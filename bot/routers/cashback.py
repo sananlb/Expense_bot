@@ -67,8 +67,8 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
     # Кнопки управления (без кнопки "Назад" по требованию)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="➕ Добавить кешбэк", callback_data="cashback_add"),
-            InlineKeyboardButton(text="➖ Убрать кешбэк", callback_data="cashback_remove")
+            InlineKeyboardButton(text="➕ Добавить", callback_data="cashback_add"),
+            InlineKeyboardButton(text="➖ Убрать", callback_data="cashback_remove")
         ],
         [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
     ])

@@ -52,8 +52,8 @@ TEXTS = {
 Пример: "альфабанк 5% 2000 руб"''',
         'cashback_added': '✅ Кешбэк добавлен',
         'cashback_deleted': '❌ Кешбэк удален',
-        'add_cashback': '➕ Добавить кешбэк',
-        'remove_cashback': '➖ Убрать кешбэк',
+        'add_cashback': '➕ Добавить',
+        'remove_cashback': '➖ Убрать',
         
         # Бюджет
         'budget': 'Бюджет',
@@ -240,8 +240,8 @@ TEXTS = {
 Example: "alphabank 5% 2000 rub"''',
         'cashback_added': '✅ Cashback added',
         'cashback_deleted': '❌ Cashback deleted',
-        'add_cashback': '➕ Add cashback',
-        'remove_cashback': '➖ Remove cashback',
+        'add_cashback': '➕ Add',
+        'remove_cashback': '➖ Remove',
         
         # Budget
         'budget': 'Budget',
