@@ -82,7 +82,7 @@ async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
         
     except Exception as e:
         logger.error(f"Error showing settings: {e}")
-        await message.answer(get_text('error_occurred', lang))
+        await send_message_with_cleanup(message, state, get_text('error_occurred', lang))
 
 
 @router.callback_query(F.data == "settings")
