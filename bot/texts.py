@@ -110,7 +110,7 @@ TEXTS = {
         'choose_action': 'Выберите действие:',
         'expenses_today': '📊 Расходы',
         'categories_menu': '📁 Категории',
-        'info': 'ℹ️ Информация',
+        'info': '🚀 /start',
         
         # Информация
         'info_text': '''💰 ExpenseBot - ваш помощник в учете расходов
@@ -289,7 +289,7 @@ Example: "alphabank 5% 2000 rub"''',
         'choose_action': 'Choose action:',
         'expenses_today': '📊 Expenses today',
         'categories_menu': '📁 Categories',
-        'info': 'ℹ️ Info',
+        'info': '🚀 /start',
         
         # Information
         'info_text': '''💰 ExpenseBot - your expense tracking assistant
