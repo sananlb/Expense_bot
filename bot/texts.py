@@ -53,7 +53,8 @@ TEXTS = {
         'cashback_added': '✅ Кешбэк добавлен',
         'cashback_deleted': '❌ Кешбэк удален',
         'add_cashback': '➕ Добавить',
-        'remove_cashback': '➖ Убрать',
+        'remove_cashback': '➖ Удалить',
+        'remove_all_cashback': '🗑️ Удалить все',
         
         # Бюджет
         'budget': 'Бюджет',
@@ -110,7 +111,7 @@ TEXTS = {
         'choose_action': 'Выберите действие:',
         'expenses_today': '📊 Расходы',
         'categories_menu': '📁 Категории',
-        'info': '🚀 /start',
+        'info': 'ℹ️ Инфо',
         
         # Информация
         'info_text': '''💰 ExpenseBot - ваш помощник в учете расходов
@@ -241,7 +242,8 @@ Example: "alphabank 5% 2000 rub"''',
         'cashback_added': '✅ Cashback added',
         'cashback_deleted': '❌ Cashback deleted',
         'add_cashback': '➕ Add',
-        'remove_cashback': '➖ Remove',
+        'remove_cashback': '➖ Delete',
+        'remove_all_cashback': '🗑️ Delete all',
         
         # Budget
         'budget': 'Budget',
@@ -289,7 +291,7 @@ Example: "alphabank 5% 2000 rub"''',
         'choose_action': 'Choose action:',
         'expenses_today': '📊 Expenses today',
         'categories_menu': '📁 Categories',
-        'info': '🚀 /start',
+        'info': 'ℹ️ Инфо',
         
         # Information
         'info_text': '''💰 ExpenseBot - your expense tracking assistant

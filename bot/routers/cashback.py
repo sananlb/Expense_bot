@@ -68,8 +68,9 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="➕ Добавить", callback_data="cashback_add"),
-            InlineKeyboardButton(text="➖ Убрать", callback_data="cashback_remove")
+            InlineKeyboardButton(text="➖ Удалить", callback_data="cashback_remove")
         ],
+        [InlineKeyboardButton(text="🗑️ Удалить все", callback_data="cashback_remove_all")],
         [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
     ])
     
@@ -431,6 +432,54 @@ async def view_cashback_month(callback: types.CallbackQuery):
     month = int(callback.data.split("_")[-1])
     await callback.message.delete()
     await show_cashback_menu(callback.message, month)
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "cashback_remove_all")
+async def confirm_remove_all_cashback(callback: types.CallbackQuery):
+    """Подтверждение удаления всех кешбэков"""
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="✅ Да, удалить все", callback_data="confirm_remove_all"),
+            InlineKeyboardButton(text="❌ Отмена", callback_data="cashback_menu")
+        ]
+    ])
+    
+    await callback.message.edit_text(
+        "⚠️ Вы уверены, что хотите удалить ВСЕ кешбэки?\n\n"
+        "Это действие нельзя отменить!",
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "confirm_remove_all")
+async def remove_all_cashback_confirmed(callback: types.CallbackQuery, state: FSMContext):
+    """Удаление всех кешбэков подтверждено"""
+    user_id = callback.from_user.id
+    current_month = date.today().month
+    
+    # Получаем все кешбэки пользователя
+    cashbacks = await get_user_cashbacks(user_id, current_month)
+    
+    if cashbacks:
+        # Удаляем все кешбэки
+        deleted_count = 0
+        for cashback in cashbacks:
+            success = await delete_cashback(user_id, cashback.id)
+            if success:
+                deleted_count += 1
+        
+        await callback.message.edit_text(
+            f"✅ Удалено кешбэков: {deleted_count}",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="💳 К кешбэкам", callback_data="cashback_menu")],
+                [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
+            ])
+        )
+    else:
+        await callback.answer("Нет кешбэков для удаления", show_alert=True)
+    
     await callback.answer()
 
 

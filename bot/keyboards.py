@@ -178,12 +178,13 @@ def cashback_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     
     keyboard.button(text=get_text('add_cashback', lang), callback_data="add_cashback")
     keyboard.button(text=get_text('remove_cashback', lang), callback_data="remove_cashback")
+    keyboard.button(text=get_text('remove_all_cashback', lang), callback_data="remove_all_cashback")
     
     # Кнопки навигации
     keyboard.button(text=get_text('back', lang), callback_data="menu")
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
-    keyboard.adjust(2, 2)
+    keyboard.adjust(2, 1, 2)
     return keyboard.as_markup()
 
 
