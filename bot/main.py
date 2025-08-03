@@ -27,7 +27,7 @@ from .routers import (
     info_router,
     chat_router
 )
-from .middlewares import DatabaseMiddleware, LocalizationMiddleware
+from .middlewares import DatabaseMiddleware, LocalizationMiddleware, MenuCleanupMiddleware
 from .middlewares.state_reset import StateResetMiddleware
 from .utils.commands import set_bot_commands
 
@@ -92,6 +92,7 @@ def create_dispatcher() -> Dispatcher:
     dp.callback_query.middleware(DatabaseMiddleware())
     dp.message.middleware(LocalizationMiddleware())
     dp.callback_query.middleware(LocalizationMiddleware())
+    dp.message.middleware(MenuCleanupMiddleware())  # Добавляем перед StateResetMiddleware
     dp.message.middleware(StateResetMiddleware())
     
     # Подключение роутеров (порядок важен для приоритета обработки)

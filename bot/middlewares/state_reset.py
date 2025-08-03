@@ -6,6 +6,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from ..routers.cashback import CashbackForm
+from ..utils.message_utils import send_message_with_cleanup
 import logging
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ class StateResetMiddleware(BaseMiddleware):
                     # Это не число, сбрасываем состояние
                     await state.clear()
                     logger.info(f"State cleared for user {event.from_user.id} on invalid percent input: {event.text}")
-                    await event.answer("❌ Действие отменено. Используйте команды для навигации.")
+                    await send_message_with_cleanup(event, state, "❌ Действие отменено. Используйте команды для навигации.")
                     return None
             
             # Аналогично для других состояний с числовым вводом
@@ -54,7 +55,7 @@ class StateResetMiddleware(BaseMiddleware):
                 except ValueError:
                     await state.clear()
                     logger.info(f"State cleared for user {event.from_user.id} on invalid limit input: {event.text}")
-                    await event.answer("❌ Действие отменено. Используйте команды для навигации.")
+                    await send_message_with_cleanup(event, state, "❌ Действие отменено. Используйте команды для навигации.")
                     return None
         
         # Вызываем обработчик
