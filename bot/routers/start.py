@@ -91,6 +91,45 @@ async def callback_menu(callback: types.CallbackQuery, state: FSMContext, lang: 
 
 
 
+@router.callback_query(F.data == "start")
+async def callback_start(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Показать информацию о боте через callback"""
+    # Информация о боте
+    text = """💰 ExpenseBot - ваш помощник в учете расходов
+
+Основные возможности:
+
+🔹 Добавление расходов:
+Просто отправьте текст или голосовое сообщение:
+"Кофе 200" или "Дизель 4095 АЗС"
+
+🔹 Отчеты о тратах:
+Попросите отчет естественным языком:
+"Покажи траты за июль" или "Сколько я потратил сегодня"
+
+🔹 Кешбэки:
+Отслеживайте кешбэки по банковским картам
+
+🔹 Категории:
+Создавайте свои категории или используйте готовые
+
+🔹 PDF отчеты:
+Получайте красивые отчеты с графиками"""
+    
+    # Кнопка закрыть
+    inline_keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
+    ])
+    
+    try:
+        await callback.message.edit_text(text, reply_markup=inline_keyboard)
+    except Exception:
+        # Если не удалось отредактировать, отправляем новое
+        await send_message_with_cleanup(callback, state, text, reply_markup=inline_keyboard)
+    
+    await callback.answer()
+
+
 @router.callback_query(F.data == "close")
 async def close_message(callback: types.CallbackQuery, state: FSMContext):
     """Закрытие сообщения"""

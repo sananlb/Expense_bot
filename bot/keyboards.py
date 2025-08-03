@@ -14,7 +14,7 @@ def main_menu_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard.button(text=get_text('cashback_menu', lang), callback_data="cashback")
     keyboard.button(text=get_text('categories_menu', lang), callback_data="categories")
     keyboard.button(text=get_text('settings_menu', lang), callback_data="settings")
-    keyboard.button(text=get_text('info', lang), callback_data="info")
+    keyboard.button(text=get_text('info', lang), callback_data="start")
     
     keyboard.adjust(2, 2, 1)
     return keyboard.as_markup()
