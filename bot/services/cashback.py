@@ -21,11 +21,11 @@ def get_user_cashbacks(user_id: int, month: int = None) -> List[Cashback]:
         cashbacks = Cashback.objects.filter(
             profile=profile,
             month=month
-        ).select_related('category').order_by('category__name')
+        ).select_related('category').order_by('bank_name', 'cashback_percent', 'id')
     else:
         cashbacks = Cashback.objects.filter(
             profile=profile
-        ).select_related('category').order_by('month', 'category__name')
+        ).select_related('category').order_by('bank_name', 'cashback_percent', 'id')
     
     return list(cashbacks)
 
@@ -33,7 +33,8 @@ def get_user_cashbacks(user_id: int, month: int = None) -> List[Cashback]:
 @sync_to_async
 def add_cashback(user_id: int, category_id: int, bank_name: str, 
                  cashback_percent: float, month: int, 
-                 limit_amount: Optional[float] = None) -> Cashback:
+                 limit_amount: Optional[float] = None,
+                 description: str = '') -> Cashback:
     """Добавить новый кешбэк"""
     profile = Profile.objects.get(telegram_id=user_id)
     
@@ -49,8 +50,10 @@ def add_cashback(user_id: int, category_id: int, bank_name: str,
         # Обновляем существующий
         existing.cashback_percent = Decimal(str(cashback_percent))
         existing.limit_amount = Decimal(str(limit_amount)) if limit_amount else None
+        existing.description = description
         existing.save()
-        return existing
+        # Перезагружаем с select_related
+        return Cashback.objects.select_related('category').get(id=existing.id)
     
     # Создаем новый
     cashback = Cashback.objects.create(
@@ -59,10 +62,12 @@ def add_cashback(user_id: int, category_id: int, bank_name: str,
         bank_name=bank_name,
         cashback_percent=Decimal(str(cashback_percent)),
         month=month,
-        limit_amount=Decimal(str(limit_amount)) if limit_amount else None
+        limit_amount=Decimal(str(limit_amount)) if limit_amount else None,
+        description=description
     )
     
-    return cashback
+    # Перезагружаем с select_related
+    return Cashback.objects.select_related('category').get(id=cashback.id)
 
 
 @sync_to_async
@@ -165,30 +170,22 @@ def format_cashback_note(cashbacks: List[Cashback], month: int) -> str:
         9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
     }
     
-    text = f"💳 Кешбэки на {month_names[month]}\n\n"
+    text = f"💳 <b>Кешбэки на {month_names[month]}</b>\n\n"
     
-    # Группируем по категориям для красивого вывода
-    by_category = {}
+    # Выводим каждый кешбэк отдельно
     for cb in cashbacks:
-        cat_id = cb.category.id
-        if cat_id not in by_category:
-            by_category[cat_id] = {
-                'name': cb.category.name,
-                'icon': cb.category.icon,
-                'banks': []
-            }
+        # Формат: Описание (Категория) - Банк 7%
+        if cb.description:
+            text += f"{cb.description} ({cb.category.icon} {cb.category.name}) - "
+        else:
+            text += f"{cb.category.icon} {cb.category.name} - "
         
-        bank_info = f"{cb.bank_name} {cb.cashback_percent}%"
+        text += f"{cb.bank_name} {cb.cashback_percent}%"
+        
         if cb.limit_amount:
-            bank_info += f" ({cb.limit_amount:,.0f} руб)"
+            text += f" (лимит {cb.limit_amount:,.0f} руб)"
         
-        by_category[cat_id]['banks'].append(bank_info)
-    
-    # Выводим по категориям
-    for cat_info in by_category.values():
-        text += f"{cat_info['icon']} {cat_info['name']} - "
-        text += ", ".join(cat_info['banks'])
-        text += "\n"
+        text += "\n\n"
     
     return text
 

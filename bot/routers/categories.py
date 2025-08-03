@@ -64,7 +64,7 @@ async def show_categories_menu(message: types.Message | types.CallbackQuery, sta
     categories = await get_user_categories(user_id)
     logger.info(f"Found {len(categories)} categories for user {user_id}")
     
-    text = "📁 Управление категориями\n\nВаши категории:"
+    text = "📁 <b>Управление категориями</b>\n\nВаши категории:"
     
     # Показываем все категории пользователя
     if categories:
@@ -84,17 +84,18 @@ async def show_categories_menu(message: types.Message | types.CallbackQuery, sta
     
     # Используем send_message_with_cleanup для правильной работы с меню
     if state:
-        sent_msg = await send_message_with_cleanup(message, state, text, reply_markup=keyboard)
+        sent_msg = await send_message_with_cleanup(message, state, text, reply_markup=keyboard, parse_mode="HTML")
     else:
         # Если state не передан, отправляем обычным способом
         if isinstance(message, types.CallbackQuery):
             sent_msg = await message.bot.send_message(
                 chat_id=message.from_user.id,
                 text=text,
-                reply_markup=keyboard
+                reply_markup=keyboard,
+                parse_mode="HTML"
             )
         else:
-            sent_msg = await message.answer(text, reply_markup=keyboard)
+            sent_msg = await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
     
     # Сохраняем ID меню если передан state
     if state:
@@ -119,6 +120,8 @@ async def add_category_start(callback: types.CallbackQuery, state: FSMContext):
             [InlineKeyboardButton(text="⬅️", callback_data="cancel_category")]
         ])
     )
+    # Обновляем ID сообщения в состоянии
+    await state.update_data(last_menu_message_id=callback.message.message_id)
     await state.set_state(CategoryForm.waiting_for_name)
     await callback.answer()
 
@@ -192,52 +195,24 @@ async def no_icon_selected(callback: types.CallbackQuery, state: FSMContext):
     # Проверяем, редактируем ли мы категорию
     editing_category_id = data.get('editing_category_id')
     if editing_category_id:
-        # Удаляем старую категорию
-        await delete_category(user_id, editing_category_id)
-    
-    category = await create_category(user_id, name, '')
-    
-    # Сохраняем необходимые данные перед удалением
-    bot = callback.bot
-    chat_id = callback.message.chat.id
+        # Обновляем существующую категорию вместо удаления
+        # Для категории "без иконки" name уже содержит полное название
+        category = await update_category(user_id, editing_category_id, name=name)
+    else:
+        category = await create_category(user_id, name, '')
     
     # Удаляем сообщение с выбором иконок
-    await callback.message.delete()
+    try:
+        await callback.message.delete()
+    except Exception:
+        # Игнорируем ошибку, если сообщение уже удалено
+        pass
     
-    # Ждем немного, чтобы убедиться, что БД обновилась
-    await asyncio.sleep(0.1)
-    
-    # Получаем обновленный список категорий
-    categories = await get_user_categories(user_id)
-    
-    # Отправляем новое сообщение с меню категорий
-    text = "📁 Управление категориями\n\nВаши категории:"
-    
-    if categories:
-        text += "\n"
-        for cat in categories:
-            text += f"\n\n• {cat.name}"
-    else:
-        text += "\n\nУ вас пока нет категорий."
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➕ Добавить", callback_data="add_category")],
-        [InlineKeyboardButton(text="✏️ Редактировать", callback_data="edit_categories")],
-        [InlineKeyboardButton(text="➖ Удалить", callback_data="delete_categories")],
-        [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
-    ])
-    
-    sent_msg = await bot.send_message(
-        chat_id=chat_id,
-        text=text,
-        reply_markup=keyboard
-    )
-    
-    # Сохраняем ID нового меню
-    await state.update_data(last_menu_message_id=sent_msg.message_id)
-    
-    # Очищаем состояние после отправки меню
+    # Очищаем состояние
     await state.clear()
+    
+    # Показываем меню категорий
+    await show_categories_menu(callback, state)
     
     await callback.answer()
 
@@ -256,58 +231,31 @@ async def set_category_icon(callback: types.CallbackQuery, state: FSMContext):
     # Проверяем, редактируем ли мы категорию
     editing_category_id = data.get('editing_category_id')
     if editing_category_id:
-        # Удаляем старую категорию
-        await delete_category(user_id, editing_category_id)
-    
-    category = await create_category(user_id, name, icon)
-    
-    # Сохраняем необходимые данные перед удалением
-    bot = callback.bot
-    chat_id = callback.message.chat.id
+        # Обновляем существующую категорию вместо удаления
+        # Объединяем иконку и название
+        full_name = f"{icon} {name}" if icon else name
+        category = await update_category(user_id, editing_category_id, name=full_name)
+    else:
+        category = await create_category(user_id, name, icon)
     
     # Удаляем сообщение с выбором иконок
-    await callback.message.delete()
+    try:
+        await callback.message.delete()
+    except Exception:
+        # Игнорируем ошибку, если сообщение уже удалено
+        pass
     
-    # Ждем немного, чтобы убедиться, что БД обновилась
-    await asyncio.sleep(0.1)
-    
-    # Получаем обновленный список категорий
-    categories = await get_user_categories(user_id)
-    
-    # Отправляем новое сообщение с меню категорий
-    text = "📁 Управление категориями\n\nВаши категории:"
-    
-    if categories:
-        text += "\n"
-        for cat in categories:
-            text += f"\n\n• {cat.name}"
-    else:
-        text += "\n\nУ вас пока нет категорий."
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➕ Добавить", callback_data="add_category")],
-        [InlineKeyboardButton(text="✏️ Редактировать", callback_data="edit_categories")],
-        [InlineKeyboardButton(text="➖ Удалить", callback_data="delete_categories")],
-        [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
-    ])
-    
-    sent_msg = await bot.send_message(
-        chat_id=chat_id,
-        text=text,
-        reply_markup=keyboard
-    )
-    
-    # Сохраняем ID нового меню
-    await state.update_data(last_menu_message_id=sent_msg.message_id)
-    
-    # Очищаем состояние после отправки меню
+    # Очищаем состояние
     await state.clear()
+    
+    # Показываем меню категорий
+    await show_categories_menu(callback, state)
     
     await callback.answer()
 
 
 @router.callback_query(lambda c: c.data == "edit_categories")
-async def edit_categories_list(callback: types.CallbackQuery):
+async def edit_categories_list(callback: types.CallbackQuery, state: FSMContext):
     """Показать список категорий для редактирования"""
     user_id = callback.from_user.id
     categories = await get_user_categories(user_id)
@@ -334,11 +282,13 @@ async def edit_categories_list(callback: types.CallbackQuery):
         "✏️ Выберите категорию для редактирования:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
+    # Обновляем ID сообщения в состоянии
+    await state.update_data(last_menu_message_id=callback.message.message_id)
     await callback.answer()
 
 
 @router.callback_query(lambda c: c.data == "delete_categories")
-async def delete_categories_list(callback: types.CallbackQuery):
+async def delete_categories_list(callback: types.CallbackQuery, state: FSMContext):
     """Показать список категорий для удаления"""
     user_id = callback.from_user.id
     categories = await get_user_categories(user_id)
@@ -365,6 +315,8 @@ async def delete_categories_list(callback: types.CallbackQuery):
         "🗑 Выберите категорию для удаления:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
+    # Обновляем ID сообщения в состоянии
+    await state.update_data(last_menu_message_id=callback.message.message_id)
     await callback.answer()
 
 
@@ -450,16 +402,10 @@ async def process_edit_category_name(message: types.Message, state: FSMContext):
     
     if has_emoji:
         # Если эмодзи уже есть, сразу обновляем категорию
-        delete_success = await delete_category(user_id, cat_id)
+        new_category = await update_category(user_id, cat_id, name=new_name.strip())
         
-        if delete_success:
-            logger.info(f"Category {cat_id} deleted successfully, creating new category with name: {new_name.strip()}")
-            new_category = await create_category(user_id, new_name.strip(), '')
-            logger.info(f"New category created: {new_category.name} (id: {new_category.id})")
-            
-            # Сохраняем необходимые данные перед удалением
-            bot = message.bot
-            chat_id = message.chat.id
+        if new_category:
+            logger.info(f"Category {cat_id} updated successfully with name: {new_name.strip()}")
             
             # Удаляем сообщение пользователя
             try:
@@ -467,41 +413,11 @@ async def process_edit_category_name(message: types.Message, state: FSMContext):
             except:
                 pass
             
-            # Ждем немного, чтобы убедиться, что БД обновилась
-            await asyncio.sleep(0.1)
-            
-            # Получаем обновленный список категорий
-            categories = await get_user_categories(user_id)
-            logger.info(f"After update, found {len(categories)} categories")
-            
-            # Отправляем новое сообщение с меню категорий
-            text = "📁 Управление категориями\n\nВаши категории:"
-            
-            if categories:
-                text += "\n"
-                for cat in categories:
-                    text += f"\n\n• {cat.name}"
-            else:
-                text += "\n\nУ вас пока нет категорий."
-            
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="➕ Добавить", callback_data="add_category")],
-                [InlineKeyboardButton(text="✏️ Редактировать", callback_data="edit_categories")],
-                [InlineKeyboardButton(text="➖ Удалить", callback_data="delete_categories")],
-                [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
-            ])
-            
-            sent_msg = await bot.send_message(
-                chat_id=chat_id,
-                text=text,
-                reply_markup=keyboard
-            )
-            
-            # Сохраняем ID нового меню
-            await state.update_data(last_menu_message_id=sent_msg.message_id)
-            
-            # Очищаем состояние после отправки меню
+            # Очищаем состояние
             await state.clear()
+            
+            # Показываем меню категорий
+            await show_categories_menu(message, state)
         else:
             await message.answer(
                 "❌ Не удалось обновить категорию.",
@@ -546,7 +462,7 @@ async def process_edit_category_name(message: types.Message, state: FSMContext):
 @router.callback_query(lambda c: c.data == "cancel_category")
 async def cancel_category(callback: types.CallbackQuery, state: FSMContext):
     """Отмена операции с категорией"""
-    await state.clear()
-    await callback.message.delete()
-    await show_categories_menu(callback.message, state)
     await callback.answer()
+    await callback.message.delete()
+    # Передаем callback вместо callback.message после удаления
+    await show_categories_menu(callback, state)

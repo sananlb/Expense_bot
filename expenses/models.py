@@ -185,6 +185,12 @@ class Cashback(models.Model):
         blank=True, 
         verbose_name='Лимит'
     )
+    description = models.CharField(
+        max_length=200, 
+        blank=True, 
+        default='', 
+        verbose_name='Описание'
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

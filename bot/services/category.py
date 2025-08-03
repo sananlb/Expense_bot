@@ -112,6 +112,16 @@ def create_category(user_id: int, name: str, icon: str = '💰') -> ExpenseCateg
         else:
             category_name = name
         
+        # Проверяем, нет ли уже такой категории
+        existing = ExpenseCategory.objects.filter(
+            profile=profile,
+            name=category_name
+        ).first()
+        
+        if existing:
+            logger.warning(f"Category '{category_name}' already exists for user {user_id}")
+            return existing
+        
         category = ExpenseCategory.objects.create(
             name=category_name,
             icon='',  # Поле icon больше не используем
@@ -146,7 +156,7 @@ def update_category(user_id: int, category_id: int, **kwargs) -> Optional[Expens
 async def update_category_name(user_id: int, category_id: int, new_name: str) -> bool:
     """Обновить название категории"""
     # Просто сохраняем то, что ввел пользователь, без разделения на эмодзи и текст
-    result = await update_category(user_id, category_id, name=new_name.strip(), icon='')
+    result = await update_category(user_id, category_id, name=new_name.strip())
     return result is not None
 
 

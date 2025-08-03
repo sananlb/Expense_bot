@@ -30,6 +30,7 @@ async def delete_message_with_effect(bot: Bot, chat_id: int, message_id: int, de
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
         return True
     except Exception as e:
+        # Игнорируем ошибки удаления - это нормально для уже удаленных сообщений
         logger.debug(f"Не удалось удалить сообщение {message_id}: {e}")
         return False
 
@@ -100,6 +101,8 @@ async def send_message_with_cleanup(
                     reply_markup=reply_markup,
                     **kwargs
                 )
+                # Важно: обновляем ID сообщения в состоянии даже при редактировании
+                await state.update_data(last_menu_message_id=edited_msg.message_id)
                 return edited_msg
             except Exception:
                 # Если не удалось отредактировать, отправляем новое
