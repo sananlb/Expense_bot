@@ -1,0 +1,90 @@
+#!/usr/bin/env python
+"""
+Запуск ExpenseBot на aiogram 3.x
+Поддерживает Windows, Linux и macOS
+"""
+import os
+import sys
+import django
+import logging
+import platform
+
+# Добавляем текущую директорию в PYTHONPATH
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Настройка Django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'expense_bot.settings')
+django.setup()
+
+# Настройка логирования
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Для Windows устанавливаем UTF-8
+if platform.system() == 'Windows':
+    import locale
+    import codecs
+    # Устанавливаем UTF-8 для консоли
+    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
+    os.system('chcp 65001 > nul 2>&1')
+
+
+def print_header():
+    """Печать заголовка"""
+    print("=" * 60)
+    print("    EXPENSE BOT (aiogram 3.x) - Telegram Bot Launcher")
+    print("=" * 60)
+    print(f"OS: {platform.system()} {platform.release()}")
+    print(f"Python: {sys.version.split()[0]}")
+    print()
+
+
+def main():
+    """Основная функция запуска"""
+    print_header()
+    
+    logger.info("=== Запуск ExpenseBot (новая версия) ===")
+    
+    # Проверяем настройки
+    if not os.getenv('BOT_TOKEN'):
+        logger.error("ОШИБКА: Не указан BOT_TOKEN в переменных окружения!")
+        logger.error("Создайте файл .env и добавьте BOT_TOKEN=ваш_токен")
+        return
+    
+    try:
+        # Импортируем и запускаем нового бота
+        from bot.main import run
+        
+        logger.info("Бот запускается в режиме: %s", os.getenv("BOT_MODE", "polling"))
+        logger.info("Для остановки нажмите Ctrl+C")
+        
+        # Запускаем бота
+        run()
+        
+    except KeyboardInterrupt:
+        logger.info("\nОстановка по Ctrl+C...")
+    except ImportError as e:
+        logger.error(f"Ошибка импорта: {e}")
+        logger.error("Убедитесь, что установлены все зависимости: pip install -r requirements.txt")
+    except Exception as e:
+        logger.error(f"Ошибка: {e}")
+        raise
+    finally:
+        logger.info("Бот остановлен")
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        logger.info("\nЗавершение работы")
+    except Exception as e:
+        logger.error(f"Критическая ошибка: {e}")
+        sys.exit(1)
