@@ -8,10 +8,10 @@ TEXTS = {
         'welcome': '💰 Добро пожаловать в ExpenseBot!',
         'welcome_text': '''Я помогу вам вести учет расходов и отслеживать кешбэки.
 
-🔹 Просто отправьте мне текстовое или голосовое сообщение:
+💸 Просто отправьте мне текстовое или голосовое сообщение:
 "Кофе 200" или "Дизель 4095 АЗС"
 
-🔹 Попросите отчет:
+📊 Попросите отчет:
 "Покажи траты за июль"''',
         'expense_added': '✅ Расход добавлен: {amount} {currency}',
         'expense_deleted': '❌ Расход удален',
@@ -197,10 +197,10 @@ TEXTS = {
         'welcome': '💰 Welcome to ExpenseBot!',
         'welcome_text': '''I'll help you track expenses and monitor cashbacks.
 
-🔹 Just send me a text or voice message:
+💸 Just send me a text or voice message:
 "Coffee 200" or "Diesel 4095 gas station"
 
-🔹 Ask for a report:
+📊 Ask for a report:
 "Show expenses for July"''',
         'expense_added': '✅ Expense added: {amount} {currency}',
         'expense_deleted': '❌ Expense deleted',
