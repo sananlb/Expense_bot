@@ -15,6 +15,7 @@ from bot.keyboards import settings_keyboard, back_close_keyboard, get_language_k
 from bot.utils import get_text, set_user_language, get_user_language, format_amount
 from bot.services.profile import get_or_create_profile
 from bot.utils.message_utils import send_message_with_cleanup
+from bot.utils.commands import update_user_commands
 from expenses.models import Profile, UserSettings
 
 logger = logging.getLogger(__name__)
@@ -37,6 +38,9 @@ async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
     try:
         profile = await get_or_create_profile(message.from_user.id)
         settings = await sync_to_async(lambda: profile.settings)()
+        
+        # Обновляем команды бота для пользователя
+        await update_user_commands(message.bot, message.from_user.id)
         
         # Формируем текст с текущими настройками
         lang_text = 'Русский' if profile.language_code == 'ru' else 'English'
@@ -93,6 +97,9 @@ async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: st
     try:
         profile = await get_or_create_profile(callback.from_user.id)
         settings = await sync_to_async(lambda: profile.settings)()
+        
+        # Обновляем команды бота для пользователя
+        await update_user_commands(callback.bot, callback.from_user.id)
         
         # Формируем текст с текущими настройками
         lang_text = 'Русский' if profile.language_code == 'ru' else 'English'

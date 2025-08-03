@@ -23,13 +23,20 @@ async def set_bot_commands(bot: Bot):
 
 
 async def update_user_commands(bot: Bot, user_id: int):
-    """Обновляем команды для конкретного пользователя"""
+    """Обновляем команды для конкретного пользователя с учетом языка"""
+    # Получаем язык пользователя
+    from bot.utils import get_user_language
+    from bot.utils import get_text
+    
+    lang = await get_user_language(user_id)
+    
+    # Формируем команды с учетом языка
     commands = [
-        BotCommand(command="expenses", description="📊 Расходы"),
-        BotCommand(command="cashback", description="💳 Кешбэк"),
-        BotCommand(command="categories", description="📁 Категории"),
-        BotCommand(command="settings", description="⚙️ Настройки"),
-        BotCommand(command="start", description="ℹ️ Информация"),
+        BotCommand(command="expenses", description=f"📊 {get_text('expenses_today', lang)}"),
+        BotCommand(command="cashback", description=f"💳 {get_text('cashback_menu', lang)}"),
+        BotCommand(command="categories", description=f"📁 {get_text('categories_menu', lang)}"),
+        BotCommand(command="settings", description=f"⚙️ {get_text('settings_menu', lang)}"),
+        BotCommand(command="start", description=f"🚀 {get_text('info', lang)}"),
     ]
     
     try:

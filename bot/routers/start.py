@@ -12,6 +12,7 @@ from bot.services.profile import get_or_create_profile
 from bot.keyboards import main_menu_keyboard, back_close_keyboard
 from bot.services.category import create_default_categories
 from bot.utils.message_utils import send_message_with_cleanup, delete_message_with_effect
+from bot.utils.commands import update_user_commands
 
 router = Router(name="start")
 
@@ -32,6 +33,9 @@ async def cmd_start(message: types.Message, state: FSMContext, lang: str = 'ru')
     
     # Создаем базовые категории для нового пользователя
     created = await create_default_categories(user_id)
+    
+    # Обновляем команды бота для пользователя
+    await update_user_commands(message.bot, user_id)
     
     # Информация о боте
     text = """💰 ExpenseBot - ваш помощник в учете расходов
@@ -94,6 +98,9 @@ async def callback_menu(callback: types.CallbackQuery, state: FSMContext, lang: 
 @router.callback_query(F.data == "start")
 async def callback_start(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать информацию о боте через callback"""
+    # Обновляем команды бота для пользователя
+    await update_user_commands(callback.bot, callback.from_user.id)
+    
     # Информация о боте
     text = """💰 ExpenseBot - ваш помощник в учете расходов
 
