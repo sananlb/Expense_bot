@@ -28,28 +28,34 @@ class MenuCleanupMiddleware(BaseMiddleware):
         # Получаем состояние из контекста
         state: FSMContext = data.get('state')
         
+        # Сохраняем информацию о старом меню для удаления после обработки
+        old_menu_id = None
         if state and isinstance(event, Message):
-            # Получаем ID последнего меню
             state_data = await state.get_data()
             old_menu_id = state_data.get('last_menu_message_id')
-            
-            # Если есть старое меню, удаляем его
-            if old_menu_id:
-                try:
-                    # Асинхронно удаляем старое меню
+        
+        # Сначала вызываем обработчик (он отправит новое меню)
+        result = await handler(event, data)
+        
+        # Теперь удаляем старое меню ПОСЛЕ того, как обработчик завершился
+        if old_menu_id and state:
+            try:
+                # Проверяем, что меню еще не было удалено обработчиком
+                state_data = await state.get_data()
+                current_menu_id = state_data.get('last_menu_message_id')
+                
+                # Удаляем только если ID изменился (значит было отправлено новое меню)
+                if current_menu_id != old_menu_id:
                     asyncio.create_task(
                         delete_message_with_effect(
                             event.bot, 
                             event.chat.id, 
                             old_menu_id,
-                            delay=0.1  # Быстрое удаление
+                            delay=0.3  # Стандартная задержка для плавного перехода
                         )
                     )
-                    # Очищаем ID из состояния
-                    await state.update_data(last_menu_message_id=None)
-                    logger.debug(f"Deleted old menu {old_menu_id} for user {event.from_user.id}")
-                except Exception as e:
-                    logger.debug(f"Failed to delete old menu: {e}")
+                    logger.debug(f"Scheduled deletion of old menu {old_menu_id} for user {event.from_user.id}")
+            except Exception as e:
+                logger.debug(f"Failed to delete old menu: {e}")
         
-        # Вызываем обработчик
-        return await handler(event, data)
+        return result
