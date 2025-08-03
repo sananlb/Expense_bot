@@ -45,7 +45,7 @@ TEXTS = {
         
         # Кешбэки
         'cashbacks': 'Кешбэки на',
-        'cashback_menu': '💳 Кешбэк',
+        'cashback_menu': 'Кешбэк',
         'choose_cashback_category': '💳 Выберите категорию для кешбэка:',
         'enter_cashback_info': '''Введите информацию о кешбэке для категории "{category}":
 
@@ -73,7 +73,7 @@ TEXTS = {
         
         # Настройки
         'settings': 'Настройки',
-        'settings_menu': '⚙️ Настройки',
+        'settings_menu': 'Настройки',
         'language': 'Язык',
         'timezone': 'Часовой пояс',
         'currency': 'Основная валюта',
@@ -109,9 +109,9 @@ TEXTS = {
         # Меню
         'main_menu': '💰 Главное меню',
         'choose_action': 'Выберите действие:',
-        'expenses_today': '📊 Расходы',
-        'categories_menu': '📁 Категории',
-        'info': 'ℹ️ Инфо',
+        'expenses_today': 'Расходы',
+        'categories_menu': 'Категории',
+        'info': 'Инфо',
         
         # Информация
         'info_text': '''💰 ExpenseBot - ваш помощник в учете расходов
@@ -234,7 +234,7 @@ TEXTS = {
         
         # Cashbacks
         'cashbacks': 'Cashbacks for',
-        'cashback_menu': '💳 Cashback',
+        'cashback_menu': 'Cashback',
         'choose_cashback_category': '💳 Choose category for cashback:',
         'enter_cashback_info': '''Enter cashback info for category "{category}":
 
@@ -262,7 +262,7 @@ Example: "alphabank 5% 2000 rub"''',
         
         # Settings
         'settings': 'Settings',
-        'settings_menu': '⚙️ Settings',
+        'settings_menu': 'Settings',
         'language': 'Language',
         'timezone': 'Timezone',
         'currency': 'Main currency',
@@ -289,9 +289,9 @@ Example: "alphabank 5% 2000 rub"''',
         # Menu
         'main_menu': '💰 Main menu',
         'choose_action': 'Choose action:',
-        'expenses_today': '📊 Expenses today',
-        'categories_menu': '📁 Categories',
-        'info': 'ℹ️ Инфо',
+        'expenses_today': 'Expenses',
+        'categories_menu': 'Categories',
+        'info': 'Info',
         
         # Information
         'info_text': '''💰 ExpenseBot - your expense tracking assistant
