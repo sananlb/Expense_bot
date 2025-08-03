@@ -86,10 +86,9 @@ class NotificationService:
             # Group by category
             categories = {}
             for expense in expenses:
-                cat_name = expense.category.name if expense.category else "Другое"
-                cat_icon = expense.category.icon if expense.category else "📦"
-                key = f"{cat_icon} {cat_name}"
-                categories[key] = categories.get(key, 0) + expense.amount
+                # Название категории уже содержит эмодзи
+                cat_name = expense.category.name if expense.category else "💰 Прочие расходы"
+                categories[cat_name] = categories.get(cat_name, 0) + expense.amount
             
             # Sort categories by amount
             sorted_cats = sorted(categories.items(), key=lambda x: x[1], reverse=True)

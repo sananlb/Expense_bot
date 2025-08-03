@@ -1,5 +1,5 @@
 """
-Обработчик расходов - главная функция бота
+Обработчик трат - главная функция бота
 """
 from aiogram import Router, types, F
 from aiogram.filters import Command
@@ -12,6 +12,7 @@ import asyncio
 from ..services.expense import get_today_summary
 from ..services.cashback import calculate_potential_cashback
 from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect
+from ..utils import get_text
 
 router = Router(name="expense")
 
@@ -23,7 +24,7 @@ class ExpenseForm(StatesGroup):
 
 
 @router.message(Command("expenses"))
-async def cmd_expenses(message: types.Message, state: FSMContext):
+async def cmd_expenses(message: types.Message, state: FSMContext, lang: str = 'ru'):
     """Команда /expenses - показать траты за сегодня"""
     user_id = message.from_user.id
     today = date.today()
@@ -31,31 +32,34 @@ async def cmd_expenses(message: types.Message, state: FSMContext):
     # Получаем сводку за сегодня
     summary = await get_today_summary(user_id)
     
+    # Получаем название месяца
+    month_name = get_text(today.strftime('%B').lower(), lang)
+    
     if not summary or summary['total'] == 0:
-        currency_symbol = '₽' if summary.get('currency', 'RUB') == 'RUB' else summary.get('currency', 'RUB')
-        text = f"""📊 Сводка за сегодня, {today.strftime('%d %B')}
+        currency_symbol = get_text('rub', lang) if summary.get('currency', 'RUB') == 'RUB' else summary.get('currency', 'RUB')
+        text = f"""📊 {get_text('summary_for', lang)} {get_text('today', lang).lower()}, {today.strftime('%d')} {month_name}
 
-💰 Всего: 0 {currency_symbol}
+💰 {get_text('total', lang)}: 0 {currency_symbol}
 
-Сегодня трат пока нет."""
+{get_text('no_expenses_today', lang)}."""
     else:
         # Форматируем текст с учетом валют
         currency = summary.get('currency', 'RUB')
-        currency_symbol = '₽' if currency == 'RUB' else currency
+        currency_symbol = get_text('rub', lang) if currency == 'RUB' else currency
         
-        text = f"""📊 Сводка за сегодня, {today.strftime('%d %B')}
+        text = f"""📊 {get_text('summary_for', lang)} {get_text('today', lang).lower()}, {today.strftime('%d')} {month_name}
 
-💰 Всего: {summary['total']:,.0f} {currency_symbol}"""
+💰 {get_text('total', lang)}: {summary['total']:,.0f} {currency_symbol}"""
         
-        # Если есть расходы в других валютах, показываем их
+        # Если есть траты в других валютах, показываем их
         if not summary.get('single_currency', True):
-            text += "\n\n💱 Другие валюты:"
+            text += f"\n\n💱 {get_text('other_currencies', lang)}:"
             for curr, amount in summary.get('currency_totals', {}).items():
                 if curr != currency and amount > 0:
-                    curr_symbol = '₽' if curr == 'RUB' else curr
+                    curr_symbol = get_text('rub', lang) if curr == 'RUB' else curr
                     text += f"\n{amount:,.2f} {curr_symbol}"
         
-        text += "\n\n📊 По категориям:"
+        text += f"\n\n📊 {get_text('by_categories', lang)}:"
         
         # Добавляем категории
         for cat in summary['categories']:
@@ -67,19 +71,19 @@ async def cmd_expenses(message: types.Message, state: FSMContext):
         
         # Добавляем потенциальный кешбэк
         cashback = await calculate_potential_cashback(user_id, today, today)
-        text += f"\n\n💳 Потенциальный кешбэк: {cashback:,.0f} ₽"
+        text += f"\n\n💳 {get_text('potential_cashback', lang)}: {cashback:,.0f} {get_text('rub', lang)}"
     
     # Кнопки навигации
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📅 Показать с начала месяца", callback_data="expenses_month")],
-        [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
+        [InlineKeyboardButton(text=get_text('show_month_start', lang), callback_data="expenses_month")],
+        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
     ])
     
     await send_message_with_cleanup(message, state, text, reply_markup=keyboard)
 
 
 @router.callback_query(lambda c: c.data == "expenses_month")
-async def show_month_expenses(callback: types.CallbackQuery):
+async def show_month_expenses(callback: types.CallbackQuery, lang: str = 'ru'):
     """Показать траты за текущий месяц"""
     user_id = callback.from_user.id
     today = date.today()
@@ -92,24 +96,33 @@ async def show_month_expenses(callback: types.CallbackQuery):
     summary = await get_month_summary(user_id, today.month, today.year)
     
     month_names = {
-        1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
-        5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
-        9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
+        1: get_text('january', lang).capitalize(),
+        2: get_text('february', lang).capitalize(),
+        3: get_text('march', lang).capitalize(),
+        4: get_text('april', lang).capitalize(),
+        5: get_text('may', lang).capitalize(),
+        6: get_text('june', lang).capitalize(),
+        7: get_text('july', lang).capitalize(),
+        8: get_text('august', lang).capitalize(),
+        9: get_text('september', lang).capitalize(),
+        10: get_text('october', lang).capitalize(),
+        11: get_text('november', lang).capitalize(),
+        12: get_text('december', lang).capitalize()
     }
     
     if not summary or summary['total'] == 0:
-        text = f"""📊 Сводка за {month_names[today.month]} {today.year}
+        text = f"""📊 {get_text('summary_for', lang)} {month_names[today.month]} {today.year}
 
-💰 Всего потрачено: 0 ₽
+💰 {get_text('total_spent_month', lang)}: 0 {get_text('rub', lang)}
 
-В этом месяце трат пока нет."""
+{get_text('no_expenses_this_month', lang)}"""
     else:
         # Форматируем текст согласно ТЗ
-        text = f"""📊 Сводка за {month_names[today.month]} {today.year}
+        text = f"""📊 {get_text('summary_for', lang)} {month_names[today.month]} {today.year}
 
-💰 Всего потрачено: {summary['total']:,.0f} ₽
+💰 {get_text('total_spent_month', lang)}: {summary['total']:,.0f} {get_text('rub', lang)}
 
-📊 По категориям:"""
+📊 {get_text('by_categories', lang)}:"""
         
         # Добавляем топ-5 категорий
         for i, cat in enumerate(summary['categories'][:5]):
@@ -124,7 +137,7 @@ async def show_month_expenses(callback: types.CallbackQuery):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📄 Сформировать PDF отчет", callback_data="generate_pdf")],
         [
-            InlineKeyboardButton(text="◀️", callback_data="expenses_today"),
+            InlineKeyboardButton(text="⬅️", callback_data="expenses_today"),
             InlineKeyboardButton(text="❌ Закрыть", callback_data="close")
         ]
     ])
@@ -136,7 +149,16 @@ async def show_month_expenses(callback: types.CallbackQuery):
 # Обработчик текстовых сообщений
 @router.message(F.text & ~F.text.startswith('/'))
 async def handle_text_expense(message: types.Message, state: FSMContext):
-    """Обработка текстовых сообщений с расходами"""
+    """Обработка текстовых сообщений с тратами"""
+    # Проверяем, есть ли активное состояние
+    current_state = await state.get_state()
+    if current_state:
+        # Если есть активное состояние, не обрабатываем как трату
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Skipping expense handler due to active state: {current_state}")
+        return
+    
     from ..utils.expense_parser import parse_expense_message
     from ..services.expense import add_expense
     from ..services.category import get_or_create_category
@@ -147,16 +169,16 @@ async def handle_text_expense(message: types.Message, state: FSMContext):
     # Парсим сообщение с AI поддержкой
     from expenses.models import Profile
     try:
-        profile = await Profile.objects.select_related('user').aget(telegram_id=user_id)
+        profile = await Profile.objects.aget(telegram_id=user_id)
     except Profile.DoesNotExist:
         profile = None
     
     parsed = await parse_expense_message(text, user_id=user_id, profile=profile, use_ai=True)
     
     if not parsed:
-        # Не удалось распознать расход
+        # Не удалось распознать трату
         await send_message_with_cleanup(message, state,
-            "❌ Не удалось распознать расход.\n\n"
+            "❌ Не удалось распознать трату.\n\n"
             "Попробуйте написать в формате:\n"
             "• Кофе 200\n"
             "• Такси домой 450 руб\n"
@@ -171,7 +193,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext):
     amount = parsed['amount']
     currency = parsed.get('currency', 'RUB')
     
-    # Добавляем расход в оригинальной валюте
+    # Добавляем трату в оригинальной валюте
     expense = await add_expense(
         user_id=user_id,
         category_id=category.id,
@@ -192,14 +214,14 @@ async def handle_text_expense(message: types.Message, state: FSMContext):
         amount_text = f"{expense.amount:,.2f} {currency}"
     
     await send_message_with_cleanup(message, state,
-        f"✅ Расход добавлен!\n\n"
+        f"✅ Трата добавлена!\n\n"
         f"💰 Сумма: {amount_text}\n"
         f"📁 Категория: {category.icon} {category.name}\n"
         f"📝 Описание: {expense.description}"
         f"{confidence_text}",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="📊 Расходы", callback_data="expenses_today"),
+                InlineKeyboardButton(text="📊 Траты", callback_data="expenses_today"),
                 InlineKeyboardButton(text="✏️ Изменить", callback_data=f"edit_expense_{expense.id}")
             ],
             [InlineKeyboardButton(text="❌ Удалить", callback_data=f"delete_expense_{expense.id}")]
@@ -222,7 +244,7 @@ async def handle_voice_expense(message: types.Message, state: FSMContext):
     user_language = 'ru'  # По умолчанию русский
     
     try:
-        profile = await Profile.objects.select_related('user').aget(telegram_id=user_id)
+        profile = await Profile.objects.aget(telegram_id=user_id)
         # Если в профиле есть настройка языка, используем её
         if hasattr(profile, 'language'):
             user_language = profile.language
@@ -238,16 +260,16 @@ async def handle_voice_expense(message: types.Message, state: FSMContext):
     # Дальше обрабатываем как обычное текстовое сообщение
     # Получаем профиль пользователя
     try:
-        profile = await Profile.objects.select_related('user').aget(telegram_id=user_id)
+        profile = await Profile.objects.aget(telegram_id=user_id)
     except Profile.DoesNotExist:
         profile = None
     
-    # Парсим расход с AI поддержкой
+    # Парсим трату с AI поддержкой
     parsed = await parse_expense_message(text, user_id=user_id, profile=profile, use_ai=True)
     
     if not parsed:
         await send_message_with_cleanup(message, state,
-            "❌ Не удалось распознать расход из голосового сообщения.\n\n"
+            "❌ Не удалось распознать трату из голосового сообщения.\n\n"
             "Попробуйте сказать четче, например:\n"
             "• \"Кофе двести рублей\"\n"
             "• \"Такси домой четыреста пятьдесят\"\n"
@@ -262,7 +284,7 @@ async def handle_voice_expense(message: types.Message, state: FSMContext):
     amount = parsed['amount']
     currency = parsed.get('currency', 'RUB')
     
-    # Добавляем расход в оригинальной валюте
+    # Добавляем трату в оригинальной валюте
     expense = await add_expense(
         user_id=user_id,
         category_id=category.id,
@@ -283,7 +305,7 @@ async def handle_voice_expense(message: types.Message, state: FSMContext):
         amount_text = f"{expense.amount:,.2f} {currency}"
     
     await send_message_with_cleanup(message, state,
-        f"✅ Расход из голосового сообщения добавлен!\n\n"
+        f"✅ Трата из голосового сообщения добавлена!\n\n"
         f"💰 Сумма: {amount_text}\n"
         f"📁 Категория: {category.icon} {category.name}\n"
         f"📝 Описание: {expense.description}"
@@ -291,7 +313,7 @@ async def handle_voice_expense(message: types.Message, state: FSMContext):
         f"🎤 Распознано: \"{text}\"",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="📊 Расходы", callback_data="expenses_today"),
+                InlineKeyboardButton(text="📊 Траты", callback_data="expenses_today"),
                 InlineKeyboardButton(text="✏️ Изменить", callback_data=f"edit_expense_{expense.id}")
             ],
             [InlineKeyboardButton(text="❌ Удалить", callback_data=f"delete_expense_{expense.id}")]
@@ -306,28 +328,28 @@ async def handle_photo_expense(message: types.Message, state: FSMContext):
     await send_message_with_cleanup(message, state, "📸 Обработка чеков будет добавлена в следующей версии.")
 
 
-# Обработчик редактирования расхода
+# Обработчик редактирования траты
 @router.callback_query(lambda c: c.data.startswith("edit_expense_"))
 async def edit_expense(callback: types.CallbackQuery):
-    """Редактирование расхода"""
+    """Редактирование траты"""
     expense_id = int(callback.data.split("_")[-1])
     # TODO: Реализовать редактирование
     await callback.answer("Редактирование будет добавлено в следующей версии", show_alert=True)
 
 
-# Обработчик удаления расхода
+# Обработчик удаления траты
 @router.callback_query(lambda c: c.data.startswith("delete_expense_"))
 async def delete_expense(callback: types.CallbackQuery):
-    """Удаление расхода"""
+    """Удаление траты"""
     expense_id = int(callback.data.split("_")[-1])
     from ..services.expense import delete_expense as delete_expense_service
     
     user_id = callback.from_user.id
     
-    # Удаляем расход
+    # Удаляем трату
     success = await delete_expense_service(user_id, expense_id)
     
     if success:
-        await callback.message.edit_text("✅ Расход удален!")
+        await callback.message.edit_text("✅ Трата удалена!")
     else:
-        await callback.answer("❌ Не удалось удалить расход", show_alert=True)
+        await callback.answer("❌ Не удалось удалить трату", show_alert=True)

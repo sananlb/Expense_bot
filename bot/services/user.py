@@ -54,14 +54,16 @@ def create_default_categories(profile_id: int):
         ('Подарки', '🎁'),
         ('Путешествия', '✈️'),
         ('Связь и интернет', '📱'),
-        ('Прочее', '💰')
+        ('Прочие расходы', '💰')
     ]
     
     for name, icon in default_categories:
+        # Сохраняем эмодзи вместе с названием
+        category_with_icon = f"{icon} {name}"
         ExpenseCategory.objects.get_or_create(
             profile=profile,
-            name=name,
+            name=category_with_icon,
             defaults={
-                'icon': icon,
+                'icon': '',  # Поле icon больше не используем
             }
         )

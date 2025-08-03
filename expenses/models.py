@@ -62,7 +62,7 @@ class UserSettings(models.Model):
 
 
 class ExpenseCategory(models.Model):
-    """Категории расходов согласно ТЗ"""
+    """Категории трат согласно ТЗ"""
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='categories')
     name = models.CharField(max_length=100)
     icon = models.CharField(max_length=10, default='💰')
@@ -86,7 +86,7 @@ class ExpenseCategory(models.Model):
 
 
 class Expense(models.Model):
-    """Расходы согласно ТЗ"""
+    """Траты согласно ТЗ"""
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='expenses')
     category = models.ForeignKey(
         ExpenseCategory, 
@@ -98,7 +98,7 @@ class Expense(models.Model):
     
     # Основная информация
     amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0.01)])
-    currency = models.CharField(max_length=3, default='RUB')  # Валюта расхода
+    currency = models.CharField(max_length=3, default='RUB')  # Валюта траты
     description = models.TextField(blank=True)
     
     # Дата и время (автоматические по ТЗ)
@@ -124,8 +124,8 @@ class Expense(models.Model):
     
     class Meta:
         db_table = 'expenses_expense'
-        verbose_name = 'Расход'
-        verbose_name_plural = 'Расходы'
+        verbose_name = 'Трата'
+        verbose_name_plural = 'Траты'
         ordering = ['-expense_date', '-expense_time']
         indexes = [
             models.Index(fields=['profile', '-expense_date']),
@@ -224,5 +224,5 @@ DEFAULT_CATEGORIES = [
     ('Подарки', '🎁'),
     ('Путешествия', '✈️'),
     ('Связь и интернет', '📱'),
-    ('Прочее', '💰')
+    ('Прочие расходы', '💰')
 ]

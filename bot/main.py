@@ -98,13 +98,13 @@ def create_dispatcher() -> Dispatcher:
     # Подключение роутеров (порядок важен для приоритета обработки)
     dp.include_router(start_router)
     dp.include_router(menu_router)
-    dp.include_router(expense_router)  # Высокий приоритет для обработки расходов
-    dp.include_router(chat_router)     # Низкий приоритет для обработки чата
+    dp.include_router(category_router)  # Перемещаем выше expense_router
     dp.include_router(cashback_router)
-    dp.include_router(category_router)
     dp.include_router(settings_router)
     dp.include_router(reports_router)
     dp.include_router(info_router)
+    dp.include_router(expense_router)  # Обработка расходов после специфичных роутеров
+    dp.include_router(chat_router)     # Низкий приоритет для обработки чата
     
     return dp
 

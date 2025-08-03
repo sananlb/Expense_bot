@@ -22,7 +22,7 @@ def send_daily_reports():
         # Get users with daily reports enabled
         profiles = Profile.objects.filter(
             settings__notifications__daily_report=True
-        ).select_related('user')
+        )
         
         logger.info(f"Sending daily reports to {profiles.count()} users")
         
@@ -61,7 +61,7 @@ def send_weekly_reports():
         # Get users with weekly reports enabled
         profiles = Profile.objects.filter(
             settings__notifications__weekly_report=True
-        ).select_related('user')
+        )
         
         logger.info(f"Sending weekly reports to {profiles.count()} users")
         
@@ -100,7 +100,7 @@ def send_monthly_reports():
         # Get users with monthly reports enabled
         profiles = Profile.objects.filter(
             settings__notifications__monthly_report=True
-        ).select_related('user')
+        )
         
         logger.info(f"Sending monthly reports to {profiles.count()} users")
         

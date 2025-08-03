@@ -89,7 +89,7 @@ async def show_today_expenses(callback: types.CallbackQuery, state: FSMContext):
         keyboard_buttons.append([InlineKeyboardButton(text="📅 Показать с начала месяца", callback_data="expenses_month")])
     
     keyboard_buttons.append([
-        InlineKeyboardButton(text="◀️", callback_data="menu"),
+        InlineKeyboardButton(text="⬅️", callback_data="menu"),
         InlineKeyboardButton(text="❌ Закрыть", callback_data="close")
     ])
     

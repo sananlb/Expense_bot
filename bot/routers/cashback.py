@@ -18,6 +18,7 @@ from ..services.cashback import (
 from ..services.category import get_user_categories
 from expenses.models import Cashback
 from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect
+from ..utils import get_text
 
 router = Router(name="cashback")
 
@@ -32,12 +33,12 @@ class CashbackForm(StatesGroup):
 
 
 @router.message(Command("cashback"))
-async def cmd_cashback(message: types.Message, state: FSMContext):
+async def cmd_cashback(message: types.Message, state: FSMContext, lang: str = 'ru'):
     """Команда /cashback - управление кешбэками"""
-    await show_cashback_menu(message, state)
+    await show_cashback_menu(message, state, lang)
 
 
-async def show_cashback_menu(message: types.Message | types.CallbackQuery, state: FSMContext, month: int = None):
+async def show_cashback_menu(message: types.Message | types.CallbackQuery, state: FSMContext, lang: str = 'ru', month: int = None):
     """Показать меню кешбэков"""
     # Получаем user_id в зависимости от типа сообщения
     if isinstance(message, types.CallbackQuery):
@@ -50,28 +51,44 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
     # Получаем кешбэки пользователя
     cashbacks = await get_user_cashbacks(user_id, target_month)
     
+    # Получаем язык пользователя
+    if state:
+        state_data = await state.get_data()
+        lang = state_data.get('lang', 'ru')
+    else:
+        lang = 'ru'
+    
     # Названия месяцев
     month_names = {
-        1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
-        5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
-        9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
+        1: get_text('january', lang).capitalize(),
+        2: get_text('february', lang).capitalize(),
+        3: get_text('march', lang).capitalize(),
+        4: get_text('april', lang).capitalize(),
+        5: get_text('may', lang).capitalize(),
+        6: get_text('june', lang).capitalize(),
+        7: get_text('july', lang).capitalize(),
+        8: get_text('august', lang).capitalize(),
+        9: get_text('september', lang).capitalize(),
+        10: get_text('october', lang).capitalize(),
+        11: get_text('november', lang).capitalize(),
+        12: get_text('december', lang).capitalize()
     }
     
     if not cashbacks:
-        text = f"💳 Кешбэки на {month_names[target_month]}\n\n"
-        text += "У вас пока нет информации о кешбэках.\n\n"
-        text += "Добавьте кешбэки ваших банковских карт для отслеживания выгоды от покупок."
+        text = f"💳 {get_text('cashbacks', lang)} {month_names[target_month]}\n\n"
+        text += f"{get_text('no_cashback_info', lang)}\n\n"
+        text += get_text('add_cashback_hint', lang)
     else:
         text = format_cashback_note(cashbacks, target_month)
     
     # Кнопки управления (без кнопки "Назад" по требованию)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="➕ Добавить", callback_data="cashback_add"),
-            InlineKeyboardButton(text="➖ Удалить", callback_data="cashback_remove")
+            InlineKeyboardButton(text=get_text('add_cashback', lang), callback_data="cashback_add"),
+            InlineKeyboardButton(text=get_text('remove_cashback', lang), callback_data="cashback_remove")
         ],
-        [InlineKeyboardButton(text="🗑️ Удалить все", callback_data="cashback_remove_all")],
-        [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
+        [InlineKeyboardButton(text=get_text('remove_all_cashback', lang), callback_data="cashback_remove_all")],
+        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
     ])
     
     await send_message_with_cleanup(message, state, text, reply_markup=keyboard)
@@ -104,18 +121,18 @@ async def add_cashback_start(callback: types.CallbackQuery, state: FSMContext):
             )
         ])
     
-    keyboard_buttons.append([InlineKeyboardButton(text="◀️", callback_data="cashback_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="cashback_menu")])
+    
+    text = f"{get_text('adding_cashback', lang)}\n\n{get_text('choose_category', lang)}"
     
     try:
         await callback.message.edit_text(
-            "➕ Добавление кешбэка\n\n"
-            "Выберите категорию:",
+            text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         )
     except Exception:
         await send_message_with_cleanup(callback, state, 
-            "➕ Добавление кешбэка\n\n"
-            "Выберите категорию:",
+            text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         )
     await state.set_state(CashbackForm.waiting_for_category)
@@ -123,7 +140,7 @@ async def add_cashback_start(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(lambda c: c.data.startswith("cashback_cat_"), CashbackForm.waiting_for_category)
-async def process_cashback_category(callback: types.CallbackQuery, state: FSMContext):
+async def process_cashback_category(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Обработка выбора категории"""
     category_id = int(callback.data.split("_")[-1])
     await state.update_data(category_id=category_id)
@@ -140,10 +157,10 @@ async def process_cashback_category(callback: types.CallbackQuery, state: FSMCon
             InlineKeyboardButton(text=bank, callback_data=f"cashback_bank_{bank}")
         ])
     
-    keyboard_buttons.append([InlineKeyboardButton(text="◀️", callback_data="cashback_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="cashback_menu")])
     
     await callback.message.edit_text(
-        "🏦 Выберите банк из списка или введите вручную:",
+        get_text('choose_bank', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
     # Банк можно ввести текстом, состояние уже установлено
@@ -180,7 +197,7 @@ async def ask_for_percent(message: types.Message, state: FSMContext):
                 ))
         keyboard_buttons.append(row)
     
-    keyboard_buttons.append([InlineKeyboardButton(text="◀️", callback_data="cashback_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text="⬅️", callback_data="cashback_menu")])
     
     await message.edit_text(
         "💰 Укажите процент кешбэка:\n\n"
@@ -282,7 +299,7 @@ async def ask_for_month(message: types.Message, state: FSMContext):
             )
         ])
     
-    keyboard_buttons.append([InlineKeyboardButton(text="◀️", callback_data="cashback_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text="⬅️", callback_data="cashback_menu")])
     
     await message.edit_text(
         "📅 На какой месяц действует кешбэк?",
@@ -347,7 +364,7 @@ async def remove_cashback_list(callback: types.CallbackQuery):
             InlineKeyboardButton(text=text, callback_data=f"remove_cb_{cb.id}")
         ])
     
-    keyboard_buttons.append([InlineKeyboardButton(text="◀️", callback_data="cashback_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text="⬅️", callback_data="cashback_menu")])
     
     await callback.message.edit_text(
         "➖ Выберите кешбэк для удаления:",
@@ -417,7 +434,7 @@ async def select_other_month(callback: types.CallbackQuery):
                 ))
         keyboard_buttons.append(row)
     
-    keyboard_buttons.append([InlineKeyboardButton(text="◀️", callback_data="cashback_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text="⬅️", callback_data="cashback_menu")])
     
     await callback.message.edit_text(
         "📅 Выберите месяц:",
@@ -510,7 +527,7 @@ async def process_bank_text(message: types.Message, state: FSMContext):
                 ))
         keyboard_buttons.append(row)
     
-    keyboard_buttons.append([InlineKeyboardButton(text="◀️", callback_data="cashback_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text="⬅️", callback_data="cashback_menu")])
     
     await send_message_with_cleanup(message, state,
         "💰 Укажите процент кешбэка:\n\n"

@@ -26,14 +26,14 @@ def create_expense(
     currency: str = 'RUB'
 ) -> Optional[Expense]:
     """
-    Создать новый расход
+    Создать новую трату
     
     Args:
         telegram_id: ID пользователя в Telegram
-        amount: Сумма расхода
+        amount: Сумма траты
         category_id: ID категории (опционально)
-        description: Описание расхода
-        expense_date: Дата расхода (по умолчанию сегодня)
+        description: Описание траты
+        expense_date: Дата траты (по умолчанию сегодня)
         ai_categorized: Категория определена AI
         ai_confidence: Уверенность AI в категории
         
@@ -42,7 +42,12 @@ def create_expense(
     """
     try:
         profile = Profile.objects.get(telegram_id=telegram_id)
-        
+    except Profile.DoesNotExist:
+        # Создаем профиль если его нет
+        profile = Profile.objects.create(telegram_id=telegram_id)
+        logger.info(f"Created new profile for user {telegram_id}")
+    
+    try:
         if expense_date is None:
             expense_date = date.today()
             
@@ -59,10 +64,6 @@ def create_expense(
         
         logger.info(f"Created expense {expense.id} for user {telegram_id}")
         return expense
-        
-    except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {telegram_id}")
-        return None
     except Exception as e:
         logger.error(f"Error creating expense: {e}")
         return None
@@ -81,7 +82,7 @@ def get_user_expenses(
     limit: int = 50
 ) -> List[Expense]:
     """
-    Получить расходы пользователя
+    Получить траты пользователя
     
     Args:
         telegram_id: ID пользователя в Telegram
@@ -91,10 +92,16 @@ def get_user_expenses(
         limit: Максимальное количество записей
         
     Returns:
-        Список расходов
+        Список трат
     """
     try:
         profile = Profile.objects.get(telegram_id=telegram_id)
+    except Profile.DoesNotExist:
+        # Создаем профиль если его нет
+        profile = Profile.objects.create(telegram_id=telegram_id)
+        logger.info(f"Created new profile for user {telegram_id}")
+    
+    try:
         queryset = Expense.objects.filter(profile=profile)
         
         if start_date:
@@ -106,9 +113,7 @@ def get_user_expenses(
             
         return list(queryset.select_related('category').order_by('-expense_date', '-created_at')[:limit])
         
-    except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {telegram_id}")
-        return []
+        pass
     except Exception as e:
         logger.error(f"Error getting expenses: {e}")
         return []
@@ -121,7 +126,7 @@ def get_expenses_summary(
     end_date: date
 ) -> Dict:
     """
-    Получить сводку расходов за период
+    Получить сводку трат за период
     
     Args:
         telegram_id: ID пользователя в Telegram
@@ -140,6 +145,12 @@ def get_expenses_summary(
     """
     try:
         profile = Profile.objects.get(telegram_id=telegram_id)
+    except Profile.DoesNotExist:
+        # Создаем профиль если его нет
+        profile = Profile.objects.create(telegram_id=telegram_id)
+        logger.info(f"Created new profile for user {telegram_id}")
+    
+    try:
         expenses = Expense.objects.filter(
             profile=profile,
             expense_date__gte=start_date,
@@ -213,15 +224,7 @@ def get_expenses_summary(
             'potential_cashback': potential_cashback
         }
         
-    except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {telegram_id}")
-        return {
-            'total': Decimal('0'),
-            'count': 0,
-            'by_category': [],
-            'currency': 'RUB',
-            'potential_cashback': Decimal('0')
-        }
+        pass
     except Exception as e:
         logger.error(f"Error getting expenses summary: {e}")
         return {
@@ -239,7 +242,7 @@ def get_expenses_by_period(
     period: str = 'month'
 ) -> Dict:
     """
-    Получить расходы за стандартный период
+    Получить траты за стандартный период
     
     Args:
         telegram_id: ID пользователя в Telegram
@@ -276,11 +279,11 @@ def update_expense(
     **kwargs
 ) -> bool:
     """
-    Обновить расход
+    Обновить трату
     
     Args:
         telegram_id: ID пользователя в Telegram
-        expense_id: ID расхода
+        expense_id: ID траты
         **kwargs: Поля для обновления
         
     Returns:
@@ -288,6 +291,11 @@ def update_expense(
     """
     try:
         profile = Profile.objects.get(telegram_id=telegram_id)
+    except Profile.DoesNotExist:
+        logger.error(f"Profile not found for user {telegram_id}")
+        return False
+    
+    try:
         expense = Expense.objects.get(id=expense_id, profile=profile)
         
         # Обновляем только переданные поля
@@ -299,7 +307,7 @@ def update_expense(
         logger.info(f"Updated expense {expense_id} for user {telegram_id}")
         return True
         
-    except (Profile.DoesNotExist, Expense.DoesNotExist):
+    except Expense.DoesNotExist:
         logger.error(f"Expense {expense_id} not found for user {telegram_id}")
         return False
     except Exception as e:
@@ -310,24 +318,29 @@ def update_expense(
 @sync_to_async
 def delete_expense(telegram_id: int, expense_id: int) -> bool:
     """
-    Удалить расход
+    Удалить трату
     
     Args:
         telegram_id: ID пользователя в Telegram
-        expense_id: ID расхода
+        expense_id: ID траты
         
     Returns:
         True если успешно, False при ошибке
     """
     try:
         profile = Profile.objects.get(telegram_id=telegram_id)
+    except Profile.DoesNotExist:
+        logger.error(f"Profile not found for user {telegram_id}")
+        return False
+    
+    try:
         expense = Expense.objects.get(id=expense_id, profile=profile)
         expense.delete()
         
         logger.info(f"Deleted expense {expense_id} for user {telegram_id}")
         return True
         
-    except (Profile.DoesNotExist, Expense.DoesNotExist):
+    except Expense.DoesNotExist:
         logger.error(f"Expense {expense_id} not found for user {telegram_id}")
         return False
     except Exception as e:
@@ -338,7 +351,7 @@ def delete_expense(telegram_id: int, expense_id: int) -> bool:
 @sync_to_async
 def get_last_expense(telegram_id: int) -> Optional[Expense]:
     """
-    Получить последний расход пользователя
+    Получить последнюю трату пользователя
     
     Args:
         telegram_id: ID пользователя в Telegram
@@ -348,11 +361,13 @@ def get_last_expense(telegram_id: int) -> Optional[Expense]:
     """
     try:
         profile = Profile.objects.get(telegram_id=telegram_id)
-        return Expense.objects.filter(profile=profile).order_by('-created_at').first()
-        
     except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {telegram_id}")
-        return None
+        # Создаем профиль если его нет
+        profile = Profile.objects.create(telegram_id=telegram_id)
+        logger.info(f"Created new profile for user {telegram_id}")
+    
+    try:
+        return Expense.objects.filter(profile=profile).order_by('-created_at').first()
     except Exception as e:
         logger.error(f"Error getting last expense: {e}")
         return None
