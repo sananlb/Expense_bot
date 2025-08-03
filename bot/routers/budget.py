@@ -14,6 +14,7 @@ from bot.keyboards import back_close_keyboard, yes_no_keyboard
 from bot.utils import get_text, format_amount
 from bot.services.budget import create_budget, get_user_budgets, check_budget_status, delete_budget, check_all_budgets
 from bot.services.category import get_user_categories
+from bot.utils.message_utils import send_message_with_cleanup
 
 logger = logging.getLogger(__name__)
 
@@ -60,11 +61,11 @@ async def cmd_budget(message: Message, state: FSMContext, lang: str = 'ru'):
         keyboard.button(text=get_text('close', lang), callback_data="close")
         keyboard.adjust(2, 2)
         
-        await message.answer(text, reply_markup=keyboard.as_markup())
+        await send_message_with_cleanup(message, state, text, reply_markup=keyboard.as_markup())
         
     except Exception as e:
         logger.error(f"Error showing budget: {e}")
-        await message.answer(get_text('error_occurred', lang))
+        await send_message_with_cleanup(message, state, get_text('error_occurred', lang))
 
 
 @router.callback_query(F.data == "add_budget")
@@ -128,7 +129,7 @@ async def process_budget_amount(message: Message, state: FSMContext, lang: str =
         amount = Decimal(text)
         
         if amount <= 0:
-            await message.answer(get_text('invalid_amount', lang))
+            await send_message_with_cleanup(message, state, get_text('invalid_amount', lang))
             return
             
         # Получаем данные из состояния
@@ -144,14 +145,14 @@ async def process_budget_amount(message: Message, state: FSMContext, lang: str =
         )
         
         if budget:
-            await message.answer(get_text('budget_set', lang))
+            await send_message_with_cleanup(message, state, get_text('budget_set', lang))
         else:
-            await message.answer(get_text('error_occurred', lang))
+            await send_message_with_cleanup(message, state, get_text('error_occurred', lang))
             
         await state.clear()
         
     except (ValueError, InvalidOperation):
-        await message.answer(get_text('invalid_amount', lang))
+        await send_message_with_cleanup(message, state, get_text('invalid_amount', lang))
 
 
 @router.callback_query(F.data == "delete_budget")

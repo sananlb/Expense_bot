@@ -118,7 +118,7 @@ async def process_category_name(message: types.Message, state: FSMContext):
     name = message.text.strip()
     
     if len(name) > 50:
-        await message.answer("❌ Название слишком длинное. Максимум 50 символов.")
+        await send_message_with_cleanup(message, state, "❌ Название слишком длинное. Максимум 50 символов.")
         return
     
     # Сохраняем название и предлагаем иконку
@@ -133,7 +133,8 @@ async def process_category_name(message: types.Message, state: FSMContext):
         [InlineKeyboardButton(text="◀️", callback_data="cancel_category")]
     ])
     
-    await message.answer(
+    await send_message_with_cleanup(
+        message, state,
         f"Для категории «{name}» предлагаю иконку: {suggested_icon}\n\n"
         "Хотите использовать её или выбрать другую?",
         reply_markup=keyboard

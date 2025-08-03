@@ -13,6 +13,7 @@ from bot.keyboards import expenses_summary_keyboard, month_selection_keyboard, b
 from bot.utils import get_text, format_amount, get_month_name
 from bot.services.expense import get_expenses_summary, get_expenses_by_period
 from bot.services.pdf_report import generate_pdf_report
+from bot.utils.message_utils import send_message_with_cleanup
 
 logger = logging.getLogger(__name__)
 
@@ -179,8 +180,8 @@ async def show_expenses_summary(
                 reply_markup=expenses_summary_keyboard(lang, period)
             )
         else:
-            await message.answer(
-                text,
+            await send_message_with_cleanup(
+                message, state, text,
                 reply_markup=expenses_summary_keyboard(lang, period)
             )
             
@@ -190,7 +191,7 @@ async def show_expenses_summary(
         if edit and original_message:
             await original_message.edit_text(error_text)
         else:
-            await message.answer(error_text)
+            await send_message_with_cleanup(message, state, error_text)
 
 
 @router.message(Command("report"))
@@ -198,7 +199,8 @@ async def cmd_report(message: Message, lang: str = 'ru'):
     """Команда /report - выбор периода для отчета"""
     keyboard = month_selection_keyboard(lang)
     
-    await message.answer(
+    await send_message_with_cleanup(
+        message, state,
         get_text('choose_month', lang),
         reply_markup=keyboard
     )

@@ -441,7 +441,7 @@ async def process_bank_text(message: types.Message, state: FSMContext):
     bank_name = message.text.strip()
     
     if len(bank_name) > 100:
-        await message.answer("❌ Название банка слишком длинное. Максимум 100 символов.")
+        await send_message_with_cleanup(message, state, "❌ Название банка слишком длинное. Максимум 100 символов.")
         return
     
     await state.update_data(bank_name=bank_name)
@@ -481,7 +481,7 @@ async def process_percent_text(message: types.Message, state: FSMContext):
         percent = float(percent_text)
         
         if percent <= 0 or percent > 100:
-            await message.answer("❌ Процент должен быть от 0 до 100")
+            await send_message_with_cleanup(message, state, "❌ Процент должен быть от 0 до 100")
             return
         
         # Сохраняем кешбэк без лимита и месяца
@@ -511,7 +511,7 @@ async def process_percent_text(message: types.Message, state: FSMContext):
         await state.clear()
         
     except ValueError:
-        await message.answer("❌ Введите корректный процент (например: 5 или 5.5)")
+        await send_message_with_cleanup(message, state, "❌ Введите корректный процент (например: 5 или 5.5)")
 
 
 @router.message(CashbackForm.waiting_for_limit)
@@ -522,7 +522,7 @@ async def process_limit_text(message: types.Message, state: FSMContext):
         limit = float(limit_text)
         
         if limit <= 0:
-            await message.answer("❌ Лимит должен быть больше 0")
+            await send_message_with_cleanup(message, state, "❌ Лимит должен быть больше 0")
             return
         
         await state.update_data(limit_amount=limit)
@@ -530,4 +530,4 @@ async def process_limit_text(message: types.Message, state: FSMContext):
         await state.set_state(CashbackForm.waiting_for_month)
         
     except ValueError:
-        await message.answer("❌ Введите корректную сумму (например: 1000 или 1000.50)")
+        await send_message_with_cleanup(message, state, "❌ Введите корректную сумму (например: 1000 или 1000.50)")

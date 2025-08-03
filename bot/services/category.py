@@ -107,6 +107,19 @@ def delete_category(user_id: int, category_id: int) -> bool:
 
 
 @sync_to_async
+def get_category_by_id(user_id: int, category_id: int) -> Optional[ExpenseCategory]:
+    """Получить категорию по ID"""
+    try:
+        category = ExpenseCategory.objects.get(
+            id=category_id,
+            profile__telegram_id=user_id
+        )
+        return category
+    except ExpenseCategory.DoesNotExist:
+        return None
+
+
+@sync_to_async
 def create_default_categories(telegram_id: int) -> bool:
     """
     Создать базовые категории для нового пользователя
