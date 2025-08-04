@@ -58,9 +58,10 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
         text += "\n"
         for payment in sorted_payments:
             status = "✅" if payment.is_active else "⏸"
-            text += f"\n\n{status} {payment.description}\n"
-            text += f"💰 {payment.amount:,.0f} ₽ - {payment.category.name}\n"
-            text += f"📅 Каждое {payment.day_of_month} число месяца"
+            text += f"\n\n{status} Регулярный платеж: <i>{payment.description}</i>\n"
+            text += f"Сумма: <i>{payment.amount:,.0f} ₽</i>\n"
+            text += f"Дата: <i>{payment.day_of_month} число месяца</i>\n"
+            text += f"Категория: <i>{payment.category.name}</i>"
     else:
         text += "\n\nУ вас пока нет регулярных платежей."
     
@@ -436,13 +437,13 @@ async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext):
     status_text = "Активен ✅" if payment.is_active else "Приостановлен ⏸"
     toggle_text = "⏸ Приостановить" if payment.is_active else "▶️ Возобновить"
     
-    text = f"""✏️ Редактирование платежа
+    text = f"""✏️ <b>Редактирование платежа</b>
 
-{payment.description}
-💰 {payment.amount:,.0f} ₽
-📁 {payment.category.name}
-📅 Каждое {payment.day_of_month} число
-Статус: {status_text}"""
+Регулярный платеж: <i>{payment.description}</i>
+Сумма: <i>{payment.amount:,.0f} ₽</i>
+Категория: <i>{payment.category.name}</i>
+Дата: <i>{payment.day_of_month} число месяца</i>
+Статус: <i>{status_text}</i>"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔄 Изменить данные", callback_data=f"change_recurring_{payment_id}")],
@@ -450,7 +451,7 @@ async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext):
         [InlineKeyboardButton(text="❌ Отмена", callback_data="recurring_menu")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     await callback.answer()
 
 
