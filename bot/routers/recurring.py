@@ -50,8 +50,13 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
     text = "🔄 <b>Регулярные платежи</b>\n\nВаши регулярные платежи:"
     
     if payments:
+        # Сортируем платежи: активные сначала, приостановленные в конце
+        active_payments = [p for p in payments if p.is_active]
+        paused_payments = [p for p in payments if not p.is_active]
+        sorted_payments = active_payments + paused_payments
+        
         text += "\n"
-        for payment in payments:
+        for payment in sorted_payments:
             status = "✅" if payment.is_active else "⏸"
             text += f"\n\n{status} {payment.description}\n"
             text += f"💰 {payment.amount:,.0f} ₽ - {payment.category.name}\n"
@@ -390,8 +395,13 @@ async def edit_recurring_list(callback: types.CallbackQuery, state: FSMContext):
         await callback.answer("У вас нет регулярных платежей", show_alert=True)
         return
     
+    # Сортируем платежи: активные сначала, приостановленные в конце
+    active_payments = [p for p in payments if p.is_active]
+    paused_payments = [p for p in payments if not p.is_active]
+    sorted_payments = active_payments + paused_payments
+    
     keyboard_buttons = []
-    for payment in payments:
+    for payment in sorted_payments:
         status = "✅" if payment.is_active else "⏸"
         text = f"{status} {payment.description} - {payment.amount:,.0f} ₽"
         keyboard_buttons.append([
@@ -506,9 +516,15 @@ async def delete_recurring_list(callback: types.CallbackQuery, state: FSMContext
         await callback.answer("У вас нет регулярных платежей", show_alert=True)
         return
     
+    # Сортируем платежи: активные сначала, приостановленные в конце
+    active_payments = [p for p in payments if p.is_active]
+    paused_payments = [p for p in payments if not p.is_active]
+    sorted_payments = active_payments + paused_payments
+    
     keyboard_buttons = []
-    for payment in payments:
-        text = f"{payment.description} - {payment.amount:,.0f} ₽"
+    for payment in sorted_payments:
+        status = "✅" if payment.is_active else "⏸"
+        text = f"{status} {payment.description} - {payment.amount:,.0f} ₽"
         keyboard_buttons.append([
             InlineKeyboardButton(
                 text=text, 
