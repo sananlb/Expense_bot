@@ -59,9 +59,9 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
         for payment in sorted_payments:
             status = "✅" if payment.is_active else "⏸"
             text += f"\n\n{status} Регулярный платеж: <i>{payment.description}</i>\n"
-            text += f"💰 Сумма: <i>{payment.amount:.0f} ₽</i>\n"
-            text += f"📅 Дата: <i>{payment.day_of_month} число месяца</i>\n"
-            text += f"📁 Категория: <i>{payment.category.name}</i>"
+            text += f"Сумма: <i>{payment.amount:.0f} ₽</i>\n"
+            text += f"Дата: <i>{payment.day_of_month} число месяца</i>\n"
+            text += f"Категория: <i>{payment.category.name}</i>"
     else:
         text += "\n\nУ вас пока нет регулярных платежей."
     
@@ -118,7 +118,7 @@ async def process_description(message: types.Message, state: FSMContext):
         
         # Спрашиваем про сумму
         await send_message_with_cleanup(message, state,
-            f"💰 Старая сумма: {data['old_amount']:.0f} ₽\n\n"
+            f"Старая сумма: {data['old_amount']:.0f} ₽\n\n"
             f"Введите новую сумму или отправьте «.» чтобы оставить прежнюю:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отмена", callback_data="recurring_menu")]
@@ -296,7 +296,7 @@ async def process_amount_text(message: types.Message, state: FSMContext):
         
         # В режиме редактирования сразу спрашиваем про день
         await send_message_with_cleanup(message, state,
-            f"📅 Старый день: {data['old_day']} число\n\n"
+            f"Старый день: {data['old_day']} число\n\n"
             f"Введите новый день месяца (1-30) или отправьте «.» чтобы оставить прежний:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отмена", callback_data="recurring_menu")]
@@ -440,9 +440,9 @@ async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext):
     text = f"""✏️ <b>Редактирование платежа</b>
 
 Регулярный платеж: <i>{payment.description}</i>
-💰 Сумма: <i>{payment.amount:,.0f} ₽</i>
-📁 Категория: <i>{payment.category.name}</i>
-📅 Дата: <i>{payment.day_of_month} число месяца</i>
+Сумма: <i>{payment.amount:.0f} ₽</i>
+Категория: <i>{payment.category.name}</i>
+Дата: <i>{payment.day_of_month} число месяца</i>
 Статус: <i>{status_text}</i>"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
