@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """
-Универсальный скрипт для запуска Redis + Celery на Windows, Linux и macOS
-Автоматически определяет ОС и запускает все необходимые сервисы
+Универсальный скрипт для запуска Redis + Celery на Windows и Linux/Ubuntu
+Автоматически определяет ОС и запускает все необходимые сервисы для Expense Bot
 """
 import os
 import sys
@@ -11,7 +11,6 @@ import time
 import signal
 import shutil
 from pathlib import Path
-import psutil  # Нужно установить: pip install psutil
 
 # Цвета для красивого вывода
 class Colors:
@@ -27,7 +26,7 @@ class Colors:
 def print_header():
     """Печать заголовка"""
     print(Colors.CYAN + "=" * 60 + Colors.ENDC)
-    print(Colors.CYAN + Colors.BOLD + "    EXPENSE BOT - Universal Launcher" + Colors.ENDC)
+    print(Colors.CYAN + Colors.BOLD + "    EXPENSE BOT - Redis & Celery Launcher" + Colors.ENDC)
     print(Colors.CYAN + "=" * 60 + Colors.ENDC)
     print(f"OS: {platform.system()} {platform.release()}")
     print(f"Python: {sys.version.split()[0]}")
@@ -36,16 +35,6 @@ def print_header():
 def check_installed(command):
     """Проверка, установлена ли программа"""
     return shutil.which(command) is not None
-
-def is_process_running(process_name):
-    """Проверка, запущен ли процесс"""
-    for proc in psutil.process_iter(['name']):
-        try:
-            if process_name.lower() in proc.info['name'].lower():
-                return True
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            pass
-    return False
 
 def find_redis_executable():
     """Поиск исполняемого файла Redis"""
@@ -75,21 +64,9 @@ def find_redis_executable():
             if "redis-server.exe" in files:
                 return os.path.join(root, "redis-server.exe")
                 
-    else:  # Linux/macOS
-        # Проверяем стандартные команды
+    else:  # Linux/Mac
         if check_installed("redis-server"):
             return "redis-server"
-        
-        # На macOS Redis может быть установлен через Homebrew
-        if system == "Darwin":
-            homebrew_paths = [
-                "/usr/local/bin/redis-server",
-                "/opt/homebrew/bin/redis-server",
-                os.path.expanduser("~/homebrew/bin/redis-server")
-            ]
-            for path in homebrew_paths:
-                if os.path.exists(path):
-                    return path
             
     return None
 
@@ -103,7 +80,7 @@ class ServiceManager:
         
     def check_redis(self):
         """Проверка и запуск Redis"""
-        print(Colors.BLUE + "🔍 Проверка Redis..." + Colors.ENDC)
+        print(Colors.BLUE + "Проверка Redis..." + Colors.ENDC)
         
         # Проверяем, запущен ли Redis
         try:
@@ -114,16 +91,18 @@ class ServiceManager:
                 timeout=2
             )
             if result.returncode == 0 and "PONG" in result.stdout:
-                print(Colors.GREEN + "✅ Redis уже запущен" + Colors.ENDC)
+                print(Colors.GREEN + "OK Redis уже запущен" + Colors.ENDC)
                 return True
-        except:
+        except subprocess.TimeoutExpired:
             pass
+        except Exception as e:
+            print(f"Ошибка при проверке Redis: {e}")
         
         # Ищем Redis
         redis_path = find_redis_executable()
         
         if not redis_path:
-            print(Colors.FAIL + "❌ Redis не найден!" + Colors.ENDC)
+            print(Colors.FAIL + "ERROR Redis не найден!" + Colors.ENDC)
             print("\nУстановите Redis:")
             if self.system == "Windows":
                 print("1. Скачайте: https://github.com/microsoftarchive/redis/releases")
@@ -136,7 +115,7 @@ class ServiceManager:
             return False
         
         # Запускаем Redis
-        print(Colors.WARNING + f"🚀 Запуск Redis: {redis_path}" + Colors.ENDC)
+        print(Colors.WARNING + f"Запуск Redis: {redis_path}" + Colors.ENDC)
         
         try:
             if self.system == "Windows":
@@ -146,7 +125,7 @@ class ServiceManager:
                     creationflags=subprocess.CREATE_NEW_CONSOLE
                 )
             else:
-                # На Linux/macOS запускаем в фоне
+                # На Linux/Mac запускаем в фоне
                 self.redis_process = subprocess.Popen(
                     [redis_path],
                     stdout=subprocess.DEVNULL,
@@ -163,19 +142,19 @@ class ServiceManager:
                 text=True
             )
             if result.returncode == 0 and "PONG" in result.stdout:
-                print(Colors.GREEN + "✅ Redis успешно запущен" + Colors.ENDC)
+                print(Colors.GREEN + "OK Redis успешно запущен" + Colors.ENDC)
                 return True
             else:
-                print(Colors.FAIL + "❌ Redis не отвечает" + Colors.ENDC)
+                print(Colors.FAIL + "ERROR Redis не отвечает" + Colors.ENDC)
                 return False
                 
         except Exception as e:
-            print(Colors.FAIL + f"❌ Ошибка запуска Redis: {e}" + Colors.ENDC)
+            print(Colors.FAIL + f"ERROR Ошибка запуска Redis: {e}" + Colors.ENDC)
             return False
     
     def check_django(self):
         """Проверка Django и миграций"""
-        print(Colors.BLUE + "\n🔍 Проверка Django..." + Colors.ENDC)
+        print(Colors.BLUE + "\nПроверка Django..." + Colors.ENDC)
         
         try:
             # Устанавливаем переменную окружения
@@ -190,23 +169,23 @@ class ServiceManager:
             
             if result.returncode == 0:
                 if "[ ]" in result.stdout:
-                    print(Colors.WARNING + "⚠️  Есть неприменённые миграции" + Colors.ENDC)
+                    print(Colors.WARNING + "Есть неприменённые миграции" + Colors.ENDC)
                     print("Применяю миграции...")
                     subprocess.run([sys.executable, "manage.py", "migrate"])
-                print(Colors.GREEN + "✅ Django настроен корректно" + Colors.ENDC)
+                print(Colors.GREEN + "OK Django настроен корректно" + Colors.ENDC)
                 return True
             else:
-                print(Colors.FAIL + "❌ Ошибка Django" + Colors.ENDC)
+                print(Colors.FAIL + "ERROR Ошибка Django" + Colors.ENDC)
                 print(result.stderr)
                 return False
                 
         except Exception as e:
-            print(Colors.FAIL + f"❌ Ошибка: {e}" + Colors.ENDC)
+            print(Colors.FAIL + f"ERROR Ошибка: {e}" + Colors.ENDC)
             return False
     
     def start_celery(self):
         """Запуск Celery Worker и Beat"""
-        print(Colors.BLUE + "\n🔍 Запуск Celery..." + Colors.ENDC)
+        print(Colors.BLUE + "\nЗапуск Celery..." + Colors.ENDC)
         
         # Команды для разных ОС
         if self.system == "Windows":
@@ -219,7 +198,7 @@ class ServiceManager:
         
         try:
             # Запуск Worker
-            print(Colors.WARNING + "🚀 Запуск Celery Worker..." + Colors.ENDC)
+            print(Colors.WARNING + "Запуск Celery Worker..." + Colors.ENDC)
             if self.system == "Windows":
                 self.worker_process = subprocess.Popen(
                     worker_cmd,
@@ -231,7 +210,7 @@ class ServiceManager:
             time.sleep(3)
             
             # Запуск Beat
-            print(Colors.WARNING + "🚀 Запуск Celery Beat..." + Colors.ENDC)
+            print(Colors.WARNING + "Запуск Celery Beat..." + Colors.ENDC)
             if self.system == "Windows":
                 self.beat_process = subprocess.Popen(
                     beat_cmd,
@@ -241,16 +220,16 @@ class ServiceManager:
                 self.beat_process = subprocess.Popen(beat_cmd)
             
             time.sleep(2)
-            print(Colors.GREEN + "✅ Celery запущен" + Colors.ENDC)
+            print(Colors.GREEN + "OK Celery запущен" + Colors.ENDC)
             return True
             
         except Exception as e:
-            print(Colors.FAIL + f"❌ Ошибка запуска Celery: {e}" + Colors.ENDC)
+            print(Colors.FAIL + f"ERROR Ошибка запуска Celery: {e}" + Colors.ENDC)
         return False
 
     def test_cache(self):
         """Быстрый тест кеша"""
-        print(Colors.BLUE + "\n🧪 Тестирование кеша..." + Colors.ENDC)
+        print(Colors.BLUE + "\nТестирование кеша..." + Colors.ENDC)
         
         try:
             # Импортируем Django
@@ -263,43 +242,55 @@ class ServiceManager:
             value = cache.get('test_key')
             
             if value == 'test_value':
-                print(Colors.GREEN + "✅ Кеш работает корректно" + Colors.ENDC)
+                print(Colors.GREEN + "OK Кеш работает корректно" + Colors.ENDC)
                 cache.delete('test_key')
                 return True
             else:
-                print(Colors.FAIL + "❌ Кеш не работает" + Colors.ENDC)
+                print(Colors.FAIL + "ERROR Кеш не работает" + Colors.ENDC)
                 return False
                 
         except Exception as e:
-            print(Colors.FAIL + f"❌ Ошибка теста: {e}" + Colors.ENDC)
+            print(Colors.FAIL + f"ERROR Ошибка теста: {e}" + Colors.ENDC)
             return False
     
     def show_status(self):
         """Показ статуса всех сервисов"""
-        print(Colors.CYAN + "\n📊 СТАТУС СЕРВИСОВ:" + Colors.ENDC)
-        print("─" * 40)
+        print(Colors.CYAN + "\nСТАТУС СЕРВИСОВ:" + Colors.ENDC)
+        print("-" * 40)
         
         # Redis
         try:
             result = subprocess.run(["redis-cli", "ping"], capture_output=True, text=True)
-            redis_status = "🟢 Работает" if result.returncode == 0 else "🔴 Остановлен"
-        except:
-            redis_status = "🔴 Остановлен"
+            redis_status = "Работает" if result.returncode == 0 else "Остановлен"
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            redis_status = "Остановлен"
         print(f"Redis:         {redis_status}")
         
         # Celery Worker
-        worker_status = "🟢 Работает" if self.worker_process and self.worker_process.poll() is None else "🔴 Остановлен"
+        worker_status = "Работает" if self.worker_process and self.worker_process.poll() is None else "Остановлен"
         print(f"Celery Worker: {worker_status}")
         
         # Celery Beat
-        beat_status = "🟢 Работает" if self.beat_process and self.beat_process.poll() is None else "🔴 Остановлен"
+        beat_status = "Работает" if self.beat_process and self.beat_process.poll() is None else "Остановлен"
         print(f"Celery Beat:   {beat_status}")
         
-        print("─" * 40)
+        print("-" * 40)
+    
+    def check_celery_tasks(self):
+        """Проверка зарегистрированных задач Celery"""
+        print(Colors.BLUE + "\nПроверка задач Celery..." + Colors.ENDC)
+        
+        try:
+            # Проверяем, что Celery tasks можно импортировать
+            import expense_bot.celery_tasks
+            print(Colors.GREEN + "OK Задачи Celery загружены" + Colors.ENDC)
+            
+        except Exception as e:
+            print(Colors.WARNING + f"Не удалось загрузить задачи: {e}" + Colors.ENDC)
     
     def stop_all(self):
         """Остановка всех сервисов"""
-        print(Colors.WARNING + "\n⏹️  Остановка сервисов..." + Colors.ENDC)
+        print(Colors.WARNING + "\nОстановка сервисов..." + Colors.ENDC)
         
         # Останавливаем Celery
         for proc, name in [(self.worker_process, "Worker"), (self.beat_process, "Beat")]:
@@ -307,10 +298,12 @@ class ServiceManager:
                 try:
                     proc.terminate()
                     proc.wait(timeout=5)
-                    print(f"✅ Celery {name} остановлен")
-                except:
+                    print(f"OK Celery {name} остановлен")
+                except subprocess.TimeoutExpired:
                     proc.kill()
-                    print(f"⚠️  Celery {name} принудительно завершён")
+                    print(f"Celery {name} принудительно завершён")
+                except Exception as e:
+                    print(f"Ошибка при остановке Celery {name}: {e}")
         
         # Останавливаем Redis (только если мы его запустили)
         if self.redis_process:
@@ -320,22 +313,17 @@ class ServiceManager:
                 else:
                     self.redis_process.terminate()
                     self.redis_process.wait(timeout=5)
-                print("✅ Redis остановлен")
-            except:
+                print("OK Redis остановлен")
+            except subprocess.TimeoutExpired:
                 if self.redis_process:
                     self.redis_process.kill()
-                print("⚠️  Redis принудительно завершён")
+                print("Redis принудительно завершён")
+            except Exception as e:
+                print(f"Ошибка при остановке Redis: {e}")
     
     def run(self):
         """Основной метод запуска"""
         print_header()
-        
-        # Проверяем зависимости
-        try:
-            import psutil
-        except ImportError:
-            print(Colors.FAIL + "❌ Установите psutil: pip install psutil" + Colors.ENDC)
-            return 1
         
         # Проверяем и запускаем сервисы
         if not self.check_redis():
@@ -352,19 +340,28 @@ class ServiceManager:
         time.sleep(2)
         self.test_cache()
         
+        # Проверяем задачи
+        self.check_celery_tasks()
+        
         # Показываем статус
         self.show_status()
         
         # Инструкции
-        print(Colors.CYAN + "\n💡 ИНСТРУКЦИИ:" + Colors.ENDC)
+        print(Colors.CYAN + "\nИНСТРУКЦИИ:" + Colors.ENDC)
         print("1. Все сервисы запущены и работают")
         print("2. Теперь можете запустить бота: python run_bot.py")
         print("3. Для остановки нажмите Ctrl+C")
         
         if self.system == "Windows":
-            print("\n📝 Примечание: На Windows сервисы запущены в отдельных окнах")
+            print("\nПримечание: На Windows сервисы запущены в отдельных окнах")
+            print("   - Celery использует --pool=solo для совместимости")
         
-        print(Colors.GREEN + "\n✨ Все готово к работе!" + Colors.ENDC)
+        print(Colors.GREEN + "\nВсе готово к работе!" + Colors.ENDC)
+        
+        # Задачи, выполняемые Celery Beat
+        print(Colors.CYAN + "\nРАСПИСАНИЕ ЗАДАЧ:" + Colors.ENDC)
+        print("- Уведомления о подписках: ежедневно в 10:00")
+        print("- Обработка повторяющихся платежей: ежедневно в 12:00")
         
         # Ждём завершения
         try:
@@ -373,18 +370,18 @@ class ServiceManager:
                 time.sleep(1)
                 # Проверяем, что процессы живы
                 if self.worker_process and self.worker_process.poll() is not None:
-                    print(Colors.WARNING + "\n⚠️  Celery Worker остановился!" + Colors.ENDC)
+                    print(Colors.WARNING + "\nCelery Worker остановился!" + Colors.ENDC)
                     break
                 if self.beat_process and self.beat_process.poll() is not None:
-                    print(Colors.WARNING + "\n⚠️  Celery Beat остановился!" + Colors.ENDC)
+                    print(Colors.WARNING + "\nCelery Beat остановился!" + Colors.ENDC)
                     break
                     
         except KeyboardInterrupt:
-            print(Colors.WARNING + "\n\n🛑 Получен сигнал остановки..." + Colors.ENDC)
+            print(Colors.WARNING + "\n\nПолучен сигнал остановки..." + Colors.ENDC)
         
         # Останавливаем всё
         self.stop_all()
-        print(Colors.GREEN + "\n✅ Все сервисы остановлены" + Colors.ENDC)
+        print(Colors.GREEN + "\nВсе сервисы остановлены" + Colors.ENDC)
         return 0
 
 def main():
@@ -393,7 +390,7 @@ def main():
     
     # Обработчик сигналов для корректного завершения
     def signal_handler(signum, frame):
-        print(Colors.WARNING + "\n\n🛑 Получен сигнал остановки..." + Colors.ENDC)
+        print(Colors.WARNING + "\n\nПолучен сигнал остановки..." + Colors.ENDC)
         manager.stop_all()
         sys.exit(0)
     

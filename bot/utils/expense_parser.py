@@ -4,7 +4,7 @@
 import re
 import logging
 from typing import Optional, Dict, Any
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 logger = logging.getLogger(__name__)
 
@@ -42,8 +42,11 @@ CURRENCY_PATTERNS = {
     'BRL': [r'brl', r'реалов?', r'бразильских?', r'бразильское', r'бразильский'],
 }
 
-# Словарь ключевых слов для категорий
-CATEGORY_KEYWORDS = {
+# Импортируем словарь ключевых слов из models
+from expenses.models import CATEGORY_KEYWORDS as MODEL_CATEGORY_KEYWORDS
+
+# Старый словарь для обратной совместимости
+OLD_CATEGORY_KEYWORDS = {
     'азс': [
         # Основные слова
         'азс', 'заправка', 'бензин', 'дизель', 'солярка', 'топливо', 'горючее',
@@ -75,14 +78,18 @@ CATEGORY_KEYWORDS = {
     'кафе и рестораны': [
         # Основные
         'ресторан', 'кафе', 'кофе', 'обед', 'завтрак', 'ужин', 'перекус', 'ланч', 'бизнес-ланч',
+        # Напитки
+        'капучино', 'латте', 'эспрессо', 'американо', 'раф', 'флэт уайт', 'макиато', 'чай', 'какао',
+        'фраппе', 'гляссе', 'мокко', 'доппио', 'ристретто', 'лунго', 'кортадо',
         # Фастфуд
         'макдональдс', 'макдак', 'мак', 'kfc', 'кфс', 'бургер кинг', 'burger king', 'вкусно и точка',
         # Кафе и кофейни
-        'старбакс', 'starbucks', 'шоколадница', 'кофемания', 'costa', 'кофе хауз',
+        'старбакс', 'starbucks', 'шоколадница', 'кофемания', 'costa', 'кофе хауз', 'кофейня',
+        'one price coffee', 'даблби', 'surf coffee', 'правда кофе', 'кооператив черный',
         # Доставка еды
         'доставка', 'яндекс.еда', 'delivery club', 'деливери', 'суши', 'пицца', 'роллы',
         # Дополнительные
-        'столовая', 'бар', 'паб', 'ресторация', 'чаевые', 'кулинария'
+        'столовая', 'бар', 'паб', 'ресторация', 'чаевые', 'кулинария', 'бистро', 'пекарня', 'кондитерская'
     ],
     'транспорт': [
         # Такси
@@ -223,21 +230,56 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                 # Убираем найденную сумму из текста для получения описания
                 text_without_amount = text.replace(match.group(0), ' ').strip()
                 break
-            except:
+            except (ValueError, InvalidOperation) as e:
+                logger.debug(f"Ошибка при парсинге суммы '{amount_str}': {e}")
                 continue
     
     if not amount or amount <= 0:
         return None
     
-    # Определяем категорию по ключевым словам
+    # Определяем категорию
     category = None
     max_score = 0
+    text_lower = text.lower()  # Приводим к нижнему регистру для поиска
     
-    for cat_name, keywords in CATEGORY_KEYWORDS.items():
-        score = sum(1 for keyword in keywords if keyword in text)
-        if score > max_score:
-            max_score = score
-            category = cat_name
+    # Сначала проверяем пользовательские категории, если есть профиль
+    if profile:
+        from expenses.models import ExpenseCategory, CategoryKeyword
+        from asgiref.sync import sync_to_async
+        
+        # Получаем категории пользователя с их ключевыми словами
+        user_categories = await sync_to_async(list)(
+            ExpenseCategory.objects.filter(profile=profile).prefetch_related('keywords')
+        )
+        
+        # Проверяем каждую категорию пользователя
+        for user_cat in user_categories:
+            user_cat_lower = user_cat.name.lower()
+            
+            # Проверяем прямое вхождение названия категории в текст
+            if user_cat_lower in text_lower:
+                category = user_cat.name
+                max_score = 100  # Максимальный приоритет для пользовательских категорий
+                break
+            
+            # Проверяем ключевые слова пользовательской категории
+            keywords = await sync_to_async(list)(user_cat.keywords.all())
+            for kw in keywords:
+                if kw.keyword.lower() in text_lower:
+                    category = user_cat.name
+                    max_score = 100
+                    break
+            
+            if category:
+                break
+    
+    # Если не нашли в пользовательских, ищем в стандартных
+    if not category:
+        for cat_name, keywords in MODEL_CATEGORY_KEYWORDS.items():
+            score = sum(1 for keyword in keywords if keyword.lower() in text_lower)
+            if score > max_score:
+                max_score = score
+                category = cat_name
     
     # Формируем описание (текст без суммы)
     description = text_without_amount if 'text_without_amount' in locals() else text
@@ -257,33 +299,84 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     result = {
         'amount': float(amount),
         'description': description or 'Расход',
-        'category': category or 'другое',
+        'category': category or 'Прочие расходы',
         'currency': currency,
         'confidence': 0.5 if category else 0.2
     }
     
-    # Попробуем улучшить с помощью AI
-    if use_ai and user_id:
-        try:
-            from bot.services.ai_categorization import categorize_expense
-            from aiogram.types import User
+    # Попробуем улучшить с помощью AI, если:
+    # 1. Не нашли категорию по ключевым словам
+    # 2. Или нашли, но её нет у пользователя
+    if use_ai and user_id and profile:
+        should_use_ai = False
+        
+        # Проверяем, нужно ли использовать AI
+        if not category:
+            should_use_ai = True
+            logger.info(f"No category found by keywords for '{text}', will use AI")
+        else:
+            # Проверяем, есть ли такая категория у пользователя
+            from expenses.models import ExpenseCategory
+            from asgiref.sync import sync_to_async
+            user_categories = await sync_to_async(list)(
+                ExpenseCategory.objects.filter(profile=profile).values_list('name', flat=True)
+            )
             
-            # Создаем простой объект User для AI сервиса
-            user = type('User', (), {'id': user_id})()
+            # Проверяем точное и частичное совпадение
+            category_exists = any(
+                category.lower() in cat.lower() or cat.lower() in category.lower() 
+                for cat in user_categories
+            )
             
-            ai_result = await categorize_expense(text, user, profile)
-            if ai_result and ai_result.get('confidence', 0) > result['confidence']:
-                # Обновляем результат данными от AI
-                result['amount'] = ai_result.get('amount', result['amount'])
-                result['description'] = ai_result.get('description', result['description'])
-                result['category'] = ai_result.get('category', result['category'])
-                result['confidence'] = ai_result.get('confidence', result['confidence'])
-                result['currency'] = ai_result.get('currency', 'RUB')
-                result['ai_enhanced'] = True
+            if not category_exists:
+                should_use_ai = True
+                logger.info(f"Category '{category}' not found in user categories, will use AI")
+        
+        if should_use_ai:
+            try:
+                from bot.services.ai_selector import get_service
                 
-                logger.info(f"AI enhanced result for user {user_id}: {result}")
-        except Exception as e:
-            logger.error(f"AI categorization failed: {e}")
+                # Получаем категории пользователя
+                user_categories = await sync_to_async(list)(
+                    ExpenseCategory.objects.filter(profile=profile).values_list('name', flat=True)
+                )
+                
+                if user_categories:
+                    # Получаем контекст пользователя (недавние категории)
+                    user_context = {}
+                    recent_expenses = await sync_to_async(list)(
+                        profile.expenses.select_related('category')
+                        .order_by('-created_at')[:10]
+                    )
+                    if recent_expenses:
+                        recent_categories = list(set([
+                            exp.category.name for exp in recent_expenses 
+                            if exp.category
+                        ]))[:3]
+                        if recent_categories:
+                            user_context['recent_categories'] = recent_categories
+                    
+                    # Используем AI сервис
+                    ai_service = get_service('categorization')
+                    ai_result = await ai_service.categorize_expense(
+                        text=text,
+                        amount=amount,
+                        currency=currency,
+                        categories=user_categories,
+                        user_context=user_context
+                    )
+                    
+                    if ai_result:
+                        # Обновляем только категорию из AI
+                        result['category'] = ai_result.get('category', result['category'])
+                        result['confidence'] = ai_result.get('confidence', result['confidence'])
+                        result['ai_enhanced'] = True
+                        result['ai_provider'] = ai_result.get('provider', 'unknown')
+                        
+                        logger.info(f"AI enhanced result for user {user_id}: category='{result['category']}', confidence={result['confidence']}")
+                    
+            except Exception as e:
+                logger.error(f"AI categorization failed: {e}")
     
     return result
 
@@ -302,9 +395,10 @@ def suggest_category(description: str) -> str:
     """
     description_lower = description.lower()
     
-    for category, keywords in CATEGORY_KEYWORDS.items():
+    # Используем новые категории из models.py
+    for category, keywords in MODEL_CATEGORY_KEYWORDS.items():
         for keyword in keywords:
-            if keyword in description_lower:
+            if keyword.lower() in description_lower:
                 return category
     
-    return 'другое'
+    return 'Прочие расходы'

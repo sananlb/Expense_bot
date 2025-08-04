@@ -21,6 +21,19 @@ DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
+# Security settings for production
+if not DEBUG:
+    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True').lower() == 'true'
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '31536000'))  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+    X_FRAME_OPTIONS = 'DENY'
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -68,15 +81,29 @@ WSGI_APPLICATION = 'expense_bot.wsgi.application'
 DJANGO_ALLOW_ASYNC_UNSAFE = True
 
 # Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'expense_bot.db',
-        'OPTIONS': {
-            'check_same_thread': False,
+if os.getenv('DB_HOST'):
+    # Production database settings for Docker
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.getenv('DB_NAME', 'expense_bot'),
+            'USER': os.getenv('DB_USER', 'expense_user'),
+            'PASSWORD': os.getenv('DB_PASSWORD', 'expense_password'),
+            'HOST': os.getenv('DB_HOST', 'db'),
+            'PORT': os.getenv('DB_PORT', '5432'),
         }
     }
-}
+else:
+    # Development database settings (SQLite)
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'expense_bot.db',
+            'OPTIONS': {
+                'check_same_thread': False,
+            }
+        }
+    }
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -113,8 +140,17 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Celery Configuration
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+# Redis connection settings for Docker
+if os.getenv('REDIS_HOST'):
+    # Docker environment
+    REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', 'redis_password')
+    REDIS_URL = f"redis://:{REDIS_PASSWORD}@{os.getenv('REDIS_HOST', 'redis')}:{os.getenv('REDIS_PORT', '6379')}"
+else:
+    # Local development
+    REDIS_URL = 'redis://localhost:6379'
+
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', f'{REDIS_URL}/0')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', f'{REDIS_URL}/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -186,6 +222,11 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'audit': {
+            'handlers': ['file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
     },
 }
 
@@ -194,8 +235,36 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
 
 # AI Configuration
+# Единичные ключи для обратной совместимости
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+
+# Множественные API ключи для ротации
+OPENAI_API_KEYS = []
+GOOGLE_API_KEYS = []
+
+# Загружаем OpenAI ключи (OPENAI_API_KEY_1, OPENAI_API_KEY_2, ...)
+for i in range(1, 10):
+    key = os.getenv(f'OPENAI_API_KEY_{i}')
+    if key:
+        OPENAI_API_KEYS.append(key)
+
+# Если нет множественных ключей, используем единичный
+if not OPENAI_API_KEYS and OPENAI_API_KEY:
+    OPENAI_API_KEYS = [OPENAI_API_KEY]
+
+# Загружаем Google ключи (GOOGLE_API_KEY_1, GOOGLE_API_KEY_2, ...)
+for i in range(1, 10):
+    key = os.getenv(f'GOOGLE_API_KEY_{i}')
+    if key:
+        GOOGLE_API_KEYS.append(key)
+
+# Если нет множественных ключей, используем единичный
+if not GOOGLE_API_KEYS and GOOGLE_API_KEY:
+    GOOGLE_API_KEYS = [GOOGLE_API_KEY]
+
+print(f"[SETTINGS] Загружено OpenAI ключей: {len(OPENAI_API_KEYS)}")
+print(f"[SETTINGS] Загружено Google API ключей: {len(GOOGLE_API_KEYS)}")
 
 # Currency and locale
 DEFAULT_CURRENCY = os.getenv('DEFAULT_CURRENCY', 'RUB')
@@ -252,3 +321,12 @@ try:
 }
 except ImportError:
     CELERY_BEAT_SCHEDULE = {}
+
+# Security Settings
+# Rate limiting
+BOT_RATE_LIMIT_MESSAGES_PER_MINUTE = int(os.getenv('BOT_RATE_LIMIT_MESSAGES_PER_MINUTE', '30'))
+BOT_RATE_LIMIT_MESSAGES_PER_HOUR = int(os.getenv('BOT_RATE_LIMIT_MESSAGES_PER_HOUR', '500'))
+
+# Content validation
+BOT_MAX_MESSAGE_LENGTH = int(os.getenv('BOT_MAX_MESSAGE_LENGTH', '4096'))
+SECURITY_MAX_FAILED_ATTEMPTS = int(os.getenv('SECURITY_MAX_FAILED_ATTEMPTS', '5'))
