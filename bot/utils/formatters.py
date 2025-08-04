@@ -4,7 +4,7 @@
 from typing import Dict, List, Optional, Union
 from decimal import Decimal
 from datetime import datetime, date
-from bot.utils.text_utils import get_text
+from bot.utils.language import get_text
 
 
 def format_currency(amount: Union[float, Decimal, int], currency: str = 'RUB') -> str:
