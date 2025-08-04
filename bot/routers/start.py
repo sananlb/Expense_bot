@@ -2,10 +2,11 @@
 Обработчик команды /start и приветствия
 """
 from aiogram import Router, F, types
-from aiogram.filters import Command
+from aiogram.filters import Command, CommandObject
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 import asyncio
+import logging
 
 from bot.utils import get_text
 from bot.services.profile import get_or_create_profile
@@ -13,26 +14,72 @@ from bot.keyboards import main_menu_keyboard, back_close_keyboard
 from bot.services.category import create_default_categories
 from bot.utils.message_utils import send_message_with_cleanup, delete_message_with_effect
 from bot.utils.commands import update_user_commands
+from expenses.models import Subscription, Profile, ReferralBonus
+from django.utils import timezone
+from datetime import timedelta
+
+logger = logging.getLogger(__name__)
 
 router = Router(name="start")
 
 
 @router.message(Command("start"))
-async def cmd_start(message: types.Message, state: FSMContext, lang: str = 'ru'):
+async def cmd_start(message: types.Message, state: FSMContext, command: CommandObject, lang: str = 'ru'):
     """Обработка команды /start - показать информацию о боте"""
     user_id = message.from_user.id
+    
+    # Проверяем, есть ли реферальный код в команде
+    referral_code = None
+    if command.args:
+        # Формат: /start ref_ABCD1234
+        args = command.args.strip()
+        if args.startswith('ref_'):
+            referral_code = args[4:]  # Убираем префикс ref_
     
     # Создаем или получаем профиль пользователя
     profile = await get_or_create_profile(
         telegram_id=user_id,
-        username=message.from_user.username,
-        first_name=message.from_user.first_name,
-        last_name=message.from_user.last_name,
         language_code=message.from_user.language_code
     )
     
     # Создаем базовые категории для нового пользователя
     created = await create_default_categories(user_id)
+    
+    # Обработка реферальной ссылки для новых пользователей
+    referral_message = ""
+    if created and referral_code:
+        try:
+            # Находим реферера по коду
+            referrer = await Profile.objects.filter(referral_code=referral_code).afirst()
+            if referrer and referrer.telegram_id != user_id:
+                # Привязываем реферера
+                profile.referrer = referrer
+                await profile.asave()
+                
+                referral_message = "\n\n🎁 Вы перешли по реферальной ссылке! После оплаты первой подписки ваш друг получит бонус."
+                
+                logger.info(f"New user {user_id} registered with referral code from {referrer.telegram_id}")
+        except Exception as e:
+            logger.error(f"Error processing referral code: {e}")
+    
+    # Проверяем, есть ли у пользователя подписка
+    has_subscription = await profile.subscriptions.filter(
+        is_active=True,
+        end_date__gt=timezone.now()
+    ).aexists()
+    
+    # Если нет подписки, создаем пробный период на 7 дней
+    if not has_subscription and created:  # created = True означает, что это новый пользователь
+        trial_end = timezone.now() + timedelta(days=7)
+        await Subscription.objects.acreate(
+            profile=profile,
+            type='trial',
+            payment_method='trial',
+            amount=0,
+            start_date=timezone.now(),
+            end_date=trial_end,
+            is_active=True
+        )
     
     # Обновляем команды бота для пользователя
     await update_user_commands(message.bot, user_id)
@@ -55,13 +102,11 @@ async def cmd_start(message: types.Message, state: FSMContext, lang: str = 'ru')
 "Покажи траты за июль" или "Сколько я потратил сегодня"
 Получайте красивые PDF отчеты с графиками"""
     
-    # Кнопка закрыть
-    inline_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
-    ])
+    # Добавляем реферальное сообщение, если есть
+    text += referral_message
     
-    # Отправляем информацию
-    await send_message_with_cleanup(message, state, text, reply_markup=inline_keyboard)
+    # Отправляем информацию без кнопок
+    await send_message_with_cleanup(message, state, text)
 
 
 
@@ -106,16 +151,11 @@ async def callback_start(callback: types.CallbackQuery, state: FSMContext, lang:
 "Покажи траты за июль" или "Сколько я потратил сегодня"
 Получайте красивые PDF отчеты с графиками"""
     
-    # Кнопка закрыть
-    inline_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
-    ])
-    
     try:
-        await callback.message.edit_text(text, reply_markup=inline_keyboard)
+        await callback.message.edit_text(text)
     except Exception:
         # Если не удалось отредактировать, отправляем новое
-        await send_message_with_cleanup(callback, state, text, reply_markup=inline_keyboard)
+        await send_message_with_cleanup(callback, state, text)
     
     await callback.answer()
 

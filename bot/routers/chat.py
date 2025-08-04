@@ -192,9 +192,16 @@ async def get_simple_response(text: str, user_id: int) -> str:
             if not summary or summary['total'] == 0:
                 return "Сегодня трат пока нет."
             else:
-                response = f"Траты за сегодня: {summary['total']:,.0f} ₽\n\n"
-                for cat in summary['categories']:
-                    response += f"{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽\n"
+                # Проверяем, спрашивают ли о категориях
+                if 'категори' in text_lower:
+                    response = f"Сегодня траты были в следующих категориях:\n\n"
+                    for cat in summary['categories']:
+                        response += f"{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽\n"
+                    response += f"\nОбщая сумма: {summary['total']:,.0f} ₽"
+                else:
+                    response = f"Траты за сегодня: {summary['total']:,.0f} ₽\n\n"
+                    for cat in summary['categories']:
+                        response += f"{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽\n"
                 return response
         
         elif 'вчера' in text_lower:

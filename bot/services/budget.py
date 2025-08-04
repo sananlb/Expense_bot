@@ -35,7 +35,7 @@ def create_budget(
         Budget instance или None при ошибке
     """
     try:
-        profile = Profile.objects.get(telegram_id=telegram_id)
+        profile = Profile.objects.get(telegram_id=user_id)
         category = ExpenseCategory.objects.get(id=category_id, profile=profile)
         
         if start_date is None:
@@ -70,7 +70,7 @@ def create_budget(
 
 
 @sync_to_async
-def get_user_budgets(telegram_id: int, active_only: bool = True) -> List[Budget]:
+def get_user_budgets(user_id: int, active_only: bool = True) -> List[Budget]:
     """
     Получить бюджеты пользователя
     
@@ -82,7 +82,7 @@ def get_user_budgets(telegram_id: int, active_only: bool = True) -> List[Budget]
         Список бюджетов
     """
     try:
-        profile = Profile.objects.get(telegram_id=telegram_id)
+        profile = Profile.objects.get(telegram_id=user_id)
         queryset = Budget.objects.filter(profile=profile)
         
         if active_only:
@@ -99,7 +99,7 @@ def get_user_budgets(telegram_id: int, active_only: bool = True) -> List[Budget]
 
 
 @sync_to_async
-def check_budget_status(telegram_id: int, category_id: int) -> Dict:
+def check_budget_status(user_id: int, category_id: int) -> Dict:
     """
     Проверить статус бюджета для категории
     
@@ -119,7 +119,7 @@ def check_budget_status(telegram_id: int, category_id: int) -> Dict:
         }
     """
     try:
-        profile = Profile.objects.get(telegram_id=telegram_id)
+        profile = Profile.objects.get(telegram_id=user_id)
         
         # Получаем активный бюджет для категории
         budget = Budget.objects.filter(
@@ -197,7 +197,7 @@ def check_budget_status(telegram_id: int, category_id: int) -> Dict:
 
 
 @sync_to_async
-def delete_budget(telegram_id: int, budget_id: int) -> bool:
+def delete_budget(user_id: int, budget_id: int) -> bool:
     """
     Удалить (деактивировать) бюджет
     
@@ -209,7 +209,7 @@ def delete_budget(telegram_id: int, budget_id: int) -> bool:
         True если успешно, False при ошибке
     """
     try:
-        profile = Profile.objects.get(telegram_id=telegram_id)
+        profile = Profile.objects.get(telegram_id=user_id)
         budget = Budget.objects.get(id=budget_id, profile=profile)
         
         # Деактивируем бюджет
@@ -228,7 +228,7 @@ def delete_budget(telegram_id: int, budget_id: int) -> bool:
 
 
 @sync_to_async
-def check_all_budgets(telegram_id: int) -> List[Dict]:
+def check_all_budgets(user_id: int) -> List[Dict]:
     """
     Проверить статус всех активных бюджетов пользователя
     
@@ -239,7 +239,7 @@ def check_all_budgets(telegram_id: int) -> List[Dict]:
         Список словарей с информацией о бюджетах
     """
     try:
-        profile = Profile.objects.get(telegram_id=telegram_id)
+        profile = Profile.objects.get(telegram_id=user_id)
         budgets = Budget.objects.filter(
             profile=profile,
             is_active=True

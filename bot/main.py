@@ -26,9 +26,18 @@ from .routers import (
     settings_router,
     reports_router,
     info_router,
-    chat_router
+    chat_router,
+    subscription_router,
+    referral_router
 )
-from .middlewares import DatabaseMiddleware, LocalizationMiddleware, MenuCleanupMiddleware
+from .middlewares import (
+    DatabaseMiddleware, 
+    LocalizationMiddleware, 
+    MenuCleanupMiddleware,
+    RateLimitMiddleware,
+    SecurityCheckMiddleware,
+    LoggingMiddleware
+)
 from .middlewares.state_reset import StateResetMiddleware
 from .utils.commands import set_bot_commands
 
@@ -49,6 +58,11 @@ logger = logging.getLogger(__name__)
 async def on_startup(bot: Bot):
     """Действия при запуске бота"""
     await set_bot_commands(bot)
+    
+    # Запускаем задачу уведомлений о подписках
+    from bot.tasks.subscription_notifications import run_notification_task
+    asyncio.create_task(run_notification_task(bot))
+    
     logger.info("Бот запущен и готов к работе")
 
 
@@ -88,12 +102,29 @@ def create_dispatcher() -> Dispatcher:
     
     dp = Dispatcher(storage=storage)
     
-    # Подключение middlewares
+    # Подключение middlewares (порядок важен!)
+    # 1. Logging - логирует все запросы
+    dp.message.middleware(LoggingMiddleware())
+    dp.callback_query.middleware(LoggingMiddleware())
+    
+    # 2. Security - проверяет контент на безопасность
+    dp.message.middleware(SecurityCheckMiddleware())
+    dp.callback_query.middleware(SecurityCheckMiddleware())
+    
+    # 3. Rate Limiting - ограничивает частоту запросов
+    dp.message.middleware(RateLimitMiddleware())
+    dp.callback_query.middleware(RateLimitMiddleware())
+    
+    # 4. Database - подключает БД
     dp.message.middleware(DatabaseMiddleware())
     dp.callback_query.middleware(DatabaseMiddleware())
+    
+    # 5. Localization - устанавливает язык
     dp.message.middleware(LocalizationMiddleware())
     dp.callback_query.middleware(LocalizationMiddleware())
-    dp.message.middleware(MenuCleanupMiddleware())  # Добавляем перед StateResetMiddleware
+    
+    # 6. Menu Cleanup и State Reset
+    dp.message.middleware(MenuCleanupMiddleware())
     dp.message.middleware(StateResetMiddleware())
     
     # Подключение роутеров (порядок важен для приоритета обработки)
@@ -102,6 +133,8 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(category_router)  # Перемещаем выше expense_router
     dp.include_router(recurring_router)
     dp.include_router(cashback_router)
+    dp.include_router(subscription_router)  # Роутер подписок
+    dp.include_router(referral_router)     # Роутер реферальной системы
     dp.include_router(settings_router)
     dp.include_router(reports_router)
     dp.include_router(info_router)

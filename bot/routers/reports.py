@@ -14,6 +14,7 @@ from bot.utils import get_text, format_amount, get_month_name
 from bot.services.expense import get_expenses_summary, get_expenses_by_period
 from bot.services.pdf_report import generate_pdf_report
 from bot.utils.message_utils import send_message_with_cleanup
+from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +67,18 @@ async def callback_show_month_start(callback: CallbackQuery, lang: str = 'ru'):
 @router.callback_query(F.data == "generate_pdf")
 async def callback_generate_pdf(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Генерировать PDF отчет"""
+    # Проверяем подписку
+    has_subscription = await check_subscription(callback.from_user.id)
+    
+    if not has_subscription:
+        await callback.message.edit_text(
+            subscription_required_message(),
+            reply_markup=get_subscription_button(),
+            parse_mode="HTML"
+        )
+        await callback.answer()
+        return
+    
     await callback.answer(get_text('processing', lang))
     
     try:

@@ -6,22 +6,73 @@ from django.utils.html import format_html
 from django.db.models import Sum, Count
 from django.urls import reverse
 from django.utils.safestring import mark_safe
-from .models import Profile, UserSettings, ExpenseCategory, Expense, Budget, Cashback
+from .models import (
+    Profile, UserSettings, ExpenseCategory, Expense, Budget, 
+    Cashback, RecurringPayment, Subscription, PromoCode, 
+    PromoCodeUsage, ReferralBonus
+)
+from dateutil.relativedelta import relativedelta
+
+
+class SubscriptionInline(admin.TabularInline):
+    """Inline редактор подписок в профиле"""
+    model = Subscription
+    extra = 1
+    fields = ['end_date', 'is_active', 'days_left']
+    readonly_fields = ['days_left']
+    ordering = ['-end_date']
+    
+    def days_left(self, obj):
+        """Осталось дней"""
+        from django.utils import timezone
+        if obj and obj.end_date:
+            if obj.is_active and obj.end_date > timezone.now():
+                days = (obj.end_date - timezone.now()).days
+                return f"{days} дней"
+            return "Истекла"
+        return "-"
+    
+    days_left.short_description = 'Осталось'
+    
+    def has_delete_permission(self, request, obj=None):
+        return True
+    
+    def get_formset(self, request, obj=None, **kwargs):
+        formset = super().get_formset(request, obj, **kwargs)
+        # Устанавливаем значения по умолчанию для новых подписок
+        if obj:
+            from django.utils import timezone
+            formset.form.base_fields['end_date'].initial = timezone.now() + relativedelta(months=1)
+            formset.form.base_fields['is_active'].initial = True
+        return formset
 
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ['telegram_id', 'username', 'first_name', 'language_code', 'currency', 'is_active', 'created_at']
-    list_filter = ['is_active', 'language_code', 'currency', 'created_at']
-    search_fields = ['telegram_id', 'username', 'first_name', 'last_name']
-    readonly_fields = ['created_at', 'updated_at']
+    list_display = ['telegram_id', 'subscription_status', 
+                    'is_beta_tester', 'referrals_count_display', 'language_code', 
+                    'currency', 'is_active', 'created_at']
+    list_filter = ['is_active', 'is_beta_tester', 'language_code', 'currency', 'created_at']
+    search_fields = ['telegram_id', 'referral_code', 'beta_access_key']
+    readonly_fields = ['created_at', 'updated_at', 'referral_code', 
+                       'referrals_count', 'active_referrals_count']
+    inlines = [SubscriptionInline]
     
     fieldsets = (
         ('Основная информация', {
-            'fields': ('telegram_id', 'username', 'first_name', 'last_name')
+            'fields': ('telegram_id',)
         }),
         ('Настройки', {
             'fields': ('language_code', 'timezone', 'currency')
+        }),
+        ('Бета-тестирование', {
+            'fields': ('is_beta_tester', 'beta_access_key'),
+            'classes': ('collapse',)
+        }),
+        ('Реферальная программа', {
+            'fields': ('referrer', 'referral_code', 'referrals_count', 
+                       'active_referrals_count'),
+            'classes': ('collapse',)
         }),
         ('Статус', {
             'fields': ('is_active', 'created_at', 'updated_at')
@@ -32,8 +83,137 @@ class ProfileAdmin(admin.ModelAdmin):
         qs = super().get_queryset(request)
         return qs.annotate(
             total_expenses=Sum('expenses__amount'),
-            expenses_count=Count('expenses')
+            expenses_count=Count('expenses'),
+            _referrals_count=Count('referrals')
         )
+    
+    def subscription_status(self, obj):
+        """Статус подписки"""
+        from django.utils import timezone
+        active_sub = obj.subscriptions.filter(
+            is_active=True,
+            end_date__gt=timezone.now()
+        ).first()
+        
+        if active_sub:
+            days_left = (active_sub.end_date - timezone.now()).days
+            color = 'green' if days_left > 7 else 'orange'
+            return format_html(
+                '<span style="color: {};">✅ {} дней</span>',
+                color, days_left
+            )
+        return format_html('<span style="color: red;">❌ Нет</span>')
+    
+    subscription_status.short_description = 'Подписка'
+    
+    def referrals_count_display(self, obj):
+        """Количество рефералов"""
+        total = getattr(obj, '_referrals_count', 0)
+        active = obj.active_referrals_count
+        
+        if total > 0:
+            return format_html('{} ({} акт.)', total, active)
+        return '0'
+    
+    referrals_count_display.short_description = 'Рефералы'
+    
+    actions = ['make_beta_tester', 'remove_beta_tester', 'generate_referral_codes', 
+               'add_month_subscription', 'add_six_months_subscription']
+    
+    def make_beta_tester(self, request, queryset):
+        """Сделать бета-тестерами"""
+        updated = queryset.update(is_beta_tester=True)
+        self.message_user(request, f'{updated} пользователей стали бета-тестерами.')
+    
+    make_beta_tester.short_description = 'Сделать бета-тестерами'
+    
+    def remove_beta_tester(self, request, queryset):
+        """Убрать из бета-тестеров"""
+        updated = queryset.update(is_beta_tester=False)
+        self.message_user(request, f'{updated} пользователей удалены из бета-тестеров.')
+    
+    remove_beta_tester.short_description = 'Убрать из бета-тестеров'
+    
+    def generate_referral_codes(self, request, queryset):
+        """Сгенерировать реферальные коды"""
+        count = 0
+        for profile in queryset:
+            if not profile.referral_code:
+                profile.generate_referral_code()
+                count += 1
+        self.message_user(request, f'Сгенерировано {count} реферальных кодов.')
+    
+    generate_referral_codes.short_description = 'Сгенерировать реферальные коды'
+    
+    def add_month_subscription(self, request, queryset):
+        """Добавить месячную подписку"""
+        from django.utils import timezone
+        count = 0
+        for profile in queryset:
+            # Проверяем активную подписку
+            active_sub = profile.subscriptions.filter(
+                is_active=True,
+                end_date__gt=timezone.now()
+            ).order_by('-end_date').first()
+            
+            if active_sub:
+                # Продлеваем от текущей
+                start_date = active_sub.end_date
+            else:
+                # Новая подписка с текущего момента
+                start_date = timezone.now()
+            
+            end_date = start_date + relativedelta(months=1)
+            
+            Subscription.objects.create(
+                profile=profile,
+                type='month',
+                payment_method='stars',
+                amount=0,  # Бесплатно через админку
+                start_date=start_date,
+                end_date=end_date,
+                is_active=True
+            )
+            count += 1
+        
+        self.message_user(request, f'Добавлено {count} месячных подписок.')
+    
+    add_month_subscription.short_description = 'Добавить месячную подписку'
+    
+    def add_six_months_subscription(self, request, queryset):
+        """Добавить полугодовую подписку"""
+        from django.utils import timezone
+        count = 0
+        for profile in queryset:
+            # Проверяем активную подписку
+            active_sub = profile.subscriptions.filter(
+                is_active=True,
+                end_date__gt=timezone.now()
+            ).order_by('-end_date').first()
+            
+            if active_sub:
+                # Продлеваем от текущей
+                start_date = active_sub.end_date
+            else:
+                # Новая подписка с текущего момента
+                start_date = timezone.now()
+            
+            end_date = start_date + relativedelta(months=6)
+            
+            Subscription.objects.create(
+                profile=profile,
+                type='six_months',
+                payment_method='stars',
+                amount=0,  # Бесплатно через админку
+                start_date=start_date,
+                end_date=end_date,
+                is_active=True
+            )
+            count += 1
+        
+        self.message_user(request, f'Добавлено {count} полугодовых подписок.')
+    
+    add_six_months_subscription.short_description = 'Добавить полугодовую подписку'
 
 
 @admin.register(UserSettings)
@@ -175,6 +355,159 @@ class CashbackAdmin(admin.ModelAdmin):
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('profile', 'category')
+
+
+@admin.register(RecurringPayment)
+class RecurringPaymentAdmin(admin.ModelAdmin):
+    list_display = ['description', 'profile_link', 'category', 'amount',
+                    'currency', 'day_of_month', 'is_active', 'last_processed']
+    list_filter = ['is_active', 'currency', 'day_of_month', 'created_at']
+    search_fields = ['description', 'profile__username', 'profile__telegram_id',
+                     'category__name']
+    
+    def profile_link(self, obj):
+        """Ссылка на профиль"""
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:expenses_profile_change', args=[obj.profile.id]),
+            obj.profile
+        )
+    
+    profile_link.short_description = 'Профиль'
+
+
+@admin.register(Subscription)
+class SubscriptionAdmin(admin.ModelAdmin):
+    list_display = ['profile_link', 'type', 'payment_method', 'amount',
+                    'start_date', 'end_date', 'is_active', 'days_left']
+    list_filter = ['type', 'payment_method', 'is_active', 'notification_sent',
+                   'created_at']
+    search_fields = ['profile__telegram_id', 'profile__username',
+                     'telegram_payment_charge_id']
+    readonly_fields = ['created_at', 'updated_at']
+    date_hierarchy = 'end_date'
+    
+    def profile_link(self, obj):
+        """Ссылка на профиль"""
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:expenses_profile_change', args=[obj.profile.id]),
+            obj.profile
+        )
+    
+    profile_link.short_description = 'Профиль'
+    
+    def days_left(self, obj):
+        """Осталось дней"""
+        from django.utils import timezone
+        if obj.is_active and obj.end_date > timezone.now():
+            days = (obj.end_date - timezone.now()).days
+            color = 'green' if days > 7 else 'orange' if days > 0 else 'red'
+            return format_html(
+                '<span style="color: {};">{} дней</span>',
+                color, days
+            )
+        return format_html('<span style="color: gray;">Истекла</span>')
+    
+    days_left.short_description = 'Осталось'
+    
+    actions = ['extend_30_days', 'send_expiry_notifications']
+    
+    def extend_30_days(self, request, queryset):
+        """Продлить на 30 дней"""
+        from dateutil.relativedelta import relativedelta
+        count = 0
+        for sub in queryset:
+            sub.end_date = sub.end_date + relativedelta(months=1)
+            sub.save()
+            count += 1
+        self.message_user(request, f'Продлено {count} подписок на 30 дней.')
+    
+    extend_30_days.short_description = 'Продлить на 30 дней'
+
+
+@admin.register(PromoCode)
+class PromoCodeAdmin(admin.ModelAdmin):
+    list_display = ['code', 'get_discount_display', 'is_active', 'used_count',
+                    'max_uses', 'valid_until', 'created_by']
+    list_filter = ['is_active', 'discount_type', 'created_at', 'valid_until']
+    search_fields = ['code', 'description']
+    readonly_fields = ['used_count', 'created_at', 'updated_at']
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('code', 'description', 'is_active')
+        }),
+        ('Скидка', {
+            'fields': ('discount_type', 'discount_value')
+        }),
+        ('Ограничения', {
+            'fields': ('max_uses', 'used_count', 'valid_from', 'valid_until')
+        }),
+        ('Метаданные', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    actions = ['activate_codes', 'deactivate_codes']
+    
+    def activate_codes(self, request, queryset):
+        """Активировать промокоды"""
+        updated = queryset.update(is_active=True)
+        self.message_user(request, f'{updated} промокодов активировано.')
+    
+    activate_codes.short_description = 'Активировать'
+    
+    def deactivate_codes(self, request, queryset):
+        """Деактивировать промокоды"""
+        updated = queryset.update(is_active=False)
+        self.message_user(request, f'{updated} промокодов деактивировано.')
+    
+    deactivate_codes.short_description = 'Деактивировать'
+
+
+@admin.register(PromoCodeUsage)
+class PromoCodeUsageAdmin(admin.ModelAdmin):
+    list_display = ['promocode', 'profile', 'subscription', 'used_at']
+    list_filter = ['used_at', 'promocode']
+    search_fields = ['promocode__code', 'profile__username',
+                     'profile__telegram_id']
+    readonly_fields = ['promocode', 'profile', 'subscription', 'used_at']
+    
+    def has_add_permission(self, request):
+        return False
+
+
+@admin.register(ReferralBonus)
+class ReferralBonusAdmin(admin.ModelAdmin):
+    list_display = ['referrer_link', 'referred_link', 'bonus_days',
+                    'is_activated', 'created_at']
+    list_filter = ['is_activated', 'created_at', 'activated_at']
+    search_fields = ['referrer__username', 'referrer__telegram_id',
+                     'referred__username', 'referred__telegram_id']
+    readonly_fields = ['referrer', 'referred', 'subscription',
+                       'created_at', 'activated_at']
+    
+    def referrer_link(self, obj):
+        """Ссылка на реферера"""
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:expenses_profile_change', args=[obj.referrer.id]),
+            obj.referrer
+        )
+    
+    referrer_link.short_description = 'Реферер'
+    
+    def referred_link(self, obj):
+        """Ссылка на приглашенного"""
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:expenses_profile_change', args=[obj.referred.id]),
+            obj.referred
+        )
+    
+    referred_link.short_description = 'Приглашенный'
 
 
 # Настройка админки

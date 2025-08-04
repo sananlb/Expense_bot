@@ -196,13 +196,12 @@ class VoiceProcessor:
             await message.answer("⚠️ Голосовое сообщение слишком длинное. Максимум 60 секунд.")
             return None
         
-        # Send processing status
-        status_msg = await message.answer("🎤 Обрабатываю голосовое сообщение...")
+        # Show typing indicator
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
         
         # Download voice file
         audio_path = await self.download_voice_file(bot, file_id)
         if not audio_path:
-            await status_msg.edit_text("❌ Ошибка загрузки голосового сообщения")
             return None
         
         try:
@@ -220,15 +219,7 @@ class VoiceProcessor:
             if not text and self.google_api_key:
                 text = await self.transcribe_with_google(audio_path)
             
-            if text:
-                await status_msg.edit_text(f"📝 Распознано: {text}")
-                return text
-            else:
-                await status_msg.edit_text(
-                    "❌ Не удалось распознать речь.\n"
-                    "Попробуйте говорить четче или отправьте текстовое сообщение."
-                )
-                return None
+            return text
                 
         finally:
             # Clean up temp file
@@ -257,5 +248,6 @@ voice_processor = VoiceProcessor()
 
 
 async def process_voice_expense(message: types.Message, bot, user_language: str = 'ru') -> Optional[str]:
-    """Helper function for easy integration"""
-    return await voice_processor.process_voice_message(message, bot, user_language)
+    """Helper function for easy integration - использует оптимизированную версию из voice_recognition.py"""
+    from .voice_recognition import process_voice_for_expense
+    return await process_voice_for_expense(message, bot, user_language)

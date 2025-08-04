@@ -17,7 +17,7 @@ def get_or_create_profile(telegram_id: int, **user_data) -> Profile:
     
     Args:
         telegram_id: ID пользователя в Telegram
-        **user_data: Дополнительные данные пользователя (username, first_name, last_name, language_code)
+        **user_data: Дополнительные данные пользователя (language_code)
         
     Returns:
         Profile instance
@@ -30,9 +30,6 @@ def get_or_create_profile(telegram_id: int, **user_data) -> Profile:
         profile, created = Profile.objects.get_or_create(
             telegram_id=telegram_id,
             defaults={
-                'username': user_data.get('username', ''),
-                'first_name': user_data.get('first_name', ''),
-                'last_name': user_data.get('last_name', ''),
                 'language_code': language_code,
                 'timezone': 'Europe/Moscow',  # По умолчанию московское время
                 'currency': default_currency,  # Валюта на основе языка
@@ -44,24 +41,6 @@ def get_or_create_profile(telegram_id: int, **user_data) -> Profile:
             # Создаем настройки пользователя
             UserSettings.objects.create(profile=profile)
             logger.info(f"Created new profile for user {telegram_id}")
-        else:
-            # Обновляем данные пользователя если они изменились
-            updated = False
-            
-            if user_data.get('username') and profile.username != user_data['username']:
-                profile.username = user_data['username']
-                updated = True
-                
-            if user_data.get('first_name') and profile.first_name != user_data['first_name']:
-                profile.first_name = user_data['first_name']
-                updated = True
-                
-            if user_data.get('last_name') and profile.last_name != user_data['last_name']:
-                profile.last_name = user_data['last_name']
-                updated = True
-                
-            if updated:
-                profile.save()
                 
         # Убеждаемся что настройки существуют
         if not hasattr(profile, 'settings'):

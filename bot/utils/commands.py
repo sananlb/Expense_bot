@@ -13,6 +13,7 @@ async def set_bot_commands(bot: Bot):
         BotCommand(command="cashback", description="💳 Кешбэк"),
         BotCommand(command="categories", description="📁 Категории"),
         BotCommand(command="recurring", description="🔄 Регулярные платежи"),
+        BotCommand(command="subscription", description="⭐ Подписка"),
         BotCommand(command="settings", description="⚙️ Настройки"),
         BotCommand(command="start", description="📖 Информация"),
     ]
@@ -37,6 +38,7 @@ async def update_user_commands(bot: Bot, user_id: int):
         BotCommand(command="cashback", description=f"💳 {get_text('cashback_menu', lang)}"),
         BotCommand(command="categories", description=f"📁 {get_text('categories_menu', lang)}"),
         BotCommand(command="recurring", description=f"🔄 Регулярные платежи"),
+        BotCommand(command="subscription", description="⭐ Подписка"),
         BotCommand(command="settings", description=f"⚙️ {get_text('settings_menu', lang)}"),
         BotCommand(command="start", description=f"📖 {get_text('info', lang)}"),
     ]

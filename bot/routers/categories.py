@@ -11,7 +11,8 @@ from typing import List
 
 from ..services.category import (
     get_user_categories, create_category, update_category, 
-    delete_category, get_icon_for_category, get_category_by_id
+    delete_category, get_icon_for_category, get_category_by_id,
+    add_category_keyword, remove_category_keyword, get_category_keywords
 )
 from ..services.expense import get_month_summary
 from ..utils.message_utils import send_message_with_cleanup
@@ -60,6 +61,10 @@ async def show_categories_menu(message: types.Message | types.CallbackQuery, sta
         user_id = message.from_user.id
     
     logger.info(f"show_categories_menu called for user_id: {user_id}")
+    
+    # Проверяем подписку
+    from bot.services.subscription import check_subscription
+    has_subscription = await check_subscription(user_id)
         
     categories = await get_user_categories(user_id)
     logger.info(f"Found {len(categories)} categories for user {user_id}")
@@ -75,12 +80,21 @@ async def show_categories_menu(message: types.Message | types.CallbackQuery, sta
     else:
         text += "\n\nУ вас пока нет категорий."
     
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➕ Добавить", callback_data="add_category")],
-        [InlineKeyboardButton(text="✏️ Редактировать", callback_data="edit_categories")],
-        [InlineKeyboardButton(text="➖ Удалить", callback_data="delete_categories")],
-        [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
-    ])
+    # Формируем клавиатуру в зависимости от подписки
+    if has_subscription:
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="➕ Добавить", callback_data="add_category")],
+            [InlineKeyboardButton(text="✏️ Редактировать", callback_data="edit_categories")],
+            [InlineKeyboardButton(text="➖ Удалить", callback_data="delete_categories")],
+            [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
+        ])
+    else:
+        # Без подписки можно только просматривать
+        text += "\n\n⚠️ <i>Редактирование категорий доступно только с подпиской</i>"
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⭐ Оформить подписку", callback_data="menu_subscription")],
+            [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
+        ])
     
     # Используем send_message_with_cleanup для правильной работы с меню
     if state:

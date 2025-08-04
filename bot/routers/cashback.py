@@ -98,6 +98,19 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
 @router.callback_query(lambda c: c.data == "cashback_menu")
 async def callback_cashback_menu(callback: types.CallbackQuery, state: FSMContext):
     """Показать меню кешбэков через callback"""
+    # Проверяем подписку
+    from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
+    
+    has_subscription = await check_subscription(callback.from_user.id)
+    if not has_subscription:
+        await callback.message.edit_text(
+            subscription_required_message() + "\n\n💳 Управление кешбэками доступно только с подпиской.",
+            reply_markup=get_subscription_button(),
+            parse_mode="HTML"
+        )
+        await callback.answer()
+        return
+    
     await show_cashback_menu(callback, state)
     await callback.answer()
 

@@ -203,8 +203,6 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     current_state = await state.get_state()
     if current_state:
         # Если есть активное состояние, не обрабатываем как трату
-        import logging
-        logger = logging.getLogger(__name__)
         logger.info(f"Skipping expense handler due to active state: {current_state}")
         return
     

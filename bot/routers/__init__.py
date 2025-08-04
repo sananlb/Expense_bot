@@ -9,6 +9,8 @@ from .settings import router as settings_router
 from .reports import router as reports_router
 from .info import router as info_router
 from .chat import router as chat_router
+from .subscription import router as subscription_router
+from .referral import router as referral_router
 
 __all__ = [
     "start_router",
@@ -20,5 +22,7 @@ __all__ = [
     "settings_router",
     "reports_router",
     "info_router",
-    "chat_router"
+    "chat_router",
+    "subscription_router",
+    "referral_router"
 ]
