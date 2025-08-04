@@ -59,7 +59,7 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
         for payment in sorted_payments:
             status = "✅" if payment.is_active else "⏸"
             text += f"\n\n{status} Регулярный платеж: <i>{payment.description}</i>\n"
-            text += f"💰 Сумма: <i>{payment.amount:,.0f} ₽</i>\n"
+            text += f"💰 Сумма: <i>{payment.amount:.0f} ₽</i>\n"
             text += f"📅 Дата: <i>{payment.day_of_month} число месяца</i>\n"
             text += f"📁 Категория: <i>{payment.category.name}</i>"
     else:
@@ -118,7 +118,7 @@ async def process_description(message: types.Message, state: FSMContext):
         
         # Спрашиваем про сумму
         await send_message_with_cleanup(message, state,
-            f"💰 Старая сумма: {data['old_amount']:,.0f} ₽\n\n"
+            f"💰 Старая сумма: {data['old_amount']:.0f} ₽\n\n"
             f"Введите новую сумму или отправьте «.» чтобы оставить прежнюю:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="❌ Отмена", callback_data="recurring_menu")]
@@ -143,7 +143,7 @@ async def process_description(message: types.Message, state: FSMContext):
             for j in range(2):
                 if i + j < len(amounts):
                     row.append(InlineKeyboardButton(
-                        text=f"{int(amounts[i + j]):,} ₽".replace(",", " "), 
+                        text=f"{int(amounts[i + j])} ₽", 
                         callback_data=f"recurring_amount_{amounts[i + j]}"
                     ))
             keyboard_buttons.append(row)
@@ -404,7 +404,7 @@ async def edit_recurring_list(callback: types.CallbackQuery, state: FSMContext):
     keyboard_buttons = []
     for payment in sorted_payments:
         status = "✅" if payment.is_active else "⏸"
-        text = f"{status} {payment.description} - {payment.amount:,.0f} ₽"
+        text = f"{status} {payment.description} - {payment.amount:.0f} ₽"
         keyboard_buttons.append([
             InlineKeyboardButton(
                 text=text, 
@@ -525,7 +525,7 @@ async def delete_recurring_list(callback: types.CallbackQuery, state: FSMContext
     keyboard_buttons = []
     for payment in sorted_payments:
         status = "✅" if payment.is_active else "⏸"
-        text = f"{status} {payment.description} - {payment.amount:,.0f} ₽"
+        text = f"{status} {payment.description} - {payment.amount:.0f} ₽"
         keyboard_buttons.append([
             InlineKeyboardButton(
                 text=text, 
