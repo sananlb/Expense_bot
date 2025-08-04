@@ -6,7 +6,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-from aiogram.exceptions import CancelHandler
+# from aiogram.exceptions import CancelHandler  # Not available in aiogram 3.x
 from datetime import date
 import asyncio
 import logging
@@ -227,7 +227,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         # Не удалось распознать трату - пропускаем обработку
         # Сообщение будет обработано chat_router'ом
         logger.info(f"Expense parser returned None for text: '{text}', passing to chat router")
-        raise CancelHandler()  # Явно отменяем обработку для передачи следующему роутеру
+        return  # В aiogram 3.x просто возвращаем None для пропуска обработки
     
     # Проверяем/создаем категорию
     category = await get_or_create_category(user_id, parsed['category'])
