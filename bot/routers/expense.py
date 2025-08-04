@@ -6,8 +6,10 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.exceptions import CancelHandler
 from datetime import date
 import asyncio
+import logging
 
 from ..services.expense import get_today_summary, add_expense
 from ..services.cashback import calculate_potential_cashback
@@ -21,6 +23,7 @@ from ..decorators import require_subscription, rate_limit
 from expenses.models import Profile
 
 router = Router(name="expense")
+logger = logging.getLogger(__name__)
 
 
 class ExpenseForm(StatesGroup):
@@ -223,7 +226,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     if not parsed:
         # Не удалось распознать трату - пропускаем обработку
         # Сообщение будет обработано chat_router'ом
-        return
+        logger.info(f"Expense parser returned None for text: '{text}', passing to chat router")
+        raise CancelHandler()  # Явно отменяем обработку для передачи следующему роутеру
     
     # Проверяем/создаем категорию
     category = await get_or_create_category(user_id, parsed['category'])
