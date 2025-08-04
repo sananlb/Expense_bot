@@ -12,6 +12,8 @@ import asyncio
 from ..services.expense import get_today_summary, get_month_summary
 from ..services.cashback import calculate_potential_cashback
 from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect
+from ..utils.formatters import format_currency, format_expenses_summary
+from ..decorators import rate_limit
 
 router = Router(name="menu")
 
@@ -26,19 +28,52 @@ async def callback_menu(callback: types.CallbackQuery, state: FSMContext):
 
 async def show_main_menu(message: types.Message | types.CallbackQuery, state: FSMContext):
     """Отображение главного меню согласно ТЗ"""
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("Showing main menu")
+    
     text = """💰 Главное меню
 
 Выберите действие:"""
     
-    # Кнопки главного меню по ТЗ
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    # Проверяем подписку для отображения кешбэка
+    from bot.services.subscription import check_subscription
+    
+    # Определяем user_id в зависимости от типа
+    if isinstance(message, types.Message):
+        user_id = message.from_user.id
+    elif isinstance(message, types.CallbackQuery):
+        user_id = message.from_user.id
+    else:
+        user_id = message.from_user.id
+        
+    has_subscription = await check_subscription(user_id)
+    
+    # Формируем кнопки меню
+    keyboard_buttons = [
         [InlineKeyboardButton(text="📊 Расходы", callback_data="expenses_today")],
-        [InlineKeyboardButton(text="💳 Кешбэк", callback_data="cashback_menu")],
+    ]
+    
+    # Кешбэк только для подписчиков
+    if has_subscription:
+        keyboard_buttons.append([InlineKeyboardButton(text="💳 Кешбэк", callback_data="cashback_menu")])
+    
+    keyboard_buttons.extend([
         [InlineKeyboardButton(text="📁 Категории", callback_data="categories_menu")],
         [InlineKeyboardButton(text="🔄 Регулярные платежи", callback_data="recurring_menu")],
+        [InlineKeyboardButton(text="⭐ Подписка", callback_data="menu_subscription")],
+    ])
+    
+    # Реферальная программа только для подписчиков
+    if has_subscription:
+        keyboard_buttons.append([InlineKeyboardButton(text="🎁 Реферальная программа", callback_data="menu_referral")])
+    
+    keyboard_buttons.extend([
         [InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings_menu")],
         [InlineKeyboardButton(text="📖 Информация", callback_data="start")]
     ])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     
     await send_message_with_cleanup(message, state, text, reply_markup=keyboard)
 
@@ -114,6 +149,13 @@ async def show_start(callback: types.CallbackQuery, state: FSMContext):
     except Exception:
         # Если не удалось отредактировать, отправляем новое
         await send_message_with_cleanup(callback, state, text, reply_markup=keyboard)
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "menu_main")
+async def callback_main_menu(callback: types.CallbackQuery, state: FSMContext):
+    """Показать главное меню через callback (возврат из подменю)"""
+    await show_main_menu(callback, state)
     await callback.answer()
 
 

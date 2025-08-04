@@ -6,14 +6,18 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from datetime import datetime, timedelta
 import logging
-from typing import Optional
+from typing import Optional, Dict, Any
 
-from ..utils.expense_parser import parse_expense_message
-from ..services.expense import add_expense, get_today_summary, get_month_summary
-from ..services.category import get_or_create_category
-from ..services.profile import get_or_create_profile
+from ..services.expense import get_today_summary, get_month_summary
 from ..utils.message_utils import send_message_with_cleanup
+from ..services.ai_selector import get_service
+from ..services.subscription import check_subscription, subscription_required_message, get_subscription_button
+from ..decorators import require_subscription, rate_limit
+from ..routers.reports import show_expenses_summary
 from expenses.models import Profile
+from dateutil import parser
+from calendar import monthrange
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -117,49 +121,58 @@ def classify_by_heuristics(text: str, lang: str = 'ru') -> str:
     return 'expense'
 
 
-async def process_chat_message(message: types.Message, state: FSMContext, text: str):
+async def process_chat_message(message: types.Message, state: FSMContext, text: str, use_ai: bool = True):
     """Обработать сообщение как чат"""
+    user_id = message.from_user.id
+    
+    # Сначала проверяем, не запрос ли это дневника трат
+    diary_result = await check_and_process_diary_request(message, state, text)
+    if diary_result:
+        return  # Запрос дневника обработан
+    
+    # Проверяем подписку для AI чата
+    has_subscription = await check_subscription(user_id)
+    
+    # Если нет подписки - используем простые ответы
+    if not has_subscription and use_ai:
+        # Для пользователей без подписки доступны только базовые функции записи трат
+        await message.answer(
+            "Я помогу вам учитывать расходы. Просто отправьте мне сообщение с тратой, например 'Кофе 200'.\n\n"
+            "Для доступа к AI-ассистенту и расширенной аналитике оформите подписку.",
+            reply_markup=get_subscription_button(),
+            parse_mode="HTML"
+        )
+        return
+    
+    # Получаем или создаем сессию
+    session_id = await ChatContextManager.get_or_create_session(user_id, state)
+    
     # Добавляем сообщение пользователя в контекст
     await ChatContextManager.add_message(state, 'user', text)
     
-    # Анализируем запрос
-    text_lower = text.lower()
-    user_id = message.from_user.id
-    
-    # Обработка запросов отчетов
-    if 'трат' in text_lower or 'расход' in text_lower or 'потратил' in text_lower:
-        if 'сегодня' in text_lower:
-            # Показать траты за сегодня
-            summary = await get_today_summary(user_id)
-            if not summary or summary['total'] == 0:
-                response = "Сегодня трат пока нет."
-            else:
-                response = f"Траты за сегодня: {summary['total']:,.0f} ₽\n\n"
-                for cat in summary['categories']:
-                    response += f"{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽\n"
-        
-        elif 'вчера' in text_lower:
-            # Показать траты за вчера
-            yesterday = datetime.now().date() - timedelta(days=1)
-            response = "Функция просмотра трат за вчера будет добавлена в следующей версии."
-        
-        elif 'месяц' in text_lower:
-            # Показать траты за месяц
-            today = datetime.now().date()
-            summary = await get_month_summary(user_id, today.month, today.year)
-            if not summary or summary['total'] == 0:
-                response = "В этом месяце трат пока нет."
-            else:
-                response = f"Траты за текущий месяц: {summary['total']:,.0f} ₽\n\n"
-                for cat in summary['categories'][:5]:
-                    response += f"{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽\n"
-        else:
-            response = "Я могу показать траты за сегодня или за текущий месяц. Просто спросите!"
-    
+    # Если есть подписка и включен AI - используем AI для ответа
+    if has_subscription and use_ai:
+        try:
+            # Получаем контекст
+            context = await ChatContextManager.get_context(state)
+            
+            # Получаем дополнительную информацию о пользователе
+            today_summary = await get_today_summary(user_id)
+            user_context = {
+                'total_today': today_summary.get('total', 0) if today_summary else 0
+            }
+            
+            # Получаем AI сервис и генерируем ответ
+            ai_service = get_service('chat')
+            response = await ai_service.chat(text, context, user_context)
+            
+        except Exception as e:
+            logger.error(f"AI chat error: {e}")
+            # Fallback на простые ответы
+            response = await get_simple_response(text, user_id)
     else:
-        # Общий ответ
-        response = ("Я помогу вам учитывать расходы. Просто отправьте мне сообщение с тратой, "
-                   "например 'Кофе 200' или спросите о ваших тратах.")
+        # Простые ответы без AI
+        response = await get_simple_response(text, user_id)
     
     # Добавляем ответ в контекст
     await ChatContextManager.add_message(state, 'assistant', response)
@@ -167,38 +180,207 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
     await send_message_with_cleanup(message, state, response)
 
 
-# Обработчик текстовых сообщений с приоритетом ниже, чем у expense handler
+async def get_simple_response(text: str, user_id: int) -> str:
+    """Получить простой ответ без использования AI"""
+    text_lower = text.lower()
+    
+    # Обработка запросов отчетов
+    if 'трат' in text_lower or 'расход' in text_lower or 'потратил' in text_lower:
+        if 'сегодня' in text_lower:
+            # Показать траты за сегодня
+            summary = await get_today_summary(user_id)
+            if not summary or summary['total'] == 0:
+                return "Сегодня трат пока нет."
+            else:
+                response = f"Траты за сегодня: {summary['total']:,.0f} ₽\n\n"
+                for cat in summary['categories']:
+                    response += f"{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽\n"
+                return response
+        
+        elif 'вчера' in text_lower:
+            # Показать траты за вчера
+            return "Функция просмотра трат за вчера будет добавлена в следующей версии."
+        
+        elif 'месяц' in text_lower:
+            # Показать траты за месяц
+            today = datetime.now().date()
+            summary = await get_month_summary(user_id, today.month, today.year)
+            if not summary or summary['total'] == 0:
+                return "В этом месяце трат пока нет."
+            else:
+                response = f"Траты за текущий месяц: {summary['total']:,.0f} ₽\n\n"
+                for cat in summary['categories'][:5]:
+                    response += f"{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽\n"
+                return response
+        else:
+            return "Я могу показать траты за сегодня или за текущий месяц. Просто спросите!"
+    
+    else:
+        # Общий ответ
+        return ("Я помогу вам учитывать расходы. Просто отправьте мне сообщение с тратой, "
+               "например 'Кофе 200' или спросите о ваших тратах.")
+
+
+async def check_and_process_diary_request(message: types.Message, state: FSMContext, text: str) -> bool:
+    """Проверить и обработать запрос дневника трат"""
+    text_lower = text.lower()
+    
+    # Ключевые слова для дневника трат
+    diary_keywords = ['дневник', 'траты за', 'расходы за', 'покажи траты', 'показать траты', 
+                      'потратил за', 'сколько потратил']
+    
+    # Проверяем наличие ключевых слов
+    is_diary_request = any(keyword in text_lower for keyword in diary_keywords)
+    
+    if not is_diary_request:
+        return False
+    
+    # Пытаемся распознать даты в тексте
+    dates = await parse_dates_from_text(text)
+    
+    if dates:
+        # Если даты найдены - показываем дневник за указанный период
+        start_date, end_date = dates
+        lang = 'ru'  # TODO: получить язык пользователя
+        
+        await show_expenses_summary(
+            message=message,
+            start_date=start_date,
+            end_date=end_date,
+            lang=lang
+        )
+        return True
+    
+    # Если даты не распознаны, но есть ключевые слова - используем простые периоды
+    if 'вчера' in text_lower:
+        yesterday = datetime.now().date() - timedelta(days=1)
+        await show_expenses_summary(message, yesterday, yesterday, 'ru')
+        return True
+    elif 'неделю' in text_lower or 'недели' in text_lower:
+        today = datetime.now().date()
+        week_start = today - timedelta(days=today.weekday())
+        await show_expenses_summary(message, week_start, today, 'ru')
+        return True
+    elif 'месяц' in text_lower and ('прошлый' in text_lower or 'прошлого' in text_lower):
+        today = datetime.now().date()
+        if today.month == 1:
+            prev_month = 12
+            prev_year = today.year - 1
+        else:
+            prev_month = today.month - 1
+            prev_year = today.year
+        
+        start_date = datetime(prev_year, prev_month, 1).date()
+        _, last_day = monthrange(prev_year, prev_month)
+        end_date = datetime(prev_year, prev_month, last_day).date()
+        
+        await show_expenses_summary(message, start_date, end_date, 'ru')
+        return True
+    
+    return False
+
+
+async def parse_dates_from_text(text: str) -> Optional[tuple[datetime.date, datetime.date]]:
+    """Распознать даты в тексте"""
+    text_lower = text.lower()
+    today = datetime.now().date()
+    
+    # Паттерны для месяцев
+    months = {
+        'январь': 1, 'января': 1,
+        'февраль': 2, 'февраля': 2,
+        'март': 3, 'марта': 3,
+        'апрель': 4, 'апреля': 4,
+        'май': 5, 'мая': 5,
+        'июнь': 6, 'июня': 6,
+        'июль': 7, 'июля': 7,
+        'август': 8, 'августа': 8,
+        'сентябрь': 9, 'сентября': 9,
+        'октябрь': 10, 'октября': 10,
+        'ноябрь': 11, 'ноября': 11,
+        'декабрь': 12, 'декабря': 12
+    }
+    
+    # Проверяем конкретные даты (например, "15 марта", "15.03", "15/03")
+    date_pattern = r'(\d{1,2})\s*(?:число|числа)?\s*([а-я]+)|(?:(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?)|(?:(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?)'
+    matches = re.findall(date_pattern, text_lower)
+    
+    if matches:
+        for match in matches:
+            try:
+                if match[0] and match[1]:  # "15 марта"
+                    day = int(match[0])
+                    month_name = match[1]
+                    if month_name in months:
+                        month = months[month_name]
+                        year = today.year
+                        # Если дата в будущем, берем прошлый год
+                        test_date = datetime(year, month, day).date()
+                        if test_date > today:
+                            year -= 1
+                        parsed_date = datetime(year, month, day).date()
+                        return (parsed_date, parsed_date)
+                        
+                elif match[2] and match[3]:  # "15.03" или "15.03.2024"
+                    day = int(match[2])
+                    month = int(match[3])
+                    year = int(match[4]) if match[4] else today.year
+                    if year < 100:  # Двузначный год
+                        year += 2000
+                    parsed_date = datetime(year, month, day).date()
+                    if parsed_date <= today:
+                        return (parsed_date, parsed_date)
+                        
+            except (ValueError, KeyError):
+                continue
+    
+    # Проверяем диапазоны дат
+    range_pattern = r'с\s*(\d{1,2}\.\d{1,2})\s*по\s*(\d{1,2}\.\d{1,2})'
+    range_match = re.search(range_pattern, text_lower)
+    if range_match:
+        try:
+            start_str = range_match.group(1)
+            end_str = range_match.group(2)
+            
+            # Добавляем текущий год если не указан
+            if len(start_str.split('.')) == 2:
+                start_str += f'.{today.year}'
+            if len(end_str.split('.')) == 2:
+                end_str += f'.{today.year}'
+                
+            start_date = parser.parse(start_str, dayfirst=True).date()
+            end_date = parser.parse(end_str, dayfirst=True).date()
+            
+            if start_date <= today and end_date <= today:
+                return (start_date, end_date)
+        except:
+            pass
+    
+    # Проверяем названия месяцев для периода за весь месяц
+    for month_name, month_num in months.items():
+        if month_name in text_lower:
+            year = today.year
+            # Если месяц в будущем, берем прошлый год
+            if month_num > today.month:
+                year -= 1
+            
+            start_date = datetime(year, month_num, 1).date()
+            _, last_day = monthrange(year, month_num)
+            end_date = datetime(year, month_num, last_day).date()
+            
+            return (start_date, end_date)
+    
+    return None
+
+
+# Обработчик текстовых сообщений - только чат
+# Expense handler имеет более высокий приоритет и обработает расходы
 @router.message(F.text & ~F.text.startswith('/'))
-async def handle_chat_or_expense(message: types.Message, state: FSMContext):
-    """Обработка текстовых сообщений - чат или расход"""
+@rate_limit(max_calls=20, period=60)  # 20 сообщений в минуту для чата
+async def handle_chat_message(message: types.Message, state: FSMContext):
+    """Обработка текстовых сообщений как чат"""
     text = message.text.strip()
     
-    # Получаем профиль пользователя
-    user_id = message.from_user.id
-    profile = await get_or_create_profile(
-        telegram_id=user_id,
-        username=message.from_user.username,
-        first_name=message.from_user.first_name,
-        last_name=message.from_user.last_name,
-        language_code=message.from_user.language_code
-    )
-    
-    lang = profile.language_code or 'ru'
-    
-    # Классифицируем сообщение
-    message_type = classify_by_heuristics(text, lang)
-    
-    if message_type == 'chat' or message_type == 'report':
-        # Обрабатываем как чат
-        await process_chat_message(message, state, text)
-    else:
-        # Пытаемся распознать как расход
-        parsed = await parse_expense_message(text, user_id=user_id, profile=profile, use_ai=True)
-        
-        if parsed:
-            # Это расход - передаем обработку expense handler
-            # Важно: expense handler должен иметь более высокий приоритет
-            return  # Пропускаем обработку, пусть обработает expense handler
-        else:
-            # Не удалось распознать как расход - обрабатываем как чат
-            await process_chat_message(message, state, text)
+    # Если сообщение дошло до этого обработчика, значит expense handler
+    # не смог его распознать как трату, поэтому обрабатываем как чат
+    await process_chat_message(message, state, text)

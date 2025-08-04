@@ -18,6 +18,9 @@ from ..services.recurring import (
 from ..services.category import get_user_categories
 from ..utils.message_utils import send_message_with_cleanup
 from ..utils import get_text
+from ..utils.validators import validate_amount, parse_description_amount
+from ..utils.formatters import format_currency, format_date
+from ..decorators import rate_limit
 
 router = Router(name="recurring")
 
@@ -60,7 +63,7 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
         for payment in sorted_payments:
             status = "✅" if payment.is_active else "⏸"
             text += f"\n\n{status} Регулярный платеж: <i>{payment.description}</i>\n"
-            text += f"Сумма: <i>{payment.amount:.0f} ₽</i>\n"
+            text += f"Сумма: <i>{format_currency(payment.amount, 'RUB')}</i>\n"
             text += f"Дата: <i>{payment.day_of_month} число месяца</i>\n"
             text += f"Категория: <i>{payment.category.name}</i>"
     else:
@@ -79,8 +82,7 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
 @router.callback_query(lambda c: c.data == "recurring_menu")
 async def callback_recurring_menu(callback: types.CallbackQuery, state: FSMContext):
     """Показать меню регулярных платежей через callback"""
-    await callback.message.delete()
-    await show_recurring_menu(callback.message, state)
+    await show_recurring_menu(callback, state)
     await callback.answer()
 
 
@@ -88,11 +90,14 @@ async def callback_recurring_menu(callback: types.CallbackQuery, state: FSMConte
 async def add_recurring_start(callback: types.CallbackQuery, state: FSMContext):
     """Начало добавления регулярного платежа"""
     await callback.message.edit_text(
-        "➕ Добавление регулярного платежа\n\n"
-        "Введите описание платежа (например: Квартира, Интернет):",
+        "➕ <b>Добавление регулярного платежа</b>\n\n"
+        "✅ Отправьте название и сумму в формате:\n"
+        "<i>Название Сумма</i>\n\n"
+        "Например: <i>Квартира 50000</i>",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❌ Отмена", callback_data="recurring_menu")]
-        ])
+        ]),
+        parse_mode="HTML"
     )
     # Обновляем ID сообщения в состоянии
     await state.update_data(last_menu_message_id=callback.message.message_id)
@@ -102,54 +107,26 @@ async def add_recurring_start(callback: types.CallbackQuery, state: FSMContext):
 
 @router.message(RecurringForm.waiting_for_description)
 async def process_description(message: types.Message, state: FSMContext):
-    """Обработка описания платежа"""
-    description = message.text.strip()
-    data = await state.get_data()
+    """Обработка данных для добавления платежа"""
+    text = message.text.strip()
+    user_id = message.from_user.id
     
-    # Обычный режим добавления
-    if len(description) > 200:
-        await send_message_with_cleanup(message, state, "❌ Описание слишком длинное. Максимум 200 символов.")
+    # Используем утилиту для парсинга
+    try:
+        parsed = parse_description_amount(text)
+        description = parsed['description']
+        amount = parsed['amount']
+    except ValueError as e:
+        await send_message_with_cleanup(message, state, f"❌ {str(e)}")
         return
     
-    # Делаем первую букву заглавной
-    description = description[0].upper() + description[1:] if description else description
-    await state.update_data(description=description)
+    await state.update_data(description=description, amount=amount)
     
-    # Кнопки с популярными суммами
-    keyboard_buttons = []
-    amounts = ["1000", "2000", "5000", "10000", "20000", "50000"]
-    
-    # Две кнопки в ряд
-    for i in range(0, len(amounts), 2):
-        row = []
-        for j in range(2):
-            if i + j < len(amounts):
-                row.append(InlineKeyboardButton(
-                    text=f"{int(amounts[i + j])} ₽", 
-                    callback_data=f"recurring_amount_{amounts[i + j]}"
-                ))
-        keyboard_buttons.append(row)
-    
-    # Убрали кнопку "Назад" по требованию пользователя
-    
-    await send_message_with_cleanup(message, state,
-        "💰 Укажите сумму платежа:\n\n"
-        "Выберите из списка или введите свою:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
-    )
-    
-    await state.set_state(RecurringForm.waiting_for_amount)
+    # Теперь сразу показываем выбор категории
+    await show_category_selection(message, state)
 
 
-@router.callback_query(lambda c: c.data.startswith("recurring_amount_"), RecurringForm.waiting_for_amount)
-async def process_amount_button(callback: types.CallbackQuery, state: FSMContext):
-    """Обработка выбора суммы кнопкой"""
-    amount = float(callback.data.split("_")[-1])
-    await state.update_data(amount=amount)
-    
-    # Показываем выбор категории
-    await show_category_selection(callback.message, state)
-    await callback.answer()
+# Удалены обработчики для суммы - теперь сумма вводится вместе с названием
 
 
 async def show_category_selection(message: types.Message, state: FSMContext):
@@ -184,7 +161,7 @@ async def show_category_selection(message: types.Message, state: FSMContext):
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         )
     else:
-        await message.edit_text(
+        await send_message_with_cleanup(message, state,
             "📁 Выберите категорию для платежа:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         )
@@ -252,22 +229,7 @@ async def process_day_button(callback: types.CallbackQuery, state: FSMContext):
         await state.clear()
 
 
-@router.message(RecurringForm.waiting_for_amount)
-async def process_amount_text(message: types.Message, state: FSMContext):
-    """Обработка ввода суммы текстом"""
-    try:
-        amount_text = message.text.strip().replace(' ', '').replace(',', '.')
-        amount = float(amount_text)
-        
-        if amount <= 0:
-            await send_message_with_cleanup(message, state, "❌ Сумма должна быть больше 0")
-            return
-        
-        await state.update_data(amount=amount)
-        await show_category_selection(message, state)
-        
-    except ValueError:
-        await send_message_with_cleanup(message, state, "❌ Введите корректную сумму")
+# Удален обработчик для ввода суммы - теперь сумма вводится вместе с названием
 
 
 @router.message(RecurringForm.waiting_for_day)
@@ -354,7 +316,7 @@ async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext):
     text = f"""✏️ <b>Редактирование платежа</b>
 
 Регулярный платеж: <i>{payment.description}</i>
-Сумма: <i>{payment.amount:.0f} ₽</i>
+Сумма: <i>{format_currency(payment.amount, 'RUB')}</i>
 Категория: <i>{payment.category.name}</i>
 Дата: <i>{payment.day_of_month} число месяца</i>
 Статус: <i>{status_text}</i>
@@ -406,29 +368,14 @@ async def process_edit_data(message: types.Message, state: FSMContext):
     data = await state.get_data()
     user_id = message.from_user.id
     
-    # Парсим текст - ожидаем формат "Название Сумма"
-    parts = text.split()
-    if len(parts) < 2:
-        await send_message_with_cleanup(message, state, 
-            "❌ Неверный формат. Отправьте название и сумму через пробел.\n"
-            "Например: Квартира 50000")
-        return
-    
-    # Последняя часть - сумма, всё остальное - название
+    # Используем утилиту для парсинга
     try:
-        amount = float(parts[-1])
-        if amount <= 0:
-            await send_message_with_cleanup(message, state, "❌ Сумма должна быть больше 0")
-            return
-    except ValueError:
-        await send_message_with_cleanup(message, state, 
-            "❌ Неверный формат суммы. Отправьте название и сумму через пробел.\n"
-            "Например: Квартира 50000")
+        parsed = parse_description_amount(text)
+        description = parsed['description']
+        amount = parsed['amount']
+    except ValueError as e:
+        await send_message_with_cleanup(message, state, f"❌ {str(e)}")
         return
-    
-    # Собираем название из всех частей кроме последней и делаем первую букву заглавной
-    description = " ".join(parts[:-1])
-    description = description[0].upper() + description[1:] if description else description
     
     # Удаляем старый платеж
     await delete_recurring_payment(user_id, data['editing_payment_id'])
