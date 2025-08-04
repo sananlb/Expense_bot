@@ -59,9 +59,9 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
         for payment in sorted_payments:
             status = "✅" if payment.is_active else "⏸"
             text += f"\n\n{status} Регулярный платеж: <i>{payment.description}</i>\n"
-            text += f"Сумма: <i>{payment.amount:,.0f} ₽</i>\n"
-            text += f"Дата: <i>{payment.day_of_month} число месяца</i>\n"
-            text += f"Категория: <i>{payment.category.name}</i>"
+            text += f"💰 Сумма: <i>{payment.amount:,.0f} ₽</i>\n"
+            text += f"📅 Дата: <i>{payment.day_of_month} число месяца</i>\n"
+            text += f"📁 Категория: <i>{payment.category.name}</i>"
     else:
         text += "\n\nУ вас пока нет регулярных платежей."
     
@@ -440,9 +440,9 @@ async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext):
     text = f"""✏️ <b>Редактирование платежа</b>
 
 Регулярный платеж: <i>{payment.description}</i>
-Сумма: <i>{payment.amount:,.0f} ₽</i>
-Категория: <i>{payment.category.name}</i>
-Дата: <i>{payment.day_of_month} число месяца</i>
+💰 Сумма: <i>{payment.amount:,.0f} ₽</i>
+📁 Категория: <i>{payment.category.name}</i>
+📅 Дата: <i>{payment.day_of_month} число месяца</i>
 Статус: <i>{status_text}</i>"""
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
