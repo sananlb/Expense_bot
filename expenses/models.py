@@ -163,10 +163,39 @@ class Budget(models.Model):
         verbose_name_plural = 'Бюджеты'
 
 
+class RecurringPayment(models.Model):
+    """Регулярные платежи пользователя"""
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='recurring_payments')
+    category = models.ForeignKey(ExpenseCategory, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0.01)])
+    currency = models.CharField(max_length=3, default='RUB')
+    description = models.CharField(max_length=200, verbose_name='Описание')
+    day_of_month = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(30)],
+        verbose_name='День месяца'
+    )
+    is_active = models.BooleanField(default=True, verbose_name='Активен')
+    last_processed = models.DateField(null=True, blank=True, verbose_name='Последний платеж')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'expenses_recurring_payment'
+        verbose_name = 'Регулярный платеж'
+        verbose_name_plural = 'Регулярные платежи'
+        indexes = [
+            models.Index(fields=['profile', 'is_active']),
+            models.Index(fields=['day_of_month', 'is_active']),
+        ]
+    
+    def __str__(self):
+        return f"{self.description} - {self.amount} {self.currency} ({self.day_of_month} числа)"
+
+
 class Cashback(models.Model):
     """Информация о кешбэках по категориям согласно ТЗ"""
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='cashbacks')
-    category = models.ForeignKey(ExpenseCategory, on_delete=models.CASCADE)
+    category = models.ForeignKey(ExpenseCategory, on_delete=models.CASCADE, null=True, blank=True)
     bank_name = models.CharField(max_length=100, verbose_name='Название банка')
     cashback_percent = models.DecimalField(
         max_digits=4, 
@@ -199,7 +228,7 @@ class Cashback(models.Model):
         db_table = 'expenses_cashback'
         verbose_name = 'Кешбэк'
         verbose_name_plural = 'Кешбэки'
-        unique_together = ['profile', 'category', 'bank_name', 'month']
+        unique_together = [['profile', 'bank_name', 'month', 'category']]
         indexes = [
             models.Index(fields=['profile', 'month']),
             models.Index(fields=['profile', 'category']),

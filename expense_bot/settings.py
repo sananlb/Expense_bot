@@ -244,6 +244,11 @@ try:
         'schedule': crontab(day_of_week=0, hour=3, minute=0),  # Sunday 3 AM
         'options': {'queue': 'maintenance'}
     },
+    'process-recurring-payments': {
+        'task': 'expense_bot.celery_tasks.process_recurring_payments',
+        'schedule': crontab(hour=12, minute=0),  # 12 PM daily
+        'options': {'queue': 'payments'}
+    }
 }
 except ImportError:
     CELERY_BEAT_SCHEDULE = {}

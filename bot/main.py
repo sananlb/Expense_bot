@@ -22,6 +22,7 @@ from .routers import (
     expense_router,
     cashback_router,
     category_router,
+    recurring_router,
     settings_router,
     reports_router,
     info_router,
@@ -99,6 +100,7 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(start_router)
     dp.include_router(menu_router)
     dp.include_router(category_router)  # Перемещаем выше expense_router
+    dp.include_router(recurring_router)
     dp.include_router(cashback_router)
     dp.include_router(settings_router)
     dp.include_router(reports_router)

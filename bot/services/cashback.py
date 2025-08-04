@@ -31,7 +31,7 @@ def get_user_cashbacks(user_id: int, month: int = None) -> List[Cashback]:
 
 
 @sync_to_async
-def add_cashback(user_id: int, category_id: int, bank_name: str, 
+def add_cashback(user_id: int, category_id: Optional[int], bank_name: str, 
                  cashback_percent: float, month: int, 
                  limit_amount: Optional[float] = None,
                  description: str = '') -> Cashback:
@@ -176,9 +176,15 @@ def format_cashback_note(cashbacks: List[Cashback], month: int) -> str:
     for cb in cashbacks:
         # Формат: Описание (Категория) - Банк 7%
         if cb.description:
-            text += f"{cb.description} ({cb.category.icon} {cb.category.name}) - "
+            if cb.category:
+                text += f"{cb.description} ({cb.category.name}) - "
+            else:
+                text += f"{cb.description} (Все категории) - "
         else:
-            text += f"{cb.category.icon} {cb.category.name} - "
+            if cb.category:
+                text += f"{cb.category.name} - "
+            else:
+                text += f"🌐 Все категории - "
         
         text += f"{cb.bank_name} {cb.cashback_percent}%"
         
@@ -200,8 +206,8 @@ def get_cashbacks_for_month(user_id: int, month: int) -> List[Dict]:
     for cb in cashbacks:
         result.append({
             'id': cb.id,
-            'category': cb.category.name,
-            'icon': cb.category.icon or '💰',
+            'category': cb.category.name if cb.category else 'Все категории',
+            'icon': cb.category.icon if cb.category else '🌐',
             'bank': cb.bank_name,
             'percent': cb.cashback_percent,
             'month': cb.month

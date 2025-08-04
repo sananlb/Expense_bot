@@ -39,8 +39,9 @@ async def show_main_menu(message: types.Message | types.CallbackQuery, state: FS
         [InlineKeyboardButton(text="📊 Расходы", callback_data="expenses_today")],
         [InlineKeyboardButton(text="💳 Кешбэк", callback_data="cashback_menu")],
         [InlineKeyboardButton(text="📁 Категории", callback_data="categories_menu")],
+        [InlineKeyboardButton(text="🔄 Регулярные платежи", callback_data="recurring_menu")],
         [InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings_menu")],
-        [InlineKeyboardButton(text="ℹ️ Информация", callback_data="start")]
+        [InlineKeyboardButton(text="📖 Информация", callback_data="start")]
     ])
     
     await send_message_with_cleanup(message, state, text, reply_markup=keyboard)

@@ -119,6 +119,15 @@ async def add_cashback_start(callback: types.CallbackQuery, state: FSMContext):
     
     # Показываем список категорий
     keyboard_buttons = []
+    
+    # Добавляем опцию "Все категории"
+    keyboard_buttons.append([
+        InlineKeyboardButton(
+            text="🌐 Все категории", 
+            callback_data="cashback_cat_all"
+        )
+    ])
+    
     for cat in categories:
         keyboard_buttons.append([
             InlineKeyboardButton(
@@ -148,8 +157,12 @@ async def add_cashback_start(callback: types.CallbackQuery, state: FSMContext):
 @router.callback_query(lambda c: c.data.startswith("cashback_cat_"), CashbackForm.waiting_for_category)
 async def process_cashback_category(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Обработка выбора категории"""
-    category_id = int(callback.data.split("_")[-1])
-    await state.update_data(category_id=category_id)
+    if callback.data == "cashback_cat_all":
+        # Если выбраны все категории, сохраняем None
+        await state.update_data(category_id=None)
+    else:
+        category_id = int(callback.data.split("_")[-1])
+        await state.update_data(category_id=category_id)
     
     # Если язык английский, не показываем список банков
     if lang == 'en':
@@ -378,7 +391,10 @@ async def remove_cashback_list(callback: types.CallbackQuery, state: FSMContext)
     
     keyboard_buttons = []
     for cb in cashbacks:
-        text = f"{cb.category.icon} {cb.category.name} - {cb.bank_name} {cb.cashback_percent}%"
+        if cb.category:
+            text = f"{cb.category.name} - {cb.bank_name} {cb.cashback_percent}%"
+        else:
+            text = f"🌐 Все категории - {cb.bank_name} {cb.cashback_percent}%"
         keyboard_buttons.append([
             InlineKeyboardButton(text=text, callback_data=f"remove_cb_{cb.id}")
         ])

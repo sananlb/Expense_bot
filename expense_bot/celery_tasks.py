@@ -241,3 +241,26 @@ def cleanup_old_expenses():
         
     except Exception as e:
         logger.error(f"Error in cleanup_old_expenses task: {e}")
+
+
+@shared_task
+def process_recurring_payments():
+    """Process recurring payments for today at 12:00"""
+    try:
+        from bot.services.recurring import process_recurring_payments_for_today
+        
+        # Run async function in sync context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Process recurring payments
+        processed_count = loop.run_until_complete(
+            process_recurring_payments_for_today()
+        )
+        
+        loop.close()
+        
+        logger.info(f"Processed {processed_count} recurring payments")
+        
+    except Exception as e:
+        logger.error(f"Error in process_recurring_payments task: {e}")
