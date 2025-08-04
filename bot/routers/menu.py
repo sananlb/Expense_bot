@@ -16,10 +16,6 @@ from ..utils.message_utils import send_message_with_cleanup, delete_message_with
 router = Router(name="menu")
 
 
-@router.message(Command("menu"))
-async def cmd_menu(message: types.Message, state: FSMContext):
-    """Показать главное меню"""
-    await show_main_menu(message, state)
 
 
 @router.callback_query(lambda c: c.data == "menu")

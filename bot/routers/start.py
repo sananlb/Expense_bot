@@ -64,15 +64,6 @@ async def cmd_start(message: types.Message, state: FSMContext, lang: str = 'ru')
     await send_message_with_cleanup(message, state, text, reply_markup=inline_keyboard)
 
 
-@router.message(Command("menu"))
-async def cmd_menu(message: types.Message, state: FSMContext, lang: str = 'ru'):
-    """Команда /menu - показать главное меню"""
-    text = f"{get_text('main_menu', lang)}\n\n{get_text('choose_action', lang)}"
-    
-    await send_message_with_cleanup(
-        message, state, text,
-        reply_markup=main_menu_keyboard(lang)
-    )
 
 
 @router.callback_query(F.data == "menu")
