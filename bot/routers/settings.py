@@ -300,7 +300,6 @@ async def configure_reports(callback: CallbackQuery, state: FSMContext, lang: st
                 callback_data="toggle_weekly_reports"
             )],
             [
-                InlineKeyboardButton(text=get_text('back', lang), callback_data="settings"),
                 InlineKeyboardButton(text=get_text('close', lang), callback_data="close")
             ]
         ])
@@ -370,7 +369,6 @@ async def set_report_time(callback: CallbackQuery, state: FSMContext, lang: str 
         keyboard_buttons.append(row)
     
     keyboard_buttons.append([
-        InlineKeyboardButton(text=get_text('back', lang), callback_data="configure_reports"),
         InlineKeyboardButton(text=get_text('close', lang), callback_data="close")
     ])
     
