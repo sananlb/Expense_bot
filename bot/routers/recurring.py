@@ -63,7 +63,6 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
         [InlineKeyboardButton(text="➕ Добавить", callback_data="add_recurring")],
         [InlineKeyboardButton(text="✏️ Редактировать", callback_data="edit_recurring")],
         [InlineKeyboardButton(text="➖ Удалить", callback_data="delete_recurring")],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu")],
         [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
     ])
     

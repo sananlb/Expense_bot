@@ -11,12 +11,13 @@ def main_menu_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard = InlineKeyboardBuilder()
     
     keyboard.button(text=get_text('expenses_today', lang), callback_data="expenses_today")
-    keyboard.button(text=get_text('cashback_menu', lang), callback_data="cashback")
-    keyboard.button(text=get_text('categories_menu', lang), callback_data="categories")
+    keyboard.button(text=get_text('cashback_menu', lang), callback_data="cashback_menu")
+    keyboard.button(text=get_text('categories_menu', lang), callback_data="categories_menu")
+    keyboard.button(text="🔄 Регулярные платежи", callback_data="recurring_menu")
     keyboard.button(text=get_text('settings_menu', lang), callback_data="settings")
     keyboard.button(text=get_text('info', lang), callback_data="start")
     
-    keyboard.adjust(2, 2, 1)
+    keyboard.adjust(2, 2, 2)
     return keyboard.as_markup()
 
 
@@ -149,11 +150,10 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today') -> Inline
     else:
         keyboard.button(text=get_text('generate_pdf', lang), callback_data="generate_pdf")
     
-    # Кнопки навигации
-    keyboard.button(text=get_text('back', lang), callback_data="menu")
+    # Кнопка закрытия
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
-    keyboard.adjust(1, 2)
+    keyboard.adjust(1, 1)
     return keyboard.as_markup()
 
 
@@ -164,11 +164,10 @@ def categories_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard.button(text=get_text('add_category', lang), callback_data="add_category")
     keyboard.button(text=get_text('delete_category', lang), callback_data="delete_category")
     
-    # Кнопки навигации
-    keyboard.button(text=get_text('back', lang), callback_data="menu")
+    # Кнопка закрытия
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
-    keyboard.adjust(2, 2)
+    keyboard.adjust(2, 1)
     return keyboard.as_markup()
 
 
@@ -180,11 +179,10 @@ def cashback_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard.button(text=get_text('remove_cashback', lang), callback_data="remove_cashback")
     keyboard.button(text=get_text('remove_all_cashback', lang), callback_data="remove_all_cashback")
     
-    # Кнопки навигации
-    keyboard.button(text=get_text('back', lang), callback_data="menu")
+    # Кнопка закрытия
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
-    keyboard.adjust(2, 1, 2)
+    keyboard.adjust(2, 1, 1)
     return keyboard.as_markup()
 
 
