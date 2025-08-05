@@ -408,10 +408,27 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     # Форматируем сообщение с учетом валюты
     amount_text = format_currency(expense.amount, currency)
     
+    # Проверяем подписку и рассчитываем кешбэк
+    from ..services.subscription import check_subscription
+    from ..services.cashback import calculate_expense_cashback
+    from datetime import datetime
+    
+    cashback_text = ""
+    has_subscription = await check_subscription(user_id)
+    if has_subscription:
+        current_month = datetime.now().month
+        cashback = await calculate_expense_cashback(
+            user_id=user_id,
+            category_id=category.id,
+            amount=expense.amount,
+            month=current_month
+        )
+        if cashback > 0:
+            cashback_text = f" (+{cashback:.0f} ₽)"
+    
     await send_message_with_cleanup(message, state,
-        f"✅ Трата добавлена!\n\n"
-        f"💰 {amount_text}\n"
-        f"{expense.description}\n"
+        f"✅ {expense.description}\n\n"
+        f"💰 {amount_text}{cashback_text}\n"
         f"{category.icon} {category.name}"
         f"{confidence_text}",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[

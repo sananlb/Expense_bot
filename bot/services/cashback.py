@@ -162,6 +162,35 @@ def calculate_potential_cashback(user_id: int, start_date: date, end_date: date)
     return total_cashback
 
 
+@sync_to_async
+def calculate_expense_cashback(user_id: int, category_id: int, amount: Decimal, month: int) -> Decimal:
+    """Рассчитать кешбэк для конкретной траты"""
+    try:
+        profile = Profile.objects.get(telegram_id=user_id)
+    except Profile.DoesNotExist:
+        return Decimal('0')
+    
+    # Получаем кешбэки для категории и месяца
+    cashbacks = Cashback.objects.filter(
+        profile=profile,
+        category_id=category_id,
+        month=month
+    )
+    
+    total_cashback = Decimal('0')
+    
+    for cashback in cashbacks:
+        cashback_amount = amount * (cashback.cashback_percent / 100)
+        
+        # Учитываем лимит
+        if cashback.limit_amount:
+            cashback_amount = min(cashback_amount, cashback.limit_amount)
+        
+        total_cashback += cashback_amount
+    
+    return total_cashback
+
+
 def format_cashback_note(cashbacks: List[Cashback], month: int) -> str:
     """Форматировать красивую заметку о кешбэках согласно ТЗ"""
     month_names = {
