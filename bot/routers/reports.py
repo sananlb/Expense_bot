@@ -12,7 +12,6 @@ import logging
 from bot.keyboards import expenses_summary_keyboard, month_selection_keyboard, back_close_keyboard
 from bot.utils import get_text, format_amount, get_month_name
 from bot.services.expense import get_expenses_summary, get_expenses_by_period
-from bot.services.pdf_report import generate_pdf_report
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
 
@@ -64,58 +63,6 @@ async def callback_show_month_start(callback: CallbackQuery, lang: str = 'ru'):
     await callback.answer()
 
 
-@router.callback_query(F.data == "generate_pdf")
-async def callback_generate_pdf(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Генерировать PDF отчет"""
-    # Проверяем подписку
-    has_subscription = await check_subscription(callback.from_user.id)
-    
-    if not has_subscription:
-        await callback.message.edit_text(
-            subscription_required_message(),
-            reply_markup=get_subscription_button(),
-            parse_mode="HTML"
-        )
-        await callback.answer()
-        return
-    
-    await callback.answer(get_text('processing', lang))
-    
-    try:
-        # Получаем данные из состояния (если есть)
-        data = await state.get_data()
-        start_date = data.get('report_start_date', date.today().replace(day=1))
-        end_date = data.get('report_end_date', date.today())
-        
-        # Генерируем PDF
-        pdf_buffer = await generate_pdf_report(
-            telegram_id=callback.from_user.id,
-            start_date=start_date,
-            end_date=end_date,
-            lang=lang
-        )
-        
-        if pdf_buffer:
-            # Формируем имя файла
-            filename = f"expense_report_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.pdf"
-            
-            # Отправляем файл
-            await callback.message.answer_document(
-                BufferedInputFile(
-                    pdf_buffer.read(),
-                    filename=filename
-                ),
-                caption=get_text('pdf_report_generated', lang)
-            )
-            
-            # Удаляем сообщение с кнопкой
-            await callback.message.delete()
-        else:
-            await callback.answer(get_text('report_generation_error', lang), show_alert=True)
-            
-    except Exception as e:
-        logger.error(f"Error generating PDF: {e}")
-        await callback.answer(get_text('error_occurred', lang), show_alert=True)
 
 
 async def show_expenses_summary(

@@ -71,9 +71,12 @@ async def cmd_expenses(message: types.Message, state: FSMContext, lang: str = 'r
         cashback = await calculate_potential_cashback(user_id, today, today)
         text += f"\n\n💳 {get_text('potential_cashback', lang)}: {format_currency(cashback, 'RUB')}"
     
+    # Добавляем подсказку внизу курсивом
+    text += "\n\n_Показать отчет за другой период?_"
+    
     # Кнопки навигации
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=get_text('show_month_start', lang), callback_data="expenses_month")],
+        [InlineKeyboardButton(text="📅 С начала месяца", callback_data="expenses_month")],
         [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
     ])
     
@@ -81,7 +84,7 @@ async def cmd_expenses(message: types.Message, state: FSMContext, lang: str = 'r
 
 
 @router.callback_query(lambda c: c.data == "expenses_month")
-async def show_month_expenses(callback: types.CallbackQuery, lang: str = 'ru'):
+async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать траты за текущий месяц"""
     user_id = callback.from_user.id
     today = date.today()
@@ -131,17 +134,171 @@ async def show_month_expenses(callback: types.CallbackQuery, lang: str = 'ru'):
         cashback = await calculate_potential_cashback(user_id, start_date, today)
         text += f"\n\n💳 Потенциальный кешбэк: {cashback:,.0f} ₽"
     
+    # Добавляем подсказку внизу курсивом
+    text += "\n\n_Показать отчет за другой период?_"
+    
+    # Сохраняем текущий период в состоянии
+    await state.update_data(current_month=today.month, current_year=today.year)
+    
     # Кнопки навигации с PDF отчетом
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📄 Сформировать PDF отчет", callback_data="generate_pdf")],
-        [
-            InlineKeyboardButton(text="⬅️", callback_data="expenses_today"),
-            InlineKeyboardButton(text="❌ Закрыть", callback_data="close")
-        ]
+        [InlineKeyboardButton(text="📄 Сформировать PDF отчет", callback_data="pdf_generate_current")],
+        [InlineKeyboardButton(text="◀️ Предыдущий месяц", callback_data="expenses_prev_month")],
+        [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
     ])
     
     await callback.message.edit_text(text, reply_markup=keyboard)
     await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "expenses_prev_month")
+async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Показать траты за предыдущий месяц"""
+    user_id = callback.from_user.id
+    
+    # Получаем текущий период из состояния
+    data = await state.get_data()
+    current_month = data.get('current_month', date.today().month)
+    current_year = data.get('current_year', date.today().year)
+    
+    # Вычисляем предыдущий месяц
+    if current_month == 1:
+        prev_month = 12
+        prev_year = current_year - 1
+    else:
+        prev_month = current_month - 1
+        prev_year = current_year
+    
+    # Импортируем здесь чтобы избежать циклических импортов
+    from ..services.expense import get_month_summary
+    
+    # Получаем сводку за месяц
+    summary = await get_month_summary(user_id, prev_month, prev_year)
+    
+    month_names = {
+        1: get_text('january', lang).capitalize(),
+        2: get_text('february', lang).capitalize(),
+        3: get_text('march', lang).capitalize(),
+        4: get_text('april', lang).capitalize(),
+        5: get_text('may', lang).capitalize(),
+        6: get_text('june', lang).capitalize(),
+        7: get_text('july', lang).capitalize(),
+        8: get_text('august', lang).capitalize(),
+        9: get_text('september', lang).capitalize(),
+        10: get_text('october', lang).capitalize(),
+        11: get_text('november', lang).capitalize(),
+        12: get_text('december', lang).capitalize()
+    }
+    
+    if not summary or summary['total'] == 0:
+        text = f"""📊 {get_text('summary_for', lang)} {month_names[prev_month]} {prev_year}
+
+💰 {get_text('total_spent_month', lang)}: 0 {get_text('rub', lang)}
+
+{get_text('no_expenses_this_month', lang)}"""
+    else:
+        # Форматируем текст согласно ТЗ
+        text = f"""📊 {get_text('summary_for', lang)} {month_names[prev_month]} {prev_year}
+
+💰 {get_text('total_spent_month', lang)}: {summary['total']:,.0f} {get_text('rub', lang)}
+
+📊 {get_text('by_categories', lang)}:"""
+        
+        # Добавляем топ-5 категорий
+        for i, cat in enumerate(summary['categories'][:5]):
+            percent = (cat['amount'] / summary['total']) * 100
+            text += f"\n{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽ ({percent:.1f}%)"
+        
+        # Добавляем потенциальный кешбэк
+        start_date = date(prev_year, prev_month, 1)
+        import calendar
+        last_day = calendar.monthrange(prev_year, prev_month)[1]
+        end_date = date(prev_year, prev_month, last_day)
+        
+        cashback = await calculate_potential_cashback(user_id, start_date, end_date)
+        text += f"\n\n💳 Потенциальный кешбэк: {cashback:,.0f} ₽"
+    
+    # Добавляем подсказку внизу курсивом
+    text += "\n\n_Показать отчет за другой период?_"
+    
+    # Обновляем текущий период в состоянии
+    await state.update_data(current_month=prev_month, current_year=prev_year)
+    
+    # Кнопки навигации с PDF отчетом
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📄 Сформировать PDF отчет", callback_data="pdf_generate_current")],
+        [InlineKeyboardButton(text="◀️ Предыдущий месяц", callback_data="expenses_prev_month")],
+        [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
+    ])
+    
+    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "pdf_generate_current")
+async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Генерация PDF отчета за текущий выбранный месяц"""
+    await callback.answer()
+    
+    # Получаем текущий период из состояния
+    data = await state.get_data()
+    month = data.get('current_month', date.today().month)
+    year = data.get('current_year', date.today().year)
+    
+    # Отправляем сообщение о начале генерации
+    progress_msg = await callback.message.answer("⏳ Генерирую отчет...\n\nЭто может занять несколько секунд.")
+    
+    try:
+        # Импортируем сервис генерации PDF
+        from ..services.pdf_report_weasyprint import PDFReportService
+        
+        # Генерируем отчет
+        pdf_service = PDFReportService()
+        pdf_bytes = await pdf_service.generate_monthly_report(
+            user_id=callback.from_user.id,
+            year=year,
+            month=month
+        )
+        
+        if not pdf_bytes:
+            await progress_msg.edit_text(
+                "❌ <b>Нет данных для отчета</b>\n\n"
+                "За выбранный месяц не найдено расходов."
+            )
+            return
+        
+        # Формируем имя файла
+        months = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+                  'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+        filename = f"Отчет_Coins_{months[month-1]}_{year}.pdf"
+        
+        # Создаем файл для отправки
+        from aiogram.types import BufferedInputFile
+        pdf_file = BufferedInputFile(pdf_bytes, filename=filename)
+        
+        # Отправляем PDF
+        await callback.message.answer_document(
+            document=pdf_file,
+            caption=(
+                f"📊 <b>Отчет за {months[month-1]} {year}</b>\n\n"
+                "В отчете содержится:\n"
+                "• Общая статистика расходов\n"
+                "• Распределение по категориям\n"
+                "• Динамика трат по дням\n"
+                "• Информация о кешбеке\n\n"
+                "💡 <i>Совет: сохраните отчет для отслеживания динамики расходов</i>"
+            )
+        )
+        
+        # Удаляем сообщение о прогрессе
+        await progress_msg.delete()
+        
+    except Exception as e:
+        logger.error(f"Error generating report: {e}")
+        await progress_msg.edit_text(
+            "❌ <b>Ошибка при генерации отчета</b>\n\n"
+            "Попробуйте позже или обратитесь в поддержку."
+        )
 
 
 # Обработчики ввода новых значений

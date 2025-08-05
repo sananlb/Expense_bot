@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coins - Финансовый отчет</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #16213e 0%, #0f3460 100%);
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+        }
+        
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .logo {
+            width: 50px;
+            height: 50px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        .brand-info h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+        
+        .brand-info p {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+        
+        .period-badge {
+            background: rgba(255,255,255,0.1);
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            color: #e2e8f0;
+        }
+        
+        /* Key Metrics */
+        .key-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .metric-card {
+            background: #16213e;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .metric-card.primary {
+            background: linear-gradient(135deg, #e94560 0%, #c72c41 100%);
+            grid-column: span 2;
+        }
+        
+        .metric-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+            opacity: 0.8;
+        }
+        
+        .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        
+        .metric-label {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+        
+        .metric-card.primary .metric-label {
+            color: rgba(255,255,255,0.8);
+        }
+        
+        .metric-trend {
+            display: inline-block;
+            font-size: 12px;
+            margin-top: 8px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.1);
+        }
+        
+        .trend-up {
+            color: #10b981;
+        }
+        
+        .trend-down {
+            color: #ef4444;
+        }
+        
+        /* Charts Grid */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-card {
+            background: #16213e;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .chart-card.full-width {
+            grid-column: span 2;
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .chart-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+        
+        .chart-subtitle {
+            font-size: 12px;
+            color: #64748b;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 250px;
+        }
+        
+        .chart-container.small {
+            height: 200px;
+        }
+        
+        /* Top Categories */
+        .categories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 12px;
+            margin-top: 20px;
+        }
+        
+        .category-card {
+            background: rgba(255,255,255,0.05);
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        
+        .category-card:hover {
+            background: rgba(255,255,255,0.08);
+            transform: translateY(-2px);
+        }
+        
+        .category-emoji {
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        
+        .category-name {
+            font-size: 14px;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+        
+        .category-amount {
+            font-size: 18px;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+        
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            color: #64748b;
+            font-size: 13px;
+        }
+        
+        @media print {
+            body {
+                background: white;
+                color: #000;
+            }
+            
+            .header, .metric-card, .chart-card {
+                background: white !important;
+                border: 1px solid #e0e0e0;
+                box-shadow: none;
+            }
+            
+            .metric-card.primary {
+                background: #f0f0f0 !important;
+            }
+            
+            .brand-info h1, .metric-value, .chart-title {
+                color: #000;
+            }
+            
+            .metric-label, .chart-subtitle, .category-name {
+                color: #666;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo-section">
+                <img src="logo.png" alt="Coins" class="logo">
+                <div class="brand-info">
+                    <h1>Coins</h1>
+                    <p>Финансовый отчет</p>
+                </div>
+            </div>
+            <div class="period-badge">
+                📅 Октябрь 2024
+            </div>
+        </div>
+        
+        <!-- Key Metrics -->
+        <div class="key-metrics">
+            <div class="metric-card primary">
+                <div class="metric-icon">💰</div>
+                <div class="metric-value">45,320 ₽</div>
+                <div class="metric-label">Общие расходы за месяц</div>
+                <span class="metric-trend trend-up">↑ 12% к прошлому месяцу</span>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon">📊</div>
+                <div class="metric-value">127</div>
+                <div class="metric-label">Транзакций</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-icon">💳</div>
+                <div class="metric-value">357 ₽</div>
+                <div class="metric-label">Средний чек</div>
+            </div>
+        </div>
+        
+        <!-- Charts Grid -->
+        <div class="charts-grid">
+            <!-- Categories Donut -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3 class="chart-title">Структура расходов</h3>
+                </div>
+                <div class="chart-container">
+                    <canvas id="donutChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- Top Categories -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3 class="chart-title">Топ категории</h3>
+                </div>
+                <div class="categories-grid">
+                    <div class="category-card">
+                        <div class="category-emoji">🍔</div>
+                        <div class="category-name">Еда</div>
+                        <div class="category-amount">15,240₽</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-emoji">🚗</div>
+                        <div class="category-name">Транспорт</div>
+                        <div class="category-amount">8,500₽</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-emoji">🎬</div>
+                        <div class="category-name">Развлечения</div>
+                        <div class="category-amount">7,200₽</div>
+                    </div>
+                    <div class="category-card">
+                        <div class="category-emoji">🛒</div>
+                        <div class="category-name">Покупки</div>
+                        <div class="category-amount">6,880₽</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Daily Trend -->
+            <div class="chart-card full-width">
+                <div class="chart-header">
+                    <div>
+                        <h3 class="chart-title">Динамика расходов</h3>
+                        <p class="chart-subtitle">Ежедневные траты за октябрь</p>
+                    </div>
+                </div>
+                <div class="chart-container small">
+                    <canvas id="areaChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <p>Сгенерировано Coins Bot • coins.bot • Октябрь 2024</p>
+        </div>
+    </div>
+    
+    <script>
+        // Color palette
+        const colors = ['#e94560', '#0f3460', '#533483', '#00adb5', '#ff6b6b', '#4ecdc4'];
+        
+        // Donut Chart
+        const donutCtx = document.getElementById('donutChart').getContext('2d');
+        new Chart(donutCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Еда', 'Транспорт', 'Развлечения', 'Покупки', 'Дом', 'Другое'],
+                datasets: [{
+                    data: [15240, 8500, 7200, 6880, 4500, 3000],
+                    backgroundColor: colors,
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '70%',
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            color: '#94a3b8',
+                            padding: 15,
+                            font: {
+                                size: 11
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Area Chart
+        const areaCtx = document.getElementById('areaChart').getContext('2d');
+        const days = Array.from({length: 31}, (_, i) => i + 1);
+        const expenses = days.map(() => Math.floor(Math.random() * 2500) + 500);
+        
+        new Chart(areaCtx, {
+            type: 'line',
+            data: {
+                labels: days,
+                datasets: [{
+                    data: expenses,
+                    borderColor: '#e94560',
+                    backgroundColor: 'rgba(233, 69, 96, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 0,
+                    pointHoverRadius: 5,
+                    pointHoverBackgroundColor: '#e94560'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: 'rgba(255,255,255,0.05)'
+                        },
+                        ticks: {
+                            color: '#64748b',
+                            callback: function(value) {
+                                return value + '₽';
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            color: '#64748b',
+                            maxRotation: 0,
+                            callback: function(value, index) {
+                                return index % 5 === 0 ? value : '';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

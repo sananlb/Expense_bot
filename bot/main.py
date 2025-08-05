@@ -28,7 +28,8 @@ from .routers import (
     info_router,
     chat_router,
     subscription_router,
-    referral_router
+    referral_router,
+    # pdf_report_router  # Временно отключено
 )
 from .middlewares import (
     DatabaseMiddleware, 
@@ -137,6 +138,7 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(referral_router)     # Роутер реферальной системы
     dp.include_router(settings_router)
     dp.include_router(reports_router)
+    # dp.include_router(pdf_report_router)   # PDF отчеты - временно отключено из-за проблем с playwright
     dp.include_router(info_router)
     dp.include_router(expense_router)  # Обработка расходов после специфичных роутеров
     dp.include_router(chat_router)     # Низкий приоритет для обработки чата

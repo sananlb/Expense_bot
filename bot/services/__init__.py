@@ -27,7 +27,7 @@ from .expense import (
     delete_expense,
     get_last_expense
 )
-from .pdf_report import generate_pdf_report
+# from .pdf_report import generate_pdf_report  # Функция не существует
 
 __all__ = [
     # Profile services
@@ -57,5 +57,5 @@ __all__ = [
     'delete_expense',
     'get_last_expense',
     # PDF report service
-    'generate_pdf_report'
+    # 'generate_pdf_report'  # Функция не существует
 ]

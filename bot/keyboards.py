@@ -143,13 +143,18 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today') -> Inline
     
     if period == 'today':
         keyboard.button(text=get_text('show_month_start', lang), callback_data="show_month_start")
-    else:
-        keyboard.button(text=get_text('generate_pdf', lang), callback_data="generate_pdf")
+    
+    # Кнопка PDF отчета (временно отключена)
+    # keyboard.button(text="📄 PDF отчет", callback_data="pdf_report_select_month")
     
     # Кнопка закрытия
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
-    keyboard.adjust(1, 1)
+    if period == 'today':
+        keyboard.adjust(1, 1)  # Только 2 кнопки теперь
+    else:
+        keyboard.adjust(1)  # Только 1 кнопка
+    
     return keyboard.as_markup()
 
 
