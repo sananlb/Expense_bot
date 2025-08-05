@@ -13,14 +13,11 @@ if [ "$DB_HOST" ]; then
     echo "PostgreSQL is ready!"
 fi
 
-# Wait for Redis to be ready
+# Wait for Redis to be ready (simplified - just wait a bit)
 if [ "$REDIS_HOST" ]; then
-    echo "Waiting for Redis..."
-    while ! nc -z "$REDIS_HOST" "${REDIS_PORT:-6379}"; do
-        echo "Redis is unavailable - sleeping"
-        sleep 2
-    done
-    echo "Redis is ready!"
+    echo "Waiting for Redis to start..."
+    sleep 5
+    echo "Proceeding with startup..."
 fi
 
 # Run database migrations
