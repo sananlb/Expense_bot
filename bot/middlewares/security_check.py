@@ -45,7 +45,7 @@ class SecurityCheckMiddleware(BaseMiddleware):
         
         # Honeypot токены для обнаружения сканеров
         self.honeypot_tokens = [
-            'admin', 'root', 'test', 'password123',
+            'root', 'password123',
             'secret_key', 'api_token'
         ]
         
@@ -78,6 +78,13 @@ class SecurityCheckMiddleware(BaseMiddleware):
             user = event.from_user
             # Callback queries обычно безопасны, но проверим data
             text = event.data
+            
+            # Пропускаем проверку для системных callback
+            if text and any(text.startswith(prefix) for prefix in [
+                'subscription_', 'sub_', 'menu_', 'expenses_', 'close',
+                'pdf_', 'cashback_', 'referral_', 'settings_', 'category_'
+            ]):
+                return await handler(event, data)
         
         if not user:
             return await handler(event, data)

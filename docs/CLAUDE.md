@@ -60,11 +60,22 @@ git push origin master
 
 # НА СЕРВЕРЕ (под пользователем batman)
 cd /home/batman/expense_bot
+# ВАЖНО: Не сохраняем локальные изменения на сервере!
+git stash  # Сохраняем временно если есть изменения
 git pull origin master
+# Или принудительно сбрасываем к версии с GitHub:
+git fetch origin
+git reset --hard origin/master
+
 docker-compose down
 docker-compose build --no-cache
 docker-compose up -d
 ```
+
+**КРИТИЧЕСКИ ВАЖНО:**
+- Версия на сервере ВСЕГДА должна соответствовать версии в GitHub
+- НЕ коммитим изменения с сервера
+- При конфликтах делаем `git reset --hard origin/master`
 
 **ЗАПРЕЩЕНО:**
 1. Редактировать файлы на сервере через nano, vim или cat
