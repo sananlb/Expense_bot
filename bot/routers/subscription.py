@@ -161,10 +161,11 @@ async def process_subscription_purchase(callback: CallbackQuery, state: FSMConte
             )
         ],
         start_parameter=f"sub_{sub_type}",
-        photo_url="https://telegram.org/img/t_logo.png",  # Можно заменить на свою картинку
-        photo_size=100,
-        photo_width=100,
-        photo_height=100,
+        # Убираем фото для более компактного вида
+        # photo_url="https://telegram.org/img/t_logo.png",
+        # photo_size=100,
+        # photo_width=100,
+        # photo_height=100,
         need_name=False,
         need_phone_number=False,
         need_email=False,
@@ -172,17 +173,17 @@ async def process_subscription_purchase(callback: CallbackQuery, state: FSMConte
         is_flexible=False
     )
     
-    # Добавляем кнопку "Назад" в отдельном сообщении
+    # Добавляем компактное сообщение с кнопкой "Назад"
     builder = InlineKeyboardBuilder()
     builder.button(text="◀️ Назад в меню подписки", callback_data="menu_subscription")
     
-    back_msg = await callback.message.answer(
-        "↩️",
+    await callback.message.answer(
+        "💡 Нажмите кнопку выше для оплаты",
         reply_markup=builder.as_markup()
     )
     
-    # Сохраняем ID сообщения с кнопкой назад для удаления после оплаты
-    await state.update_data(back_button_msg_id=back_msg.message_id, invoice_msg_id=invoice_msg.message_id)
+    # Сохраняем ID сообщения инвойса для удаления после оплаты
+    await state.update_data(invoice_msg_id=invoice_msg.message_id)
     
     await callback.answer()
 
@@ -447,10 +448,11 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
             )
         ],
         start_parameter=f"sub_{sub_type}_promo",
-        photo_url="https://telegram.org/img/t_logo.png",
-        photo_size=100,
-        photo_width=100,
-        photo_height=100,
+        # Убираем фото для более компактного вида
+        # photo_url="https://telegram.org/img/t_logo.png",
+        # photo_size=100,
+        # photo_width=100,
+        # photo_height=100,
         need_name=False,
         need_phone_number=False,
         need_email=False,
@@ -458,17 +460,18 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
         is_flexible=False
     )
     
-    # Добавляем кнопку "Назад" в минималистичном сообщении
+    # Добавляем компактное сообщение с кнопкой "Назад"
     builder = InlineKeyboardBuilder()
     builder.button(text="◀️ Назад в меню подписки", callback_data="menu_subscription")
     
-    back_msg = await callback.message.answer(
-        f"💸 Скидка: {discounted_price} звёзд вместо {original_price}",
+    await callback.message.answer(
+        f"💸 Скидка применена: {discounted_price} звёзд вместо {original_price}\n"
+        f"💡 Нажмите кнопку выше для оплаты",
         reply_markup=builder.as_markup()
     )
     
-    # Сохраняем ID сообщения для удаления после оплаты
-    await state.update_data(back_button_msg_id=back_msg.message_id, invoice_msg_id=invoice_msg.message_id)
+    # Сохраняем ID сообщения инвойса для удаления после оплаты
+    await state.update_data(invoice_msg_id=invoice_msg.message_id)
     
     await callback.answer()
 
@@ -495,13 +498,9 @@ async def process_pre_checkout_updated(pre_checkout_query: PreCheckoutQuery):
 @router.message(F.successful_payment)
 async def process_successful_payment_updated(message: Message, state: FSMContext):
     """Обработка успешной оплаты"""
-    # Удаляем сообщение с кнопкой "Назад", если оно есть
+    # Очищаем состояние после оплаты
     data = await state.get_data()
-    if back_msg_id := data.get('back_button_msg_id'):
-        try:
-            await message.bot.delete_message(message.chat.id, back_msg_id)
-        except:
-            pass
+    await state.clear()
     
     payment = message.successful_payment
     payload_parts = payment.invoice_payload.split("_")
