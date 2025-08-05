@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     gettext \
     curl \
-    netcat \
+    netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
