@@ -148,7 +148,11 @@ async def process_subscription_purchase(callback: CallbackQuery, state: FSMConte
     except:
         pass
     
-    # Создаем инвойс для оплаты
+    # Создаем клавиатуру с кнопкой "Назад"
+    builder = InlineKeyboardBuilder()
+    builder.button(text="◀️ Назад в меню подписки", callback_data="menu_subscription")
+    
+    # Создаем инвойс для оплаты с кнопкой "Назад"
     invoice_msg = await callback.message.answer_invoice(
         title=sub_info['title'],
         description=sub_info['description'],
@@ -170,16 +174,8 @@ async def process_subscription_purchase(callback: CallbackQuery, state: FSMConte
         need_phone_number=False,
         need_email=False,
         need_shipping_address=False,
-        is_flexible=False
-    )
-    
-    # Добавляем компактное сообщение с кнопкой "Назад"
-    builder = InlineKeyboardBuilder()
-    builder.button(text="◀️ Назад в меню подписки", callback_data="menu_subscription")
-    
-    await callback.message.answer(
-        "💡 Нажмите кнопку выше для оплаты",
-        reply_markup=builder.as_markup()
+        is_flexible=False,
+        reply_markup=builder.as_markup()  # Добавляем кнопку прямо к инвойсу
     )
     
     # Сохраняем ID сообщения инвойса для удаления после оплаты
@@ -436,9 +432,14 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
         pass
     
     # Создаем инвойс для оплаты со скидкой
+    # Создаем клавиатуру с кнопкой "Назад"
+    builder = InlineKeyboardBuilder()
+    builder.button(text="◀️ Назад в меню подписки", callback_data="menu_subscription")
+    
+    # Создаем инвойс со скидкой и кнопкой "Назад"
     invoice_msg = await callback.message.answer_invoice(
         title=f"{sub_info['title']} (со скидкой)",
-        description=f"{sub_info['description']}\n\nПромокод: {promocode.code} {promocode.get_discount_display()}",
+        description=f"{sub_info['description']}\n\n💸 Промокод: {promocode.code} {promocode.get_discount_display()}\n✨ Цена со скидкой: {discounted_price} звёзд (вместо {original_price})",
         payload=f"subscription_{sub_type}_{callback.from_user.id}_promo_{promocode.id}",
         currency="XTR",  # Telegram Stars
         prices=[
@@ -457,17 +458,8 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
         need_phone_number=False,
         need_email=False,
         need_shipping_address=False,
-        is_flexible=False
-    )
-    
-    # Добавляем компактное сообщение с кнопкой "Назад"
-    builder = InlineKeyboardBuilder()
-    builder.button(text="◀️ Назад в меню подписки", callback_data="menu_subscription")
-    
-    await callback.message.answer(
-        f"💸 Скидка применена: {discounted_price} звёзд вместо {original_price}\n"
-        f"💡 Нажмите кнопку выше для оплаты",
-        reply_markup=builder.as_markup()
+        is_flexible=False,
+        reply_markup=builder.as_markup()  # Добавляем кнопку прямо к инвойсу
     )
     
     # Сохраняем ID сообщения инвойса для удаления после оплаты
