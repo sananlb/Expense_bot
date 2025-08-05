@@ -411,8 +411,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     await send_message_with_cleanup(message, state,
         f"✅ Трата добавлена!\n\n"
         f"💰 {amount_text}\n"
-        f"📝 {expense.description}\n"
-        f"📁 {category.icon} {category.name}"
+        f"{expense.description}\n"
+        f"{category.icon} {category.name}"
         f"{confidence_text}",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [
