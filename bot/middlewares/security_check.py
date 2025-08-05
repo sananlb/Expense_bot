@@ -36,7 +36,7 @@ class SecurityCheckMiddleware(BaseMiddleware):
             
             # XSS attempts
             '<script', 'javascript:', 'onerror=', 'onclick=',
-            'onload=', 'onmouseover=', '<iframe', '<embed',
+            ' onload=', 'onmouseover=', '<iframe', '<embed',
             
             # Command injection
             '; ls', '| cat', '&& rm', '|| wget',
@@ -162,7 +162,19 @@ class SecurityCheckMiddleware(BaseMiddleware):
         detected = []
         
         for pattern in self.suspicious_patterns:
-            if pattern.lower() in text_lower:
+            pattern_lower = pattern.lower()
+            # Для HTML/JS паттернов проверяем точное вхождение
+            if pattern_lower.startswith('<') or '=' in pattern_lower or pattern_lower.startswith('javascript'):
+                if pattern_lower in text_lower:
+                    detected.append(pattern)
+                    self.security_stats[f'pattern_{pattern}'] += 1
+            # Для SQL команд проверяем с пробелами
+            elif pattern_lower.startswith('drop') or pattern_lower.startswith('delete') or pattern_lower.startswith('insert') or pattern_lower.startswith('update'):
+                if f' {pattern_lower} ' in f' {text_lower} ':
+                    detected.append(pattern)
+                    self.security_stats[f'pattern_{pattern}'] += 1
+            # Для остальных - обычная проверка
+            elif pattern_lower in text_lower:
                 detected.append(pattern)
                 self.security_stats[f'pattern_{pattern}'] += 1
         
