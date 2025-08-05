@@ -215,10 +215,6 @@ def format_expenses_summary(summary: Dict, lang: str = 'ru') -> str:
     if count:
         text += f"📊 {get_text('expense_count', lang)}: {count}\n"
     
-    # Средний чек
-    if count > 0:
-        avg = total / count
-        text += f"📈 {get_text('average_expense', lang)}: {format_currency(avg, currency)}\n"
     
     # Категории
     categories = summary.get('categories', [])

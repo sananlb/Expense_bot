@@ -37,8 +37,8 @@ def get_referral_keyboard(has_code: bool = False):
         )
     
     builder.button(
-        text="◀️ Назад",
-        callback_data="menu_main"
+        text="❌ Закрыть",
+        callback_data="close"
     )
     
     builder.adjust(1)

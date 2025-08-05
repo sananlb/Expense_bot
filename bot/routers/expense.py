@@ -54,18 +54,22 @@ async def cmd_expenses(message: types.Message, state: FSMContext, lang: str = 'r
     # Заголовок с датой
     header = f"📊 {get_text('summary_for', lang)} {get_text('today', lang).lower()}, {today.strftime('%d')} {month_name}\n\n"
     
-    if not summary or summary['total'] == 0:
+    if not summary or (not summary.get('currency_totals') or all(v == 0 for v in summary.get('currency_totals', {}).values())):
         text = header + f"💰 {get_text('total', lang)}: {format_currency(0, summary.get('currency', 'RUB'))}\n\n{get_text('no_expenses_today', lang)}."
     else:
-        # Используем утилиту форматирования
-        text = header + format_expenses_summary(summary, lang)
+        # Показываем все валюты в разделе "Всего"
+        text = header + f"💰 {get_text('total', lang)}:\n"
+        currency_totals = summary.get('currency_totals', {})
+        for curr, amount in sorted(currency_totals.items()):
+            if amount > 0:
+                text += f"{format_currency(amount, curr)}\n"
         
-        # Если есть траты в других валютах, показываем их
-        if not summary.get('single_currency', True):
-            text += f"\n\n💱 {get_text('other_currencies', lang)}:"
-            for curr, amount in summary.get('currency_totals', {}).items():
-                if curr != summary.get('currency', 'RUB') and amount > 0:
-                    text += f"\n{format_currency(amount, curr)}"
+        # Показываем категории для всех валют
+        if summary.get('categories'):
+            text += f"\n📊 {get_text('by_categories', lang)}:"
+            for cat in summary['categories']:
+                if cat['amount'] > 0:
+                    text += f"\n{cat.get('icon', '💰')} {cat['name']}: {format_currency(cat['amount'], cat['currency'])}"
         
         # Добавляем потенциальный кешбэк
         cashback = await calculate_potential_cashback(user_id, today, today)
@@ -111,7 +115,7 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
         12: get_text('december', lang).capitalize()
     }
     
-    if not summary or summary['total'] == 0:
+    if not summary or (not summary.get('currency_totals') or all(v == 0 for v in summary.get('currency_totals', {}).values())):
         text = f"""📊 {get_text('summary_for', lang)} {month_names[today.month]} {today.year}
 
 💰 {get_text('total_spent_month', lang)}: 0 {get_text('rub', lang)}
@@ -121,18 +125,28 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
         # Форматируем текст согласно ТЗ
         text = f"""📊 {get_text('summary_for', lang)} {month_names[today.month]} {today.year}
 
-💰 {get_text('total_spent_month', lang)}: {summary['total']:,.0f} {get_text('rub', lang)}
+💰 {get_text('total_spent_month', lang)}:
+"""
+        # Показываем все валюты
+        currency_totals = summary.get('currency_totals', {})
+        for curr, amount in sorted(currency_totals.items()):
+            if amount > 0:
+                text += f"{format_currency(amount, curr)}\n"
 
-📊 {get_text('by_categories', lang)}:"""
-        
-        # Добавляем топ-5 категорий
-        for i, cat in enumerate(summary['categories'][:5]):
-            percent = (float(cat['amount']) / float(summary['total'])) * 100
-            text += f"\n{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽ ({percent:.1f}%)"
+        # Показываем категории для всех валют
+        if summary.get('categories'):
+            text += f"\n📊 {get_text('by_categories', lang)}:"
+            # Добавляем топ-5 категорий
+            for i, cat in enumerate(summary['categories'][:5]):
+                if cat['amount'] > 0:
+                    # Для процентов используем сумму в валюте категории
+                    currency_total = summary.get('currency_totals', {}).get(cat['currency'], 0)
+                    percent = (float(cat['amount']) / float(currency_total)) * 100 if currency_total > 0 else 0
+                    text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])} ({percent:.1f}%)"
         
         # Добавляем потенциальный кешбэк
         cashback = await calculate_potential_cashback(user_id, start_date, today)
-        text += f"\n\n💳 Потенциальный кешбэк: {cashback:,.0f} ₽"
+        text += f"\n\n💳 Потенциальный кешбэк: {format_currency(cashback, 'RUB')}"
     
     # Добавляем подсказку внизу курсивом
     text += "\n\n<i>Показать отчет за другой период?</i>"
@@ -190,7 +204,7 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
         12: get_text('december', lang).capitalize()
     }
     
-    if not summary or summary['total'] == 0:
+    if not summary or (not summary.get('currency_totals') or all(v == 0 for v in summary.get('currency_totals', {}).values())):
         text = f"""📊 {get_text('summary_for', lang)} {month_names[prev_month]} {prev_year}
 
 💰 {get_text('total_spent_month', lang)}: 0 {get_text('rub', lang)}
@@ -200,14 +214,24 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
         # Форматируем текст согласно ТЗ
         text = f"""📊 {get_text('summary_for', lang)} {month_names[prev_month]} {prev_year}
 
-💰 {get_text('total_spent_month', lang)}: {summary['total']:,.0f} {get_text('rub', lang)}
+💰 {get_text('total_spent_month', lang)}:
+"""
+        # Показываем все валюты
+        currency_totals = summary.get('currency_totals', {})
+        for curr, amount in sorted(currency_totals.items()):
+            if amount > 0:
+                text += f"{format_currency(amount, curr)}\n"
 
-📊 {get_text('by_categories', lang)}:"""
-        
-        # Добавляем топ-5 категорий
-        for i, cat in enumerate(summary['categories'][:5]):
-            percent = (float(cat['amount']) / float(summary['total'])) * 100
-            text += f"\n{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽ ({percent:.1f}%)"
+        # Показываем категории для всех валют
+        if summary.get('categories'):
+            text += f"\n📊 {get_text('by_categories', lang)}:"
+            # Добавляем топ-5 категорий
+            for i, cat in enumerate(summary['categories'][:5]):
+                if cat['amount'] > 0:
+                    # Для процентов используем сумму в валюте категории
+                    currency_total = summary.get('currency_totals', {}).get(cat['currency'], 0)
+                    percent = (float(cat['amount']) / float(currency_total)) * 100 if currency_total > 0 else 0
+                    text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])} ({percent:.1f}%)"
         
         # Добавляем потенциальный кешбэк
         start_date = date(prev_year, prev_month, 1)
@@ -216,7 +240,7 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
         end_date = date(prev_year, prev_month, last_day)
         
         cashback = await calculate_potential_cashback(user_id, start_date, end_date)
-        text += f"\n\n💳 Потенциальный кешбэк: {cashback:,.0f} ₽"
+        text += f"\n\n💳 Потенциальный кешбэк: {format_currency(cashback, 'RUB')}"
     
     # Добавляем подсказку внизу курсивом
     text += "\n\n<i>Показать отчет за другой период?</i>"
@@ -245,15 +269,20 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
     month = data.get('current_month', date.today().month)
     year = data.get('current_year', date.today().year)
     
-    # Отправляем сообщение о начале генерации
-    progress_msg = await callback.message.answer("⏳ Генерирую отчет...\n\nЭто может занять несколько секунд.")
+    # Отправляем индикатор "печатает"
+    await callback.bot.send_chat_action(callback.message.chat.id, "upload_document")
     
     try:
         # Импортируем сервис генерации PDF
-        from ..services.pdf_report_weasyprint import PDFReportService
-        
-        # Генерируем отчет
-        pdf_service = PDFReportService()
+        # На продакшене будет использоваться WeasyPrint
+        try:
+            from ..services.pdf_report_weasyprint import PDFReportService
+            pdf_service = PDFReportService()
+        except Exception as e:
+            # Fallback для Windows/тестирования
+            logger.warning(f"WeasyPrint not available: {e}, using simple PDF")
+            from ..services.pdf_report_simple import SimplePDFReportService
+            pdf_service = SimplePDFReportService()
         pdf_bytes = await pdf_service.generate_monthly_report(
             user_id=callback.from_user.id,
             year=year,
@@ -261,9 +290,10 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
         )
         
         if not pdf_bytes:
-            await progress_msg.edit_text(
+            await callback.message.answer(
                 "❌ <b>Нет данных для отчета</b>\n\n"
-                "За выбранный месяц не найдено расходов."
+                "За выбранный месяц не найдено расходов.",
+                parse_mode="HTML"
             )
             return
         
@@ -290,14 +320,13 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
             )
         )
         
-        # Удаляем сообщение о прогрессе
-        await progress_msg.delete()
         
     except Exception as e:
         logger.error(f"Error generating report: {e}")
-        await progress_msg.edit_text(
+        await callback.message.answer(
             "❌ <b>Ошибка при генерации отчета</b>\n\n"
-            "Попробуйте позже или обратитесь в поддержку."
+            "Попробуйте позже или обратитесь в поддержку.",
+            parse_mode="HTML"
         )
 
 

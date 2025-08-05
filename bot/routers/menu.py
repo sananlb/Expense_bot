@@ -87,7 +87,7 @@ async def show_today_expenses(callback: types.CallbackQuery, state: FSMContext):
     # Получаем сводку за сегодня
     summary = await get_today_summary(user_id)
     
-    if not summary or summary['total'] == 0:
+    if not summary or (not summary.get('currency_totals') or all(v == 0 for v in summary.get('currency_totals', {}).values())):
         text = f"""📊 Сводка за сегодня, {today.strftime('%d %B')}
 
 💰 Всего: 0 ₽
@@ -97,18 +97,24 @@ async def show_today_expenses(callback: types.CallbackQuery, state: FSMContext):
         # Форматируем текст согласно ТЗ
         text = f"""📊 Сводка за сегодня, {today.strftime('%d %B')}
 
-💰 Всего: {summary['total']:,.0f} ₽
-
-📊 По категориям:"""
+💰 Всего:
+"""
+        # Показываем все валюты
+        currency_totals = summary.get('currency_totals', {})
+        for curr, amount in sorted(currency_totals.items()):
+            if amount > 0:
+                text += f"{format_currency(amount, curr)}\n"
         
-        # Добавляем категории
-        for cat in summary['categories']:
-            percent = (float(cat['amount']) / float(summary['total'])) * 100
-            text += f"\n{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽ ({percent:.1f}%)"
+        # Показываем категории для всех валют
+        if summary.get('categories'):
+            text += f"\n📊 По категориям:"
+            for cat in summary['categories']:
+                if cat['amount'] > 0:
+                    text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])}"
         
         # Добавляем потенциальный кешбэк
         cashback = await calculate_potential_cashback(user_id, today, today)
-        text += f"\n\n💳 Потенциальный кешбэк: {cashback:,.0f} ₽"
+        text += f"\n\n💳 Потенциальный кешбэк: {format_currency(cashback, 'RUB')}"
     
     # Получаем сводку за месяц для проверки наличия трат
     month_summary = await get_month_summary(user_id, today.month, today.year)

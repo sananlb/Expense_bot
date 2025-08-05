@@ -288,11 +288,12 @@ try:
     from celery.schedules import crontab
     
     CELERY_BEAT_SCHEDULE = {
-    'send-daily-reports': {
-        'task': 'expense_bot.celery_tasks.send_daily_reports',
-        'schedule': crontab(hour=20, minute=0),  # 8 PM daily
-        'options': {'queue': 'reports'}
-    },
+    # Daily reports removed per user request
+    # 'send-daily-reports': {
+    #     'task': 'expense_bot.celery_tasks.send_daily_reports',
+    #     'schedule': crontab(hour=20, minute=0),  # 8 PM daily
+    #     'options': {'queue': 'reports'}
+    # },
     'send-weekly-reports': {
         'task': 'expense_bot.celery_tasks.send_weekly_reports',
         'schedule': crontab(day_of_week=0, hour=10, minute=0),  # Sunday 10 AM

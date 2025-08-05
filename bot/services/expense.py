@@ -445,34 +445,43 @@ async def get_today_summary(user_id: int) -> Dict[str, Any]:
         # Get user's primary currency
         user_currency = profile.currency or 'RUB'
         
-        # If all expenses are in user's currency, use simple total
-        if len(currency_totals) == 1 and user_currency in currency_totals:
+        # Keep currencies separate
+        # Total will be shown per currency
+        single_currency = len(currency_totals) == 1
+        # For single currency, use that total
+        if single_currency and user_currency in currency_totals:
             total = float(currency_totals[user_currency])
-            single_currency = True
         else:
-            # Multiple currencies - show total in user's currency and list others
+            # For multiple currencies, show main currency total
             total = float(currency_totals.get(user_currency, 0))
-            single_currency = False
         
-        # Group by category
-        categories = {}
+        # Group by category and currency
+        categories_by_currency = {}
         for expense in expenses:
             if expense.category:
+                currency = expense.currency or 'RUB'
+                if currency not in categories_by_currency:
+                    categories_by_currency[currency] = {}
+                
                 cat_key = expense.category.id
-                if cat_key not in categories:
-                    categories[cat_key] = {
+                if cat_key not in categories_by_currency[currency]:
+                    categories_by_currency[currency][cat_key] = {
                         'name': expense.category.name,
                         'icon': expense.category.icon,
                         'amount': Decimal('0'),
-                        'currency': user_currency
+                        'currency': currency
                     }
-                # For now, sum in user's currency (will need conversion button later)
-                if expense.currency == user_currency:
-                    categories[cat_key]['amount'] += expense.amount
+                categories_by_currency[currency][cat_key]['amount'] += expense.amount
         
-        # Sort by amount
+        # Combine categories from all currencies
+        all_categories = []
+        for currency, cats in categories_by_currency.items():
+            for cat in cats.values():
+                all_categories.append(cat)
+        
+        # Sort by amount (note: mixed currencies, but at least shows all)
         sorted_categories = sorted(
-            categories.values(),
+            all_categories,
             key=lambda x: x['amount'],
             reverse=True
         )
@@ -519,34 +528,43 @@ async def get_month_summary(user_id: int, month: int, year: int) -> Dict[str, An
         # Get user's primary currency
         user_currency = profile.currency or 'RUB'
         
-        # If all expenses are in user's currency, use simple total
-        if len(currency_totals) == 1 and user_currency in currency_totals:
+        # Keep currencies separate
+        # Total will be shown per currency
+        single_currency = len(currency_totals) == 1
+        # For single currency, use that total
+        if single_currency and user_currency in currency_totals:
             total = float(currency_totals[user_currency])
-            single_currency = True
         else:
-            # Multiple currencies - show total in user's currency and list others
+            # For multiple currencies, show main currency total
             total = float(currency_totals.get(user_currency, 0))
-            single_currency = False
         
-        # Group by category
-        categories = {}
+        # Group by category and currency
+        categories_by_currency = {}
         for expense in expenses:
             if expense.category:
+                currency = expense.currency or 'RUB'
+                if currency not in categories_by_currency:
+                    categories_by_currency[currency] = {}
+                
                 cat_key = expense.category.id
-                if cat_key not in categories:
-                    categories[cat_key] = {
+                if cat_key not in categories_by_currency[currency]:
+                    categories_by_currency[currency][cat_key] = {
                         'name': expense.category.name,
                         'icon': expense.category.icon,
                         'amount': Decimal('0'),
-                        'currency': user_currency
+                        'currency': currency
                     }
-                # For now, sum in user's currency (will need conversion button later)
-                if expense.currency == user_currency:
-                    categories[cat_key]['amount'] += expense.amount
+                categories_by_currency[currency][cat_key]['amount'] += expense.amount
         
-        # Sort by amount
+        # Combine categories from all currencies
+        all_categories = []
+        for currency, cats in categories_by_currency.items():
+            for cat in cats.values():
+                all_categories.append(cat)
+        
+        # Sort by amount (note: mixed currencies, but at least shows all)
         sorted_categories = sorted(
-            categories.values(),
+            all_categories,
             key=lambda x: x['amount'],
             reverse=True
         )

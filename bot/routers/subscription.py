@@ -60,8 +60,8 @@ def get_subscription_keyboard():
         callback_data="subscription_promo"
     )
     builder.button(
-        text="◀️ Назад",
-        callback_data="menu_main"
+        text="❌ Закрыть",
+        callback_data="close"
     )
     
     builder.adjust(1)
@@ -643,9 +643,9 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
         parse_mode="HTML"
     )
     
-    # Показываем главное меню
+    # Показываем кнопку закрыть
     builder = InlineKeyboardBuilder()
-    builder.button(text="🏠 Главное меню", callback_data="menu_main")
+    builder.button(text="❌ Закрыть", callback_data="close")
     
     await message.answer(
         "Что дальше?",
