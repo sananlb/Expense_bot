@@ -28,12 +28,12 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p /app/logs /app/media /app/staticfiles
 
+# Copy and set permissions for entrypoint
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+RUN chmod +x /docker-entrypoint.sh
+
 # Collect static files
 RUN python manage.py collectstatic --noinput || true
-
-# Create entrypoint script
-COPY docker-entrypoint.sh /
-RUN chmod +x /docker-entrypoint.sh
 
 # Expose port
 EXPOSE 8000
