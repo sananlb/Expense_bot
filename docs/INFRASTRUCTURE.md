@@ -41,6 +41,14 @@
 ## Решенные проблемы
 1. **Ошибка "exec /docker-entrypoint.sh: no such file or directory"** - решена пересборкой образов
 2. **Ошибка KeyError: 'ContainerConfig'** - решена через docker-compose down -v и docker system prune
+3. **Ошибка "exec /docker-entrypoint.sh: no such file or directory"** - причина: Windows line endings (^M) в файле docker-entrypoint.sh
+   Решение: dos2unix docker-entrypoint.sh или sed -i 's/\r$//' docker-entrypoint.sh
+
+## Важные замечания
+- При копировании файлов с Windows всегда проверяйте line endings командой: cat -A filename | head
+- Если видите ^M$ в конце строк, конвертируйте файл: dos2unix filename
+
+Это критически важно для bash скриптов в Docker контейнерах.
 
 ## Диагностика проблем
 
