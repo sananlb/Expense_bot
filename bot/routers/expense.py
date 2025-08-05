@@ -72,7 +72,7 @@ async def cmd_expenses(message: types.Message, state: FSMContext, lang: str = 'r
         text += f"\n\n💳 {get_text('potential_cashback', lang)}: {format_currency(cashback, 'RUB')}"
     
     # Добавляем подсказку внизу курсивом
-    text += "\n\n_Показать отчет за другой период?_"
+    text += "\n\n<i>Показать отчет за другой период?</i>"
     
     # Кнопки навигации
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -80,7 +80,7 @@ async def cmd_expenses(message: types.Message, state: FSMContext, lang: str = 'r
         [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
     ])
     
-    await send_message_with_cleanup(message, state, text, reply_markup=keyboard)
+    await send_message_with_cleanup(message, state, text, reply_markup=keyboard, parse_mode="HTML")
 
 
 @router.callback_query(lambda c: c.data == "expenses_month")
@@ -127,7 +127,7 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
         
         # Добавляем топ-5 категорий
         for i, cat in enumerate(summary['categories'][:5]):
-            percent = (cat['amount'] / summary['total']) * 100
+            percent = (float(cat['amount']) / float(summary['total'])) * 100
             text += f"\n{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽ ({percent:.1f}%)"
         
         # Добавляем потенциальный кешбэк
@@ -135,7 +135,7 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
         text += f"\n\n💳 Потенциальный кешбэк: {cashback:,.0f} ₽"
     
     # Добавляем подсказку внизу курсивом
-    text += "\n\n_Показать отчет за другой период?_"
+    text += "\n\n<i>Показать отчет за другой период?</i>"
     
     # Сохраняем текущий период в состоянии
     await state.update_data(current_month=today.month, current_year=today.year)
@@ -147,7 +147,7 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
         [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     await callback.answer()
 
 
@@ -206,7 +206,7 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
         
         # Добавляем топ-5 категорий
         for i, cat in enumerate(summary['categories'][:5]):
-            percent = (cat['amount'] / summary['total']) * 100
+            percent = (float(cat['amount']) / float(summary['total'])) * 100
             text += f"\n{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽ ({percent:.1f}%)"
         
         # Добавляем потенциальный кешбэк
@@ -219,7 +219,7 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
         text += f"\n\n💳 Потенциальный кешбэк: {cashback:,.0f} ₽"
     
     # Добавляем подсказку внизу курсивом
-    text += "\n\n_Показать отчет за другой период?_"
+    text += "\n\n<i>Показать отчет за другой период?</i>"
     
     # Обновляем текущий период в состоянии
     await state.update_data(current_month=prev_month, current_year=prev_year)
@@ -231,7 +231,7 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
         [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
     ])
     
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     await callback.answer()
 
 

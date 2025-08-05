@@ -103,7 +103,7 @@ async def show_today_expenses(callback: types.CallbackQuery, state: FSMContext):
         
         # Добавляем категории
         for cat in summary['categories']:
-            percent = (cat['amount'] / summary['total']) * 100
+            percent = (float(cat['amount']) / float(summary['total'])) * 100
             text += f"\n{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽ ({percent:.1f}%)"
         
         # Добавляем потенциальный кешбэк

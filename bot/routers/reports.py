@@ -115,7 +115,7 @@ async def show_expenses_summary(
                 text += f"\n💳 {get_text('potential_cashback', lang)}: {format_amount(summary['potential_cashback'], summary['currency'], lang)}"
         
         # Добавляем подсказку внизу курсивом
-        text += "\n\n_Показать отчет за другой период?_"
+        text += "\n\n<i>Показать отчет за другой период?</i>"
         
         # Определяем период для клавиатуры
         today = date.today()
