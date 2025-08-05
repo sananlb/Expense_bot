@@ -137,23 +137,26 @@ def get_currency_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     return keyboard.as_markup()
 
 
-def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today') -> InlineKeyboardMarkup:
+def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf: bool = True) -> InlineKeyboardMarkup:
     """Клавиатура для сводки расходов"""
     keyboard = InlineKeyboardBuilder()
     
     if period == 'today':
-        keyboard.button(text=get_text('show_month_start', lang), callback_data="show_month_start")
-    
-    # Кнопка PDF отчета (временно отключена)
-    # keyboard.button(text="📄 PDF отчет", callback_data="pdf_report_select_month")
+        keyboard.button(text="📅 С начала месяца", callback_data="show_month_start")
+    elif period == 'month' and show_pdf:
+        # Для месячных отчетов показываем кнопку PDF
+        keyboard.button(text="📄 Сформировать PDF отчет", callback_data="pdf_generate_current")
+        keyboard.button(text="◀️ Предыдущий месяц", callback_data="expenses_prev_month")
     
     # Кнопка закрытия
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
     if period == 'today':
-        keyboard.adjust(1, 1)  # Только 2 кнопки теперь
+        keyboard.adjust(1, 1)  # 2 кнопки
+    elif period == 'month' and show_pdf:
+        keyboard.adjust(1, 1, 1)  # 3 кнопки по одной в ряд
     else:
-        keyboard.adjust(1)  # Только 1 кнопка
+        keyboard.adjust(1)  # Только кнопка закрытия
     
     return keyboard.as_markup()
 

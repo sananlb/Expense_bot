@@ -114,8 +114,26 @@ async def show_expenses_summary(
             if summary['potential_cashback'] > 0:
                 text += f"\n💳 {get_text('potential_cashback', lang)}: {format_amount(summary['potential_cashback'], summary['currency'], lang)}"
         
+        # Добавляем подсказку внизу курсивом
+        text += "\n\n_Показать отчет за другой период?_"
+        
         # Определяем период для клавиатуры
-        period = 'today' if start_date == end_date == date.today() else 'month'
+        today = date.today()
+        is_today = start_date == end_date == today
+        is_current_month = (start_date.day == 1 and 
+                           start_date.month == today.month and 
+                           start_date.year == today.year and
+                           end_date >= today)
+        
+        if is_today:
+            period = 'today'
+            show_pdf = False
+        elif is_current_month or (start_date.day == 1 and end_date.month == start_date.month):
+            period = 'month'
+            show_pdf = True
+        else:
+            period = 'custom'
+            show_pdf = True
         
         # Сохраняем даты в состоянии для генерации PDF
         from aiogram.fsm.storage.base import StorageKey
@@ -130,19 +148,21 @@ async def show_expenses_summary(
         )
         await state.update_data(
             report_start_date=start_date,
-            report_end_date=end_date
+            report_end_date=end_date,
+            current_month=start_date.month if start_date.day == 1 else None,
+            current_year=start_date.year if start_date.day == 1 else None
         )
         
         # Отправляем или редактируем сообщение
         if edit and original_message:
             await original_message.edit_text(
                 text,
-                reply_markup=expenses_summary_keyboard(lang, period)
+                reply_markup=expenses_summary_keyboard(lang, period, show_pdf)
             )
         else:
             await send_message_with_cleanup(
                 message, state, text,
-                reply_markup=expenses_summary_keyboard(lang, period)
+                reply_markup=expenses_summary_keyboard(lang, period, show_pdf)
             )
             
     except Exception as e:
