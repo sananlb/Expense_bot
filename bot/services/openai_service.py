@@ -104,7 +104,7 @@ class OpenAIService(AIBaseService):
                         "content": prompt
                     }
                 ],
-                max_tokens=150,
+                max_tokens=1000,  # Увеличиваем до 1000
                 temperature=0.1,
                 response_format={"type": "json_object"}
             )

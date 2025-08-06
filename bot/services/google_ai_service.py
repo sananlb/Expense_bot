@@ -108,7 +108,7 @@ class GoogleAIService(AIBaseService):
             # Генерация с настройками для чата
             generation_config = genai.GenerationConfig(
                 temperature=0.7,
-                max_output_tokens=500,
+                max_output_tokens=1000,  # Увеличиваем до 1000
                 top_p=0.9
             )
             
