@@ -30,6 +30,7 @@ class ExpenseForm(StatesGroup):
     waiting_for_amount = State()
     waiting_for_category = State()
     waiting_for_description = State()
+    waiting_for_amount_clarification = State()  # Новое состояние для уточнения суммы
 
 
 class EditExpenseForm(StatesGroup):
@@ -408,10 +409,44 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     parsed = await parse_expense_message(text, user_id=user_id, profile=profile, use_ai=True)
     
     if not parsed:
-        # Не удалось распознать трату - пропускаем обработку
-        # Сообщение будет обработано chat_router'ом
+        # Проверяем, может быть это описание траты без суммы
+        # Попробуем распарсить как потенциальную трату
+        from expenses.models import CATEGORY_KEYWORDS
+        
+        # Проверяем, похоже ли на описание траты (есть ли ключевые слова категорий)
+        text_lower = text.lower()
+        might_be_expense = False
+        
+        # Проверяем наличие ключевых слов категорий
+        for category, keywords in CATEGORY_KEYWORDS.items():
+            if any(keyword.lower() in text_lower for keyword in keywords):
+                might_be_expense = True
+                break
+        
+        # Также проверяем некоторые общие слова, связанные с тратами
+        expense_indicators = ['купил', 'купила', 'покупка', 'оплата', 'оплатил', 'заплатил', 
+                              'потратил', 'трата', 'расход', 'платная', 'платный']
+        if any(word in text_lower for word in expense_indicators):
+            might_be_expense = True
+        
+        if might_be_expense and len(text) > 2:  # Минимальная длина для осмысленного описания
+            # Запрашиваем сумму
+            await state.update_data(expense_description=text)
+            await state.set_state(ExpenseForm.waiting_for_amount_clarification)
+            
+            from ..services.db_service import get_user_language
+            lang = await get_user_language(user_id)
+            
+            await message.answer(
+                f"💰 Вы хотите внести трату \"{text}\"?\n\n"
+                f"Укажите сумму траты:",
+                reply_markup=types.ReplyKeyboardRemove()
+            )
+            return
+        
+        # Не похоже на трату - пропускаем к chat_router
         logger.info(f"Expense parser returned None for text: '{text}', passing to chat router")
-        return  # В aiogram 3.x просто возвращаем None для пропуска обработки
+        return
     
     # Проверяем/создаем категорию
     category = await get_or_create_category(user_id, parsed['category'])
@@ -429,10 +464,10 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         currency=currency
     )
     
-    # Формируем ответ
+    # Формируем ответ (убираем вывод AI уверенности)
     confidence_text = ""
-    if parsed.get('ai_enhanced') and parsed.get('confidence'):
-        confidence_text = f"\n🤖 AI уверенность: {parsed['confidence']*100:.0f}%"
+    # if parsed.get('ai_enhanced') and parsed.get('confidence'):
+    #     confidence_text = f"\n🤖 AI уверенность: {parsed['confidence']*100:.0f}%"
     
     # Форматируем сообщение с учетом валюты
     amount_text = format_currency(expense.amount, currency)
@@ -560,6 +595,93 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: s
     
     await state.set_state(EditExpenseForm.choosing_field)
     await callback.answer()
+
+
+# Обработчик ввода суммы после уточнения
+@router.message(ExpenseForm.waiting_for_amount_clarification)
+async def handle_amount_clarification(message: types.Message, state: FSMContext):
+    """Обработка суммы после уточнения описания траты"""
+    from ..utils.expense_parser import parse_expense_message
+    from ..services.expense import add_expense
+    from ..services.category import get_or_create_category
+    from ..services.cashback import calculate_expense_cashback
+    from ..services.subscription import check_subscription
+    from datetime import datetime
+    
+    user_id = message.from_user.id
+    text = message.text.strip()
+    
+    # Получаем сохраненное описание
+    data = await state.get_data()
+    description = data.get('expense_description', '')
+    
+    if not description:
+        await state.clear()
+        await message.answer("❌ Произошла ошибка. Попробуйте еще раз.")
+        return
+    
+    # Парсим сумму из сообщения пользователя
+    parsed_amount = await parse_expense_message(text, user_id=user_id, use_ai=False)
+    
+    if not parsed_amount or not parsed_amount.get('amount'):
+        await message.answer(
+            "❌ Не удалось распознать сумму.\n"
+            "Пожалуйста, введите число (например: 750 или 10.50):"
+        )
+        return
+    
+    # Парсим описание для определения категории
+    parsed_description = await parse_expense_message(description, user_id=user_id, use_ai=True)
+    
+    # Формируем итоговый результат
+    amount = parsed_amount['amount']
+    currency = parsed_amount.get('currency', 'RUB')
+    category_name = parsed_description.get('category') if parsed_description else 'Прочие расходы'
+    
+    # Создаем или получаем категорию
+    category = await get_or_create_category(user_id, category_name)
+    
+    # Сохраняем трату
+    expense = await add_expense(
+        user_id=user_id,
+        category_id=category.id,
+        amount=amount,
+        description=description,
+        currency=currency
+    )
+    
+    # Форматируем сообщение с учетом валюты
+    amount_text = format_currency(expense.amount, currency)
+    
+    # Проверяем подписку и рассчитываем кешбэк
+    cashback_text = ""
+    has_subscription = await check_subscription(user_id)
+    if has_subscription:
+        current_month = datetime.now().month
+        cashback = await calculate_expense_cashback(
+            user_id=user_id,
+            category_id=category.id,
+            amount=expense.amount,
+            month=current_month
+        )
+        if cashback > 0:
+            cashback_text = f" (+{cashback:.0f} ₽)"
+    
+    # Очищаем состояние
+    await state.clear()
+    
+    # Отправляем подтверждение
+    await send_message_with_cleanup(message, state,
+        f"✅ {expense.description}\n\n"
+        f"💰 {amount_text}{cashback_text}\n"
+        f"{category.icon} {category.name}",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
+                InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
+            ]
+        ])
+    )
 
 
 # Обработчик удаления траты
