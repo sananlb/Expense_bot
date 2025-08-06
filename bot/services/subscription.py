@@ -7,18 +7,48 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 
-async def check_subscription(telegram_id: int) -> bool:
-    """Проверка наличия активной подписки у пользователя"""
+async def check_subscription(telegram_id: int, include_trial: bool = True) -> bool:
+    """Проверка наличия активной подписки у пользователя
+    
+    Args:
+        telegram_id: ID пользователя в Telegram
+        include_trial: Учитывать ли пробный период как подписку
+    """
     try:
         profile = await Profile.objects.aget(telegram_id=telegram_id)
         
         # Проверяем наличие активной подписки
-        has_subscription = await profile.subscriptions.filter(
+        if include_trial:
+            # Учитываем любую активную подписку включая пробный период
+            has_subscription = await profile.subscriptions.filter(
+                is_active=True,
+                end_date__gt=timezone.now()
+            ).aexists()
+        else:
+            # Исключаем пробный период
+            has_subscription = await profile.subscriptions.filter(
+                is_active=True,
+                end_date__gt=timezone.now()
+            ).exclude(subscription_type='trial').aexists()
+        
+        return has_subscription
+    except Profile.DoesNotExist:
+        return False
+
+
+async def is_trial_active(telegram_id: int) -> bool:
+    """Проверка активного пробного периода"""
+    try:
+        profile = await Profile.objects.aget(telegram_id=telegram_id)
+        
+        # Проверяем наличие активного пробного периода
+        has_trial = await profile.subscriptions.filter(
             is_active=True,
+            subscription_type='trial',
             end_date__gt=timezone.now()
         ).aexists()
         
-        return has_subscription
+        return has_trial
     except Profile.DoesNotExist:
         return False
 
