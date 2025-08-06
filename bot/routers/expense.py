@@ -409,25 +409,18 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     parsed = await parse_expense_message(text, user_id=user_id, profile=profile, use_ai=True)
     
     if not parsed:
-        # Проверяем, может быть это описание траты без суммы
-        # Попробуем распарсить как потенциальную трату
-        from expenses.models import CATEGORY_KEYWORDS
+        # Используем улучшенный классификатор для определения типа сообщения
+        from ..utils.text_classifier import classify_message, get_expense_indicators
         
-        # Проверяем, похоже ли на описание траты (есть ли ключевые слова категорий)
-        text_lower = text.lower()
-        might_be_expense = False
+        message_type, confidence = classify_message(text)
         
-        # Проверяем наличие ключевых слов категорий
-        for category, keywords in CATEGORY_KEYWORDS.items():
-            if any(keyword.lower() in text_lower for keyword in keywords):
-                might_be_expense = True
-                break
+        # Логируем для отладки
+        if confidence > 0.5:
+            indicators = get_expense_indicators(text)
+            logger.info(f"Classified '{text}' as {message_type} (confidence: {confidence:.2f}), indicators: {indicators}")
         
-        # Также проверяем некоторые общие слова, связанные с тратами
-        expense_indicators = ['купил', 'купила', 'покупка', 'оплата', 'оплатил', 'заплатил', 
-                              'потратил', 'трата', 'расход', 'платная', 'платный']
-        if any(word in text_lower for word in expense_indicators):
-            might_be_expense = True
+        # Если классификатор уверен, что это трата
+        might_be_expense = (message_type == 'record' and confidence >= 0.6)
         
         if might_be_expense and len(text) > 2:  # Минимальная длина для осмысленного описания
             # Сначала ищем похожие траты за последний год
