@@ -39,10 +39,10 @@ class GeminiAIService:
                 logger.warning("GOOGLE_API_KEY not found in environment variables")
                 self.model_name = None
             else:
-                self.model_name = 'gemini-1.5-flash'
+                self.model_name = 'gemini-2.5-flash'
         else:
             self.api_key = None
-            self.model_name = 'gemini-1.5-flash'
+            self.model_name = 'gemini-2.5-flash'
     
     @classmethod
     def get_next_key(cls) -> Optional[str]:

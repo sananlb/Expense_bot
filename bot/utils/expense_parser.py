@@ -358,7 +358,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         if recent_categories:
                             user_context['recent_categories'] = recent_categories
                     
-                    # Используем AI сервис
+                    # Пробуем сначала основной AI сервис
                     ai_service = get_service('categorization')
                     ai_result = await ai_service.categorize_expense(
                         text=text,
@@ -368,6 +368,24 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         user_context=user_context
                     )
                     
+                    # Если Google AI не сработал, пробуем OpenAI
+                    if not ai_result:
+                        logger.warning(f"Primary AI failed, trying fallback to OpenAI")
+                        from bot.services.ai_selector import AISelector
+                        try:
+                            openai_service = AISelector('openai')
+                            ai_result = await openai_service.categorize_expense(
+                                text=text,
+                                amount=amount,
+                                currency=currency,
+                                categories=user_categories,
+                                user_context=user_context
+                            )
+                            if ai_result:
+                                logger.info(f"OpenAI fallback successful")
+                        except Exception as e:
+                            logger.error(f"OpenAI fallback failed: {e}")
+                    
                     if ai_result:
                         # Обновляем только категорию из AI
                         result['category'] = ai_result.get('category', result['category'])
@@ -375,7 +393,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         result['ai_enhanced'] = True
                         result['ai_provider'] = ai_result.get('provider', 'unknown')
                         
-                        logger.info(f"AI enhanced result for user {user_id}: category='{result['category']}', confidence={result['confidence']}")
+                        logger.info(f"AI enhanced result for user {user_id}: category='{result['category']}', confidence={result['confidence']}, provider={result['ai_provider']}")
                     
             except Exception as e:
                 logger.error(f"AI categorization failed: {e}")

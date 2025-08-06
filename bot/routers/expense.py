@@ -404,8 +404,15 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
         await message.answer("❌ Произошла ошибка. Попробуйте еще раз.")
         return
     
+    # Получаем профиль пользователя
+    from expenses.models import Profile
+    try:
+        profile = await Profile.objects.aget(telegram_id=user_id)
+    except Profile.DoesNotExist:
+        profile = None
+    
     # Парсим сумму из сообщения пользователя
-    parsed_amount = await parse_expense_message(text, user_id=user_id, use_ai=False)
+    parsed_amount = await parse_expense_message(text, user_id=user_id, profile=profile, use_ai=False)
     
     if not parsed_amount or not parsed_amount.get('amount'):
         await message.answer(
@@ -414,13 +421,22 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
         )
         return
     
-    # Парсим описание для определения категории
-    parsed_description = await parse_expense_message(description, user_id=user_id, use_ai=True)
+    # Объединяем описание и сумму для полного парсинга с AI
+    full_text = f"{description} {text}"
+    parsed_full = await parse_expense_message(full_text, user_id=user_id, profile=profile, use_ai=True)
     
-    # Формируем итоговый результат
-    amount = parsed_amount['amount']
-    currency = parsed_amount.get('currency', 'RUB')
-    category_name = parsed_description.get('category') if parsed_description else 'Прочие расходы'
+    # Если полный парсинг успешен, используем его результат
+    if parsed_full:
+        amount = parsed_full['amount']
+        currency = parsed_full.get('currency', 'RUB')
+        category_name = parsed_full.get('category', 'Прочие расходы')
+        final_description = parsed_full.get('description', description)
+    else:
+        # Fallback: используем отдельно распарсенные данные
+        amount = parsed_amount['amount']
+        currency = parsed_amount.get('currency', 'RUB')
+        category_name = 'Прочие расходы'
+        final_description = description
     
     # Создаем или получаем категорию
     category = await get_or_create_category(user_id, category_name)
@@ -430,7 +446,7 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
         user_id=user_id,
         category_id=category.id,
         amount=amount,
-        description=description,
+        description=final_description,
         currency=currency
     )
     
@@ -473,6 +489,12 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
 @rate_limit(max_calls=30, period=60)  # 30 сообщений в минуту
 async def handle_text_expense(message: types.Message, state: FSMContext, text: str = None):
     """Обработка текстовых сообщений с тратами"""
+    # Импортируем необходимые функции в начале
+    from ..services.category import get_or_create_category
+    from ..services.expense import add_expense
+    from ..services.cashback import calculate_expense_cashback
+    from ..services.subscription import check_subscription
+    
     # Проверяем, есть ли активное состояние (кроме нашего состояния ожидания суммы, 
     # которое теперь обрабатывается отдельным обработчиком выше)
     current_state = await state.get_state()
@@ -513,10 +535,6 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         if might_be_expense and len(text) > 2:  # Минимальная длина для осмысленного описания
             # Сначала ищем похожие траты за последний год
             from ..services.expense import find_similar_expenses
-            from ..services.expense import add_expense
-            from ..services.category import get_or_create_category
-            from ..services.cashback import calculate_expense_cashback
-            from ..services.subscription import check_subscription
             from datetime import datetime
             
             similar = await find_similar_expenses(user_id, text)
@@ -615,8 +633,6 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     amount_text = format_currency(expense.amount, currency)
     
     # Проверяем подписку и рассчитываем кешбэк
-    from ..services.subscription import check_subscription
-    from ..services.cashback import calculate_expense_cashback
     from datetime import datetime
     
     cashback_text = ""

@@ -11,21 +11,21 @@ logger = logging.getLogger(__name__)
 # Конфигурация AI провайдеров
 AI_PROVIDERS = {
     'categorization': {
-        'provider': os.getenv('AI_PROVIDER_CATEGORIZATION', 'google'),  # google или openai
+        'provider': os.getenv('AI_PROVIDER_CATEGORIZATION', 'google'),  # Google по умолчанию
         'model': {
             'google': os.getenv('GOOGLE_MODEL_CATEGORIZATION', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_CATEGORIZATION', 'gpt-4o-mini')
         }
     },
     'chat': {
-        'provider': os.getenv('AI_PROVIDER_CHAT', 'google'),
+        'provider': os.getenv('AI_PROVIDER_CHAT', 'google'),  # Google по умолчанию
         'model': {
             'google': os.getenv('GOOGLE_MODEL_CHAT', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_CHAT', 'gpt-4o-mini')
         }
     },
     'default': {
-        'provider': os.getenv('AI_PROVIDER_DEFAULT', 'google'),
+        'provider': os.getenv('AI_PROVIDER_DEFAULT', 'google'),  # Google по умолчанию
         'model': {
             'google': os.getenv('GOOGLE_MODEL_DEFAULT', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_DEFAULT', 'gpt-4o-mini')
@@ -102,15 +102,35 @@ def get_provider_settings(provider: str) -> Dict[str, Any]:
         Словарь с настройками
     """
     if provider == 'google':
+        # Импортируем настройки чтобы получить ключи
+        from expense_bot import settings
+        api_key = None
+        if hasattr(settings, 'GOOGLE_API_KEYS') and settings.GOOGLE_API_KEYS:
+            api_key = settings.GOOGLE_API_KEYS[0]  # Берем первый ключ
+        elif hasattr(settings, 'GOOGLE_API_KEY'):
+            api_key = settings.GOOGLE_API_KEY
+        else:
+            api_key = os.getenv('GOOGLE_API_KEY')
+            
         return {
-            'api_key': os.getenv('GOOGLE_API_KEY'),
+            'api_key': api_key,
             'default_model': 'gemini-2.5-flash',
             'max_tokens': 150,
             'temperature': 0.1
         }
     elif provider == 'openai':
+        # Импортируем настройки чтобы получить ключи
+        from expense_bot import settings
+        api_key = None
+        if hasattr(settings, 'OPENAI_API_KEYS') and settings.OPENAI_API_KEYS:
+            api_key = settings.OPENAI_API_KEYS[0]  # Берем первый ключ
+        elif hasattr(settings, 'OPENAI_API_KEY'):
+            api_key = settings.OPENAI_API_KEY
+        else:
+            api_key = os.getenv('OPENAI_API_KEY')
+            
         return {
-            'api_key': os.getenv('OPENAI_API_KEY'),
+            'api_key': api_key,
             'default_model': 'gpt-4o-mini',
             'max_tokens': 150,
             'temperature': 0.1
