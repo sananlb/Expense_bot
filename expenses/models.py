@@ -146,6 +146,14 @@ class CategoryKeyword(models.Model):
     """Ключевые слова для автоматического определения категорий"""
     category = models.ForeignKey(ExpenseCategory, on_delete=models.CASCADE, related_name='keywords')
     keyword = models.CharField(max_length=100, db_index=True)
+    
+    # Счетчик использования (только ручные исправления)
+    usage_count = models.IntegerField(default=0, verbose_name='Количество использований')
+    
+    # Нормализованный вес для конфликтующих слов
+    normalized_weight = models.FloatField(default=1.0, verbose_name='Нормализованный вес')
+    
+    # Временная метка создания
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
@@ -155,10 +163,11 @@ class CategoryKeyword(models.Model):
         unique_together = ['category', 'keyword']
         indexes = [
             models.Index(fields=['category', 'keyword']),
+            models.Index(fields=['normalized_weight']),
         ]
     
     def __str__(self):
-        return f"{self.keyword} -> {self.category.name}"
+        return f"{self.keyword} -> {self.category.name} (вес: {self.normalized_weight:.2f})"
 
 
 class Expense(models.Model):
@@ -580,7 +589,9 @@ CATEGORY_KEYWORDS = {
         'ресторан', 'кафе', 'бар', 'паб', 'кофейня', 'пиццерия', 'суши', 'фастфуд',
         'mcdonalds', 'kfc', 'burger king', 'subway', 'starbucks', 'coffee', 'обед',
         'ужин', 'завтрак', 'ланч', 'доставка еды', 'delivery club', 'яндекс еда',
-        'шоколадница', 'теремок', 'крошка картошка', 'додо пицца', 'папа джонс'
+        'шоколадница', 'теремок', 'крошка картошка', 'додо пицца', 'папа джонс',
+        'кофе', 'капучино', 'латте', 'американо', 'эспрессо', 'чай', 'пицца', 
+        'бургер', 'роллы', 'паста', 'салат', 'десерт', 'мороженое', 'торт'
     ],
     'АЗС': [
         'азс', 'заправка', 'бензин', 'топливо', 'газпром', 'лукойл', 'роснефть',

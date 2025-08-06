@@ -24,6 +24,7 @@ def get_or_create_category(user_id: int, category_name: str) -> ExpenseCategory:
         'супермаркеты': ['супермаркет', 'продукты', 'магазин'],
         'продукты': ['продукты', 'еда', 'супермаркет', 'другие продукты'],
         'кафе и рестораны': ['кафе', 'ресторан', 'рестораны', 'еда', 'обед', 'кофе'],
+        'кафе': ['кафе', 'ресторан', 'рестораны'],  # Добавляем отдельное сопоставление для "кафе"
         'транспорт': ['транспорт', 'такси', 'метро', 'автобус'],
         'здоровье': ['здоровье', 'аптека', 'медицина', 'лекарства'],
         'одежда и обувь': ['одежда', 'обувь', 'вещи'],
@@ -34,6 +35,7 @@ def get_or_create_category(user_id: int, category_name: str) -> ExpenseCategory:
         'автомобиль': ['автомобиль', 'машина', 'авто', 'бензин'],
         'подарки': ['подарки', 'подарок', 'цветы'],
         'путешествия': ['путешествия', 'отпуск', 'поездка', 'тур'],
+        'другое': ['другое', 'прочее', 'разное'],  # Добавляем сопоставление для "другое"
     }
     
     # Ищем среди категорий пользователя
@@ -89,6 +91,13 @@ def get_or_create_category(user_id: int, category_name: str) -> ExpenseCategory:
                 if category:
                     logger.info(f"Found category '{category.name}' through mapping keyword (uppercase) '{keyword.upper()}'")
                     return category
+    
+    # Дополнительная проверка: если category_name это "кафе", ищем любую категорию со словом "кафе"
+    if 'кафе' in category_name.lower():
+        for cat in all_categories:
+            if 'кафе' in cat.name.lower() or 'ресторан' in cat.name.lower():
+                logger.info(f"Found category '{cat.name}' by cafe/restaurant keyword")
+                return cat
     
     # Если категория не найдена, возвращаем "Прочие расходы"
     logger.warning(f"Category '{category_name}' not found for user {user_id}, using default")

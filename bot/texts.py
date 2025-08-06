@@ -5,7 +5,7 @@
 TEXTS = {
     'ru': {
         # Основные сообщения
-        'welcome': '🪙  Добро пожаловать в Coins!',
+        'welcome': '💰 Добро пожаловать в Coins!',
         'welcome_text': '''Я помогу вам вести учет трат и отслеживать кешбэки.
 
 💸 Отправьте мне текстовое или голосовое сообщение:
@@ -118,7 +118,7 @@ TEXTS = {
         'sunday': 'воскресенье',
         'select_time': 'Выберите время отправки отчетов',
         'time_saved': 'Время сохранено',
-        'change_language': '🌐 Изменить язык',
+        'change_language': '🌐 Язык / Language',
         'change_timezone': '🕰️ Изменить часовой пояс',
         'change_currency': '💵 Изменить валюту',
         'configure_reports': '📊 Настройка отчетов',
@@ -231,6 +231,15 @@ TEXTS = {
         'recognized_text': '🎤 Распознано: "{text}"',
         'receipt_processing_future': '📸 Обработка чеков будет добавлена в следующей версии.',
         'edit_future': 'Редактирование будет добавлено в следующей версии',
+        'editing_expense': 'Редактирование траты',
+        'choose_field_to_edit': 'Выберите поле для изменения:',
+        'choose_new_category': 'Выберите новую категорию',
+        'learning_message': 'Меняя категорию вы обучаете систему, с каждым редактированием подбор категорий становится точнее для вас',
+        'editing_amount': 'Изменение суммы',
+        'enter_new_amount': 'Введите новую сумму:',
+        'editing_description': 'Изменение описания',
+        'enter_new_description': 'Введите новое описание:',
+        'edit_done': 'Готово',
         'sum': 'Сумма',
         'description': 'Описание',
         'expenses': 'Траты',
@@ -284,7 +293,7 @@ TEXTS = {
     },
     'en': {
         # Basic messages
-        'welcome': '🪙  Welcome to Coins!',
+        'welcome': '💰 Welcome to Coins!',
         'welcome_text': '''I'll help you track expenses and monitor cashbacks.
 
 💸 Send me a text or voice message:
@@ -389,7 +398,7 @@ Example: "alphabank 5% 2000 rub"''',
         'notifications': 'Notifications',
         'daily_reports': 'Daily',
         'weekly_reports': 'Weekly',
-        'change_language': '🌐 Change language',
+        'change_language': '🌐 Язык / Language',
         'change_timezone': '🕰️ Change timezone',
         'change_currency': '💵 Change currency',
         'configure_reports': '📊 Configure reports',
@@ -502,6 +511,15 @@ Get beautiful reports with charts''',
         'recognized_text': '🎤 Recognized: "{text}"',
         'receipt_processing_future': '📸 Receipt processing will be added in the next version.',
         'edit_future': 'Editing will be added in the next version',
+        'editing_expense': 'Editing expense',
+        'choose_field_to_edit': 'Choose field to edit:',
+        'choose_new_category': 'Choose new category',
+        'learning_message': 'By changing the category you train the system, with each edit category selection becomes more accurate for you',
+        'editing_amount': 'Editing amount',
+        'enter_new_amount': 'Enter new amount:',
+        'editing_description': 'Editing description',
+        'enter_new_description': 'Enter new description:',
+        'edit_done': 'Done',
         'sum': 'Amount',
         'description': 'Description',
         'expenses': 'Expenses',

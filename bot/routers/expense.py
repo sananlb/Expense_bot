@@ -522,7 +522,7 @@ async def handle_photo_expense(message: types.Message, state: FSMContext):
 
 # Обработчик редактирования траты
 @router.callback_query(lambda c: c.data.startswith("edit_expense_"))
-async def edit_expense(callback: types.CallbackQuery, state: FSMContext):
+async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Редактирование траты"""
     expense_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
@@ -537,7 +537,7 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext):
             profile__telegram_id=user_id
         )
     except Expense.DoesNotExist:
-        await callback.answer("❌ Трата не найдена", show_alert=True)
+        await callback.answer(get_text('expense_not_found', lang), show_alert=True)
         return
     
     # Сохраняем ID траты в состоянии
@@ -545,15 +545,15 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext):
     
     # Показываем меню выбора поля для редактирования
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"💰 Сумма: {expense.amount:.0f} ₽", callback_data="edit_field_amount")],
-        [InlineKeyboardButton(text=f"📝 Описание: {expense.description}", callback_data="edit_field_description")],
-        [InlineKeyboardButton(text=f"📁 Категория: {expense.category.name}", callback_data="edit_field_category")],
-        [InlineKeyboardButton(text="✅ Готово", callback_data="edit_done")]
+        [InlineKeyboardButton(text=f"💰 {get_text('sum', lang)}: {expense.amount:.0f} ₽", callback_data="edit_field_amount")],
+        [InlineKeyboardButton(text=f"📝 {get_text('description', lang)}: {expense.description}", callback_data="edit_field_description")],
+        [InlineKeyboardButton(text=f"📁 {get_text('category', lang)}: {expense.category.name}", callback_data="edit_field_category")],
+        [InlineKeyboardButton(text=f"✅ {get_text('edit_done', lang)}", callback_data="edit_done")]
     ])
     
     await callback.message.edit_text(
-        "✏️ <b>Редактирование траты</b>\n\n"
-        "Выберите поле для изменения:",
+        f"✏️ <b>{get_text('editing_expense', lang)}</b>\n\n"
+        f"{get_text('choose_field_to_edit', lang)}",
         reply_markup=keyboard,
         parse_mode="HTML"
     )
@@ -582,11 +582,11 @@ async def delete_expense(callback: types.CallbackQuery):
 
 # Обработчики выбора поля для редактирования
 @router.callback_query(lambda c: c.data == "edit_field_amount", EditExpenseForm.choosing_field)
-async def edit_field_amount(callback: types.CallbackQuery, state: FSMContext):
+async def edit_field_amount(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Редактирование суммы"""
     await callback.message.edit_text(
-        "💰 <b>Изменение суммы</b>\n\n"
-        "Введите новую сумму:",
+        f"💰 <b>{get_text('editing_amount', lang)}</b>\n\n"
+        f"{get_text('enter_new_amount', lang)}",
         parse_mode="HTML"
     )
     await state.set_state(EditExpenseForm.editing_amount)
@@ -594,11 +594,11 @@ async def edit_field_amount(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(lambda c: c.data == "edit_field_description", EditExpenseForm.choosing_field)
-async def edit_field_description(callback: types.CallbackQuery, state: FSMContext):
+async def edit_field_description(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Редактирование описания"""
     await callback.message.edit_text(
-        "📝 <b>Изменение описания</b>\n\n"
-        "Введите новое описание:",
+        f"📝 <b>{get_text('editing_description', lang)}</b>\n\n"
+        f"{get_text('enter_new_description', lang)}",
         parse_mode="HTML"
     )
     await state.set_state(EditExpenseForm.editing_description)
@@ -606,7 +606,7 @@ async def edit_field_description(callback: types.CallbackQuery, state: FSMContex
 
 
 @router.callback_query(lambda c: c.data == "edit_field_category", EditExpenseForm.choosing_field)
-async def edit_field_category(callback: types.CallbackQuery, state: FSMContext):
+async def edit_field_category(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Редактирование категории"""
     user_id = callback.from_user.id
     from ..services.category import get_user_categories
@@ -622,10 +622,11 @@ async def edit_field_category(callback: types.CallbackQuery, state: FSMContext):
             )
         ])
     
-    keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="edit_cancel")])
+    keyboard_buttons.append([InlineKeyboardButton(text=f"❌ {get_text('cancel', lang)}", callback_data="edit_cancel")])
     
     await callback.message.edit_text(
-        "📁 <b>Выберите новую категорию</b>:",
+        f"📁 <b>{get_text('choose_new_category', lang)}</b>:\n\n"
+        f"<i>{get_text('learning_message', lang)}</i>",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons),
         parse_mode="HTML"
     )
@@ -771,6 +772,7 @@ async def show_edit_menu_callback(callback: types.CallbackQuery, state: FSMConte
 async def show_updated_expense(message: types.Message, state: FSMContext, expense_id: int):
     """Показать обновленную трату"""
     from expenses.models import Expense
+    from ..utils.formatters import format_currency
     
     try:
         expense = await Expense.objects.select_related('category').aget(
@@ -778,18 +780,14 @@ async def show_updated_expense(message: types.Message, state: FSMContext, expens
             profile__telegram_id=message.from_user.id
         )
         
-        # Форматируем сообщение
+        # Форматируем сообщение так же как при добавлении
         currency = expense.currency or 'RUB'
-        if currency == 'RUB':
-            amount_text = f"{expense.amount:.0f} ₽"
-        else:
-            amount_text = f"{expense.amount:.2f} {currency}"
+        amount_text = format_currency(expense.amount, currency)
         
         await send_message_with_cleanup(message, state,
-            f"✅ Трата обновлена!\n\n"
-            f"💰 Сумма: {amount_text}\n"
-            f"📁 Категория: {expense.category.icon} {expense.category.name}\n"
-            f"📝 Описание: {expense.description}",
+            f"✅ {expense.description}\n\n"
+            f"💰 {amount_text}\n"
+            f"{expense.category.icon} {expense.category.name}",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
                     InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
@@ -808,6 +806,7 @@ async def show_updated_expense(message: types.Message, state: FSMContext, expens
 async def show_updated_expense_callback(callback: types.CallbackQuery, state: FSMContext, expense_id: int):
     """Показать обновленную трату для callback"""
     from expenses.models import Expense
+    from ..utils.formatters import format_currency
     
     try:
         expense = await Expense.objects.select_related('category').aget(
@@ -815,18 +814,14 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
             profile__telegram_id=callback.from_user.id
         )
         
-        # Форматируем сообщение
+        # Форматируем сообщение так же как при добавлении
         currency = expense.currency or 'RUB'
-        if currency == 'RUB':
-            amount_text = f"{expense.amount:.0f} ₽"
-        else:
-            amount_text = f"{expense.amount:.2f} {currency}"
+        amount_text = format_currency(expense.amount, currency)
         
         await callback.message.edit_text(
-            f"✅ Трата обновлена!\n\n"
-            f"💰 Сумма: {amount_text}\n"
-            f"📁 Категория: {expense.category.icon} {expense.category.name}\n"
-            f"📝 Описание: {expense.description}",
+            f"✅ {expense.description}\n\n"
+            f"💰 {amount_text}\n"
+            f"{expense.category.icon} {expense.category.name}",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
                     InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),

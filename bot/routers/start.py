@@ -28,6 +28,10 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
     """Обработка команды /start - показать информацию о боте"""
     user_id = message.from_user.id
     
+    # Определяем язык пользователя (если не русский, используем английский)
+    user_language_code = message.from_user.language_code or 'en'
+    display_lang = 'ru' if user_language_code.startswith('ru') else 'en'
+    
     # Проверяем, есть ли реферальный код в команде
     referral_code = None
     if command.args:
@@ -41,6 +45,11 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
         telegram_id=user_id,
         language_code=message.from_user.language_code
     )
+    
+    # Обновляем язык профиля если он не установлен или отличается
+    if profile.language_code != display_lang:
+        profile.language_code = display_lang
+        await profile.asave()
     
     # Создаем базовые категории для нового пользователя
     created = await create_default_categories(user_id)
@@ -56,7 +65,10 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
                 profile.referrer = referrer
                 await profile.asave()
                 
-                referral_message = "\n\n🎁 Вы перешли по реферальной ссылке! После оплаты первой подписки ваш друг получит бонус."
+                if display_lang == 'en':
+                    referral_message = "\n\n🎁 You joined via a referral link! After paying for your first subscription, your friend will receive a bonus."
+                else:
+                    referral_message = "\n\n🎁 Вы перешли по реферальной ссылке! После оплаты первой подписки ваш друг получит бонус."
                 
                 logger.info(f"New user {user_id} registered with referral code from {referrer.telegram_id}")
         except Exception as e:
@@ -84,8 +96,28 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
     # Обновляем команды бота для пользователя
     await update_user_commands(message.bot, user_id)
     
-    # Информация о боте
-    text = """🪙  Coins - ваш помощник в учете расходов
+    # Информация о боте на нужном языке
+    if display_lang == 'en':
+        text = """💰 Coins - your expense tracking assistant
+
+Key features:
+
+💸 Adding expenses:
+Send a text or voice message:
+"Coffee 200" or "Gas 4095 station"
+
+📁 Expense categories:
+Customize categories for yourself - add your own, delete unnecessary ones. The system will automatically determine the category for each expense.
+
+💳 Bank card cashbacks:
+Add information about cashbacks on your bank cards to have it always at hand. All cashbacks are calculated automatically and displayed in reports.
+
+📊 Expense reports:
+Request a report in natural language:
+"Show expenses for July" or "How much did I spend yesterday"
+Get beautiful PDF reports with charts"""
+    else:
+        text = """💰 Coins - ваш помощник в учете расходов
 
 Основные возможности:
 
@@ -135,8 +167,28 @@ async def callback_start(callback: types.CallbackQuery, state: FSMContext, lang:
     # Обновляем команды бота для пользователя
     await update_user_commands(callback.bot, callback.from_user.id)
     
-    # Информация о боте
-    text = """🪙  Coins - ваш помощник в учете расходов
+    # Информация о боте на нужном языке
+    if display_lang == 'en':
+        text = """💰 Coins - your expense tracking assistant
+
+Key features:
+
+💸 Adding expenses:
+Send a text or voice message:
+"Coffee 200" or "Gas 4095 station"
+
+📁 Expense categories:
+Customize categories for yourself - add your own, delete unnecessary ones. The system will automatically determine the category for each expense.
+
+💳 Bank card cashbacks:
+Add information about cashbacks on your bank cards to have it always at hand. All cashbacks are calculated automatically and displayed in reports.
+
+📊 Expense reports:
+Request a report in natural language:
+"Show expenses for July" or "How much did I spend yesterday"
+Get beautiful PDF reports with charts"""
+    else:
+        text = """💰 Coins - ваш помощник в учете расходов
 
 Основные возможности:
 

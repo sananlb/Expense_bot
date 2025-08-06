@@ -55,7 +55,7 @@ class GoogleAIService(AIBaseService):
             # Генерация с настройками для JSON
             generation_config = genai.GenerationConfig(
                 temperature=0.1,
-                max_output_tokens=150,
+                max_output_tokens=1000,  # Увеличиваем лимит токенов до 1000
                 response_mime_type="application/json"
             )
             

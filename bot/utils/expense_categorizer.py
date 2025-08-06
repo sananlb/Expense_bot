@@ -467,6 +467,106 @@ def get_category_suggestions(text: str) -> List[Tuple[str, float]]:
 
 
 # Тестовая функция
+def categorize_expense_with_weights(text: str, user_profile) -> Tuple[str, float, str]:
+    """
+    Категоризация расхода с использованием персональных весов из БД
+    
+    Args:
+        text: Описание расхода
+        user_profile: Профиль пользователя из БД
+    
+    Returns:
+        Кортеж (категория, уверенность, исправленный текст)
+    """
+    import math
+    from expenses.models import CategoryKeyword, ExpenseCategory
+    
+    # Исправляем опечатки
+    language = detect_language(text)
+    corrected_text = correct_typos(text, language)
+    
+    # Разбиваем на отдельные элементы и слова
+    items = split_multiple_items(corrected_text)
+    
+    # Получаем все категории пользователя
+    user_categories = ExpenseCategory.objects.filter(profile=user_profile)
+    
+    # Подсчитываем очки для каждой категории
+    category_scores = {}
+    
+    for category in user_categories:
+        score = 0.0
+        
+        # Получаем ключевые слова категории с весами
+        keywords = CategoryKeyword.objects.filter(category=category)
+        
+        for item in items:
+            words = item.lower().split()
+            
+            for word in words:
+                # Очищаем слово
+                clean_word = re.sub(r'[^\w\s]', '', word).strip()
+                if len(clean_word) < 3:
+                    continue
+                
+                # Ищем совпадения в ключевых словах
+                for keyword in keywords:
+                    if keyword.keyword.lower() == clean_word:
+                        # Точное совпадение - используем нормализованный вес
+                        score += keyword.normalized_weight * 3
+                    elif clean_word.startswith(keyword.keyword.lower()):
+                        # Слово начинается с ключевого
+                        score += keyword.normalized_weight * 2
+                    elif keyword.keyword.lower() in clean_word:
+                        # Ключевое слово входит в слово
+                        score += keyword.normalized_weight * 1
+        
+        if score > 0:
+            category_scores[category.name] = score
+    
+    # Если нашли совпадения
+    if category_scores:
+        best_category = max(category_scores.items(), key=lambda x: x[1])
+        category_name = best_category[0]
+        score = best_category[1]
+        
+        # Вычисляем уверенность (используем логарифмическую шкалу)
+        # score = 1 -> confidence = 0.5
+        # score = 5 -> confidence = 0.85
+        # score = 10 -> confidence = 0.95
+        confidence = 1 - math.exp(-score * 0.3)
+        confidence = min(max(confidence, 0.1), 1.0)
+        
+        return category_name, confidence, corrected_text
+    
+    # Если не нашли в персональных весах, используем старую логику
+    return categorize_expense(text, language=language)
+
+
+def categorize_expense_smart(text: str, user_profile=None) -> Tuple[str, float, str]:
+    """
+    Умная категоризация: использует веса из БД если есть профиль,
+    иначе использует статические правила
+    
+    Args:
+        text: Описание расхода
+        user_profile: Профиль пользователя (опционально)
+    
+    Returns:
+        Кортеж (категория, уверенность, исправленный текст)
+    """
+    if user_profile:
+        try:
+            # Пробуем использовать веса из БД
+            return categorize_expense_with_weights(text, user_profile)
+        except Exception as e:
+            # Если что-то пошло не так, используем старую логику
+            print(f"Error in weighted categorization: {e}")
+    
+    # Используем статическую категоризацию
+    return categorize_expense(text)
+
+
 if __name__ == "__main__":
     test_cases = [
         "кофе вода и чебурек",

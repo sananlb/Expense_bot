@@ -297,11 +297,11 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     user_currency = profile.currency if profile else 'RUB'
     currency = detect_currency(text, user_currency)
     
-    # Базовый результат
+    # Базовый результат (НЕ заполняем category если не найдена)
     result = {
         'amount': float(amount),
         'description': description or 'Расход',
-        'category': category or 'Прочие расходы',
+        'category': category,  # Оставляем None если не найдено
         'currency': currency,
         'confidence': 0.5 if category else 0.2
     }
@@ -379,6 +379,11 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                     
             except Exception as e:
                 logger.error(f"AI categorization failed: {e}")
+    
+    # Финальный fallback - если категория все еще не определена
+    if not result['category']:
+        result['category'] = 'Прочие расходы'
+        logger.info(f"Using default category 'Прочие расходы' for '{text}'")
     
     return result
 

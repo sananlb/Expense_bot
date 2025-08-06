@@ -284,6 +284,15 @@ def update_expense(
     try:
         expense = Expense.objects.get(id=expense_id, profile=profile)
         
+        # Запоминаем старую категорию для обучения системы
+        old_category_id = expense.category_id if expense.category else None
+        
+        # Проверяем, изменилась ли категория
+        category_changed = False
+        new_category_id = kwargs.get('category_id')
+        if new_category_id and new_category_id != old_category_id:
+            category_changed = True
+        
         # Обновляем только переданные поля
         for field, value in kwargs.items():
             if hasattr(expense, field):
@@ -291,6 +300,17 @@ def update_expense(
                 
         expense.save()
         logger.info(f"Updated expense {expense_id} for user {user_id}")
+        
+        # Если категория изменилась, запускаем фоновую задачу для обновления весов
+        if category_changed and old_category_id:
+            from expense_bot.celery_tasks import update_keywords_weights
+            update_keywords_weights.delay(
+                expense_id=expense_id,
+                old_category_id=old_category_id,
+                new_category_id=new_category_id
+            )
+            logger.info(f"Triggered keywords weights update for expense {expense_id}")
+        
         return True
         
     except Expense.DoesNotExist:
