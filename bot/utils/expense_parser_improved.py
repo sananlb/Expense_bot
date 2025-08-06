@@ -14,6 +14,9 @@ try:
 except ImportError:
     openai = None
 
+# Импортируем новый модуль категоризации
+from .expense_categorizer import categorize_expense, correct_typos
+
 # Расширенные паттерны для извлечения суммы
 AMOUNT_PATTERNS = [
     # Прямые упоминания суммы с валютой
@@ -172,38 +175,12 @@ def extract_amount_advanced(text: str) -> Tuple[Optional[Decimal], str]:
 
 
 def categorize_advanced(text: str) -> Tuple[str, float]:
-    """Продвинутая категоризация с весами и контекстом"""
-    best_category = 'другое'
-    best_score = 0.0
+    """Продвинутая категоризация с использованием улучшенного модуля"""
+    # Используем новую функцию категоризации
+    category, confidence, corrected_text = categorize_expense(text)
     
-    for category_name, keyword_groups in CATEGORY_KEYWORDS.items():
-        category_score = 0.0
-        
-        for group_type, keywords in keyword_groups.items():
-            if group_type in CATEGORY_WEIGHTS:
-                weight = CATEGORY_WEIGHTS[group_type]
-                
-                for keyword in keywords:
-                    if keyword in text:
-                        # Бонус за точное совпадение слова
-                        if f' {keyword} ' in f' {text} ':
-                            category_score += weight * 1.2
-                        else:
-                            category_score += weight
-        
-        # Нормализуем счет по количеству ключевых слов в категории
-        total_keywords = sum(len(keywords) for keywords in keyword_groups.values())
-        if total_keywords > 0:
-            normalized_score = category_score / total_keywords
-            
-            if normalized_score > best_score:
-                best_score = normalized_score
-                best_category = category_name
-    
-    # Минимальный порог уверенности
-    confidence = min(best_score, 1.0)
-    
-    return best_category, confidence
+    # Возвращаем категорию и уверенность
+    return category, confidence
 
 
 async def _enhance_with_ai(parsed_expense: ParsedExpense) -> Optional[ParsedExpense]:
@@ -287,16 +264,19 @@ def parse_expense_message(text: str, use_ai: bool = False) -> Optional[ParsedExp
     
     original_text = text.strip()
     
+    # Исправляем опечатки
+    corrected_text = correct_typos(original_text)
+    
     # Извлекаем сумму
-    amount, text_without_amount = extract_amount_advanced(text)
+    amount, text_without_amount = extract_amount_advanced(corrected_text)
     
     if not amount or amount <= 0:
         return None
     
-    # Определяем категорию
-    category, confidence = categorize_advanced(original_text.lower())
+    # Определяем категорию (используя исправленный текст)
+    category, confidence = categorize_advanced(corrected_text.lower())
     
-    # Формируем описание
+    # Формируем описание из исправленного текста
     description = text_without_amount.strip()
     if not description:
         description = 'Расход'

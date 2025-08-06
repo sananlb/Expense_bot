@@ -6,7 +6,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from ..routers.cashback import CashbackForm
-from ..utils.message_utils import send_message_with_cleanup
+from ..utils.message_utils import send_message_with_cleanup, delete_subscription_messages
 import logging
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,9 @@ class StateResetMiddleware(BaseMiddleware):
         
         if state and hasattr(event, 'text') and event.text:
             current_state = await state.get_state()
+            
+            # Всегда удаляем сообщения подписки при любом новом сообщении от пользователя
+            await delete_subscription_messages(state, event.bot, event.chat.id)
             
             # Проверяем, является ли сообщение командой
             if event.text.startswith('/'):

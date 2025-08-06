@@ -5,10 +5,10 @@
 TEXTS = {
     'ru': {
         # Основные сообщения
-        'welcome': '💰 Добро пожаловать в ExpenseBot!',
+        'welcome': '🪙  Добро пожаловать в Coins!',
         'welcome_text': '''Я помогу вам вести учет трат и отслеживать кешбэки.
 
-💸 Просто отправьте мне текстовое или голосовое сообщение:
+💸 Отправьте мне текстовое или голосовое сообщение:
 "Кофе 200" или "Дизель 4095 АЗС"
 
 📊 Попросите отчет:
@@ -284,10 +284,10 @@ TEXTS = {
     },
     'en': {
         # Basic messages
-        'welcome': '💰 Welcome to ExpenseBot!',
+        'welcome': '🪙  Welcome to Coins!',
         'welcome_text': '''I'll help you track expenses and monitor cashbacks.
 
-💸 Just send me a text or voice message:
+💸 Send me a text or voice message:
 "Coffee 200" or "Diesel 4095 gas station"
 
 📊 Ask for a report:

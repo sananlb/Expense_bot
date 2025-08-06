@@ -58,6 +58,40 @@ async def delete_last_menu(state: 'FSMContext', bot: Bot, chat_id: int) -> None:
         await state.update_data(last_menu_message_id=None)
 
 
+async def delete_subscription_messages(state: 'FSMContext', bot: Bot, chat_id: int) -> None:
+    """
+    Удалить сообщения связанные с подпиской (инвойс и кнопку назад)
+    
+    Args:
+        state: FSM контекст
+        bot: Объект бота
+        chat_id: ID чата
+    """
+    try:
+        data = await state.get_data()
+        
+        # Удаляем инвойс
+        invoice_msg_id = data.get('invoice_msg_id')
+        if invoice_msg_id:
+            try:
+                await bot.delete_message(chat_id=chat_id, message_id=invoice_msg_id)
+            except Exception as e:
+                logger.debug(f"Не удалось удалить инвойс: {e}")
+        
+        # Удаляем сообщение с кнопкой "Назад"
+        back_msg_id = data.get('subscription_back_msg_id')
+        if back_msg_id:
+            try:
+                await bot.delete_message(chat_id=chat_id, message_id=back_msg_id)
+            except Exception as e:
+                logger.debug(f"Не удалось удалить кнопку назад: {e}")
+        
+        # Очищаем ID из состояния
+        await state.update_data(invoice_msg_id=None, subscription_back_msg_id=None)
+    except Exception as e:
+        logger.debug(f"Ошибка при удалении сообщений подписки: {e}")
+
+
 async def send_message_with_cleanup(
     message: Message | CallbackQuery,
     state: 'FSMContext',
