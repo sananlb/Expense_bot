@@ -222,15 +222,3 @@ async def close_message(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.delete()
     # Очищаем последнее сохраненное сообщение меню
     await state.update_data(last_menu_message_id=None)
-
-
-@router.message(Command("cancel"))
-async def cmd_cancel(message: types.Message, state: FSMContext):
-    """Отмена текущего действия и сброс состояния"""
-    current_state = await state.get_state()
-    
-    if current_state is None:
-        await message.answer("❌ Нет активных действий для отмены")
-    else:
-        await state.clear()
-        await message.answer("✅ Действие отменено", reply_markup=types.ReplyKeyboardRemove())
