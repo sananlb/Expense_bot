@@ -488,8 +488,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 await state.update_data(expense_description=text)
                 await state.set_state(ExpenseForm.waiting_for_amount_clarification)
                 
-                from ..services.db_service import get_user_language
-                lang = await get_user_language(user_id)
+                # Язык пользователя берём из middleware или используем русский по умолчанию
+                lang = 'ru'
                 
                 await message.answer(
                     f"💰 Вы хотите внести трату \"{text}\"?\n\n"

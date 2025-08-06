@@ -23,7 +23,7 @@ async def check_expiring_subscriptions(bot: Bot):
         end_date__gte=tomorrow_start,
         end_date__lte=tomorrow_end,
         notification_sent=False
-    ).select_related('profile').aiterator()
+    ).select_related('profile')
     
     async for subscription in expiring_subscriptions:
         try:
