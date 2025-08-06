@@ -387,32 +387,109 @@ def get_user_expenses(
 
 
 @sync_to_async
+def find_similar_expenses(
+    telegram_id: int,
+    description: str,
+    days_back: int = 365
+) -> List[Dict[str, Any]]:
+    """
+    Найти похожие траты за последний период
+    
+    Args:
+        telegram_id: ID пользователя в Telegram
+        description: Описание для поиска
+        days_back: Количество дней назад для поиска (по умолчанию год)
+        
+    Returns:
+        Список похожих трат с уникальными суммами
+    """
+    try:
+        profile = Profile.objects.get(telegram_id=telegram_id)
+        
+        # Определяем период поиска
+        end_date = date.today()
+        start_date = end_date - timedelta(days=days_back)
+        
+        # Нормализуем описание для поиска
+        search_desc = description.lower().strip()
+        
+        # Ищем траты с похожим описанием
+        queryset = Expense.objects.filter(
+            profile=profile,
+            expense_date__gte=start_date,
+            expense_date__lte=end_date
+        )
+        
+        # Фильтруем по описанию (точное совпадение или содержит)
+        similar_expenses = []
+        for expense in queryset.select_related('category'):
+            if expense.description:
+                exp_desc = expense.description.lower().strip()
+                # Проверяем точное совпадение или вхождение
+                if exp_desc == search_desc or search_desc in exp_desc or exp_desc in search_desc:
+                    similar_expenses.append(expense)
+        
+        # Группируем по уникальным суммам и категориям
+        unique_amounts = {}
+        for expense in similar_expenses:
+            key = (float(expense.amount), expense.currency, expense.category.name if expense.category else 'Прочие расходы')
+            if key not in unique_amounts:
+                unique_amounts[key] = {
+                    'amount': float(expense.amount),
+                    'currency': expense.currency,
+                    'category': expense.category.name if expense.category else 'Прочие расходы',
+                    'count': 1,
+                    'last_date': expense.expense_date
+                }
+            else:
+                unique_amounts[key]['count'] += 1
+                if expense.expense_date > unique_amounts[key]['last_date']:
+                    unique_amounts[key]['last_date'] = expense.expense_date
+        
+        # Сортируем по частоте использования и дате
+        result = sorted(
+            unique_amounts.values(),
+            key=lambda x: (x['count'], x['last_date']),
+            reverse=True
+        )
+        
+        return result[:5]  # Возвращаем топ-5 вариантов
+        
+    except Profile.DoesNotExist:
+        logger.error(f"Profile not found for user {telegram_id}")
+        return []
+    except Exception as e:
+        logger.error(f"Error finding similar expenses: {e}")
+        return []
+
+
+@sync_to_async
 def delete_expense(telegram_id: int, expense_id: int) -> bool:
     """
     Удалить трату
     
     Args:
-        user_id: ID пользователя в Telegram
+        telegram_id: ID пользователя в Telegram
         expense_id: ID траты
         
     Returns:
         True если успешно, False при ошибке
     """
     try:
-        profile = Profile.objects.get(telegram_id=user_id)
+        profile = Profile.objects.get(telegram_id=telegram_id)
     except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {user_id}")
+        logger.error(f"Profile not found for user {telegram_id}")
         return False
     
     try:
         expense = Expense.objects.get(id=expense_id, profile=profile)
         expense.delete()
         
-        logger.info(f"Deleted expense {expense_id} for user {user_id}")
+        logger.info(f"Deleted expense {expense_id} for user {telegram_id}")
         return True
         
     except Expense.DoesNotExist:
-        logger.error(f"Expense {expense_id} not found for user {user_id}")
+        logger.error(f"Expense {expense_id} not found for user {telegram_id}")
         return False
     except Exception as e:
         logger.error(f"Error deleting expense: {e}")

@@ -430,18 +430,79 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             might_be_expense = True
         
         if might_be_expense and len(text) > 2:  # Минимальная длина для осмысленного описания
-            # Запрашиваем сумму
-            await state.update_data(expense_description=text)
-            await state.set_state(ExpenseForm.waiting_for_amount_clarification)
+            # Сначала ищем похожие траты за последний год
+            from ..services.expense import find_similar_expenses
+            from ..services.expense import add_expense
+            from ..services.category import get_or_create_category
+            from ..services.cashback import calculate_expense_cashback
+            from ..services.subscription import check_subscription
+            from datetime import datetime
             
-            from ..services.db_service import get_user_language
-            lang = await get_user_language(user_id)
+            similar = await find_similar_expenses(user_id, text)
             
-            await message.answer(
-                f"💰 Вы хотите внести трату \"{text}\"?\n\n"
-                f"Укажите сумму траты:",
-                reply_markup=types.ReplyKeyboardRemove()
-            )
+            if similar:
+                # Если есть похожие траты, автоматически используем последнюю сумму
+                last_expense = similar[0]  # Берем самую частую/последнюю
+                amount = last_expense['amount']
+                currency = last_expense['currency']
+                category_name = last_expense['category']
+                
+                # Создаем или получаем категорию
+                category = await get_or_create_category(user_id, category_name)
+                
+                # Сохраняем трату
+                expense = await add_expense(
+                    user_id=user_id,
+                    category_id=category.id,
+                    amount=amount,
+                    description=text,
+                    currency=currency
+                )
+                
+                # Форматируем сообщение с учетом валюты
+                amount_text = format_currency(expense.amount, currency)
+                
+                # Проверяем подписку и рассчитываем кешбэк
+                cashback_text = ""
+                has_subscription = await check_subscription(user_id)
+                if has_subscription:
+                    current_month = datetime.now().month
+                    cashback = await calculate_expense_cashback(
+                        user_id=user_id,
+                        category_id=category.id,
+                        amount=expense.amount,
+                        month=current_month
+                    )
+                    if cashback > 0:
+                        cashback_text = f" (+{cashback:.0f} ₽)"
+                
+                # Отправляем подтверждение
+                await send_message_with_cleanup(message, state,
+                    f"✅ {expense.description}\n\n"
+                    f"💰 {amount_text}{cashback_text}\n"
+                    f"{category.icon} {category.name}\n"
+                    f"<i>(сумма взята из последней похожей траты)</i>",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [
+                            InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
+                            InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
+                        ]
+                    ]),
+                    parse_mode="HTML"
+                )
+            else:
+                # Если похожих трат нет, используем обычный двухшаговый ввод
+                await state.update_data(expense_description=text)
+                await state.set_state(ExpenseForm.waiting_for_amount_clarification)
+                
+                from ..services.db_service import get_user_language
+                lang = await get_user_language(user_id)
+                
+                await message.answer(
+                    f"💰 Вы хотите внести трату \"{text}\"?\n\n"
+                    f"Укажите сумму траты:",
+                    reply_markup=types.ReplyKeyboardRemove()
+                )
             return
         
         # Не похоже на трату - пропускаем к chat_router
@@ -595,6 +656,7 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: s
     
     await state.set_state(EditExpenseForm.choosing_field)
     await callback.answer()
+
 
 
 # Обработчик ввода суммы после уточнения
