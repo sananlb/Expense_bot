@@ -110,19 +110,46 @@ async def get_subscription_info_text(profile: Profile) -> str:
 @router.callback_query(F.data == "menu_subscription")
 async def show_subscription_menu(callback: CallbackQuery, state: FSMContext):
     """Показать меню подписки"""
+    # Получаем сохраненные ID сообщений
+    data = await state.get_data()
+    invoice_msg_id = data.get('invoice_msg_id')
+    subscription_back_msg_id = data.get('subscription_back_msg_id')
+    
+    # Удаляем сообщение с инвойсом, если оно есть
+    if invoice_msg_id:
+        try:
+            await callback.bot.delete_message(
+                chat_id=callback.from_user.id,
+                message_id=invoice_msg_id
+            )
+        except:
+            pass
+    
+    # Удаляем сообщение с кнопкой "Назад"
+    if subscription_back_msg_id:
+        try:
+            await callback.bot.delete_message(
+                chat_id=callback.from_user.id,
+                message_id=subscription_back_msg_id
+            )
+        except:
+            pass
+    
+    # Очищаем сохраненные ID
+    await state.update_data(invoice_msg_id=None, subscription_back_msg_id=None)
+    
     profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
     
     text = await get_subscription_info_text(profile)
     
-    try:
-        await callback.message.edit_text(
-            text=text,
-            reply_markup=get_subscription_keyboard(),
-            parse_mode="HTML"
-        )
-    except Exception:
-        # Если не удалось отредактировать, отправляем новое
-        await send_message_with_cleanup(callback, state, text, reply_markup=get_subscription_keyboard(), parse_mode="HTML")
+    # Отправляем новое сообщение с меню подписки
+    await send_message_with_cleanup(
+        callback.message, 
+        state, 
+        text, 
+        reply_markup=get_subscription_keyboard(), 
+        parse_mode="HTML"
+    )
     
     await callback.answer()
 
@@ -506,8 +533,22 @@ async def process_pre_checkout_updated(pre_checkout_query: PreCheckoutQuery):
 @router.message(F.successful_payment)
 async def process_successful_payment_updated(message: Message, state: FSMContext):
     """Обработка успешной оплаты"""
-    # Очищаем состояние после оплаты
+    # Получаем сохраненные ID сообщений перед очисткой состояния
     data = await state.get_data()
+    invoice_msg_id = data.get('invoice_msg_id')
+    subscription_back_msg_id = data.get('subscription_back_msg_id')
+    
+    # Удаляем сообщение с кнопкой "Назад", если оно есть
+    if subscription_back_msg_id:
+        try:
+            await message.bot.delete_message(
+                chat_id=message.from_user.id,
+                message_id=subscription_back_msg_id
+            )
+        except:
+            pass
+    
+    # Очищаем состояние после оплаты
     await state.clear()
     
     payment = message.successful_payment
