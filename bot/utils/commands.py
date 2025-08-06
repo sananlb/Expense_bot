@@ -16,6 +16,7 @@ async def set_bot_commands(bot: Bot):
         BotCommand(command="subscription", description="⭐ Подписка"),
         BotCommand(command="settings", description="⚙️ Настройки"),
         BotCommand(command="start", description="📖 Информация"),
+        BotCommand(command="cancel", description="❌ Отмена"),
     ]
     
     await bot.set_my_commands(

@@ -18,7 +18,7 @@ async def check_expiring_subscriptions(bot: Bot):
     tomorrow_end = tomorrow.replace(hour=23, minute=59, second=59, microsecond=999999)
     
     # Находим подписки, истекающие завтра, по которым еще не отправлено уведомление
-    expiring_subscriptions = await Subscription.objects.filter(
+    expiring_subscriptions = Subscription.objects.filter(
         is_active=True,
         end_date__gte=tomorrow_start,
         end_date__lte=tomorrow_end,
