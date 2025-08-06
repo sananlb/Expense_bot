@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any
 from ..services.expense import get_today_summary, get_month_summary
 from ..utils.message_utils import send_message_with_cleanup
 from ..services.ai_selector import get_service
-from ..services.subscription import check_subscription, is_trial_active, subscription_required_message, get_subscription_button
+from ..services.subscription import check_subscription, subscription_required_message, get_subscription_button
 from ..decorators import require_subscription, rate_limit
 from ..routers.reports import show_expenses_summary
 from expenses.models import Profile
@@ -131,9 +131,7 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
         return  # Запрос дневника обработан
     
     # Проверяем подписку для AI чата (включая пробный период)
-    has_subscription_or_trial = await check_subscription(user_id, include_trial=True)
-    has_paid_subscription = await check_subscription(user_id, include_trial=False)
-    is_trial = await is_trial_active(user_id)
+    has_subscription = await check_subscription(user_id, include_trial=True)
     
     # Получаем или создаем сессию
     session_id = await ChatContextManager.get_or_create_session(user_id, state)
@@ -142,7 +140,7 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
     await ChatContextManager.add_message(state, 'user', text)
     
     # Если есть подписка (включая пробный период) и включен AI - используем AI для ответа
-    if has_subscription_or_trial and use_ai:
+    if has_subscription and use_ai:
         try:
             # Получаем контекст
             context = await ChatContextManager.get_context(state)
@@ -157,10 +155,6 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
             ai_service = get_service('chat')
             response = await ai_service.chat(text, context, user_context)
             
-            # Если пользователь на пробном периоде, напоминаем о подписке
-            if is_trial and not has_paid_subscription:
-                response += "\n\n🎁 Вы используете пробный период. Оформите подписку для продолжения /subscription"
-            
         except Exception as e:
             logger.error(f"AI chat error: {e}")
             # Fallback на простые ответы
@@ -170,7 +164,7 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
         response = await get_simple_response(text, user_id)
         
         # Если нет подписки и пробного периода, предлагаем оформить
-        if not has_subscription_or_trial and use_ai:
+        if not has_subscription and use_ai:
             response += "\n\n💡 Для доступа к AI-ассистенту оформите подписку /subscription"
     
     # Добавляем ответ в контекст
