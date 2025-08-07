@@ -163,27 +163,19 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # Cache Configuration
-# TODO: Install django-redis and uncomment
-# CACHES = {
-#     'default': {
-#         'BACKEND': 'django_redis.cache.RedisCache',
-#         'LOCATION': os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/1'),
-#         'OPTIONS': {
-#             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-#             'CONNECTION_POOL_KWARGS': {
-#                 'max_connections': 50,
-#                 'retry_on_timeout': True,
-#             },
-#             'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
-#             'IGNORE_EXCEPTIONS': True,
-#         }
-#     }
-# }
-
-# For now use dummy cache
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL + '/1',
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': 50,
+                'retry_on_timeout': True,
+            },
+            'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
+            'IGNORE_EXCEPTIONS': True,
+        }
     }
 }
 

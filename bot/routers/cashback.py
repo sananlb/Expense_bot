@@ -242,7 +242,7 @@ async def ask_for_description(message: types.Message, state: FSMContext):
         await message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
 
 
-async def ask_for_percent(message: types.Message, state: FSMContext):
+async def ask_for_percent(message: types.Message | types.CallbackQuery, state: FSMContext):
     """Запрос процента кешбэка"""
     # Кнопки с популярными процентами
     keyboard_buttons = []
@@ -261,11 +261,22 @@ async def ask_for_percent(message: types.Message, state: FSMContext):
     
     # Убрали кнопку "Назад" по требованию пользователя
     
-    await message.edit_text(
-        "💰 Укажите процент кешбэка:\n\n"
-        "Выберите из списка или введите свой:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
-    )
+    text = "💰 Укажите процент кешбэка:\n\n" \
+           "Выберите из списка или введите свой:"
+    
+    # Проверяем тип сообщения и используем соответствующий метод
+    if isinstance(message, types.CallbackQuery):
+        await message.message.edit_text(
+            text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        )
+    else:
+        # Для обычного сообщения используем send_message_with_cleanup
+        from ..utils.message_utils import send_message_with_cleanup
+        await send_message_with_cleanup(
+            message, state, text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        )
 
 
 @router.callback_query(lambda c: c.data.startswith("cashback_percent_"), CashbackForm.waiting_for_percent)
