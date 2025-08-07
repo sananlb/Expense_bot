@@ -98,40 +98,36 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
     
     # Информация о боте на нужном языке
     if display_lang == 'en':
-        text = """💰 Coins - your expense tracking assistant
+        text = """<b>🪙 Coins - your expense tracking assistant</b>
 
-Key features:
-
-💸 Adding expenses:
+<b>💸 Adding expenses:</b>
 Send a text or voice message:
 "Coffee 200" or "Gas 4095 station"
 
-📁 Expense categories:
+<b>📁 Expense categories:</b>
 Customize categories for yourself - add your own, delete unnecessary ones. The system will automatically determine the category for each expense.
 
-💳 Bank card cashbacks:
+<b>💳 Bank card cashbacks:</b>
 Add information about cashbacks on your bank cards to have it always at hand. All cashbacks are calculated automatically and displayed in reports.
 
-📊 Expense reports:
+<b>📊 Expense reports:</b>
 Request a report in natural language:
 "Show expenses for July" or "How much did I spend yesterday"
 Get beautiful PDF reports with charts"""
     else:
-        text = """💰 Coins - ваш помощник в учете расходов
+        text = """<b>🪙 Coins - ваш помощник в учете расходов</b>
 
-Основные возможности:
-
-💸 Добавление расходов:
+<b>💸 Добавление расходов:</b>
 Отправьте текст или голосовое сообщение:
 "Кофе 200" или "Дизель 4095 АЗС"
 
-📁 Категории трат:
+<b>📁 Категории трат:</b>
 Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. Система автоматически определит категорию для каждой траты.
 
-💳 Кешбэки по банковским картам:
+<b>💳 Кешбэки по банковским картам:</b>
 Добавьте информацию о кешбеках по вашим банковским картам, чтобы она всегда была под рукой. Все кешбеки рассчитываются автоматически и отображаются в отчетах.
 
-📊 Отчеты о тратах:
+<b>📊 Отчеты о тратах:</b>
 Попросите отчет естественным языком:
 "Покажи траты за июль" или "Сколько я потратил вчера"
 Получайте красивые PDF отчеты с графиками"""
@@ -140,7 +136,7 @@ Get beautiful PDF reports with charts"""
     text += referral_message
     
     # Отправляем информацию без кнопок
-    await send_message_with_cleanup(message, state, text)
+    await send_message_with_cleanup(message, state, text, parse_mode="HTML")
 
 
 
@@ -168,50 +164,46 @@ async def callback_start(callback: types.CallbackQuery, state: FSMContext, lang:
     await update_user_commands(callback.bot, callback.from_user.id)
     
     # Информация о боте на нужном языке
-    if display_lang == 'en':
-        text = """💰 Coins - your expense tracking assistant
+    if lang == 'en':
+        text = """<b>🪙 Coins - your expense tracking assistant</b>
 
-Key features:
-
-💸 Adding expenses:
+<b>💸 Adding expenses:</b>
 Send a text or voice message:
 "Coffee 200" or "Gas 4095 station"
 
-📁 Expense categories:
+<b>📁 Expense categories:</b>
 Customize categories for yourself - add your own, delete unnecessary ones. The system will automatically determine the category for each expense.
 
-💳 Bank card cashbacks:
+<b>💳 Bank card cashbacks:</b>
 Add information about cashbacks on your bank cards to have it always at hand. All cashbacks are calculated automatically and displayed in reports.
 
-📊 Expense reports:
+<b>📊 Expense reports:</b>
 Request a report in natural language:
 "Show expenses for July" or "How much did I spend yesterday"
 Get beautiful PDF reports with charts"""
     else:
-        text = """💰 Coins - ваш помощник в учете расходов
+        text = """<b>🪙 Coins - ваш помощник в учете расходов</b>
 
-Основные возможности:
-
-💸 Добавление расходов:
+<b>💸 Добавление расходов:</b>
 Отправьте текст или голосовое сообщение:
 "Кофе 200" или "Дизель 4095 АЗС"
 
-📁 Категории трат:
+<b>📁 Категории трат:</b>
 Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. Система автоматически определит категорию для каждой траты.
 
-💳 Кешбэки по банковским картам:
+<b>💳 Кешбэки по банковским картам:</b>
 Добавьте информацию о кешбеках по вашим банковским картам, чтобы она всегда была под рукой. Все кешбеки рассчитываются автоматически и отображаются в отчетах.
 
-📊 Отчеты о тратах:
+<b>📊 Отчеты о тратах:</b>
 Попросите отчет естественным языком:
 "Покажи траты за июль" или "Сколько я потратил вчера"
 Получайте красивые PDF отчеты с графиками"""
     
     try:
-        await callback.message.edit_text(text)
+        await callback.message.edit_text(text, parse_mode="HTML")
     except Exception:
         # Если не удалось отредактировать, отправляем новое
-        await send_message_with_cleanup(callback, state, text)
+        await send_message_with_cleanup(callback, state, text, parse_mode="HTML")
     
     await callback.answer()
 

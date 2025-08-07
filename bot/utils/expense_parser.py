@@ -3,6 +3,7 @@
 """
 import re
 import logging
+import asyncio
 from typing import Optional, Dict, Any
 from decimal import Decimal, InvalidOperation
 
@@ -358,15 +359,29 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         if recent_categories:
                             user_context['recent_categories'] = recent_categories
                     
-                    # Пробуем сначала основной AI сервис
-                    ai_service = get_service('categorization')
-                    ai_result = await ai_service.categorize_expense(
-                        text=text,
-                        amount=amount,
-                        currency=currency,
-                        categories=user_categories,
-                        user_context=user_context
-                    )
+                    # Пробуем сначала основной AI сервис с таймаутом
+                    try:
+                        logger.info(f"Getting AI service for categorization...")
+                        ai_service = get_service('categorization')
+                        logger.info(f"AI service obtained: {type(ai_service).__name__}")
+                        logger.info(f"Calling categorize_expense with timeout=15s...")
+                        ai_result = await asyncio.wait_for(
+                            ai_service.categorize_expense(
+                                text=text,
+                                amount=amount,
+                                currency=currency,
+                                categories=user_categories,
+                                user_context=user_context
+                            ),
+                            timeout=15.0  # 15 секунд общий таймаут для изолированного процесса
+                        )
+                        logger.info(f"AI categorization completed")
+                    except asyncio.TimeoutError:
+                        logger.warning(f"AI categorization timeout for '{text}'")
+                        ai_result = None
+                    except Exception as e:
+                        logger.error(f"AI categorization error: {e}")
+                        ai_result = None
                     
                     # Если Google AI не сработал, пробуем OpenAI
                     if not ai_result:
@@ -374,15 +389,20 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         from bot.services.ai_selector import AISelector
                         try:
                             openai_service = AISelector('openai')
-                            ai_result = await openai_service.categorize_expense(
-                                text=text,
-                                amount=amount,
-                                currency=currency,
-                                categories=user_categories,
-                                user_context=user_context
+                            ai_result = await asyncio.wait_for(
+                                openai_service.categorize_expense(
+                                    text=text,
+                                    amount=amount,
+                                    currency=currency,
+                                    categories=user_categories,
+                                    user_context=user_context
+                                ),
+                                timeout=5.0  # 5 секунд таймаут для fallback
                             )
                             if ai_result:
                                 logger.info(f"OpenAI fallback successful")
+                        except asyncio.TimeoutError:
+                            logger.error(f"OpenAI fallback timeout")
                         except Exception as e:
                             logger.error(f"OpenAI fallback failed: {e}")
                     
@@ -393,7 +413,16 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         result['ai_enhanced'] = True
                         result['ai_provider'] = ai_result.get('provider', 'unknown')
                         
-                        logger.info(f"AI enhanced result for user {user_id}: category='{result['category']}', confidence={result['confidence']}, provider={result['ai_provider']}")
+                        # Безопасное логирование без Unicode
+                        try:
+                            # Оставляем эмодзи но убираем их из лога
+                            if result['category']:
+                                cat_clean = ''.join(c for c in result['category'] if ord(c) < 128).strip()
+                                if not cat_clean and result['category']:
+                                    cat_clean = 'category with emoji'
+                                logger.info(f"AI enhanced result for user {user_id}: category='{cat_clean}', confidence={result['confidence']}, provider={result['ai_provider']}")
+                        except:
+                            pass
                     
             except Exception as e:
                 logger.error(f"AI categorization failed: {e}")

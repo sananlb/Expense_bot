@@ -9,11 +9,14 @@ import django
 import logging
 import platform
 import io
+import multiprocessing as mp
 
 # Настройка кодировки для Windows
 if platform.system() == 'Windows':
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    # Для Windows используем spawn для multiprocessing (для Google AI)
+    mp.set_start_method('spawn', force=True)
 
 # Добавляем текущую директорию в PYTHONPATH
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -55,6 +58,14 @@ def print_header():
 def main():
     """Основная функция запуска"""
     print_header()
+    
+    # Очищаем кэш AI сервисов при старте
+    try:
+        from bot.services.ai_selector import AISelector
+        AISelector.clear_cache()
+        logger.info("AI service cache cleared on startup")
+    except Exception as e:
+        logger.warning(f"Could not clear AI cache: {e}")
     
     logger.info("=== Запуск ExpenseBot (новая версия) ===")
     

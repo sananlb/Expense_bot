@@ -204,7 +204,7 @@ async def process_subscription_purchase(callback: CallbackQuery, state: FSMConte
     
     # Отправляем отдельное сообщение с кнопкой "Назад"
     builder = InlineKeyboardBuilder()
-    builder.button(text="◀️", callback_data="menu_subscription")
+    builder.button(text="← Назад", callback_data="menu_subscription")
     
     back_msg = await callback.bot.send_message(
         chat_id=callback.from_user.id,
@@ -494,7 +494,7 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
     
     # Отправляем отдельное сообщение с кнопкой "Назад"
     builder = InlineKeyboardBuilder()
-    builder.button(text="◀️", callback_data="menu_subscription")
+    builder.button(text="← Назад", callback_data="menu_subscription")
     
     back_msg = await callback.bot.send_message(
         chat_id=callback.from_user.id,

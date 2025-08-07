@@ -1,39 +1,38 @@
 """
-Google AI Service для expense_bot
+Google AI Service для expense_bot - упрощенная рабочая версия на основе nutrition_bot
 """
 import logging
 import json
 import asyncio
+import os
 from typing import Dict, List, Optional, Any
 import google.generativeai as genai
 from .ai_base_service import AIBaseService
-from .ai_selector import get_provider_settings, get_model
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+# Глобальная инициализация клиента при загрузке модуля
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+if GOOGLE_API_KEY:
+    genai.configure(api_key=GOOGLE_API_KEY)
+    logger.info("[GoogleAI] Module configured with API key")
+
 
 class GoogleAIService(AIBaseService):
-    """Сервис для работы с Google AI (Gemini)"""
+    """Сервис для работы с Google AI (Gemini) - упрощенная стабильная версия"""
     
     def __init__(self):
         """Инициализация сервиса"""
-        settings = get_provider_settings('google')
-        self.api_key = settings['api_key']
-        
-        if not self.api_key:
+        if not GOOGLE_API_KEY:
             raise ValueError("GOOGLE_API_KEY not found in environment")
         
-        genai.configure(api_key=self.api_key)
-        self.models = {}  # Кэш моделей для разных типов
+        self.api_key = GOOGLE_API_KEY
+        logger.info("[GoogleAI] Service initialized (fixed version)")
         
-    def _get_model(self, service_type: str = 'categorization'):
-        """Получает или создает модель"""
-        if service_type not in self.models:
-            model_name = get_model(service_type, 'google')
-            logger.info(f"Creating Google AI model: {model_name} for {service_type}")
-            self.models[service_type] = genai.GenerativeModel(model_name)
-        return self.models[service_type]
-    
     async def categorize_expense(
         self, 
         text: str, 
@@ -46,52 +45,69 @@ class GoogleAIService(AIBaseService):
         Категоризация расхода через Google AI
         """
         try:
-            logger.info(f"Starting Google AI categorization for '{text}'")
+            logger.info(f"[GoogleAI] Starting categorization for: {text[:30]}")
             
+            # Создаем промпт
             prompt = self.get_expense_categorization_prompt(
                 text, amount, currency, categories, user_context
             )
             
-            logger.info(f"Getting model for categorization")
-            model = self._get_model('categorization')
-            logger.info(f"Model retrieved: {model}")
+            # Создаем модель
+            model_name = 'gemini-2.5-flash'  # Используем фиксированную модель
+            model = genai.GenerativeModel(
+                model_name=model_name,
+                system_instruction="You are an expense categorization assistant. Return ONLY valid JSON without any additional text or markdown formatting."
+            )
             
-            # Генерация с настройками для JSON
+            # Настройки генерации
             generation_config = genai.GenerationConfig(
                 temperature=0.1,
-                max_output_tokens=1000  # Увеличиваем лимит токенов до 1000
-                # Убираем response_mime_type, так как может вызывать проблемы
+                max_output_tokens=1000,
+                candidate_count=1,
+                top_p=0.95,
+                top_k=40
             )
-            logger.info(f"Generation config created")
             
-            logger.info(f"Calling Google AI API with timeout=5s...")
-            # Асинхронный вызов с таймаутом
-            try:
-                response = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        model.generate_content,
-                        prompt,
-                        generation_config=generation_config
-                    ),
-                    timeout=5.0  # 5 секунд таймаут
-                )
-                logger.info(f"Google AI responded successfully")
-            except asyncio.TimeoutError:
-                logger.error(f"Google AI timeout after 5 seconds for '{text}'")
-                return None
-            except Exception as e:
-                logger.error(f"Google AI error: {e}")
+            # Safety settings
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+            ]
+            
+            # Простой асинхронный вызов без лишних оберток
+            response = await model.generate_content_async(
+                prompt,
+                generation_config=generation_config,
+                safety_settings=safety_settings
+            )
+            
+            logger.info(f"[GoogleAI] Got response")
+            
+            # Проверяем блокировку контента
+            if not response.parts:
+                logger.warning(f"[GoogleAI] Empty response or content blocked")
                 return None
             
-            # Парсим ответ
+            # Обрабатываем ответ
+            response_text = response.text.strip()
+            
+            # Убираем markdown блоки если есть
+            if response_text.startswith('```json'):
+                response_text = response_text[7:]
+            if response_text.startswith('```'):
+                response_text = response_text[3:]
+            if response_text.endswith('```'):
+                response_text = response_text[:-3]
+            response_text = response_text.strip()
+            
+            # Парсим JSON
             try:
-                result = json.loads(response.text)
+                result = json.loads(response_text)
                 
-                # Валидация результата
                 if 'category' in result and result['category'] in categories:
-                    # Убираем эмоджи для логирования в Windows
-                    cat_clean = ''.join(c for c in result['category'] if ord(c) < 128).strip()
-                    logger.info(f"Google AI categorized '{text[:20]}' as '{cat_clean}' with confidence {result.get('confidence', 0)}")
+                    logger.info(f"[GoogleAI] Categorized successfully: {result['category']}")
                     return {
                         'category': result['category'],
                         'confidence': result.get('confidence', 0.8),
@@ -99,17 +115,15 @@ class GoogleAIService(AIBaseService):
                         'provider': 'google'
                     }
                 else:
-                    cat_name = result.get('category', 'None')
-                    cat_clean = ''.join(c for c in str(cat_name) if ord(c) < 128).strip()
-                    logger.warning(f"Google AI returned invalid category: {cat_clean}")
+                    logger.warning(f"[GoogleAI] Invalid category in response: {result.get('category')}")
                     return None
                     
-            except json.JSONDecodeError:
-                logger.error(f"Failed to parse Google AI response: {response.text}")
+            except json.JSONDecodeError as e:
+                logger.error(f"[GoogleAI] JSON parse error: {e}, response: {response_text[:200]}")
                 return None
-                
+                    
         except Exception as e:
-            logger.error(f"Google AI categorization error: {e}")
+            logger.error(f"[GoogleAI] Error: {type(e).__name__}: {str(e)[:200]}")
             return None
     
     async def chat(
@@ -124,24 +138,36 @@ class GoogleAIService(AIBaseService):
         try:
             prompt = self.get_chat_prompt(message, context, user_context)
             
-            model = self._get_model('chat')
+            model_name = 'gemini-2.5-flash'
+            model = genai.GenerativeModel(
+                model_name=model_name,
+                system_instruction="You are a helpful expense tracking assistant. Respond in the same language as the user's message."
+            )
             
-            # Генерация с настройками для чата
             generation_config = genai.GenerationConfig(
                 temperature=0.7,
-                max_output_tokens=1000,  # Увеличиваем до 1000
+                max_output_tokens=1000,
                 top_p=0.9
             )
             
-            # Асинхронный вызов
-            response = await asyncio.to_thread(
-                model.generate_content,
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+            ]
+            
+            response = await model.generate_content_async(
                 prompt,
-                generation_config=generation_config
+                generation_config=generation_config,
+                safety_settings=safety_settings
             )
             
-            return response.text.strip()
-            
+            if response and response.parts:
+                return response.text.strip()
+            else:
+                return "Извините, не удалось получить ответ от AI."
+                
         except Exception as e:
-            logger.error(f"Google AI chat error: {e}")
-            return "Извините, произошла ошибка при обработке вашего сообщения. Попробуйте еще раз."
+            logger.error(f"[GoogleAI Chat] Error: {type(e).__name__}: {str(e)[:200]}")
+            return "Извините, произошла ошибка при обработке вашего сообщения."

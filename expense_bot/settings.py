@@ -80,6 +80,11 @@ WSGI_APPLICATION = 'expense_bot.wsgi.application'
 # Async settings
 DJANGO_ALLOW_ASYNC_UNSAFE = True
 
+# Fix для Windows и multiprocessing
+if os.name == 'nt':  # Windows
+    import multiprocessing
+    multiprocessing.set_start_method('spawn', force=True)
+
 # Database
 if os.getenv('DB_HOST'):
     # Production database settings for Docker
