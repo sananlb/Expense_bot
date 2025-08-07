@@ -221,9 +221,16 @@ async def process_day_button(callback: types.CallbackQuery, state: FSMContext):
         )
         
         await state.clear()
+        
+        # Удаляем старое сообщение с выбором даты
+        try:
+            await callback.message.delete()
+        except:
+            pass
+        
         # Показываем меню регулярных платежей
         await show_recurring_menu(callback, state)
-        await callback.answer()
+        await callback.answer("✅ Регулярный платеж добавлен")
     except Exception as e:
         await callback.answer(f"Ошибка: {str(e)}", show_alert=True)
         await state.clear()

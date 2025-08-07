@@ -359,6 +359,72 @@ async def delete_category_direct(callback: types.CallbackQuery, state: FSMContex
 
 
 
+@router.callback_query(lambda c: c.data.startswith("skip_edit_name_"))
+async def skip_edit_name(callback: types.CallbackQuery, state: FSMContext):
+    """Пропустить изменение названия и перейти к выбору иконки"""
+    import logging
+    import re
+    logger = logging.getLogger(__name__)
+    
+    cat_id = int(callback.data.split("_")[-1])
+    user_id = callback.from_user.id
+    
+    # Получаем информацию о категории
+    category = await get_category_by_id(user_id, cat_id)
+    
+    if not category:
+        await callback.answer("❌ Категория не найдена", show_alert=True)
+        return
+    
+    # Проверяем, есть ли уже эмодзи в начале названия
+    emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]'
+    has_emoji = bool(re.match(emoji_pattern, category.name))
+    
+    if has_emoji:
+        # Если эмодзи уже есть, просто возвращаемся к меню категорий
+        await state.clear()
+        await show_categories_menu(callback, state)
+        await callback.answer("Название категории оставлено без изменений")
+    else:
+        # Если эмодзи нет, извлекаем чистое название без эмодзи
+        name_without_emoji = re.sub(emoji_pattern + r'\s*', '', category.name)
+        
+        # Сохраняем данные для выбора иконки
+        await state.update_data(
+            editing_category_id=cat_id,
+            name=name_without_emoji  # Сохраняем название без эмодзи
+        )
+        
+        # Показываем выбор иконок
+        icons = [
+            ['💰', '💵', '💳', '💸', '🏦'],
+            ['🛒', '🍽️', '☕', '🍕', '👪'],
+            ['🚗', '🚕', '🚌', '✈️', '⛽'],
+            ['🏠', '💡', '🔧', '🛠️', '🏡'],
+            ['👕', '👟', '👜', '💄', '💍'],
+            ['💊', '🏥', '💉', '🩺', '🏋️'],
+            ['📱', '💻', '🎮', '📷', '🎧'],
+            ['🎭', '🎬', '🎪', '🎨', '🎯'],
+            ['📚', '✏️', '🎓', '📖', '🖊️'],
+            ['🎁', '🎉', '🎂', '💐', '🎈']
+        ]
+        
+        keyboard_buttons = []
+        for row in icons:
+            buttons_row = [InlineKeyboardButton(text=icon, callback_data=f"set_icon_{icon}") for icon in row]
+            keyboard_buttons.append(buttons_row)
+        
+        keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_icon")])
+        keyboard_buttons.append([InlineKeyboardButton(text="⬅️", callback_data="edit_categories")])
+        
+        await callback.message.edit_text(
+            f"🎨 Выберите новую иконку для категории «{name_without_emoji}»:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        )
+        await state.set_state(CategoryForm.waiting_for_icon)
+        await callback.answer()
+
+
 @router.callback_query(lambda c: c.data.startswith("edit_cat_"))
 async def edit_category(callback: types.CallbackQuery, state: FSMContext):
     """Редактирование категории"""
@@ -380,8 +446,9 @@ async def edit_category(callback: types.CallbackQuery, state: FSMContext):
         
         await callback.message.edit_text(
             f"✏️ Редактирование категории «{category.name}»\n\n"
-            "Введите новое название категории:",
+            "Введите новое название категории или нажмите «Пропустить», чтобы оставить текущее:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="⏭️ Пропустить", callback_data=f"skip_edit_name_{cat_id}")],
                 [InlineKeyboardButton(text="❌ Отмена", callback_data="edit_categories")]
             ])
         )

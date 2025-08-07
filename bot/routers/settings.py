@@ -248,10 +248,45 @@ async def change_currency(callback: CallbackQuery, state: FSMContext, lang: str 
     """Изменить валюту"""
     await state.set_state(SettingsStates.currency)
     
-    await callback.message.edit_text(
-        get_text('change_currency', lang),
-        reply_markup=get_currency_keyboard(lang)
-    )
+    # Получаем текущую валюту пользователя
+    try:
+        profile = await get_or_create_profile(callback.from_user.id)
+        current_currency = profile.currency or 'RUB'
+        
+        # Словарь валют с их названиями
+        currencies = {
+            'RUB': '🇷🇺 Российский рубль',
+            'USD': '🇺🇸 Доллар США', 
+            'EUR': '🇪🇺 Евро',
+            'GBP': '🇬🇧 Фунт стерлингов',
+            'CNY': '🇨🇳 Китайский юань',
+            'JPY': '🇯🇵 Японская иена',
+            'KRW': '🇰🇷 Корейская вона',
+            'INR': '🇮🇳 Индийская рупия',
+            'TRY': '🇹🇷 Турецкая лира',
+            'AED': '🇦🇪 Дирхам ОАЭ',
+            'KZT': '🇰🇿 Казахстанский тенге',
+            'BYN': '🇧🇾 Белорусский рубль',
+            'UAH': '🇺🇦 Украинская гривна',
+            'PLN': '🇵🇱 Польский злотый',
+            'CZK': '🇨🇿 Чешская крона'
+        }
+        
+        current_currency_name = currencies.get(current_currency, current_currency)
+        
+        text = f"{get_text('change_currency', lang)}\n\n"
+        text += f"💰 Текущая валюта: {current_currency_name}"
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=get_currency_keyboard(lang)
+        )
+    except Exception as e:
+        logger.error(f"Error getting current currency: {e}")
+        await callback.message.edit_text(
+            get_text('change_currency', lang),
+            reply_markup=get_currency_keyboard(lang)
+        )
 
 
 @router.callback_query(SettingsStates.currency, F.data.startswith("curr_"))
@@ -440,8 +475,8 @@ async def change_notification_time(callback: CallbackQuery, state: FSMContext, l
     """Изменить время отправки уведомлений"""
     await state.set_state(NotificationStates.selecting_time)
     
-    # Время только от 15:00 до 23:00
-    times = ["15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00", "23:00"]
+    # Предлагаем популярное время, но можно выбрать любое
+    times = ["06:00", "09:00", "12:00", "15:00", "18:00", "19:00", "20:00", "21:00", "22:00"]
     
     keyboard_buttons = []
     for i in range(0, len(times), 3):
@@ -463,8 +498,7 @@ async def change_notification_time(callback: CallbackQuery, state: FSMContext, l
     await callback.message.edit_text(
         "⏰ Выберите время для отправки отчетов:\n\n"
         "Вы можете нажать на кнопку или ввести время в формате ЧЧ:ММ\n"
-        "(например: 18:30)\n\n"
-        "⚠️ Доступное время: с 15:00 до 23:00",
+        "(например: 18:30)",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
     await callback.answer()
@@ -513,19 +547,18 @@ async def process_time_input(message: Message, state: FSMContext, lang: str = 'r
         await send_message_with_cleanup(
             message, state,
             "❌ Неверный формат времени.\n\n"
-            "Введите время в формате ЧЧ:ММ (например: 18:30)\n"
-            "Доступное время: с 15:00 до 23:00"
+            "Введите время в формате ЧЧ:ММ (например: 18:30)"
         )
         return
     
     hour = int(match.group(1))
     minute = int(match.group(2))
     
-    # Проверяем диапазон времени (15:00 - 23:59)
-    if hour < 15 or hour > 23:
+    # Проверяем корректность времени (0-23 часов)
+    if hour > 23:
         await send_message_with_cleanup(
             message, state,
-            "❌ Время должно быть в диапазоне с 15:00 до 23:00\n\n"
+            "❌ Неверное время. Часы должны быть от 0 до 23.\n\n"
             "Пожалуйста, введите корректное время."
         )
         return
