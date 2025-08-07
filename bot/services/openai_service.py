@@ -36,6 +36,7 @@ class OpenAIService(AIBaseService):
     def __init__(self):
         """Инициализация сервиса"""
         super().__init__()
+        self.use_rotation = False  # Добавляем атрибут
         # Если нет пула клиентов, создаем единичный клиент
         if not OPENAI_CLIENTS:
             settings = get_provider_settings('openai')

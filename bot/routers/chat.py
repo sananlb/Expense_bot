@@ -48,6 +48,9 @@ class ChatContextManager:
         if not session_id:
             need_reset = True
         elif last_activity:
+            # Преобразуем строку обратно в datetime если нужно
+            if isinstance(last_activity, str):
+                last_activity = datetime.fromisoformat(last_activity)
             inactive_minutes = (now - last_activity).total_seconds() / 60
             if inactive_minutes > ChatContextManager.CONTEXT_RESET_MINUTES:
                 need_reset = True
@@ -56,11 +59,11 @@ class ChatContextManager:
             session_id = f"chat_{user_id}_{int(now.timestamp())}"
             await state.update_data(
                 chat_session_id=session_id,
-                chat_last_activity=now,
+                chat_last_activity=now.isoformat(),
                 chat_messages=[]
             )
         else:
-            await state.update_data(chat_last_activity=now)
+            await state.update_data(chat_last_activity=now.isoformat())
         
         return session_id
     
@@ -146,9 +149,36 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
             context = await ChatContextManager.get_context(state)
             
             # Получаем дополнительную информацию о пользователе
+            from expenses.models import Expense
+            from datetime import timedelta
+            
+            today = datetime.now().date()
             today_summary = await get_today_summary(user_id)
+            
+            # Получаем последние расходы для контекста
+            recent_expenses = []
+            try:
+                from asgiref.sync import sync_to_async
+                expenses = await sync_to_async(list)(
+                    Expense.objects.filter(
+                        profile__telegram_id=user_id,
+                        expense_date__gte=today - timedelta(days=30)
+                    ).select_related('category').order_by('-expense_date', '-id')[:20]
+                )
+                
+                for exp in expenses:
+                    recent_expenses.append({
+                        'date': exp.expense_date.isoformat(),
+                        'amount': float(exp.amount),
+                        'category': exp.category.name,
+                        'description': exp.description or ''
+                    })
+            except Exception as e:
+                logger.error(f"Error getting recent expenses: {e}")
+            
             user_context = {
-                'total_today': today_summary.get('total', 0) if today_summary else 0
+                'total_today': today_summary.get('total', 0) if today_summary else 0,
+                'expenses_data': recent_expenses
             }
             
             # Получаем AI сервис и генерируем ответ
@@ -156,9 +186,18 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
             response = await ai_service.chat(text, context, user_context)
             
         except Exception as e:
-            logger.error(f"AI chat error: {e}")
-            # Fallback на простые ответы
-            response = await get_simple_response(text, user_id)
+            logger.error(f"AI chat error with primary service: {e}")
+            # Fallback на OpenAI
+            try:
+                logger.info("Trying fallback to OpenAI service...")
+                from ..services.openai_service import OpenAIService
+                openai_service = OpenAIService()
+                response = await openai_service.chat(text, context, user_context)
+                logger.info("OpenAI fallback successful")
+            except Exception as fallback_error:
+                logger.error(f"OpenAI fallback also failed: {fallback_error}")
+                # Крайний случай - простые ответы
+                response = "AI сервис временно недоступен. Попробуйте позже."
     else:
         # Простые ответы без AI для пользователей без подписки
         response = await get_simple_response(text, user_id)
@@ -170,7 +209,14 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
     # Добавляем ответ в контекст
     await ChatContextManager.add_message(state, 'assistant', response)
     
-    await send_message_with_cleanup(message, state, response)
+    # Конвертируем Markdown в HTML для правильного отображения
+    import re
+    # Заменяем **text** на <b>text</b>
+    response_html = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', response)
+    # Заменяем *text* на <i>text</i> (только одинарные звездочки)
+    response_html = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<i>\1</i>', response_html)
+    
+    await send_message_with_cleanup(message, state, response_html, parse_mode="HTML")
 
 
 async def get_simple_response(text: str, user_id: int) -> str:

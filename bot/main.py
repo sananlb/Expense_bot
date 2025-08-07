@@ -69,6 +69,16 @@ async def on_startup(bot: Bot):
 
 async def on_shutdown(bot: Bot):
     """Действия при остановке бота"""
+    # Закрываем AI сервисы если они есть
+    try:
+        from bot.services.ai_selector import AISelector
+        for provider_type, service in AISelector._instances.items():
+            if hasattr(service, 'close'):
+                service.close()
+                logger.info(f"Closed {provider_type} AI service")
+    except Exception as e:
+        logger.warning(f"Error closing AI services: {e}")
+    
     logger.info("Бот остановлен")
 
 

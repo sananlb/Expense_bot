@@ -19,6 +19,7 @@ from ..utils import get_text
 from ..utils.expense_parser import parse_expense_message
 from ..utils.formatters import format_currency, format_expenses_summary, format_date
 from ..utils.validators import validate_amount, parse_description_amount
+from ..utils.expense_messages import format_expense_added_message
 from ..decorators import require_subscription, rate_limit
 from expenses.models import Profile
 
@@ -470,17 +471,23 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
     # Очищаем состояние
     await state.clear()
     
+    # Формируем сообщение с информацией о потраченном за день
+    message_text = await format_expense_added_message(
+        expense=expense,
+        category=category,
+        cashback_text=cashback_text
+    )
+    
     # Отправляем подтверждение
     await send_message_with_cleanup(message, state,
-        f"✅ {expense.description}\n\n"
-        f"💰 {amount_text}{cashback_text}\n"
-        f"{category.icon} {category.name}",
+        message_text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
                 InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
             ]
-        ])
+        ]),
+        parse_mode="HTML"
     )
 
 
@@ -494,6 +501,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     from ..services.expense import add_expense
     from ..services.cashback import calculate_expense_cashback
     from ..services.subscription import check_subscription
+    from aiogram.fsm.context import FSMContext
+    from ..routers.chat import process_chat_message
     
     # Проверяем, есть ли активное состояние (кроме нашего состояния ожидания суммы, 
     # которое теперь обрабатывается отдельным обработчиком выше)
@@ -516,7 +525,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     except Profile.DoesNotExist:
         profile = None
     
+    logger.info(f"Starting parse_expense_message for text: '{text}', user_id: {user_id}")
     parsed = await parse_expense_message(text, user_id=user_id, profile=profile, use_ai=True)
+    logger.info(f"Parsing completed, result: {parsed}")
     
     if not parsed:
         # Используем улучшенный классификатор для определения типа сообщения
@@ -575,12 +586,17 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     if cashback > 0:
                         cashback_text = f" (+{cashback:.0f} ₽)"
                 
+                # Формируем сообщение с информацией о потраченном за день
+                message_text = await format_expense_added_message(
+                    expense=expense,
+                    category=category,
+                    cashback_text=cashback_text,
+                    similar_expense=True
+                )
+                
                 # Отправляем подтверждение
                 await send_message_with_cleanup(message, state,
-                    f"✅ {expense.description}\n\n"
-                    f"💰 {amount_text}{cashback_text}\n"
-                    f"{category.icon} {category.name}\n"
-                    f"<i>(сумма взята из последней похожей траты)</i>",
+                    message_text,
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [
                             InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
@@ -604,8 +620,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 )
             return
         
-        # Не похоже на трату - пропускаем к chat_router
-        logger.info(f"Expense parser returned None for text: '{text}', passing to chat router")
+        # Не похоже на трату - обрабатываем как чат
+        logger.info(f"Expense parser returned None for text: '{text}', processing as chat")
+        await process_chat_message(message, state, text)
         return
     
     # Проверяем/создаем категорию
@@ -648,17 +665,23 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         if cashback > 0:
             cashback_text = f" (+{cashback:.0f} ₽)"
     
+    # Формируем сообщение с информацией о потраченном за день
+    message_text = await format_expense_added_message(
+        expense=expense,
+        category=category,
+        cashback_text=cashback_text,
+        confidence_text=confidence_text
+    )
+    
     await send_message_with_cleanup(message, state,
-        f"✅ {expense.description}\n\n"
-        f"💰 {amount_text}{cashback_text}\n"
-        f"{category.icon} {category.name}"
-        f"{confidence_text}",
+        message_text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
                 InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
             ]
-        ])
+        ]),
+        parse_mode="HTML"
     )
 
 
@@ -815,7 +838,7 @@ async def edit_field_category(callback: types.CallbackQuery, state: FSMContext, 
             )
         ])
     
-    keyboard_buttons.append([InlineKeyboardButton(text=f"❌ {get_text('cancel', lang)}", callback_data="edit_cancel")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('cancel', lang), callback_data="edit_cancel")])
     
     await callback.message.edit_text(
         f"📁 <b>{get_text('choose_new_category', lang)}</b>:\n\n"
@@ -824,6 +847,21 @@ async def edit_field_category(callback: types.CallbackQuery, state: FSMContext, 
         parse_mode="HTML"
     )
     await state.set_state(EditExpenseForm.editing_category)
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "edit_cancel")
+async def edit_cancel(callback: types.CallbackQuery, state: FSMContext):
+    """Отмена редактирования категории"""
+    # Возвращаемся к меню редактирования траты
+    data = await state.get_data()
+    expense_id = data.get('editing_expense_id')
+    
+    if expense_id:
+        await show_edit_menu_callback(callback, state, expense_id)
+    else:
+        await callback.message.delete()
+        await state.clear()
     await callback.answer()
 
 
@@ -836,16 +874,27 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext):
     # Получаем обновленную трату
     from expenses.models import Expense
     try:
-        expense = await Expense.objects.select_related('category').aget(
+        expense = await Expense.objects.select_related('category', 'profile').aget(
             id=expense_id,
             profile__telegram_id=callback.from_user.id
         )
         
+        # Используем единый формат сообщения
+        from ..utils.expense_messages import format_expense_added_message
+        message_text = await format_expense_added_message(
+            expense=expense,
+            category=expense.category
+        )
+        
+        # Редактируем сообщение с кнопками редактирования
         await callback.message.edit_text(
-            f"✅ <b>Трата обновлена!</b>\n\n"
-            f"💰 Сумма: {expense.amount:.0f} ₽\n"
-            f"📁 Категория: {expense.category.name}\n"
-            f"📝 Описание: {expense.description}",
+            message_text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
+                    InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
+                ]
+            ]),
             parse_mode="HTML"
         )
     except Expense.DoesNotExist:
@@ -965,28 +1014,28 @@ async def show_edit_menu_callback(callback: types.CallbackQuery, state: FSMConte
 async def show_updated_expense(message: types.Message, state: FSMContext, expense_id: int):
     """Показать обновленную трату"""
     from expenses.models import Expense
-    from ..utils.formatters import format_currency
     
     try:
-        expense = await Expense.objects.select_related('category').aget(
+        expense = await Expense.objects.select_related('category', 'profile').aget(
             id=expense_id,
             profile__telegram_id=message.from_user.id
         )
         
-        # Форматируем сообщение так же как при добавлении
-        currency = expense.currency or 'RUB'
-        amount_text = format_currency(expense.amount, currency)
+        # Формируем сообщение с информацией о потраченном за день
+        message_text = await format_expense_added_message(
+            expense=expense,
+            category=expense.category
+        )
         
         await send_message_with_cleanup(message, state,
-            f"✅ {expense.description}\n\n"
-            f"💰 {amount_text}\n"
-            f"{expense.category.icon} {expense.category.name}",
+            message_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
                     InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
                     InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
                 ]
-            ])
+            ]),
+            parse_mode="HTML"
         )
         
         # Очищаем состояние
@@ -999,28 +1048,28 @@ async def show_updated_expense(message: types.Message, state: FSMContext, expens
 async def show_updated_expense_callback(callback: types.CallbackQuery, state: FSMContext, expense_id: int):
     """Показать обновленную трату для callback"""
     from expenses.models import Expense
-    from ..utils.formatters import format_currency
     
     try:
-        expense = await Expense.objects.select_related('category').aget(
+        expense = await Expense.objects.select_related('category', 'profile').aget(
             id=expense_id,
             profile__telegram_id=callback.from_user.id
         )
         
-        # Форматируем сообщение так же как при добавлении
-        currency = expense.currency or 'RUB'
-        amount_text = format_currency(expense.amount, currency)
+        # Формируем сообщение с информацией о потраченном за день
+        message_text = await format_expense_added_message(
+            expense=expense,
+            category=expense.category
+        )
         
         await callback.message.edit_text(
-            f"✅ {expense.description}\n\n"
-            f"💰 {amount_text}\n"
-            f"{expense.category.icon} {expense.category.name}",
+            message_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
                     InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
                     InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
                 ]
-            ])
+            ]),
+            parse_mode="HTML"
         )
         
         # Очищаем состояние
