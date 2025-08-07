@@ -34,6 +34,15 @@ def create_recurring_payment(user_id: int, category_id: int, amount: float,
     """Создать новый регулярный платеж"""
     profile = Profile.objects.get(telegram_id=user_id)
     
+    # Проверяем лимит регулярных платежей (максимум 50)
+    recurring_count = RecurringPayment.objects.filter(profile=profile).count()
+    if recurring_count >= 50:
+        raise ValueError("Достигнут лимит регулярных платежей (максимум 50)")
+    
+    # Проверяем длину описания (максимум 500 символов)
+    if description and len(description) > 500:
+        raise ValueError("Описание слишком длинное (максимум 500 символов)")
+    
     payment = RecurringPayment.objects.create(
         profile=profile,
         category_id=category_id,

@@ -46,11 +46,6 @@ else:  # Linux and other Unix systems
 
 # Task routing configuration
 app.conf.task_routes = {
-    'expense_bot.celery_tasks.send_daily_reports': {
-        'queue': 'reports',
-        'routing_key': 'report.daily',
-        'priority': 5,
-    },
     'expense_bot.celery_tasks.send_weekly_reports': {
         'queue': 'reports', 
         'routing_key': 'report.weekly',
@@ -70,6 +65,11 @@ app.conf.task_routes = {
         'queue': 'maintenance',
         'routing_key': 'maintenance.cleanup',
         'priority': 3,
+    },
+    'expense_bot.celery_tasks.send_daily_admin_report': {
+        'queue': 'reports',
+        'routing_key': 'report.admin_daily',
+        'priority': 6,
     },
     'expenses.tasks.process_recurring_expenses': {
         'queue': 'recurring',

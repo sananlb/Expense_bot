@@ -157,19 +157,21 @@ async def process_category_name(message: types.Message, state: FSMContext):
     if has_emoji:
         # Если эмодзи уже есть, сразу создаем категорию
         user_id = message.from_user.id
-        category = await create_category(user_id, name, '')
-        
-        await state.clear()
-        
-        # Сразу показываем меню категорий
-        await show_categories_menu(message, state)
+        try:
+            category = await create_category(user_id, name, '')
+            await state.clear()
+            # Сразу показываем меню категорий
+            await show_categories_menu(message, state)
+        except ValueError as e:
+            await send_message_with_cleanup(message, state, f"❌ {str(e)}")
+            await state.clear()
     else:
         # Если эмодзи нет, сразу показываем выбор иконок
         await state.update_data(name=name)
         
         icons = [
             ['💰', '💵', '💳', '💸', '🏦'],
-            ['🛒', '🍽️', '☕', '🍕', '🥘'],
+            ['🛒', '🍽️', '☕', '🍕', '👪'],
             ['🚗', '🚕', '🚌', '✈️', '⛽'],
             ['🏠', '💡', '🔧', '🛠️', '🏡'],
             ['👕', '👟', '👜', '💄', '💍'],
@@ -446,7 +448,7 @@ async def process_edit_category_name(message: types.Message, state: FSMContext):
         
         icons = [
             ['💰', '💵', '💳', '💸', '🏦'],
-            ['🛒', '🍽️', '☕', '🍕', '🥘'],
+            ['🛒', '🍽️', '☕', '🍕', '👪'],
             ['🚗', '🚕', '🚌', '✈️', '⛽'],
             ['🏠', '💡', '🔧', '🛠️', '🏡'],
             ['👕', '👟', '👜', '💄', '💍'],

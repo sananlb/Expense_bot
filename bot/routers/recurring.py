@@ -51,7 +51,7 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
     # Получаем регулярные платежи пользователя
     payments = await get_user_recurring_payments(user_id)
     
-    text = "🔄 <b>Регулярные платежи</b>\n\nВаши регулярные платежи:"
+    text = "🔄 <b>Регулярные платежи</b>"
     
     if payments:
         # Сортируем платежи: активные сначала, приостановленные в конце
@@ -59,10 +59,9 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
         paused_payments = [p for p in payments if not p.is_active]
         sorted_payments = active_payments + paused_payments
         
-        text += "\n"
         for payment in sorted_payments:
             status = "✅" if payment.is_active else "⏸"
-            text += f"\n\n{status} Регулярный платеж: <i>{payment.description}</i>\n"
+            text += f"\n\n{status} <b>{payment.description}</b>\n"
             text += f"Сумма: <i>{format_currency(payment.amount, 'RUB')}</i>\n"
             text += f"Дата: <i>{payment.day_of_month} число месяца</i>\n"
             text += f"Категория: <i>{payment.category.name}</i>"
@@ -224,6 +223,7 @@ async def process_day_button(callback: types.CallbackQuery, state: FSMContext):
         await state.clear()
         # Показываем меню регулярных платежей
         await show_recurring_menu(callback, state)
+        await callback.answer()
     except Exception as e:
         await callback.answer(f"Ошибка: {str(e)}", show_alert=True)
         await state.clear()

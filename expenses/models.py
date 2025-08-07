@@ -4,7 +4,7 @@
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 import string
 import random
@@ -103,11 +103,13 @@ class UserSettings(models.Model):
     profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name='settings')
     
     # Уведомления
-    daily_reminder_enabled = models.BooleanField(default=True)
-    daily_reminder_time = models.TimeField(default='20:00')
     weekly_summary_enabled = models.BooleanField(default=True)
-    monthly_summary_enabled = models.BooleanField(default=True)
+    monthly_summary_enabled = models.BooleanField(default=True)  # Всегда включено
     budget_alerts_enabled = models.BooleanField(default=True)
+    
+    # Время и день для уведомлений
+    notification_time = models.TimeField(default=time(18, 0))  # Общее время для недельных и месячных (18:00 по умолчанию)
+    weekly_summary_day = models.IntegerField(default=0)  # 0 = Понедельник, 6 = Воскресенье
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -574,6 +576,7 @@ DEFAULT_CATEGORIES = [
     ('Образование', '📚'),
     ('Подарки', '🎁'),
     ('Путешествия', '✈️'),
+    ('Родственники', '👪'),
     ('Коммунальные услуги и подписки', '📱'),
     ('Прочие расходы', '💰')
 ]

@@ -30,6 +30,12 @@ class SettingsStates(StatesGroup):
     notifications = State()
 
 
+class NotificationStates(StatesGroup):
+    selecting_weekday = State()
+    selecting_time = State()
+    configuring = State()
+
+
 @router.message(Command("settings"))
 async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
     """Показать меню настроек"""
@@ -63,9 +69,13 @@ async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
         currency_text = profile.currency or 'RUB'
         
         # Статус уведомлений
-        daily_status = '✅' if settings.daily_reminder_enabled else '❌'
         weekly_status = '✅' if settings.weekly_summary_enabled else '❌'
-        daily_time = settings.daily_reminder_time.strftime('%H:%M') if settings.daily_reminder_time else '21:00'
+        weekday = settings.weekly_summary_day
+        weekdays = {
+            0: 'Понедельник', 1: 'Вторник', 2: 'Среда', 3: 'Четверг',
+            4: 'Пятница', 5: 'Суббота', 6: 'Воскресенье'
+        }
+        weekday_text = weekdays.get(weekday, 'Понедельник')
         
         text = f"""{get_text('settings_menu', lang)}
 
@@ -74,8 +84,8 @@ async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
 {get_text('currency', lang)}: {currency_text}
 
 {get_text('notifications', lang)}:
-{daily_status} {get_text('daily_reports', lang)}: {daily_time}
-{weekly_status} {get_text('weekly_reports', lang)}: {get_text('monday', lang)}"""
+{weekly_status} {get_text('weekly_reports', lang)}: {weekday_text}
+✅ {get_text('monthly_reports', lang)}"""
         
         await send_message_with_cleanup(
             message, 
@@ -122,9 +132,13 @@ async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: st
         currency_text = profile.currency or 'RUB'
         
         # Статус уведомлений
-        daily_status = '✅' if settings.daily_reminder_enabled else '❌'
         weekly_status = '✅' if settings.weekly_summary_enabled else '❌'
-        daily_time = settings.daily_reminder_time.strftime('%H:%M') if settings.daily_reminder_time else '21:00'
+        weekday = settings.weekly_summary_day
+        weekdays = {
+            0: 'Понедельник', 1: 'Вторник', 2: 'Среда', 3: 'Четверг',
+            4: 'Пятница', 5: 'Суббота', 6: 'Воскресенье'
+        }
+        weekday_text = weekdays.get(weekday, 'Понедельник')
         
         text = f"""{get_text('settings_menu', lang)}
 
@@ -133,8 +147,8 @@ async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: st
 {get_text('currency', lang)}: {currency_text}
 
 {get_text('notifications', lang)}:
-{daily_status} {get_text('daily_reports', lang)}: {daily_time}
-{weekly_status} {get_text('weekly_reports', lang)}: {get_text('monday', lang)}"""
+{weekly_status} {get_text('weekly_reports', lang)}: {weekday_text}
+✅ {get_text('monthly_reports', lang)}"""
         
         await callback.message.edit_text(
             text,
@@ -261,79 +275,72 @@ async def process_currency_change(callback: CallbackQuery, state: FSMContext, la
 
 
 @router.callback_query(F.data == "configure_reports")
-async def configure_reports(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Настроить уведомления и отчеты"""
-    await state.clear()
+async def configure_notifications(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Настроить уведомления"""
+    await state.set_state(NotificationStates.configuring)
     
     try:
         profile = await get_or_create_profile(callback.from_user.id)
         settings = await sync_to_async(lambda: profile.settings)()
         
-        # Форматируем время отчета
-        report_time = settings.daily_reminder_time.strftime('%H:%M') if settings.daily_reminder_time else '21:00'
+        # Получаем настройки уведомлений
+        weekly_enabled = settings.weekly_summary_enabled
         
-        # Статусы отчетов
-        daily_icon = '✅' if settings.daily_reminder_enabled else '❌'
-        weekly_icon = '✅' if settings.weekly_summary_enabled else '❌'
+        # День недели для еженедельных отчетов
+        weekday = settings.weekly_summary_day
+        weekdays = {
+            0: 'Понедельник', 1: 'Вторник', 2: 'Среда', 3: 'Четверг',
+            4: 'Пятница', 5: 'Суббота', 6: 'Воскресенье'
+        }
+        weekday_text = weekdays.get(weekday, 'Понедельник')
         
-        text = f"""{get_text('report_settings', lang)}
+        # Время отправки
+        notification_time = settings.notification_time
+        time_text = notification_time.strftime('%H:%M') if notification_time else '18:00'
+        
+        # Статусы
+        weekly_icon = '✅' if weekly_enabled else '❌'
+        
+        text = f"""⚙️ <b>Настройка отчетов</b>
 
-{get_text('report_time', lang)}: {report_time}
+📅 <b>Еженедельные отчеты:</b> {weekly_icon}
+День: {weekday_text}
+Время: {time_text}
 
-{get_text('report_types', lang)}:
-{daily_icon} {get_text('daily_reports', lang)}
-{weekly_icon} {get_text('weekly_reports', lang)} ({get_text('sunday', lang)})
-ℹ️ {get_text('monthly_reports', lang)} ({get_text('enabled_by_default', lang)})"""
+📊 <b>Ежемесячные отчеты:</b> ✅
+Последний день месяца в {time_text}
+
+💡 Выберите, что хотите настроить:"""
         
         # Создаем клавиатуру
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(
-                text=f"⏰ {get_text('change_time', lang)}", 
-                callback_data="set_report_time"
+                text=f"{weekly_icon} Еженедельные отчеты",
+                callback_data="toggle_weekly_notif"
             )],
             [InlineKeyboardButton(
-                text=f"{daily_icon} {get_text('daily_reports', lang)}", 
-                callback_data="toggle_daily_reports"
+                text="📅 Изменить день недели",
+                callback_data="notif_change_weekday"
             )],
             [InlineKeyboardButton(
-                text=f"{weekly_icon} {get_text('weekly_reports', lang)}", 
-                callback_data="toggle_weekly_reports"
+                text="⏰ Изменить время",
+                callback_data="notif_change_time"
             )],
-            [
-                InlineKeyboardButton(text=get_text('close', lang), callback_data="close")
-            ]
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="settings")],
+            [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
         ])
         
-        await callback.message.edit_text(text, reply_markup=keyboard)
+        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
         await callback.answer()
         
     except Exception as e:
-        logger.error(f"Error configuring reports: {e}")
+        logger.error(f"Error configuring notifications: {e}")
         await callback.answer(get_text('error_occurred', lang), show_alert=True)
 
 
-@router.callback_query(F.data == "toggle_daily_reports")
-async def toggle_daily_reports(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Переключить ежедневные отчеты"""
-    try:
-        profile = await get_or_create_profile(callback.from_user.id)
-        settings = await sync_to_async(lambda: profile.settings)()
-        
-        # Переключаем статус
-        settings.daily_reminder_enabled = not settings.daily_reminder_enabled
-        await sync_to_async(settings.save)()
-        
-        # Обновляем меню
-        await configure_reports(callback, state, lang)
-        
-    except Exception as e:
-        logger.error(f"Error toggling daily reports: {e}")
-        await callback.answer(get_text('error_occurred', lang), show_alert=True)
-
-
-@router.callback_query(F.data == "toggle_weekly_reports")
-async def toggle_weekly_reports(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Переключить еженедельные отчеты"""
+@router.callback_query(NotificationStates.configuring, F.data == "toggle_weekly_notif")
+async def toggle_weekly_notifications(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Переключить еженедельные уведомления"""
     try:
         profile = await get_or_create_profile(callback.from_user.id)
         settings = await sync_to_async(lambda: profile.settings)()
@@ -342,64 +349,264 @@ async def toggle_weekly_reports(callback: CallbackQuery, state: FSMContext, lang
         settings.weekly_summary_enabled = not settings.weekly_summary_enabled
         await sync_to_async(settings.save)()
         
+        status = "включены" if settings.weekly_summary_enabled else "отключены"
+        await callback.answer(f"Еженедельные отчеты {status}")
+        
         # Обновляем меню
-        await configure_reports(callback, state, lang)
+        await configure_notifications(callback, state, lang)
         
     except Exception as e:
-        logger.error(f"Error toggling weekly reports: {e}")
+        logger.error(f"Error toggling weekly notifications: {e}")
         await callback.answer(get_text('error_occurred', lang), show_alert=True)
 
 
-@router.callback_query(F.data == "set_report_time")
-async def set_report_time(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Установить время отправки отчетов"""
-    # Создаем клавиатуру с популярными временами
-    times = ["07:00", "08:00", "09:00", "12:00", "18:00", "20:00", "21:00", "22:00"]
+# Удаляем функцию toggle_monthly_notif - ежемесячные отчеты всегда включены
+
+
+@router.callback_query(NotificationStates.configuring, F.data == "notif_change_weekday")
+async def change_notification_weekday(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Изменить день недели для еженедельных отчетов"""
+    await state.set_state(NotificationStates.selecting_weekday)
+    
+    weekdays = [
+        ("Понедельник", "weekday_0"),
+        ("Вторник", "weekday_1"),
+        ("Среда", "weekday_2"),
+        ("Четверг", "weekday_3"),
+        ("Пятница", "weekday_4"),
+        ("Суббота", "weekday_5"),
+        ("Воскресенье", "weekday_6")
+    ]
     
     keyboard_buttons = []
-    for i in range(0, len(times), 2):
+    for i in range(0, len(weekdays), 2):
         row = []
         for j in range(2):
-            if i + j < len(times):
-                time = times[i + j]
-                row.append(InlineKeyboardButton(
-                    text=f"🕐 {time}", 
-                    callback_data=f"report_time_{time.replace(':', '_')}"
-                ))
-        keyboard_buttons.append(row)
+            if i + j < len(weekdays):
+                text, data = weekdays[i + j]
+                row.append(InlineKeyboardButton(text=f"📅 {text}", callback_data=data))
+        if row:
+            keyboard_buttons.append(row)
     
     keyboard_buttons.append([
-        InlineKeyboardButton(text=get_text('close', lang), callback_data="close")
+        InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_notifications")
     ])
     
     await callback.message.edit_text(
-        f"{get_text('select_time', lang)}:",
+        "📅 Выберите день недели для еженедельных отчетов:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
     await callback.answer()
 
 
-@router.callback_query(lambda c: c.data.startswith("report_time_"))
-async def save_report_time(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Сохранить выбранное время отчетов"""
+@router.callback_query(NotificationStates.selecting_weekday, F.data.startswith("weekday_"))
+async def save_notification_weekday(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Сохранить выбранный день недели"""
     try:
-        # Извлекаем время из callback_data
-        time_str = callback.data.replace("report_time_", "").replace("_", ":")
+        weekday = int(callback.data.split('_')[1])
+        
+        profile = await get_or_create_profile(callback.from_user.id)
+        settings = await sync_to_async(lambda: profile.settings)()
+        
+        # Сохраняем день недели (добавляем поле если его нет)
+        if not hasattr(settings, 'weekly_summary_day'):
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "ALTER TABLE expenses_usersettings ADD COLUMN weekly_summary_day INTEGER DEFAULT 0"
+                )
+        
+        settings.weekly_summary_day = weekday
+        await sync_to_async(settings.save)()
+        
+        weekdays = {
+            0: 'Понедельник', 1: 'Вторник', 2: 'Среда', 3: 'Четверг',
+            4: 'Пятница', 5: 'Суббота', 6: 'Воскресенье'
+        }
+        
+        await callback.answer(f"✅ День изменен на {weekdays[weekday]}")
+        
+        # Возвращаемся в меню настроек
+        await state.set_state(NotificationStates.configuring)
+        await configure_notifications(callback, state, lang)
+        
+    except Exception as e:
+        logger.error(f"Error saving weekday: {e}")
+        await callback.answer(get_text('error_occurred', lang), show_alert=True)
+
+
+@router.callback_query(NotificationStates.configuring, F.data == "notif_change_time")
+async def change_notification_time(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Изменить время отправки уведомлений"""
+    await state.set_state(NotificationStates.selecting_time)
+    
+    # Время только от 15:00 до 23:00
+    times = ["15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00", "23:00"]
+    
+    keyboard_buttons = []
+    for i in range(0, len(times), 3):
+        row = []
+        for j in range(3):
+            if i + j < len(times):
+                time = times[i + j]
+                row.append(InlineKeyboardButton(
+                    text=f"🕐 {time}", 
+                    callback_data=f"time_{time.replace(':', '_')}"
+                ))
+        if row:
+            keyboard_buttons.append(row)
+    
+    keyboard_buttons.append([
+        InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_notifications")
+    ])
+    
+    await callback.message.edit_text(
+        "⏰ Выберите время для отправки отчетов:\n\n"
+        "Вы можете нажать на кнопку или ввести время в формате ЧЧ:ММ\n"
+        "(например: 18:30)\n\n"
+        "⚠️ Доступное время: с 15:00 до 23:00",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+    )
+    await callback.answer()
+
+
+@router.callback_query(NotificationStates.selecting_time, F.data.startswith("time_"))
+async def save_notification_time(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Сохранить выбранное время"""
+    try:
+        time_str = callback.data.replace("time_", "").replace("_", ":")
         hour, minute = map(int, time_str.split(':'))
         
         profile = await get_or_create_profile(callback.from_user.id)
         settings = await sync_to_async(lambda: profile.settings)()
         
-        # Устанавливаем новое время
+        # Сохраняем время уведомлений
         from datetime import time
-        settings.daily_reminder_time = time(hour, minute)
+        settings.notification_time = time(hour, minute)
         await sync_to_async(settings.save)()
         
-        await callback.answer(f"✅ {get_text('time_saved', lang)}: {time_str}")
+        await callback.answer(f"✅ Время изменено на {time_str}")
         
-        # Возвращаемся в меню отчетов
-        await configure_reports(callback, state, lang)
+        # Возвращаемся в меню настроек
+        await state.set_state(NotificationStates.configuring)
+        await configure_notifications(callback, state, lang)
         
     except Exception as e:
-        logger.error(f"Error saving report time: {e}")
+        logger.error(f"Error saving time: {e}")
         await callback.answer(get_text('error_occurred', lang), show_alert=True)
+
+
+@router.message(NotificationStates.selecting_time)
+async def process_time_input(message: Message, state: FSMContext, lang: str = 'ru'):
+    """Обработка ввода времени текстом"""
+    import re
+    from datetime import time
+    from bot.utils.message_utils import send_message_with_cleanup
+    
+    text = message.text.strip()
+    
+    # Проверяем формат времени (ЧЧ:ММ или ЧЧ.ММ)
+    time_pattern = r'^([0-2]?[0-9])[:.]([0-5][0-9])$'
+    match = re.match(time_pattern, text)
+    
+    if not match:
+        await send_message_with_cleanup(
+            message, state,
+            "❌ Неверный формат времени.\n\n"
+            "Введите время в формате ЧЧ:ММ (например: 18:30)\n"
+            "Доступное время: с 15:00 до 23:00"
+        )
+        return
+    
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    
+    # Проверяем диапазон времени (15:00 - 23:59)
+    if hour < 15 or hour > 23:
+        await send_message_with_cleanup(
+            message, state,
+            "❌ Время должно быть в диапазоне с 15:00 до 23:00\n\n"
+            "Пожалуйста, введите корректное время."
+        )
+        return
+    
+    try:
+        # Сохраняем время
+        profile = await get_or_create_profile(message.from_user.id)
+        settings = await sync_to_async(lambda: profile.settings)()
+        
+        settings.notification_time = time(hour, minute)
+        await sync_to_async(settings.save)()
+        
+        time_str = f"{hour:02d}:{minute:02d}"
+        await send_message_with_cleanup(
+            message, state,
+            f"✅ Время изменено на {time_str}\n\n"
+            "Отчеты будут приходить в это время."
+        )
+        
+        # Возвращаемся в меню настроек
+        await state.set_state(NotificationStates.configuring)
+        
+        # Показываем обновленное меню настроек
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        
+        # Получаем обновленные настройки
+        weekly_enabled = settings.weekly_summary_enabled
+        weekday = settings.weekly_summary_day
+        weekdays = {
+            0: 'Понедельник', 1: 'Вторник', 2: 'Среда', 3: 'Четверг',
+            4: 'Пятница', 5: 'Суббота', 6: 'Воскресенье'
+        }
+        weekday_text = weekdays.get(weekday, 'Понедельник')
+        
+        weekly_icon = '✅' if weekly_enabled else '❌'
+        
+        text = f"""⚙️ <b>Настройка отчетов</b>
+
+📅 <b>Еженедельные отчеты:</b> {weekly_icon}
+День: {weekday_text}
+Время: {time_str}
+
+📊 <b>Ежемесячные отчеты:</b> ✅
+Последний день месяца в {time_str}
+
+💡 Выберите, что хотите настроить:"""
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text=f"{weekly_icon} Еженедельные отчеты",
+                callback_data="toggle_weekly_notif"
+            )],
+            [InlineKeyboardButton(
+                text="📅 Изменить день недели",
+                callback_data="notif_change_weekday"
+            )],
+            [InlineKeyboardButton(
+                text="⏰ Изменить время",
+                callback_data="notif_change_time"
+            )],
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="settings")],
+            [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
+        ])
+        
+        await send_message_with_cleanup(
+            message, state, text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        
+    except Exception as e:
+        logger.error(f"Error saving time from text: {e}")
+        await send_message_with_cleanup(
+            message, state,
+            "❌ Произошла ошибка при сохранении времени.\n"
+            "Попробуйте еще раз."
+        )
+
+
+@router.callback_query(F.data == "back_to_notifications")
+async def back_to_notifications(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Вернуться в меню настроек уведомлений"""
+    await state.set_state(NotificationStates.configuring)
+    await configure_notifications(callback, state, lang)

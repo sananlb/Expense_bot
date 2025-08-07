@@ -240,6 +240,10 @@ LOGGING = {
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
 
+# Admin monitoring configuration
+MONITORING_BOT_TOKEN = os.getenv('MONITORING_BOT_TOKEN')
+ADMIN_TELEGRAM_ID = os.getenv('ADMIN_TELEGRAM_ID')
+
 # AI Configuration
 # Единичные ключи для обратной совместимости
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
@@ -302,12 +306,12 @@ try:
     # },
     'send-weekly-reports': {
         'task': 'expense_bot.celery_tasks.send_weekly_reports',
-        'schedule': crontab(day_of_week=0, hour=10, minute=0),  # Sunday 10 AM
+        'schedule': crontab(minute=0),  # Every hour at minute 0
         'options': {'queue': 'reports'}
     },
     'send-monthly-reports': {
         'task': 'expense_bot.celery_tasks.send_monthly_reports',
-        'schedule': crontab(day_of_month=1, hour=9, minute=0),  # 1st of month 9 AM
+        'schedule': crontab(minute=0),  # Every hour at minute 0
         'options': {'queue': 'reports'}
     },
     'check-budget-limits': {
@@ -324,6 +328,11 @@ try:
         'task': 'expense_bot.celery_tasks.process_recurring_payments',
         'schedule': crontab(hour=12, minute=0),  # 12 PM daily
         'options': {'queue': 'payments'}
+    },
+    'send-daily-admin-report': {
+        'task': 'expense_bot.celery_tasks.send_daily_admin_report',
+        'schedule': crontab(hour=9, minute=0),  # 9 AM daily
+        'options': {'queue': 'reports'}
     }
 }
 except ImportError:

@@ -46,6 +46,21 @@ def create_expense(
     try:
         if expense_date is None:
             expense_date = date.today()
+        
+        # Проверяем лимит расходов в день (максимум 100)
+        today_expenses_count = Expense.objects.filter(
+            profile=profile,
+            expense_date=expense_date
+        ).count()
+        
+        if today_expenses_count >= 100:
+            logger.warning(f"User {user_id} reached daily expenses limit (100)")
+            raise ValueError("Достигнут лимит записей в день (максимум 100). Попробуйте завтра.")
+        
+        # Проверяем длину описания (максимум 500 символов)
+        if description and len(description) > 500:
+            logger.warning(f"User {user_id} provided too long description: {len(description)} chars")
+            raise ValueError("Описание слишком длинное (максимум 500 символов)")
             
         expense = Expense.objects.create(
             profile=profile,
@@ -60,6 +75,8 @@ def create_expense(
         
         logger.info(f"Created expense {expense.id} for user {user_id}")
         return expense
+    except ValueError:
+        raise  # Пробрасываем ValueError дальше
     except Exception as e:
         logger.error(f"Error creating expense: {e}")
         return None

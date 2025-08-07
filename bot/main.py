@@ -40,6 +40,7 @@ from .middlewares import (
     LoggingMiddleware
 )
 from .middlewares.state_reset import StateResetMiddleware
+from .middleware import ActivityTrackerMiddleware, RateLimitMiddleware as AdminRateLimitMiddleware
 from .utils.commands import set_bot_commands
 
 # Загрузка переменных окружения
@@ -64,11 +65,19 @@ async def on_startup(bot: Bot):
     from bot.tasks.subscription_notifications import run_notification_task
     asyncio.create_task(run_notification_task(bot))
     
+    # Отправляем уведомление админу о запуске бота
+    from bot.services.admin_notifier import notify_bot_started
+    asyncio.create_task(notify_bot_started())
+    
     logger.info("Бот запущен и готов к работе")
 
 
 async def on_shutdown(bot: Bot):
     """Действия при остановке бота"""
+    # Отправляем уведомление админу об остановке бота
+    from bot.services.admin_notifier import notify_bot_stopped
+    await notify_bot_stopped()
+    
     # Закрываем AI сервисы если они есть
     try:
         from bot.services.ai_selector import AISelector
@@ -114,29 +123,46 @@ def create_dispatcher() -> Dispatcher:
     dp = Dispatcher(storage=storage)
     
     # Подключение middlewares (порядок важен!)
-    # 1. Logging - логирует все запросы
+    # 1. Activity Tracker - отслеживает активность и отправляет уведомления админу
+    activity_tracker = ActivityTrackerMiddleware()
+    dp.message.middleware(activity_tracker)
+    dp.callback_query.middleware(activity_tracker)
+    
+    # 2. Admin Rate Limiter - более строгий rate limiter с уведомлениями
+    admin_rate_limiter = AdminRateLimitMiddleware()
+    dp.message.middleware(admin_rate_limiter)
+    dp.callback_query.middleware(admin_rate_limiter)
+    
+    # 3. Logging - логирует все запросы
     dp.message.middleware(LoggingMiddleware())
     dp.callback_query.middleware(LoggingMiddleware())
     
-    # 2. Security - проверяет контент на безопасность
+    # 4. Security - проверяет контент на безопасность
     dp.message.middleware(SecurityCheckMiddleware())
     dp.callback_query.middleware(SecurityCheckMiddleware())
     
-    # 3. Rate Limiting - ограничивает частоту запросов
+    # 5. Rate Limiting - ограничивает частоту запросов
+    from bot.middleware.rate_limit import CommandRateLimitMiddleware
+    dp.message.middleware(CommandRateLimitMiddleware())
     dp.message.middleware(RateLimitMiddleware())
     dp.callback_query.middleware(RateLimitMiddleware())
     
-    # 4. Database - подключает БД
+    # 6. Database - подключает БД
     dp.message.middleware(DatabaseMiddleware())
     dp.callback_query.middleware(DatabaseMiddleware())
     
-    # 5. Localization - устанавливает язык
+    # 7. Localization - устанавливает язык
     dp.message.middleware(LocalizationMiddleware())
     dp.callback_query.middleware(LocalizationMiddleware())
     
-    # 6. Menu Cleanup и State Reset
+    # 8. Menu Cleanup и State Reset
     dp.message.middleware(MenuCleanupMiddleware())
     dp.message.middleware(StateResetMiddleware())
+    
+    # 9. Notification Settings - управление состояниями настроек уведомлений
+    from bot.middleware.notification_settings import NotificationSettingsMiddleware
+    dp.message.middleware(NotificationSettingsMiddleware())
+    dp.callback_query.middleware(NotificationSettingsMiddleware())
     
     # Подключение роутеров (порядок важен для приоритета обработки)
     dp.include_router(start_router)

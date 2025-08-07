@@ -172,6 +172,12 @@ async def create_category(user_id: int, name: str, icon: str = '💰') -> Expens
             except Profile.DoesNotExist:
                 profile = Profile.objects.create(telegram_id=user_id)
             
+            # Проверяем лимит категорий (максимум 50)
+            categories_count = ExpenseCategory.objects.filter(profile=profile).count()
+            if categories_count >= 50:
+                logger.warning(f"User {user_id} reached categories limit (50)")
+                raise ValueError("Достигнут лимит категорий (максимум 50)")
+            
             # Если иконка предоставлена, добавляем её к названию
             if icon and icon.strip():
                 category_name = f"{icon} {name}"

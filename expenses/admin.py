@@ -218,18 +218,18 @@ class ProfileAdmin(admin.ModelAdmin):
 
 @admin.register(UserSettings)
 class UserSettingsAdmin(admin.ModelAdmin):
-    list_display = ['profile', 'daily_reminder_enabled', 'daily_reminder_time', 
+    list_display = ['profile', 'notification_time', 'weekly_summary_day',
                     'weekly_summary_enabled', 'monthly_summary_enabled']
-    list_filter = ['daily_reminder_enabled', 'weekly_summary_enabled', 
+    list_filter = ['weekly_summary_enabled', 
                    'monthly_summary_enabled', 'budget_alerts_enabled']
-    search_fields = ['profile__username', 'profile__first_name']
+    search_fields = ['profile__telegram_id']
     
     fieldsets = (
         ('Профиль', {
             'fields': ('profile',)
         }),
         ('Уведомления', {
-            'fields': ('daily_reminder_enabled', 'daily_reminder_time',
+            'fields': ('notification_time', 'weekly_summary_day',
                       'weekly_summary_enabled', 'monthly_summary_enabled',
                       'budget_alerts_enabled')
         }),

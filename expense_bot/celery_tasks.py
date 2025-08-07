@@ -1,70 +1,36 @@
 from celery import shared_task
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import asyncio
 import logging
 import re
 from typing import List
 
 from django.conf import settings
-from django.db.models import Count
+from django.db.models import Count, Sum
 from aiogram import Bot
 
 logger = logging.getLogger(__name__)
 
 
-@shared_task
-def send_daily_reports():
-    """Send daily expense reports to all users"""
-    try:
-        from profiles.models import Profile
-        from bot.services.notifications import NotificationService
-        
-        bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-        service = NotificationService(bot)
-        
-        # Get users with daily reports enabled
-        profiles = Profile.objects.filter(
-            settings__notifications__daily_report=True
-        )
-        
-        logger.info(f"Sending daily reports to {profiles.count()} users")
-        
-        # Run async function in sync context
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        for profile in profiles:
-            try:
-                loop.run_until_complete(
-                    service.send_daily_report(profile.telegram_id, profile)
-                )
-            except Exception as e:
-                logger.error(f"Error sending daily report to user {profile.telegram_id}: {e}")
-        
-        loop.close()
-        
-    except Exception as e:
-        logger.error(f"Error in send_daily_reports task: {e}")
-
 
 @shared_task
 def send_weekly_reports():
-    """Send weekly expense reports (on Sundays)"""
+    """Send weekly expense reports"""
     try:
-        # Only run on Sundays
-        if datetime.now().weekday() != 6:
-            return
-        
-        from profiles.models import Profile
+        from expenses.models import Profile, UserSettings
         from bot.services.notifications import NotificationService
         
         bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
         service = NotificationService(bot)
         
-        # Get users with weekly reports enabled
+        current_weekday = datetime.now().weekday()
+        current_time = datetime.now().time()
+        
+        # Get users with weekly reports enabled for current weekday and time
         profiles = Profile.objects.filter(
-            settings__notifications__weekly_report=True
-        )
+            settings__weekly_summary_enabled=True,
+            settings__weekly_summary_day=current_weekday
+        ).select_related('settings')
         
         logger.info(f"Sending weekly reports to {profiles.count()} users")
         
@@ -88,22 +54,28 @@ def send_weekly_reports():
 
 @shared_task
 def send_monthly_reports():
-    """Send monthly expense reports (on the 1st)"""
+    """Send monthly expense reports"""
     try:
-        # Only run on the 1st day of month
-        if datetime.now().day != 1:
-            return
-        
-        from profiles.models import Profile
+        from expenses.models import Profile, UserSettings
         from bot.services.notifications import NotificationService
+        from calendar import monthrange
         
         bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
         service = NotificationService(bot)
         
+        # Check if today is the last day of month
+        today = datetime.now()
+        last_day = monthrange(today.year, today.month)[1]
+        
+        if today.day != last_day:
+            return
+        
+        current_time = today.time()
+        
         # Get users with monthly reports enabled
         profiles = Profile.objects.filter(
-            settings__notifications__monthly_report=True
-        )
+            settings__monthly_summary_enabled=True
+        ).select_related('settings')
         
         logger.info(f"Sending monthly reports to {profiles.count()} users")
         
@@ -244,6 +216,79 @@ def cleanup_old_expenses():
         
     except Exception as e:
         logger.error(f"Error in cleanup_old_expenses task: {e}")
+
+
+@shared_task
+def send_daily_admin_report():
+    """Отправка ежедневного отчета администратору"""
+    try:
+        from expenses.models import UserProfile, Expense, ExpenseCategory
+        from bot.services.admin_notifier import send_admin_alert
+        from django.utils import timezone
+        
+        yesterday = timezone.now().date() - timedelta(days=1)
+        today = timezone.now().date()
+        
+        # Собираем статистику
+        total_users = UserProfile.objects.count()
+        active_users = Expense.objects.filter(
+            created_at__date=yesterday
+        ).values('profile').distinct().count()
+        
+        expenses_stats = Expense.objects.filter(
+            created_at__date=yesterday
+        ).aggregate(
+            total=Sum('amount'),
+            count=Count('id')
+        )
+        
+        new_users = UserProfile.objects.filter(
+            created_at__date=yesterday
+        ).count()
+        
+        # Топ категорий
+        top_categories = Expense.objects.filter(
+            created_at__date=yesterday
+        ).values('category__name').annotate(
+            total=Sum('amount'),
+            count=Count('id')
+        ).order_by('-total')[:5]
+        
+        categories_text = "\n".join([
+            f"  • {cat['category__name'] or 'Без категории'}: "
+            f"{cat['total']:.2f} ({cat['count']} записей)"
+            for cat in top_categories
+        ])
+        
+        # Формируем отчет
+        report = (
+            f"📊 *Ежедневный отчет за {yesterday.strftime('%d.%m.%Y')}*\n\n"
+            f"👥 *Пользователи:*\n"
+            f"  • Всего: {total_users}\n"
+            f"  • Активных вчера: {active_users}\n"
+            f"  • Новых: {new_users}\n\n"
+            f"💰 *Расходы:*\n"
+            f"  • Количество: {expenses_stats['count'] or 0}\n"
+            f"  • Сумма: {expenses_stats['total'] or 0:.2f}\n\n"
+        )
+        
+        if categories_text:
+            report += f"📂 *Топ категорий:*\n{categories_text}\n\n"
+        
+        report += f"🕐 Отчет сформирован: {datetime.now().strftime('%H:%M:%S')}"
+        
+        # Отправляем отчет асинхронно
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        loop.run_until_complete(send_admin_alert(report, disable_notification=True))
+        
+        loop.close()
+        
+        logger.info(f"Ежедневный отчет за {yesterday} отправлен администратору")
+        
+    except Exception as e:
+        logger.error(f"Ошибка отправки ежедневного отчета: {e}")
 
 
 @shared_task

@@ -55,9 +55,10 @@ def get_language_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard.button(text="🇬🇧 English", callback_data="lang_en")
     
     # Кнопки навигации
+    keyboard.button(text="◀️ Назад", callback_data="settings")
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
-    keyboard.adjust(2, 1)
+    keyboard.adjust(2, 1, 1)
     return keyboard.as_markup()
 
 
@@ -83,10 +84,11 @@ def get_timezone_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         )
     
     # Кнопки навигации
+    keyboard.button(text="◀️ Назад", callback_data="settings")
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
-    # Группируем кнопки по 3 в ряд, последняя 1 для навигации
-    keyboard.adjust(*[3] * 9, 1)
+    # Группируем кнопки по 3 в ряд, последние по одной для навигации
+    keyboard.adjust(*[3] * 9, 1, 1)
     return keyboard.as_markup()
 
 
@@ -130,10 +132,11 @@ def get_currency_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         keyboard.button(text=text, callback_data=callback_data)
     
     # Кнопки навигации
+    keyboard.button(text="◀️ Назад", callback_data="settings")
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
-    # Группируем по 3 кнопки в ряд (теперь у нас 25 валют + 1 навигационная кнопка)
-    keyboard.adjust(*[3] * 8, 1, 1)  # 8 рядов по 3 валюты + 1 валюта + 2 навигационные кнопки
+    # Группируем по 3 кнопки в ряд (теперь у нас 25 валют + 2 навигационные кнопки)
+    keyboard.adjust(*[3] * 8, 1, 1, 1)  # 8 рядов по 3 валюты + 1 валюта + кнопки навигации по одной в ряд
     return keyboard.as_markup()
 
 
