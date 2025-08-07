@@ -24,6 +24,7 @@ router = Router(name="categories")
 class CategoryForm(StatesGroup):
     waiting_for_name = State()
     waiting_for_icon = State()
+    waiting_for_custom_icon = State()
     waiting_for_edit_choice = State()
     waiting_for_new_name = State()
     waiting_for_new_icon = State()
@@ -188,6 +189,7 @@ async def process_category_name(message: types.Message, state: FSMContext):
             keyboard_buttons.append(buttons_row)
         
         keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_icon")])
+        keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_icon")])
         # Убрали кнопку "Назад" по требованию пользователя
         
         await send_message_with_cleanup(
@@ -198,6 +200,58 @@ async def process_category_name(message: types.Message, state: FSMContext):
         await state.set_state(CategoryForm.waiting_for_icon)
 
 
+
+
+@router.callback_query(lambda c: c.data == "custom_icon")
+async def custom_icon_start(callback: types.CallbackQuery, state: FSMContext):
+    """Запрос пользовательского эмодзи"""
+    await callback.message.edit_text(
+        "✏️ Отправьте свой эмодзи для категории:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="categories_menu")]
+        ])
+    )
+    await state.set_state(CategoryForm.waiting_for_custom_icon)
+    await callback.answer()
+
+
+@router.message(CategoryForm.waiting_for_custom_icon)
+async def process_custom_icon(message: types.Message, state: FSMContext):
+    """Обработка пользовательского эмодзи"""
+    import re
+    
+    custom_icon = message.text.strip()
+    
+    # Проверяем, что введен один эмодзи
+    emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+$'
+    if not re.match(emoji_pattern, custom_icon) or len(custom_icon) > 2:
+        await send_message_with_cleanup(message, state, "❌ Пожалуйста, отправьте только один эмодзи.")
+        return
+    
+    data = await state.get_data()
+    name = data.get('name')
+    user_id = message.from_user.id
+    
+    # Проверяем, редактируем ли мы категорию
+    editing_category_id = data.get('editing_category_id')
+    if editing_category_id:
+        # Обновляем существующую категорию
+        full_name = f"{custom_icon} {name}" if custom_icon else name
+        category = await update_category(user_id, editing_category_id, name=full_name)
+    else:
+        category = await create_category(user_id, name, custom_icon)
+    
+    # Удаляем сообщение пользователя
+    try:
+        await message.delete()
+    except:
+        pass
+    
+    # Очищаем состояние
+    await state.clear()
+    
+    # Показываем меню категорий
+    await show_categories_menu(message, state)
 
 
 @router.callback_query(lambda c: c.data == "no_icon")
@@ -415,6 +469,7 @@ async def skip_edit_name(callback: types.CallbackQuery, state: FSMContext):
             keyboard_buttons.append(buttons_row)
         
         keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_icon")])
+        keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_icon")])
         keyboard_buttons.append([InlineKeyboardButton(text="⬅️", callback_data="edit_categories")])
         
         await callback.message.edit_text(
@@ -532,6 +587,7 @@ async def process_edit_category_name(message: types.Message, state: FSMContext):
             keyboard_buttons.append(buttons_row)
         
         keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_icon")])
+        keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_icon")])
         keyboard_buttons.append([InlineKeyboardButton(text="⬅️", callback_data="edit_categories")])
         
         await send_message_with_cleanup(

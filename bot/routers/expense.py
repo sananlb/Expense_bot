@@ -625,6 +625,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         await process_chat_message(message, state, text)
         return
     
+    # Проверяем, использовались ли данные из предыдущей траты
+    reused_from_last = parsed.get('reused_from_last', False)
+    
     # Проверяем/создаем категорию
     category = await get_or_create_category(user_id, parsed['category'])
     
@@ -670,7 +673,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         expense=expense,
         category=category,
         cashback_text=cashback_text,
-        confidence_text=confidence_text
+        confidence_text=confidence_text,
+        reused_from_last=reused_from_last
     )
     
     await send_message_with_cleanup(message, state,

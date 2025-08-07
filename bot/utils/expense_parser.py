@@ -237,7 +237,33 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                 logger.debug(f"Ошибка при парсинге суммы '{amount_str}': {e}")
                 continue
     
+    # Если не нашли сумму, пытаемся найти последнюю трату с таким же названием
     if not amount or amount <= 0:
+        if user_id:
+            from bot.services.expense import get_last_expense_by_description
+            # Пытаемся найти последнюю трату с похожим описанием
+            last_expense = await get_last_expense_by_description(user_id, text)
+            if last_expense:
+                # Используем сумму и категорию из найденной траты
+                amount = last_expense.amount
+                category_id = last_expense.category_id if last_expense.category else None
+                # Сохраняем оригинальное описание
+                description = text[0].upper() + text[1:] if text else 'Расход'
+                
+                result = {
+                    'amount': float(amount),
+                    'description': description,
+                    'category': last_expense.category.name if last_expense.category else None,
+                    'category_id': category_id,
+                    'currency': last_expense.currency or 'RUB',
+                    'confidence': 0.8,  # Высокая уверенность, так как нашли похожую трату
+                    'reused_from_last': True  # Флаг, что данные взяты из предыдущей траты
+                }
+                
+                logger.info(f"Нашли похожую трату '{last_expense.description}' с суммой {amount}")
+                return result
+        
+        # Если не нашли похожую трату, возвращаем None
         return None
     
     # Определяем категорию

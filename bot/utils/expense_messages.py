@@ -12,7 +12,8 @@ async def format_expense_added_message(
     category,
     cashback_text: str = "",
     confidence_text: str = "",
-    similar_expense: bool = False
+    similar_expense: bool = False,
+    reused_from_last: bool = False
 ) -> str:
     """
     Форматирует сообщение о добавленном расходе с информацией о потраченном за день
@@ -31,8 +32,11 @@ async def format_expense_added_message(
     currency = expense.currency or 'RUB'
     amount_text = format_currency(expense.amount, currency)
     
-    # Делаем описание жирным
-    message = f"✅ <b>{expense.description}</b>\n\n"
+    # Делаем описание жирным и добавляем невидимые символы для расширения
+    # Используем неразрывные пробелы (U+00A0) и символ нулевой ширины (U+200B)
+    invisible_padding = "\u200B" * 20  # Символы нулевой ширины для расширения
+    
+    message = f"✅ <b>{expense.description}</b>{invisible_padding}\n\n"
     message += f"💰 {amount_text}{cashback_text}\n"
     # Если есть иконка у категории, добавляем её с пробелом, иначе только название
     if category.icon:
@@ -44,15 +48,15 @@ async def format_expense_added_message(
     if confidence_text:
         message += confidence_text
     
-    if similar_expense:
-        message += "\n<i>(сумма взята из последней похожей траты)</i>"
+    if similar_expense or reused_from_last:
+        message += "\n<i>💡 Использованы данные из последней похожей траты</i>"
     
     # Получаем сводку за сегодня
     try:
         today_summary = await get_today_summary(expense.profile.telegram_id)
         
         if today_summary and today_summary.get('currency_totals'):
-            message += "\n\n━━━━━━━━━━━━━━━"
+            message += "\n\n━━━━━━━━━━━━━━━━━━━━━━━"
             message += "\n💸 <b>Потрачено сегодня:</b>"
             
             # Показываем все валюты, в которых были траты

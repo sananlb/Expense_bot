@@ -616,6 +616,56 @@ async def get_today_summary(user_id: int) -> Dict[str, Any]:
         return {'total': 0, 'count': 0, 'categories': [], 'currency': 'RUB', 'currency_totals': {}, 'single_currency': True}
 
 
+@sync_to_async
+def get_last_expense_by_description(telegram_id: int, description: str) -> Optional[Expense]:
+    """
+    Найти последнюю трату пользователя по описанию
+    
+    Args:
+        telegram_id: ID пользователя
+        description: Описание для поиска
+        
+    Returns:
+        Последняя трата с похожим описанием или None
+    """
+    try:
+        profile = Profile.objects.get(telegram_id=telegram_id)
+        # Ищем точное совпадение или частичное вхождение
+        expense = Expense.objects.filter(
+            profile=profile,
+            description__icontains=description.strip()
+        ).order_by('-date', '-created_at').first()
+        return expense
+    except Profile.DoesNotExist:
+        return None
+    except Exception as e:
+        logger.error(f"Error finding expense by description: {e}")
+        return None
+
+
+@sync_to_async
+def get_last_expenses(telegram_id: int, limit: int = 30) -> List[Expense]:
+    """
+    Получить последние расходы пользователя
+    
+    Args:
+        telegram_id: ID пользователя
+        limit: Максимальное количество записей
+        
+    Returns:
+        Список расходов
+    """
+    try:
+        profile = Profile.objects.get(telegram_id=telegram_id)
+        expenses = Expense.objects.filter(profile=profile).order_by('-date', '-created_at')[:limit]
+        return list(expenses)
+    except Profile.DoesNotExist:
+        return []
+    except Exception as e:
+        logger.error(f"Error getting last expenses: {e}")
+        return []
+
+
 async def get_month_summary(user_id: int, month: int, year: int) -> Dict[str, Any]:
     """Get monthly expense summary with multi-currency support"""
     from expenses.models import Profile

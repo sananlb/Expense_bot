@@ -11,9 +11,10 @@ import logging
 
 from bot.keyboards import expenses_summary_keyboard, month_selection_keyboard, back_close_keyboard
 from bot.utils import get_text, format_amount, get_month_name
-from bot.services.expense import get_expenses_summary, get_expenses_by_period
+from bot.services.expense import get_expenses_summary, get_expenses_by_period, get_last_expenses
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 logger = logging.getLogger(__name__)
 
@@ -184,6 +185,95 @@ async def cmd_report(message: Message, lang: str = 'ru'):
         get_text('choose_month', lang),
         reply_markup=keyboard
     )
+
+
+@router.callback_query(F.data == "show_diary")
+async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Показать дневник трат (последние 30 записей)"""
+    try:
+        # Получаем последние 30 расходов
+        expenses = await get_last_expenses(callback.from_user.id, limit=30)
+        
+        if not expenses:
+            text = "📔 <b>Дневник трат</b>\n\n<i>У вас пока нет записей о тратах</i>"
+        else:
+            text = "📔 <b>Дневник трат</b>\n<i>Последние 30 записей</i>\n\n"
+            
+            current_date = None
+            for expense in expenses:
+                # Группируем по датам
+                if expense.date != current_date:
+                    current_date = expense.date
+                    text += f"\n<b>{current_date.strftime('%d.%m.%Y')}</b>\n"
+                
+                # Форматируем время, описание и сумму в одну строку
+                time_str = expense.created_at.strftime('%H:%M')
+                description = expense.description or "Без описания"
+                # Обрезаем длинное описание
+                if len(description) > 30:
+                    description = description[:27] + "..."
+                
+                # Форматируем сумму с валютой
+                currency = expense.currency or 'RUB'
+                amount_str = f"{expense.amount:,.0f}".replace(',', ' ')
+                if currency == 'RUB':
+                    amount_str += ' ₽'
+                elif currency == 'USD':
+                    amount_str += ' $'
+                elif currency == 'EUR':
+                    amount_str += ' €'
+                else:
+                    amount_str += f' {currency}'
+                
+                text += f"  {time_str} • {description} • {amount_str}\n"
+        
+        # Добавляем кнопку "Назад"
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Назад к отчету", callback_data="back_to_summary")],
+            [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
+        ])
+        
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        await callback.answer()
+        
+    except Exception as e:
+        logger.error(f"Error showing expense diary: {e}")
+        await callback.answer("Произошла ошибка при загрузке дневника", show_alert=True)
+
+
+@router.callback_query(F.data == "back_to_summary")
+async def callback_back_to_summary(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Вернуться к последнему отчету"""
+    data = await state.get_data()
+    start_date = data.get('report_start_date')
+    end_date = data.get('report_end_date')
+    
+    if start_date and end_date:
+        await show_expenses_summary(
+            callback.message,
+            start_date,
+            end_date,
+            lang,
+            edit=True,
+            original_message=callback.message
+        )
+    else:
+        # Если нет сохраненных дат, показываем отчет за текущий месяц
+        today = date.today()
+        start_date = today.replace(day=1)
+        await show_expenses_summary(
+            callback.message,
+            start_date,
+            today,
+            lang,
+            edit=True,
+            original_message=callback.message
+        )
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("month_"))

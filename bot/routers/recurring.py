@@ -397,11 +397,9 @@ async def process_edit_data(message: types.Message, state: FSMContext):
             day_of_month=data['old_day']
         )
         
-        await send_message_with_cleanup(message, state, "✅ Регулярный платеж успешно обновлен!")
         await state.clear()
         
-        # Ждем немного и показываем меню
-        await asyncio.sleep(1)
+        # Сразу показываем меню без сообщения
         await show_recurring_menu(message, state)
     except Exception as e:
         await send_message_with_cleanup(message, state, f"❌ Ошибка при обновлении: {str(e)}")
