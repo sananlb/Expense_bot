@@ -202,8 +202,8 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
             current_date = None
             for expense in expenses:
                 # Группируем по датам
-                if expense.date != current_date:
-                    current_date = expense.date
+                if expense.expense_date != current_date:
+                    current_date = expense.expense_date
                     text += f"\n<b>{current_date.strftime('%d.%m.%Y')}</b>\n"
                 
                 # Форматируем время, описание и сумму в одну строку

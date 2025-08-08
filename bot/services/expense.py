@@ -634,7 +634,7 @@ def get_last_expense_by_description(telegram_id: int, description: str) -> Optio
         expense = Expense.objects.filter(
             profile=profile,
             description__icontains=description.strip()
-        ).order_by('-date', '-created_at').first()
+        ).order_by('-expense_date', '-created_at').first()
         return expense
     except Profile.DoesNotExist:
         return None
@@ -657,7 +657,7 @@ def get_last_expenses(telegram_id: int, limit: int = 30) -> List[Expense]:
     """
     try:
         profile = Profile.objects.get(telegram_id=telegram_id)
-        expenses = Expense.objects.filter(profile=profile).order_by('-date', '-created_at')[:limit]
+        expenses = Expense.objects.filter(profile=profile).order_by('-expense_date', '-created_at')[:limit]
         return list(expenses)
     except Profile.DoesNotExist:
         return []
