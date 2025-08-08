@@ -388,11 +388,11 @@ class ExpenseStats(models.Model):
         self.total_expenses_sum = expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0')
         
         if expenses.exists():
-            self.last_expense_date = expenses.first().date
+            self.last_expense_date = expenses.first().expense_date
             
             # Расчет средних показателей за последние 30 дней
             thirty_days_ago = timezone.now().date() - timedelta(days=30)
-            recent_expenses = expenses.filter(date__gte=thirty_days_ago)
+            recent_expenses = expenses.filter(expense_date__gte=thirty_days_ago)
             
             if recent_expenses.exists():
                 days_count = (timezone.now().date() - thirty_days_ago).days or 1

@@ -911,13 +911,18 @@ async def edit_field_category(callback: types.CallbackQuery, state: FSMContext, 
     categories = await get_user_categories(user_id)
     
     keyboard_buttons = []
-    for cat in categories:
-        keyboard_buttons.append([
-            InlineKeyboardButton(
-                text=f"{cat.name}", 
-                callback_data=f"expense_cat_{cat.id}"
-            )
-        ])
+    # Группируем категории по 2 в строке
+    for i in range(0, len(categories), 2):
+        row = [InlineKeyboardButton(
+            text=f"{categories[i].name}", 
+            callback_data=f"expense_cat_{categories[i].id}"
+        )]
+        if i + 1 < len(categories):
+            row.append(InlineKeyboardButton(
+                text=f"{categories[i + 1].name}", 
+                callback_data=f"expense_cat_{categories[i + 1].id}"
+            ))
+        keyboard_buttons.append(row)
     
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('cancel', lang), callback_data="edit_cancel")])
     

@@ -152,13 +152,18 @@ async def add_cashback_start(callback: types.CallbackQuery, state: FSMContext):
         )
     ])
     
-    for cat in categories:
-        keyboard_buttons.append([
-            InlineKeyboardButton(
-                text=f"{cat.icon} {cat.name}", 
-                callback_data=f"cashback_cat_{cat.id}"
-            )
-        ])
+    # Группируем категории по 2 в строке
+    for i in range(0, len(categories), 2):
+        row = [InlineKeyboardButton(
+            text=f"{categories[i].icon} {categories[i].name}", 
+            callback_data=f"cashback_cat_{categories[i].id}"
+        )]
+        if i + 1 < len(categories):
+            row.append(InlineKeyboardButton(
+                text=f"{categories[i + 1].icon} {categories[i + 1].name}", 
+                callback_data=f"cashback_cat_{categories[i + 1].id}"
+            ))
+        keyboard_buttons.append(row)
     
     # Добавляем кнопку "Назад"
     keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="cashback_menu")])
@@ -196,10 +201,11 @@ async def process_cashback_category(callback: types.CallbackQuery, state: FSMCon
     ]
     
     keyboard_buttons = []
-    for bank in banks:
-        keyboard_buttons.append([
-            InlineKeyboardButton(text=bank, callback_data=f"cashback_bank_{bank}")
-        ])
+    for i in range(0, len(banks), 2):
+        row = [InlineKeyboardButton(text=banks[i], callback_data=f"cashback_bank_{banks[i]}")]
+        if i + 1 < len(banks):
+            row.append(InlineKeyboardButton(text=banks[i + 1], callback_data=f"cashback_bank_{banks[i + 1]}"))
+        keyboard_buttons.append(row)
     
     keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="cashback_add")])
     keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cashback_menu")])
@@ -420,10 +426,11 @@ async def edit_cashback_selected(callback: types.CallbackQuery, state: FSMContex
     ]
     
     keyboard_buttons = []
-    for bank in banks:
-        keyboard_buttons.append([
-            InlineKeyboardButton(text=bank, callback_data=f"edit_bank_{bank}")
-        ])
+    for i in range(0, len(banks), 2):
+        row = [InlineKeyboardButton(text=banks[i], callback_data=f"edit_bank_{banks[i]}")]
+        if i + 1 < len(banks):
+            row.append(InlineKeyboardButton(text=banks[i + 1], callback_data=f"edit_bank_{banks[i + 1]}"))
+        keyboard_buttons.append(row)
     
     keyboard_buttons.append([InlineKeyboardButton(text="⏭️ Пропустить", callback_data="skip_edit_bank")])
     keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="cashback_edit")])

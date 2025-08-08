@@ -338,13 +338,18 @@ async def edit_categories_list(callback: types.CallbackQuery, state: FSMContext)
         return
     
     keyboard_buttons = []
-    for cat in editable_categories:
-        keyboard_buttons.append([
-            InlineKeyboardButton(
-                text=f"{cat.name}", 
-                callback_data=f"edit_cat_{cat.id}"
-            )
-        ])
+    # Группируем категории по 2 в строке
+    for i in range(0, len(editable_categories), 2):
+        row = [InlineKeyboardButton(
+            text=f"{editable_categories[i].name}", 
+            callback_data=f"edit_cat_{editable_categories[i].id}"
+        )]
+        if i + 1 < len(editable_categories):
+            row.append(InlineKeyboardButton(
+                text=f"{editable_categories[i + 1].name}", 
+                callback_data=f"edit_cat_{editable_categories[i + 1].id}"
+            ))
+        keyboard_buttons.append(row)
     
     keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="categories_menu")])
     
@@ -371,13 +376,18 @@ async def delete_categories_list(callback: types.CallbackQuery, state: FSMContex
         return
     
     keyboard_buttons = []
-    for cat in deletable_categories:
-        keyboard_buttons.append([
-            InlineKeyboardButton(
-                text=f"{cat.name}", 
-                callback_data=f"del_cat_{cat.id}"
-            )
-        ])
+    # Группируем категории по 2 в строке
+    for i in range(0, len(deletable_categories), 2):
+        row = [InlineKeyboardButton(
+            text=f"{deletable_categories[i].name}", 
+            callback_data=f"del_cat_{deletable_categories[i].id}"
+        )]
+        if i + 1 < len(deletable_categories):
+            row.append(InlineKeyboardButton(
+                text=f"{deletable_categories[i + 1].name}", 
+                callback_data=f"del_cat_{deletable_categories[i + 1].id}"
+            ))
+        keyboard_buttons.append(row)
     
     keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="categories_menu")])
     

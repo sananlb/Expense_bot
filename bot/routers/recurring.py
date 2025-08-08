@@ -144,13 +144,18 @@ async def show_category_selection(message: types.Message, state: FSMContext):
         return
     
     keyboard_buttons = []
-    for cat in categories:
-        keyboard_buttons.append([
-            InlineKeyboardButton(
-                text=f"{cat.name}", 
-                callback_data=f"recurring_cat_{cat.id}"
-            )
-        ])
+    # Группируем категории по 2 в строке
+    for i in range(0, len(categories), 2):
+        row = [InlineKeyboardButton(
+            text=f"{categories[i].name}", 
+            callback_data=f"recurring_cat_{categories[i].id}"
+        )]
+        if i + 1 < len(categories):
+            row.append(InlineKeyboardButton(
+                text=f"{categories[i + 1].name}", 
+                callback_data=f"recurring_cat_{categories[i + 1].id}"
+            ))
+        keyboard_buttons.append(row)
     
     keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="recurring_menu")])
     
