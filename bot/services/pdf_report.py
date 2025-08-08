@@ -149,7 +149,7 @@ class PDFReportService:
                             cb_amount = amount
                             if cb.limit_amount and cb.limit_amount > 0:
                                 cb_amount = min(amount, float(cb.limit_amount))
-                            category_cashback += cb_amount * (cb.cashback_percent / 100)
+                            category_cashback += cb_amount * (float(cb.cashback_percent) / 100)
                     
                     top_categories.append({
                         'name': cat_stat['category__name'],
@@ -169,7 +169,7 @@ class PDFReportService:
                             cb_amount = amount
                             if cb.limit_amount and cb.limit_amount > 0:
                                 cb_amount = min(amount, float(cb.limit_amount))
-                            other_cashback += cb_amount * (cb.cashback_percent / 100)
+                            other_cashback += cb_amount * (float(cb.cashback_percent) / 100)
                 
                 idx += 1
             
