@@ -296,15 +296,63 @@ def process_recurring_payments():
     """Process recurring payments for today at 12:00"""
     try:
         from bot.services.recurring import process_recurring_payments_for_today
+        from bot.utils.expense_messages import format_expense_added_message
+        from aiogram import Bot
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        
+        bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
         
         # Run async function in sync context
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
         # Process recurring payments
-        processed_count = loop.run_until_complete(
+        processed_count, processed_payments = loop.run_until_complete(
             process_recurring_payments_for_today()
         )
+        
+        # Отправляем уведомления пользователям о списанных регулярных платежах
+        for payment_info in processed_payments:
+            try:
+                user_id = payment_info['user_id']
+                expense = payment_info['expense']
+                payment = payment_info['payment']
+                
+                # Для регулярных платежей не считаем кешбэк
+                cashback_text = ""
+                
+                # Форматируем сообщение используя стандартную функцию
+                text = loop.run_until_complete(
+                    format_expense_added_message(
+                        expense=expense,
+                        category=expense.category,
+                        cashback_text=cashback_text,
+                        is_recurring=True  # Флаг для регулярного платежа
+                    )
+                )
+                
+                # Создаем клавиатуру с кнопками редактирования
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
+                        InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete_expense_{expense.id}")
+                    ]
+                ])
+                
+                # Отправляем уведомление
+                loop.run_until_complete(
+                    bot.send_message(
+                        chat_id=user_id,
+                        text=text,
+                        reply_markup=keyboard,
+                        parse_mode="HTML"
+                    )
+                )
+                
+                logger.info(f"Sent notification to user {user_id} about recurring payment")
+                
+            except Exception as e:
+                logger.error(f"Error sending notification to user {payment_info['user_id']}: {e}")
         
         loop.close()
         

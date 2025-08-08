@@ -425,6 +425,22 @@ async def parse_dates_from_text(text: str) -> Optional[tuple[datetime.date, date
 @rate_limit(max_calls=20, period=60)  # 20 сообщений в минуту для чата
 async def handle_chat_message(message: types.Message, state: FSMContext):
     """Обработка текстовых сообщений как чат"""
+    import asyncio
+    
+    # Отправляем "печатает..."
+    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    
+    # Планируем второй "печатает..." через 4 секунды (как в nutrition_bot)
+    async def send_typing_again():
+        await asyncio.sleep(4)
+        try:
+            await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        except:
+            pass  # Игнорируем ошибки если чат уже недоступен
+    
+    # Запускаем асинхронную задачу для повторной отправки
+    asyncio.create_task(send_typing_again())
+    
     text = message.text.strip()
     
     # Если сообщение дошло до этого обработчика, значит expense handler

@@ -346,7 +346,7 @@ async def edit_categories_list(callback: types.CallbackQuery, state: FSMContext)
             )
         ])
     
-    # Убрали кнопку "Назад" по требованию пользователя
+    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="categories_menu")])
     
     await callback.message.edit_text(
         "✏️ Выберите категорию для редактирования:",
@@ -379,7 +379,7 @@ async def delete_categories_list(callback: types.CallbackQuery, state: FSMContex
             )
         ])
     
-    # Убрали кнопку "Назад" по требованию пользователя
+    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="categories_menu")])
     
     await callback.message.edit_text(
         "🗑 Выберите категорию для удаления:",
@@ -470,7 +470,7 @@ async def skip_edit_name(callback: types.CallbackQuery, state: FSMContext):
         
         keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_icon")])
         keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_icon")])
-        keyboard_buttons.append([InlineKeyboardButton(text="⬅️", callback_data="edit_categories")])
+        keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="edit_categories")])
         
         await callback.message.edit_text(
             f"🎨 Выберите новую иконку для категории «{name_without_emoji}»:",
@@ -588,7 +588,7 @@ async def process_edit_category_name(message: types.Message, state: FSMContext):
         
         keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_icon")])
         keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_icon")])
-        keyboard_buttons.append([InlineKeyboardButton(text="⬅️", callback_data="edit_categories")])
+        keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="edit_categories")])
         
         await send_message_with_cleanup(
             message, state,

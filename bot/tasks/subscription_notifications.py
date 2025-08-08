@@ -6,27 +6,41 @@ from datetime import timedelta
 from django.utils import timezone
 from aiogram import Bot
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+import logging
 
-from expenses.models import Subscription, Profile
+from expenses.models import Subscription, Profile, SubscriptionNotification
+
+logger = logging.getLogger(__name__)
 
 
 async def check_expiring_subscriptions(bot: Bot):
-    """Проверка подписок, истекающих через сутки"""
-    # Находим подписки, которые истекают через 24 часа
-    tomorrow = timezone.now() + timedelta(days=1)
+    """Проверка подписок и отправка уведомлений за 1 день до истечения"""
+    now = timezone.now()
+    
+    # Проверяем подписки, истекающие завтра
+    tomorrow = now + timedelta(days=1)
     tomorrow_start = tomorrow.replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow_end = tomorrow.replace(hour=23, minute=59, second=59, microsecond=999999)
     
-    # Находим подписки, истекающие завтра, по которым еще не отправлено уведомление
+    # Находим подписки, истекающие завтра
     expiring_subscriptions = Subscription.objects.filter(
         is_active=True,
         end_date__gte=tomorrow_start,
-        end_date__lte=tomorrow_end,
-        notification_sent=False
+        end_date__lte=tomorrow_end
     ).select_related('profile')
     
     async for subscription in expiring_subscriptions:
         try:
+            # Проверяем, не было ли уже отправлено уведомление для этой подписки
+            notification_exists = await SubscriptionNotification.objects.filter(
+                subscription=subscription,
+                notification_type='one_day'
+            ).aexists()
+            
+            if notification_exists:
+                logger.info(f"Уведомление для подписки {subscription.id} уже отправлено")
+                continue
+            
             # Формируем сообщение
             if subscription.type == 'trial':
                 message = (
@@ -36,7 +50,7 @@ async def check_expiring_subscriptions(bot: Bot):
                     "• Редактирование категорий\n"
                     "• Управление кешбэками\n"
                     "• Экспорт отчетов в PDF\n\n"
-                    "Оформите подписку прямо сейчас со скидкой!"
+                    "Оформите подписку прямо сейчас!"
                 )
             else:
                 message = (
@@ -60,12 +74,17 @@ async def check_expiring_subscriptions(bot: Bot):
                 parse_mode="HTML"
             )
             
-            # Отмечаем, что уведомление отправлено
-            subscription.notification_sent = True
-            await subscription.asave(update_fields=['notification_sent'])
+            # Сохраняем информацию об отправленном уведомлении
+            await SubscriptionNotification.objects.acreate(
+                subscription=subscription,
+                notification_type='one_day',
+                sent_at=now
+            )
+            
+            logger.info(f"Отправлено уведомление пользователю {subscription.profile.telegram_id}")
             
         except Exception as e:
-            print(f"Ошибка при отправке уведомления пользователю {subscription.profile.telegram_id}: {e}")
+            logger.error(f"Ошибка при отправке уведомления пользователю {subscription.profile.telegram_id}: {e}")
 
 
 async def run_notification_task(bot: Bot):
@@ -74,7 +93,7 @@ async def run_notification_task(bot: Bot):
         try:
             await check_expiring_subscriptions(bot)
         except Exception as e:
-            print(f"Ошибка в задаче уведомлений: {e}")
+            logger.error(f"Ошибка в задаче уведомлений: {e}")
         
-        # Проверяем каждый час
-        await asyncio.sleep(3600)
+        # Проверяем каждые 4 часа
+        await asyncio.sleep(14400)

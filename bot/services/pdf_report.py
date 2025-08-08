@@ -25,17 +25,17 @@ logger = logging.getLogger(__name__)
 class PDFReportService:
     """Сервис для генерации PDF отчетов"""
     
-    TEMPLATE_PATH = Path(__file__).parent.parent.parent / "reports" / "templates" / "report_variant_1_modern.html"
+    TEMPLATE_PATH = Path(__file__).parent.parent.parent / "reports" / "templates" / "report_modern.html"
     LOGO_PATH = Path(__file__).parent.parent.parent / "reports" / "templates" / "logo.png"
     
     def __init__(self):
         self.template = self._load_template()
     
-    def _load_template(self) -> str:
+    def _load_template(self) -> Template:
         """Загрузить HTML шаблон"""
         with open(self.TEMPLATE_PATH, 'r', encoding='utf-8') as f:
             content = f.read()
-        return content
+        return Template(content)
     
     async def generate_monthly_report(self, user_id: int, year: int, month: int) -> Optional[bytes]:
         """
@@ -67,25 +67,20 @@ class PDFReportService:
         except Exception as e:
             logger.error(f"Error generating PDF report: {e}")
             return None
-    
-    async def _prepare_report_data(self, user_id: int, year: int, month: int) -> Optional[Dict]:
-        """Подготовить данные для отчета из БД"""
+        """Подготовить данные для отчета за произвольный период"""
         try:
             # Получаем профиль пользователя
-            profile = await Profile.objects.aget(telegram_id=user_id)
-            
-            # Определяем период
-            start_date = date(year, month, 1)
-            if month == 12:
-                end_date = date(year + 1, 1, 1) - timedelta(days=1)
-            else:
-                end_date = date(year, month + 1, 1) - timedelta(days=1)
+            try:
+                profile = await Profile.objects.select_related('settings').aget(telegram_id=user_id)
+            except Profile.DoesNotExist:
+                logger.warning(f"Profile not found for user {user_id}")
+                return None
             
             # Получаем расходы за период
             expenses = Expense.objects.filter(
                 profile=profile,
-                created_at__date__gte=start_date,
-                created_at__date__lte=end_date
+                expense_date__gte=start_date,
+                expense_date__lte=end_date
             )
             
             # Общая статистика
@@ -98,167 +93,617 @@ class PDFReportService:
             total_count = total_stats['total_count'] or 0
             
             if total_count == 0:
+                logger.warning(f"No expenses found for user {user_id} in period {start_date} to {end_date}")
                 return None
             
             # Статистика по категориям
-            category_colors = [
-                '#8B4513',  # коричневый
-                '#4682B4',  # стальной синий
-                '#9370DB',  # средний фиолетовый
-                '#20B2AA',  # светлый морской
-                '#F4A460',  # песочный
-                '#708090',  # серо-синий
-                '#DDA0DD',  # сливовый
-                '#B0C4DE'   # светло-стальной синий
-            ]
+            categories_stats = []
+            async for stat in expenses.values('category').annotate(
+                total=Sum('amount'),
+                count=Count('id')
+            ).order_by('-total').aiterator():
+                categories_stats.append(stat)
             
-            # Получаем все кешбеки пользователя для этого месяца
-            user_cashbacks = await Cashback.objects.filter(
-                profile=profile,
-                month=month
-            ).select_related('category').aall()
+            # Получаем информацию о категориях и кешбэках
+            categories_data = []
+            colors = ['#8B4513', '#4682B4', '#9370DB', '#20B2AA', '#FFD700', 
+                      '#FF6347', '#32CD32', '#FF69B4', '#87CEEB']
             
-            # Создаем словарь кешбеков по категориям
-            cashback_by_category = {}
-            for cb in user_cashbacks:
-                if cb.category_id:
-                    if cb.category_id not in cashback_by_category:
-                        cashback_by_category[cb.category_id] = []
-                    cashback_by_category[cb.category_id].append(cb)
-            
-            # Получаем топ-7 категорий
-            categories_stats = expenses.values('category__id', 'category__name', 'category__icon').annotate(
-                amount=Sum('amount')
-            ).order_by('-amount')
-            
-            top_categories = []
+            # Группируем категории: топ-8 + остальные в "Другие"
             other_amount = 0
             other_cashback = 0
             
-            idx = 0
-            async for cat_stat in categories_stats:
-                if idx < 7:
-                    amount = float(cat_stat['amount'])
-                    category_id = cat_stat['category__id']
+            for i, stat in enumerate(categories_stats):
+                if i < 8:  # Топ-8 категорий
+                    if stat['category']:
+                        category = await ExpenseCategory.objects.aget(id=stat['category'])
+                        name = category.name
+                        icon = category.icon or '💰'
+                    else:
+                        name = 'Без категории'
+                        icon = '💰'
                     
-                    # Рассчитываем кешбек для категории
-                    category_cashback = 0
-                    if category_id in cashback_by_category:
-                        for cb in cashback_by_category[category_id]:
-                            cb_amount = amount
-                            if cb.limit_amount and cb.limit_amount > 0:
-                                cb_amount = min(amount, float(cb.limit_amount))
-                            category_cashback += cb_amount * (cb.cashback_percent / 100)
+                    # Считаем кешбэк
+                    cashback = 0
+                    if stat['category']:
+                        try:
+                            cashback_obj = await Cashback.objects.aget(
+                                profile=profile,
+                                category_id=stat['category']
+                            )
+                            cashback = float(stat['total']) * float(cashback_obj.percent) / 100
+                        except Cashback.DoesNotExist:
+                            pass
                     
-                    top_categories.append({
-                        'name': cat_stat['category__name'],
-                        'icon': cat_stat['category__icon'] or '📊',
-                        'amount': amount,
-                        'cashback': category_cashback,
-                        'color': category_colors[idx] if idx < len(category_colors) else '#95a5a6'
+                    categories_data.append({
+                        'name': name,
+                        'icon': icon,
+                        'amount': float(stat['total']),
+                        'amount_formatted': f"{float(stat['total']):,.0f}",
+                        'percent': (float(stat['total']) / total_amount * 100) if total_amount > 0 else 0,
+                        'cashback': cashback,
+                        'cashback_formatted': f"{cashback:,.0f}",
+                        'color': colors[i]
                     })
-                else:
-                    amount = float(cat_stat['amount'])
-                    category_id = cat_stat['category__id']
-                    other_amount += amount
+                else:  # Остальные категории объединяем в "Другие"
+                    other_amount += float(stat['total'])
                     
-                    # Рассчитываем кешбек для "Другое"
-                    if category_id in cashback_by_category:
-                        for cb in cashback_by_category[category_id]:
-                            cb_amount = amount
-                            if cb.limit_amount and cb.limit_amount > 0:
-                                cb_amount = min(amount, float(cb.limit_amount))
-                            other_cashback += cb_amount * (cb.cashback_percent / 100)
-                
-                idx += 1
+                    # Считаем кешбэк для "Других"
+                    if stat['category']:
+                        try:
+                            category = await ExpenseCategory.objects.aget(id=stat['category'])
+                            cashback_obj = await Cashback.objects.aget(
+                                profile=profile,
+                                category=category
+                            )
+                            other_cashback += float(stat['total']) * float(cashback_obj.percent) / 100
+                        except (Cashback.DoesNotExist, ExpenseCategory.DoesNotExist):
+                            pass
             
-            # Добавляем "Другое" если есть
+            # Добавляем категорию "Остальные расходы" если есть остальные траты
             if other_amount > 0:
-                top_categories.append({
-                    'name': 'Другое',
-                    'icon': '🔍',
+                categories_data.append({
+                    'name': 'Остальные расходы',
+                    'icon': '📊',
                     'amount': other_amount,
+                    'amount_formatted': f"{other_amount:,.0f}",
+                    'percent': (other_amount / total_amount * 100) if total_amount > 0 else 0,
                     'cashback': other_cashback,
-                    'color': '#95a5a6'
+                    'cashback_formatted': f"{other_cashback:,.0f}",
+                    'color': colors[8]
                 })
             
-            # Расходы по дням
-            daily_expenses = {}
-            daily_categories = {}
+            # Статистика по дням
+            days_in_period = (end_date - start_date).days + 1
+            daily_expenses = [0] * days_in_period
+            daily_cashback = [0] * days_in_period
             
-            # Получаем все расходы с категориями
-            expenses_list = expenses.select_related('category')
-            async for expense in expenses_list:
-                day = expense.created_at.date().day
-                
-                if day not in daily_expenses:
-                    daily_expenses[day] = 0
-                    daily_categories[day] = {}
-                
-                daily_expenses[day] += float(expense.amount)
-                
-                cat_name = expense.category.name
-                if cat_name not in daily_categories[day]:
-                    daily_categories[day][cat_name] = 0
-                daily_categories[day][cat_name] += float(expense.amount)
+            # Получаем все расходы в список
+            expenses_list = []
+            async for expense in expenses.select_related('category').aiterator():
+                expenses_list.append(expense)
             
-            # Общий кешбек
-            total_cashback = sum(cat['cashback'] for cat in top_categories)
+            # Обрабатываем расходы
+            for expense in expenses_list:
+                day_index = (expense.expense_date - start_date).days
+                if 0 <= day_index < days_in_period:
+                    daily_expenses[day_index] += float(expense.amount)
             
-            # Сравнение с предыдущим месяцем
-            prev_month = month - 1 if month > 1 else 12
-            prev_year = year if month > 1 else year - 1
-            
-            prev_start = date(prev_year, prev_month, 1)
-            if prev_month == 12:
-                prev_end = date(prev_year + 1, 1, 1) - timedelta(days=1)
+            # Формируем заголовок периода
+            if title:
+                period_text = title
+            elif (end_date - start_date).days == 6:
+                # Недельный отчет
+                period_text = f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
             else:
-                prev_end = date(prev_year, prev_month + 1, 1) - timedelta(days=1)
+                period_text = f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
             
-            prev_total = await Expense.objects.filter(
-                profile=profile,
-                created_at__date__gte=prev_start,
-                created_at__date__lte=prev_end
-            ).aaggregate(total=Sum('amount'))
-            
-            prev_amount = float(prev_total['total'] or 0)
-            
-            if prev_amount > 0:
-                change_percent = round((total_amount - prev_amount) / prev_amount * 100, 1)
-                change_direction = "↑" if change_percent > 0 else "↓"
-            else:
-                change_percent = 0
-                change_direction = ""
-            
-            # Форматируем данные для шаблона
-            months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-                      'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
-            
-            prev_months = ['январю', 'февралю', 'марту', 'апрелю', 'маю', 'июню',
-                           'июлю', 'августу', 'сентябрю', 'октябрю', 'ноябрю', 'декабрю']
-            
-            report_data = {
-                'period': f"1 - {end_date.day} {months[month-1]} {year}",
+            # Подготавливаем данные для шаблона
+            return {
+                'period': period_text,
                 'total_amount': f"{total_amount:,.0f}",
                 'total_count': total_count,
-                'total_cashback': f"{total_cashback:,.0f}",
-                'change_percent': abs(change_percent),
-                'change_direction': change_direction,
-                'prev_month_name': prev_months[prev_month-1],
-                'categories': top_categories,
-                'daily_expenses': daily_expenses,
-                'daily_categories': daily_categories,
-                'days_in_month': end_date.day,
+                'total_cashback': f"{sum(cat['cashback'] for cat in categories_data):,.0f}",
+                'categories': categories_data,
+                'categories_json': json.dumps(categories_data, ensure_ascii=False),
+                'daily_json': json.dumps({
+                    'days': list(range(1, days_in_period + 1)),
+                    'expenses': daily_expenses,
+                    'cashback': daily_cashback
+                }, ensure_ascii=False),
+                'change_direction': '',
+                'change_percent': 0,
+                'prev_month_name': '',
                 'logo_base64': await self._get_logo_base64()
             }
             
-            return report_data
-            
-        except Profile.DoesNotExist:
-            logger.error(f"Profile not found for user_id: {user_id}")
-            return None
         except Exception as e:
-            logger.error(f"Error preparing report data: {e}")
+            logger.error(f"Error preparing period report data: {e}")
+            return None
+            
+            # Генерируем HTML
+            html_content = await self._render_html(report_data)
+            
+            # Конвертируем в PDF
+            pdf_bytes = await self._html_to_pdf(html_content)
+            
+            return pdf_bytes
+            
+        except Exception as e:
+            logger.error(f"Error generating PDF report: {e}")
+            return None
+        """Подготовить данные для отчета за произвольный период"""
+        try:
+            # Получаем профиль пользователя
+            try:
+                profile = await Profile.objects.select_related('settings').aget(telegram_id=user_id)
+            except Profile.DoesNotExist:
+                logger.warning(f"Profile not found for user {user_id}")
+                return None
+            
+            # Получаем расходы за период
+            expenses = Expense.objects.filter(
+                profile=profile,
+                expense_date__gte=start_date,
+                expense_date__lte=end_date
+            )
+            
+            # Общая статистика
+            total_stats = await expenses.aaggregate(
+                total_amount=Sum('amount'),
+                total_count=Count('id')
+            )
+            
+            total_amount = float(total_stats['total_amount'] or 0)
+            total_count = total_stats['total_count'] or 0
+            
+            if total_count == 0:
+                logger.warning(f"No expenses found for user {user_id} in period {start_date} to {end_date}")
+                return None
+            
+            # Статистика по категориям
+            categories_stats = []
+            async for stat in expenses.values('category').annotate(
+                total=Sum('amount'),
+                count=Count('id')
+            ).order_by('-total').aiterator():
+                categories_stats.append(stat)
+            
+            # Получаем информацию о категориях и кешбэках
+            categories_data = []
+            colors = ['#8B4513', '#4682B4', '#9370DB', '#20B2AA', '#FFD700', 
+                      '#FF6347', '#32CD32', '#FF69B4', '#87CEEB']
+            
+            # Группируем категории: топ-8 + остальные в "Другие"
+            other_amount = 0
+            other_cashback = 0
+            
+            for i, stat in enumerate(categories_stats):
+                if i < 8:  # Топ-8 категорий
+                    if stat['category']:
+                        category = await ExpenseCategory.objects.aget(id=stat['category'])
+                        name = category.name
+                        icon = category.icon or '💰'
+                    else:
+                        name = 'Без категории'
+                        icon = '💰'
+                    
+                    # Считаем кешбэк
+                    cashback = 0
+                    if stat['category']:
+                        try:
+                            cashback_obj = await Cashback.objects.aget(
+                                profile=profile,
+                                category_id=stat['category']
+                            )
+                            cashback = float(stat['total']) * float(cashback_obj.percent) / 100
+                        except Cashback.DoesNotExist:
+                            pass
+                    
+                    categories_data.append({
+                        'name': name,
+                        'icon': icon,
+                        'amount': float(stat['total']),
+                        'amount_formatted': f"{float(stat['total']):,.0f}",
+                        'percent': (float(stat['total']) / total_amount * 100) if total_amount > 0 else 0,
+                        'cashback': cashback,
+                        'cashback_formatted': f"{cashback:,.0f}",
+                        'color': colors[i]
+                    })
+                else:  # Остальные категории объединяем в "Другие"
+                    other_amount += float(stat['total'])
+                    
+                    # Считаем кешбэк для "Других"
+                    if stat['category']:
+                        try:
+                            category = await ExpenseCategory.objects.aget(id=stat['category'])
+                            cashback_obj = await Cashback.objects.aget(
+                                profile=profile,
+                                category=category
+                            )
+                            other_cashback += float(stat['total']) * float(cashback_obj.percent) / 100
+                        except (Cashback.DoesNotExist, ExpenseCategory.DoesNotExist):
+                            pass
+            
+            # Добавляем категорию "Остальные расходы" если есть остальные траты
+            if other_amount > 0:
+                categories_data.append({
+                    'name': 'Остальные расходы',
+                    'icon': '📊',
+                    'amount': other_amount,
+                    'amount_formatted': f"{other_amount:,.0f}",
+                    'percent': (other_amount / total_amount * 100) if total_amount > 0 else 0,
+                    'cashback': other_cashback,
+                    'cashback_formatted': f"{other_cashback:,.0f}",
+                    'color': colors[8]
+                })
+            
+            # Статистика по дням
+            days_in_period = (end_date - start_date).days + 1
+            daily_expenses = [0] * days_in_period
+            daily_cashback = [0] * days_in_period
+            
+            # Получаем все расходы в список
+            expenses_list = []
+            async for expense in expenses.select_related('category').aiterator():
+                expenses_list.append(expense)
+            
+            # Обрабатываем расходы
+            for expense in expenses_list:
+                day_index = (expense.expense_date - start_date).days
+                if 0 <= day_index < days_in_period:
+                    daily_expenses[day_index] += float(expense.amount)
+            
+            # Формируем заголовок периода
+            if title:
+                period_text = title
+            elif (end_date - start_date).days == 6:
+                # Недельный отчет
+                period_text = f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
+            else:
+                period_text = f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
+            
+            # Подготавливаем данные для шаблона
+            return {
+                'period': period_text,
+                'total_amount': f"{total_amount:,.0f}",
+                'total_count': total_count,
+                'total_cashback': f"{sum(cat['cashback'] for cat in categories_data):,.0f}",
+                'categories': categories_data,
+                'categories_json': json.dumps(categories_data, ensure_ascii=False),
+                'daily_json': json.dumps({
+                    'days': list(range(1, days_in_period + 1)),
+                    'expenses': daily_expenses,
+                    'cashback': daily_cashback
+                }, ensure_ascii=False),
+                'change_direction': '',
+                'change_percent': 0,
+                'prev_month_name': '',
+                'logo_base64': await self._get_logo_base64()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error preparing period report data: {e}")
+            return None
+    
+    async def _prepare_report_data(self, user_id: int, year: int, month: int) -> Optional[Dict]:
+        """Подготовить данные для отчета из БД"""
+        try:
+            # Получаем профиль пользователя
+            try:
+                profile = await Profile.objects.select_related('settings').aget(telegram_id=user_id)
+            except Profile.DoesNotExist:
+                logger.warning(f"Profile not found for user {user_id}")
+                return None
+            
+            # Получаем расходы за период
+            expenses = Expense.objects.filter(
+                profile=profile,
+                expense_date__gte=start_date,
+                expense_date__lte=end_date
+            )
+            
+            # Общая статистика
+            total_stats = await expenses.aaggregate(
+                total_amount=Sum('amount'),
+                total_count=Count('id')
+            )
+            
+            total_amount = float(total_stats['total_amount'] or 0)
+            total_count = total_stats['total_count'] or 0
+            
+            if total_count == 0:
+                logger.warning(f"No expenses found for user {user_id} in period {start_date} to {end_date}")
+                return None
+            
+            # Статистика по категориям
+            categories_stats = []
+            async for stat in expenses.values('category').annotate(
+                total=Sum('amount'),
+                count=Count('id')
+            ).order_by('-total').aiterator():
+                categories_stats.append(stat)
+            
+            # Получаем информацию о категориях и кешбэках
+            categories_data = []
+            colors = ['#8B4513', '#4682B4', '#9370DB', '#20B2AA', '#FFD700', 
+                      '#FF6347', '#32CD32', '#FF69B4', '#87CEEB']
+            
+            # Группируем категории: топ-8 + остальные в "Другие"
+            other_amount = 0
+            other_cashback = 0
+            
+            for i, stat in enumerate(categories_stats):
+                if i < 8:  # Топ-8 категорий
+                    if stat['category']:
+                        category = await ExpenseCategory.objects.aget(id=stat['category'])
+                        name = category.name
+                        icon = category.icon or '💰'
+                    else:
+                        name = 'Без категории'
+                        icon = '💰'
+                    
+                    # Считаем кешбэк
+                    cashback = 0
+                    if stat['category']:
+                        try:
+                            cashback_obj = await Cashback.objects.aget(
+                                profile=profile,
+                                category_id=stat['category']
+                            )
+                            cashback = float(stat['total']) * float(cashback_obj.percent) / 100
+                        except Cashback.DoesNotExist:
+                            pass
+                    
+                    categories_data.append({
+                        'name': name,
+                        'icon': icon,
+                        'amount': float(stat['total']),
+                        'amount_formatted': f"{float(stat['total']):,.0f}",
+                        'percent': (float(stat['total']) / total_amount * 100) if total_amount > 0 else 0,
+                        'cashback': cashback,
+                        'cashback_formatted': f"{cashback:,.0f}",
+                        'color': colors[i]
+                    })
+                else:  # Остальные категории объединяем в "Другие"
+                    other_amount += float(stat['total'])
+                    
+                    # Считаем кешбэк для "Других"
+                    if stat['category']:
+                        try:
+                            category = await ExpenseCategory.objects.aget(id=stat['category'])
+                            cashback_obj = await Cashback.objects.aget(
+                                profile=profile,
+                                category=category
+                            )
+                            other_cashback += float(stat['total']) * float(cashback_obj.percent) / 100
+                        except (Cashback.DoesNotExist, ExpenseCategory.DoesNotExist):
+                            pass
+            
+            # Добавляем категорию "Остальные расходы" если есть остальные траты
+            if other_amount > 0:
+                categories_data.append({
+                    'name': 'Остальные расходы',
+                    'icon': '📊',
+                    'amount': other_amount,
+                    'amount_formatted': f"{other_amount:,.0f}",
+                    'percent': (other_amount / total_amount * 100) if total_amount > 0 else 0,
+                    'cashback': other_cashback,
+                    'cashback_formatted': f"{other_cashback:,.0f}",
+                    'color': colors[8]
+                })
+            
+            # Статистика по дням
+            days_in_period = (end_date - start_date).days + 1
+            daily_expenses = [0] * days_in_period
+            daily_cashback = [0] * days_in_period
+            
+            # Получаем все расходы в список
+            expenses_list = []
+            async for expense in expenses.select_related('category').aiterator():
+                expenses_list.append(expense)
+            
+            # Обрабатываем расходы
+            for expense in expenses_list:
+                day_index = (expense.expense_date - start_date).days
+                if 0 <= day_index < days_in_period:
+                    daily_expenses[day_index] += float(expense.amount)
+            
+            # Формируем заголовок периода
+            if title:
+                period_text = title
+            elif (end_date - start_date).days == 6:
+                # Недельный отчет
+                period_text = f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
+            else:
+                period_text = f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
+            
+            # Подготавливаем данные для шаблона
+            return {
+                'period': period_text,
+                'total_amount': f"{total_amount:,.0f}",
+                'total_count': total_count,
+                'total_cashback': f"{sum(cat['cashback'] for cat in categories_data):,.0f}",
+                'categories': categories_data,
+                'categories_json': json.dumps(categories_data, ensure_ascii=False),
+                'daily_json': json.dumps({
+                    'days': list(range(1, days_in_period + 1)),
+                    'expenses': daily_expenses,
+                    'cashback': daily_cashback
+                }, ensure_ascii=False),
+                'change_direction': '',
+                'change_percent': 0,
+                'prev_month_name': '',
+                'logo_base64': await self._get_logo_base64()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error preparing period report data: {e}")
+            return None
+            
+            # Генерируем HTML
+            html_content = await self._render_html(report_data)
+            
+            # Конвертируем в PDF
+            pdf_bytes = await self._html_to_pdf(html_content)
+            
+            return pdf_bytes
+            
+        except Exception as e:
+            logger.error(f"Error generating period PDF report: {e}")
+            return None
+        """Подготовить данные для отчета за произвольный период"""
+        try:
+            # Получаем профиль пользователя
+            try:
+                profile = await Profile.objects.select_related('settings').aget(telegram_id=user_id)
+            except Profile.DoesNotExist:
+                logger.warning(f"Profile not found for user {user_id}")
+                return None
+            
+            # Получаем расходы за период
+            expenses = Expense.objects.filter(
+                profile=profile,
+                expense_date__gte=start_date,
+                expense_date__lte=end_date
+            )
+            
+            # Общая статистика
+            total_stats = await expenses.aaggregate(
+                total_amount=Sum('amount'),
+                total_count=Count('id')
+            )
+            
+            total_amount = float(total_stats['total_amount'] or 0)
+            total_count = total_stats['total_count'] or 0
+            
+            if total_count == 0:
+                logger.warning(f"No expenses found for user {user_id} in period {start_date} to {end_date}")
+                return None
+            
+            # Статистика по категориям
+            categories_stats = []
+            async for stat in expenses.values('category').annotate(
+                total=Sum('amount'),
+                count=Count('id')
+            ).order_by('-total').aiterator():
+                categories_stats.append(stat)
+            
+            # Получаем информацию о категориях и кешбэках
+            categories_data = []
+            colors = ['#8B4513', '#4682B4', '#9370DB', '#20B2AA', '#FFD700', 
+                      '#FF6347', '#32CD32', '#FF69B4', '#87CEEB']
+            
+            # Группируем категории: топ-8 + остальные в "Другие"
+            other_amount = 0
+            other_cashback = 0
+            
+            for i, stat in enumerate(categories_stats):
+                if i < 8:  # Топ-8 категорий
+                    if stat['category']:
+                        category = await ExpenseCategory.objects.aget(id=stat['category'])
+                        name = category.name
+                        icon = category.icon or '💰'
+                    else:
+                        name = 'Без категории'
+                        icon = '💰'
+                    
+                    # Считаем кешбэк
+                    cashback = 0
+                    if stat['category']:
+                        try:
+                            cashback_obj = await Cashback.objects.aget(
+                                profile=profile,
+                                category_id=stat['category']
+                            )
+                            cashback = float(stat['total']) * float(cashback_obj.percent) / 100
+                        except Cashback.DoesNotExist:
+                            pass
+                    
+                    categories_data.append({
+                        'name': name,
+                        'icon': icon,
+                        'amount': float(stat['total']),
+                        'amount_formatted': f"{float(stat['total']):,.0f}",
+                        'percent': (float(stat['total']) / total_amount * 100) if total_amount > 0 else 0,
+                        'cashback': cashback,
+                        'cashback_formatted': f"{cashback:,.0f}",
+                        'color': colors[i]
+                    })
+                else:  # Остальные категории объединяем в "Другие"
+                    other_amount += float(stat['total'])
+                    
+                    # Считаем кешбэк для "Других"
+                    if stat['category']:
+                        try:
+                            category = await ExpenseCategory.objects.aget(id=stat['category'])
+                            cashback_obj = await Cashback.objects.aget(
+                                profile=profile,
+                                category=category
+                            )
+                            other_cashback += float(stat['total']) * float(cashback_obj.percent) / 100
+                        except (Cashback.DoesNotExist, ExpenseCategory.DoesNotExist):
+                            pass
+            
+            # Добавляем категорию "Остальные расходы" если есть остальные траты
+            if other_amount > 0:
+                categories_data.append({
+                    'name': 'Остальные расходы',
+                    'icon': '📊',
+                    'amount': other_amount,
+                    'amount_formatted': f"{other_amount:,.0f}",
+                    'percent': (other_amount / total_amount * 100) if total_amount > 0 else 0,
+                    'cashback': other_cashback,
+                    'cashback_formatted': f"{other_cashback:,.0f}",
+                    'color': colors[8]
+                })
+            
+            # Статистика по дням
+            days_in_period = (end_date - start_date).days + 1
+            daily_expenses = [0] * days_in_period
+            daily_cashback = [0] * days_in_period
+            
+            # Получаем все расходы в список
+            expenses_list = []
+            async for expense in expenses.select_related('category').aiterator():
+                expenses_list.append(expense)
+            
+            # Обрабатываем расходы
+            for expense in expenses_list:
+                day_index = (expense.expense_date - start_date).days
+                if 0 <= day_index < days_in_period:
+                    daily_expenses[day_index] += float(expense.amount)
+            
+            # Формируем заголовок периода
+            if title:
+                period_text = title
+            elif (end_date - start_date).days == 6:
+                # Недельный отчет
+                period_text = f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
+            else:
+                period_text = f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
+            
+            # Подготавливаем данные для шаблона
+            return {
+                'period': period_text,
+                'total_amount': f"{total_amount:,.0f}",
+                'total_count': total_count,
+                'total_cashback': f"{sum(cat['cashback'] for cat in categories_data):,.0f}",
+                'categories': categories_data,
+                'categories_json': json.dumps(categories_data, ensure_ascii=False),
+                'daily_json': json.dumps({
+                    'days': list(range(1, days_in_period + 1)),
+                    'expenses': daily_expenses,
+                    'cashback': daily_cashback
+                }, ensure_ascii=False),
+                'change_direction': '',
+                'change_percent': 0,
+                'prev_month_name': '',
+                'logo_base64': await self._get_logo_base64()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error preparing period report data: {e}")
             return None
     
     async def _get_logo_base64(self) -> str:
@@ -272,205 +717,44 @@ class PDFReportService:
     
     async def _render_html(self, report_data: Dict) -> str:
         """Рендеринг HTML из шаблона с данными"""
-        html = self.template
+        # Подготавливаем данные для графиков в формате JSON
+        categories_json = json.dumps(report_data['categories'], ensure_ascii=False)
         
-        # Заменяем плейсхолдеры
-        html = html.replace('Отчет за период: 1 - 31 октября 2024', f'Отчет за период: {report_data["period"]}')
-        html = html.replace('45,320 ₽', f'{report_data["total_amount"]} ₽')
-        html = html.replace('<p class="summary-value">127</p>', f'<p class="summary-value">{report_data["total_count"]}</p>')
-        html = html.replace('2,420 ₽', f'{report_data["total_cashback"]} ₽')
+        # Подготавливаем данные для ежедневного графика
+        daily_json = {
+            'days': list(range(1, report_data['days_in_month'] + 1)),
+            'expenses': report_data['daily_expenses'],
+            'cashback': []
+        }
         
-        # Обновляем сравнение с предыдущим месяцем
-        if report_data['change_direction']:
-            trend_class = 'trend-up' if report_data['change_direction'] == '↑' else 'trend-down'
-            trend_html = f'<p class="summary-trend {trend_class}">{report_data["change_direction"]} {report_data["change_percent"]}% к {report_data["prev_month_name"]}</p>'
-            html = html.replace('<p class="summary-trend trend-up">↑ 12% к сентябрю</p>', trend_html)
-        else:
-            html = html.replace('<p class="summary-trend trend-up">↑ 12% к сентябрю</p>', '')
-        
-        # Заменяем src="logo.png" на base64
-        if report_data.get('logo_base64'):
-            html = html.replace(
-                'src="logo.png"',
-                f'src="data:image/png;base64,{report_data["logo_base64"]}"'
-            )
-        
-        # Обновляем список категорий
-        categories_html = ""
-        for cat in report_data['categories']:
-            categories_html += f"""
-                    <div class="category-item">
-                        <div class="category-info">
-                            <div class="category-color" style="background: {cat['color']}"></div>
-                            <span class="category-name">{cat['icon']} {cat['name']}</span>
-                        </div>
-                        <div class="category-right">
-                            <div class="category-amount">{cat['amount']:,.0f} ₽</div>
-                            <div class="category-cashback">+{cat['cashback']:,.0f} ₽ кешбек</div>
-                        </div>
-                    </div>"""
-        
-        # Находим и заменяем блок категорий
-        start_marker = '<div class="categories-list">'
-        end_marker = '</div>\n            </div>\n        </div>'
-        start_idx = html.find(start_marker) + len(start_marker)
-        end_idx = html.find(end_marker, start_idx)
-        html = html[:start_idx] + categories_html + '\n                ' + html[end_idx:]
-        
-        # Обновляем JavaScript
-        html = self._update_chart_data(html, report_data)
-        
-        return html
-    
-    def _update_chart_data(self, html: str, report_data: Dict) -> str:
-        """Обновить данные для графиков в JavaScript"""
-        # Подготавливаем данные
-        categories_data = report_data['categories']
-        pie_labels = [cat['name'] for cat in categories_data]
-        pie_data = [cat['amount'] for cat in categories_data]
-        pie_colors = [cat['color'] for cat in categories_data]
-        
-        days = list(range(1, report_data['days_in_month'] + 1))
-        
-        # Создаем данные для stacked bar chart
-        category_datasets = []
-        for cat in categories_data:
-            cat_name = cat['name']
-            cat_data = []
-            
-            for day in days:
-                if day in report_data['daily_categories']:
-                    amount = report_data['daily_categories'][day].get(cat_name, 0)
-                    cat_data.append(amount)
-                else:
-                    cat_data.append(0)
-            
-            category_datasets.append({
-                'label': cat_name,
-                'data': cat_data,
-                'backgroundColor': cat['color'],
-                'borderWidth': 0
-            })
-        
-        # Кешбек данные - считаем на основе категорий за день
-        cashback_data = []
-        for day in days:
+        # Считаем кешбек для каждого дня
+        for day in daily_json['days']:
             day_cashback = 0
-            if day in report_data['daily_categories']:
+            if day in report_data.get('daily_categories', {}):
                 for cat_name, cat_amount in report_data['daily_categories'][day].items():
-                    # Ищем категорию в списке top_categories чтобы получить её кешбек
-                    for cat in categories_data:
+                    # Находим категорию и её кешбек
+                    for cat in report_data['categories']:
                         if cat['name'] == cat_name and cat['cashback'] > 0:
-                            # Пропорционально распределяем кешбек
                             if cat['amount'] > 0:
                                 cashback_rate = cat['cashback'] / cat['amount']
                                 day_cashback += cat_amount * cashback_rate
                             break
-            cashback_data.append(round(-day_cashback, 2))  # Отрицательное значение для отображения вниз
+            daily_json['cashback'].append(round(day_cashback, 2))
         
-        # Заменяем данные в JavaScript
-        js_replacement = f"""
-        // Pie Chart
-        const pieCtx = document.getElementById('pieChart').getContext('2d');
-        new Chart(pieCtx, {{
-            type: 'doughnut',
-            data: {{
-                labels: {json.dumps(pie_labels, ensure_ascii=False)},
-                datasets: [{{
-                    data: {json.dumps(pie_data)},
-                    backgroundColor: {json.dumps(pie_colors)},
-                    borderWidth: 0
-                }}]
-            }},
-            options: {{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {{
-                    legend: {{
-                        position: 'bottom',
-                        labels: {{
-                            padding: 10,
-                            font: {{
-                                size: 11
-                            }},
-                            boxWidth: 12,
-                            usePointStyle: true
-                        }},
-                        fullSize: true,
-                        maxHeight: 50
-                    }}
-                }}
-            }}
-        }});
-        
-        // Stacked Bar Chart with Cashback
-        const barCtx = document.getElementById('barChart').getContext('2d');
-        const categoryDatasets = {json.dumps(category_datasets, ensure_ascii=False)};
-        const cashbackDataset = {{
-            label: 'Кешбек',
-            data: {json.dumps(cashback_data)},
-            backgroundColor: '#10b981',
-            borderWidth: 0
-        }};
-        
-        new Chart(barCtx, {{
-            type: 'bar',
-            data: {{
-                labels: {json.dumps(days)},
-                datasets: [...categoryDatasets, cashbackDataset]
-            }},
-            options: {{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {{
-                    legend: {{
-                        display: false
-                    }},
-                    tooltip: {{
-                        callbacks: {{
-                            title: function(context) {{
-                                return context[0].label + ' число';
-                            }},
-                            label: function(context) {{
-                                const value = Math.abs(context.parsed.y);
-                                return context.dataset.label + ': ' + value + ' ₽';
-                            }}
-                        }}
-                    }}
-                }},
-                scales: {{
-                    x: {{
-                        stacked: true,
-                        grid: {{
-                            display: false
-                        }},
-                        ticks: {{
-                            maxRotation: 0,
-                            callback: function(value, index) {{
-                                return (index + 1) % 5 === 0 ? index + 1 : '';
-                            }}
-                        }}
-                    }},
-                    y: {{
-                        stacked: true,
-                        beginAtZero: true,
-                        ticks: {{
-                            callback: function(value) {{
-                                return Math.abs(value) + ' ₽';
-                            }}
-                        }}
-                    }}
-                }}
-            }}
-        }});
-        """
-        
-        # Находим место для замены JavaScript
-        script_start = html.find('<script>') + 8
-        script_end = html.find('</script>')
-        
-        # Заменяем JavaScript
-        html = html[:script_start] + js_replacement + html[script_end:]
+        # Рендерим шаблон с данными
+        html = self.template.render(
+            period=report_data['period'],
+            total_amount=report_data['total_amount'],
+            total_count=report_data['total_count'],
+            total_cashback=report_data['total_cashback'],
+            change_direction=report_data.get('change_direction', ''),
+            change_percent=report_data.get('change_percent', 0),
+            prev_month_name=report_data.get('prev_month_name', ''),
+            categories=report_data['categories'],
+            logo_base64=report_data.get('logo_base64', ''),
+            categories_json=categories_json,
+            daily_json=json.dumps(daily_json, ensure_ascii=False)
+        )
         
         return html
     
@@ -478,7 +762,11 @@ class PDFReportService:
         """Конвертация HTML в PDF используя Playwright"""
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
+            # Создаем страницу с высоким разрешением для лучшей четкости
+            page = await browser.new_page(
+                viewport={'width': 1920, 'height': 1080},
+                device_scale_factor=2  # Удваиваем разрешение для четкости
+            )
             
             # Загружаем HTML
             await page.set_content(html_content, wait_until='networkidle')
@@ -486,11 +774,12 @@ class PDFReportService:
             # Ждем загрузки графиков
             await page.wait_for_timeout(2000)
             
-            # Генерируем PDF
+            # Генерируем PDF с оптимизацией для одной страницы
             pdf_bytes = await page.pdf(
                 format='A4',
                 print_background=True,
-                margin={'top': '20px', 'bottom': '20px', 'left': '20px', 'right': '20px'}
+                margin={'top': '10px', 'bottom': '10px', 'left': '15px', 'right': '15px'},
+                scale=0.95  # Немного увеличиваем масштаб для лучшего использования пространства
             )
             
             await browser.close()

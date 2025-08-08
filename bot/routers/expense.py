@@ -69,9 +69,22 @@ async def cmd_expenses(message: types.Message, state: FSMContext, lang: str = 'r
         # Показываем категории для всех валют
         if summary.get('categories'):
             text += f"\n📊 {get_text('by_categories', lang)}:"
-            for cat in summary['categories']:
-                if cat['amount'] > 0:
+            # Добавляем топ-8 категорий
+            other_amount = {}
+            for i, cat in enumerate(summary['categories']):
+                if i < 8 and cat['amount'] > 0:
                     text += f"\n{cat.get('icon', '💰')} {cat['name']}: {format_currency(cat['amount'], cat['currency'])}"
+                elif i >= 8 and cat['amount'] > 0:
+                    # Суммируем остальные категории по валютам
+                    curr = cat['currency']
+                    if curr not in other_amount:
+                        other_amount[curr] = 0
+                    other_amount[curr] += cat['amount']
+            
+            # Добавляем "Остальные расходы" если есть
+            if other_amount:
+                for curr, amount in other_amount.items():
+                    text += f"\n📊 Остальные расходы: {format_currency(amount, curr)}"
         
         # Добавляем потенциальный кешбэк
         cashback = await calculate_potential_cashback(user_id, today, today)
@@ -138,13 +151,27 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
         # Показываем категории для всех валют
         if summary.get('categories'):
             text += f"\n📊 {get_text('by_categories', lang)}:"
-            # Добавляем топ-5 категорий
-            for i, cat in enumerate(summary['categories'][:5]):
-                if cat['amount'] > 0:
+            # Добавляем топ-8 категорий
+            other_amount = {}
+            for i, cat in enumerate(summary['categories']):
+                if i < 8 and cat['amount'] > 0:
                     # Для процентов используем сумму в валюте категории
                     currency_total = summary.get('currency_totals', {}).get(cat['currency'], 0)
                     percent = (float(cat['amount']) / float(currency_total)) * 100 if currency_total > 0 else 0
                     text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])} ({percent:.1f}%)"
+                elif i >= 8 and cat['amount'] > 0:
+                    # Суммируем остальные категории по валютам
+                    curr = cat['currency']
+                    if curr not in other_amount:
+                        other_amount[curr] = 0
+                    other_amount[curr] += cat['amount']
+            
+            # Добавляем "Остальные расходы" если есть
+            if other_amount:
+                for curr, amount in other_amount.items():
+                    currency_total = summary.get('currency_totals', {}).get(curr, 0)
+                    percent = (float(amount) / float(currency_total)) * 100 if currency_total > 0 else 0
+                    text += f"\n📊 Остальные расходы: {format_currency(amount, curr)} ({percent:.1f}%)"
         
         # Добавляем потенциальный кешбэк
         cashback = await calculate_potential_cashback(user_id, start_date, today)
@@ -159,7 +186,7 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
     # Кнопки навигации с PDF отчетом
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📄 Сформировать PDF отчет", callback_data="pdf_generate_current")],
-        [InlineKeyboardButton(text="◀️ Предыдущий месяц", callback_data="expenses_prev_month")],
+        [InlineKeyboardButton(text="← Предыдущий месяц", callback_data="expenses_prev_month")],
         [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
     ])
     
@@ -227,13 +254,27 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
         # Показываем категории для всех валют
         if summary.get('categories'):
             text += f"\n📊 {get_text('by_categories', lang)}:"
-            # Добавляем топ-5 категорий
-            for i, cat in enumerate(summary['categories'][:5]):
-                if cat['amount'] > 0:
+            # Добавляем топ-8 категорий
+            other_amount = {}
+            for i, cat in enumerate(summary['categories']):
+                if i < 8 and cat['amount'] > 0:
                     # Для процентов используем сумму в валюте категории
                     currency_total = summary.get('currency_totals', {}).get(cat['currency'], 0)
                     percent = (float(cat['amount']) / float(currency_total)) * 100 if currency_total > 0 else 0
                     text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])} ({percent:.1f}%)"
+                elif i >= 8 and cat['amount'] > 0:
+                    # Суммируем остальные категории по валютам
+                    curr = cat['currency']
+                    if curr not in other_amount:
+                        other_amount[curr] = 0
+                    other_amount[curr] += cat['amount']
+            
+            # Добавляем "Остальные расходы" если есть
+            if other_amount:
+                for curr, amount in other_amount.items():
+                    currency_total = summary.get('currency_totals', {}).get(curr, 0)
+                    percent = (float(amount) / float(currency_total)) * 100 if currency_total > 0 else 0
+                    text += f"\n📊 Остальные расходы: {format_currency(amount, curr)} ({percent:.1f}%)"
         
         # Добавляем потенциальный кешбэк
         start_date = date(prev_year, prev_month, 1)
@@ -253,7 +294,7 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
     # Кнопки навигации с PDF отчетом
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📄 Сформировать PDF отчет", callback_data="pdf_generate_current")],
-        [InlineKeyboardButton(text="◀️ Предыдущий месяц", callback_data="expenses_prev_month")],
+        [InlineKeyboardButton(text="← Предыдущий месяц", callback_data="expenses_prev_month")],
         [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
     ])
     
@@ -274,17 +315,19 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
     # Отправляем индикатор "печатает"
     await callback.bot.send_chat_action(callback.message.chat.id, "upload_document")
     
+    # Добавляем задержку для увеличения времени отображения "Отправляет файл..."
+    import asyncio
+    await asyncio.sleep(1.5)  # Дополнительная задержка
+    
     try:
         # Импортируем сервис генерации PDF
-        # На продакшене будет использоваться WeasyPrint
-        try:
-            from ..services.pdf_report_weasyprint import PDFReportService
-            pdf_service = PDFReportService()
-        except Exception as e:
-            # Fallback для Windows/тестирования
-            logger.warning(f"WeasyPrint not available: {e}, using simple PDF")
-            from ..services.pdf_report_simple import SimplePDFReportService
-            pdf_service = SimplePDFReportService()
+        # Используем Playwright версию - работает на всех платформах
+        from ..services.pdf_report import PDFReportService
+        pdf_service = PDFReportService()
+        
+        # Отправляем индикатор еще раз перед генерацией
+        await callback.bot.send_chat_action(callback.message.chat.id, "upload_document")
+        
         pdf_bytes = await pdf_service.generate_monthly_report(
             user_id=callback.from_user.id,
             year=year,
@@ -478,7 +521,7 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
         cashback_text=cashback_text
     )
     
-    # Отправляем подтверждение
+    # Отправляем подтверждение (сообщение о трате не должно исчезать)
     await send_message_with_cleanup(message, state,
         message_text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -487,7 +530,8 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
                 InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
             ]
         ]),
-        parse_mode="HTML"
+        parse_mode="HTML",
+        keep_message=True  # Не удалять это сообщение при следующих действиях
     )
 
 
@@ -503,6 +547,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     from ..services.subscription import check_subscription
     from aiogram.fsm.context import FSMContext
     from ..routers.chat import process_chat_message
+    import asyncio
     
     # Проверяем, есть ли активное состояние (кроме нашего состояния ожидания суммы, 
     # которое теперь обрабатывается отдельным обработчиком выше)
@@ -513,6 +558,20 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         return
     
     user_id = message.from_user.id
+    
+    # Отправляем "печатает..."
+    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    
+    # Планируем второй "печатает..." через 4 секунды (как в nutrition_bot)
+    async def send_typing_again():
+        await asyncio.sleep(4)
+        try:
+            await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        except:
+            pass  # Игнорируем ошибки если чат уже недоступен
+    
+    # Запускаем асинхронную задачу для повторной отправки
+    asyncio.create_task(send_typing_again())
     
     # Если текст не передан явно, берем из сообщения
     if text is None:
@@ -527,7 +586,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     
     logger.info(f"Starting parse_expense_message for text: '{text}', user_id: {user_id}")
     parsed = await parse_expense_message(text, user_id=user_id, profile=profile, use_ai=True)
-    logger.info(f"Parsing completed, result: {parsed}")
+    logger.info(f"Parsing completed, result: {parsed!r}")
     
     if not parsed:
         # Используем улучшенный классификатор для определения типа сообщения
@@ -594,7 +653,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     similar_expense=True
                 )
                 
-                # Отправляем подтверждение
+                # Отправляем подтверждение (сообщение о трате не должно исчезать)
                 await send_message_with_cleanup(message, state,
                     message_text,
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -603,7 +662,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                             InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
                         ]
                     ]),
-                    parse_mode="HTML"
+                    parse_mode="HTML",
+                    keep_message=True  # Не удалять это сообщение при следующих действиях
                 )
             else:
                 # Если похожих трат нет, используем обычный двухшаговый ввод
@@ -685,7 +745,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
             ]
         ]),
-        parse_mode="HTML"
+        parse_mode="HTML",
+        keep_message=True  # Не удалять это сообщение при следующих действиях
     )
 
 

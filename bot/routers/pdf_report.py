@@ -54,7 +54,7 @@ async def show_month_selection(callback: types.CallbackQuery, state: FSMContext)
     
     # Добавляем кнопку "Назад"
     keyboard_buttons.append([
-        InlineKeyboardButton(text="◀️ Назад", callback_data="show_month_start")
+        InlineKeyboardButton(text="← Назад", callback_data="show_month_start")
     ])
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)

@@ -152,7 +152,7 @@ async def show_category_selection(message: types.Message, state: FSMContext):
             )
         ])
     
-    keyboard_buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="recurring_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="recurring_menu")])
     
     if isinstance(message, types.CallbackQuery):
         await message.message.edit_text(
@@ -190,7 +190,7 @@ async def process_category(callback: types.CallbackQuery, state: FSMContext):
                 ))
         keyboard_buttons.append(row)
     
-    keyboard_buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="recurring_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="recurring_menu")])
     
     await callback.message.edit_text(
         "📅 В какой день месяца записывать платеж?\n\n"
@@ -295,7 +295,7 @@ async def edit_recurring_list(callback: types.CallbackQuery, state: FSMContext):
             )
         ])
     
-    keyboard_buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="recurring_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="recurring_menu")])
     
     await callback.message.edit_text(
         "✏️ Выберите платеж для редактирования:",
@@ -432,7 +432,7 @@ async def delete_recurring_list(callback: types.CallbackQuery, state: FSMContext
             )
         ])
     
-    keyboard_buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="recurring_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="recurring_menu")])
     
     await callback.message.edit_text(
         "🗑 Выберите платеж для удаления:",

@@ -22,54 +22,35 @@ class NotificationService:
     async def send_weekly_report(self, user_id: int, profile: Profile):
         """Send weekly expense report for last 7 days"""
         try:
+            from ..services.pdf_report import PDFReportService
+            from aiogram.types import BufferedInputFile
+            
             today = date.today()
             week_start = today - timedelta(days=6)  # Последние 7 дней включая сегодня
             
-            # Получаем сводку за последние 7 дней
-            summary = await get_expenses_summary(
-                telegram_id=user_id,
-                start_date=week_start,
-                end_date=today
+            # Генерируем PDF отчет за текущий месяц (так работает существующая функция)
+            pdf_service = PDFReportService()
+            pdf_bytes = await pdf_service.generate_monthly_report(
+                user_id=user_id,
+                year=today.year,
+                month=today.month
             )
             
-            # Формируем текст отчета
-            text = f"📊 Недельный отчет ({week_start.strftime('%d.%m')} - {today.strftime('%d.%m')})\n\n"
-            
-            if summary['total'] == 0:
-                text += "💰 За последние 7 дней расходов не было"
-            else:
-                # Общая сумма
-                text += f"💰 Всего потрачено: {format_amount(summary['total'], summary['currency'], 'ru')}\n"
-                text += f"📝 Количество трат: {summary.get('count', 0)}\n"
+            if pdf_bytes:
+                # Отправляем PDF файл
+                pdf_file = BufferedInputFile(
+                    pdf_bytes,
+                    filename=f"weekly_report_{week_start.strftime('%Y%m%d')}_{today.strftime('%Y%m%d')}.pdf"
+                )
                 
-                if summary.get('count', 0) > 0:
-                    avg = summary['total'] / summary.get('count', 1)
-                    text += f"💵 Средний чек: {format_amount(avg, summary['currency'], 'ru')}\n\n"
+                await self.bot.send_document(
+                    chat_id=user_id,
+                    document=pdf_file,
+                    caption=f"📊 Недельный отчет за последние 7 дней\n{week_start.strftime('%d.%m.%Y')} - {today.strftime('%d.%m.%Y')}"
+                )
                 
-                # По категориям
-                if summary['by_category']:
-                    text += "📊 Топ категорий:\n"
-                    for cat in summary['by_category'][:5]:  # Топ-5 категорий
-                        percentage = float(cat['total']) / float(summary['total']) * 100
-                        text += f"{cat['icon']} {cat['name']}: {format_amount(cat['total'], summary['currency'], 'ru')} ({percentage:.1f}%)\n"
-                
-                # Потенциальный кешбэк
-                if summary.get('potential_cashback', 0) > 0:
-                    text += f"\n💳 Потенциальный кешбэк: {format_amount(summary['potential_cashback'], summary['currency'], 'ru')}"
-            
-            # Добавляем кнопки
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📈 Показать с начала месяца", callback_data="show_month_start")],
-                [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
-            ])
-            
-            await self.bot.send_message(
-                chat_id=user_id,
-                text=text,
-                reply_markup=keyboard
-            )
-            
-            logger.info(f"Weekly report sent to user {user_id}")
+                logger.info(f"Weekly PDF report sent to user {user_id}")
+            # Если расходов не было - ничего не отправляем
             
         except Exception as e:
             logger.error(f"Error sending weekly report to user {user_id}: {e}")
@@ -77,97 +58,38 @@ class NotificationService:
     async def send_monthly_report(self, user_id: int, profile: Profile):
         """Send monthly expense report"""
         try:
+            from ..services.pdf_report import PDFReportService
+            from aiogram.types import BufferedInputFile
+            
             today = date.today()
             # Отчет за весь текущий месяц
             month_start = today.replace(day=1)
             
-            # Получаем сводку за месяц
-            summary = await get_expenses_summary(
-                telegram_id=user_id,
-                start_date=month_start,
-                end_date=today
+            # Генерируем PDF отчет
+            pdf_service = PDFReportService()
+            pdf_bytes = await pdf_service.generate_monthly_report(
+                user_id=user_id,
+                year=today.year,
+                month=today.month
             )
             
             month_name = get_month_name(today.month, 'ru')
             
-            # Формируем текст отчета
-            text = f"📊 Ежемесячный отчет за {month_name} {today.year}\n\n"
-            
-            if summary['total'] == 0:
-                text += f"💰 В {month_name} расходов не было"
-            else:
-                # Общая сумма
-                text += f"💰 Всего потрачено: {format_amount(summary['total'], summary['currency'], 'ru')}\n"
-                text += f"📝 Количество трат: {summary.get('count', 0)}\n"
-                
-                if summary.get('count', 0) > 0:
-                    avg = summary['total'] / summary.get('count', 1)
-                    text += f"💵 Средний чек: {format_amount(avg, summary['currency'], 'ru')}\n\n"
-                
-                # По категориям
-                if summary['by_category']:
-                    text += "📊 Распределение по категориям:\n"
-                    for cat in summary['by_category'][:10]:  # Топ-10 категорий
-                        percentage = float(cat['total']) / float(summary['total']) * 100
-                        text += f"{cat['icon']} {cat['name']}: {format_amount(cat['total'], summary['currency'], 'ru')} ({percentage:.1f}%)\n"
-                
-                # Потенциальный кешбэк
-                if summary.get('potential_cashback', 0) > 0:
-                    text += f"\n💳 Потенциальный кешбэк за месяц: {format_amount(summary['potential_cashback'], summary['currency'], 'ru')}"
-                
-                # Сравнение с прошлым месяцем
-                prev_month = today.month - 1 if today.month > 1 else 12
-                prev_year = today.year if today.month > 1 else today.year - 1
-                prev_month_start = date(prev_year, prev_month, 1)
-                
-                # Последний день прошлого месяца
-                from calendar import monthrange
-                prev_month_end = date(prev_year, prev_month, monthrange(prev_year, prev_month)[1])
-                
-                prev_summary = await get_expenses_summary(
-                    telegram_id=user_id,
-                    start_date=prev_month_start,
-                    end_date=prev_month_end
+            if pdf_bytes:
+                # Отправляем PDF файл
+                pdf_file = BufferedInputFile(
+                    pdf_bytes,
+                    filename=f"monthly_report_{today.year}_{today.month:02d}.pdf"
                 )
                 
-                if prev_summary['total'] > 0:
-                    diff = summary['total'] - prev_summary['total']
-                    diff_percent = (diff / prev_summary['total']) * 100 if prev_summary['total'] > 0 else 0
-                    
-                    text += "\n\n📈 Сравнение с прошлым месяцем:\n"
-                    if diff > 0:
-                        text += f"Потрачено больше на {format_amount(abs(diff), summary['currency'], 'ru')} (+{abs(diff_percent):.1f}%)"
-                    else:
-                        text += f"Потрачено меньше на {format_amount(abs(diff), summary['currency'], 'ru')} (-{abs(diff_percent):.1f}%)"
-            
-            # Создаем состояние для сохранения данных отчета
-            storage_key = StorageKey(
-                bot_id=self.bot.id,
-                chat_id=user_id,
-                user_id=user_id
-            )
-            state = FSMContext(
-                storage=self.bot.fsm_storage,
-                key=storage_key
-            )
-            await state.update_data(
-                current_month=today.month,
-                current_year=today.year
-            )
-            
-            # Добавляем кнопки
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📄 Сформировать PDF отчет", callback_data="pdf_generate_current")],
-                [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
-            ])
-            
-            await self.bot.send_message(
-                chat_id=user_id,
-                text=text,
-                reply_markup=keyboard
-            )
-            
-            logger.info(f"Monthly report sent to user {user_id}")
+                await self.bot.send_document(
+                    chat_id=user_id,
+                    document=pdf_file,
+                    caption=f"📊 Ежемесячный отчет за {month_name} {today.year}"
+                )
+                
+                logger.info(f"Monthly PDF report sent to user {user_id}")
+            # Если расходов не было - ничего не отправляем
             
         except Exception as e:
             logger.error(f"Error sending monthly report to user {user_id}: {e}")

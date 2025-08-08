@@ -161,7 +161,7 @@ async def add_cashback_start(callback: types.CallbackQuery, state: FSMContext):
         ])
     
     # Добавляем кнопку "Назад"
-    keyboard_buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="cashback_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="cashback_menu")])
     
     text = f"{get_text('adding_cashback', lang)}\n\n{get_text('choose_category', lang)}"
     
@@ -201,7 +201,7 @@ async def process_cashback_category(callback: types.CallbackQuery, state: FSMCon
             InlineKeyboardButton(text=bank, callback_data=f"cashback_bank_{bank}")
         ])
     
-    keyboard_buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="cashback_add")])
+    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="cashback_add")])
     keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cashback_menu")])
     
     await callback.message.edit_text(
@@ -222,7 +222,7 @@ async def process_cashback_bank(callback: types.CallbackQuery, state: FSMContext
     
     # Запрашиваем процент и описание
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="cashback_add")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="cashback_add")],
         [InlineKeyboardButton(text="❌ Отмена", callback_data="cashback_menu")]
     ])
     
@@ -255,7 +255,7 @@ async def process_bank_text(message: types.Message, state: FSMContext):
     
     # Запрашиваем процент и описание
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="cashback_add")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="cashback_add")],
         [InlineKeyboardButton(text="❌ Отмена", callback_data="cashback_menu")]
     ])
     
@@ -381,7 +381,7 @@ async def edit_cashback_list(callback: types.CallbackQuery, state: FSMContext):
             InlineKeyboardButton(text=text, callback_data=f"edit_cb_{cb.id}")
         ])
     
-    keyboard_buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="cashback_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="cashback_menu")])
     
     await callback.message.edit_text(
         "✏️ Выберите кешбэк для редактирования:",
@@ -426,7 +426,7 @@ async def edit_cashback_selected(callback: types.CallbackQuery, state: FSMContex
         ])
     
     keyboard_buttons.append([InlineKeyboardButton(text="⏭️ Пропустить", callback_data="skip_edit_bank")])
-    keyboard_buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="cashback_edit")])
+    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="cashback_edit")])
     keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cashback_menu")])
     
     text = f"💳 <b>Редактирование кешбэка</b>\n\n"
@@ -480,7 +480,7 @@ async def show_edit_percent_prompt(message_or_callback, state: FSMContext):
     data = await state.get_data()
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"edit_cb_{data['editing_cashback_id']}")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data=f"edit_cb_{data['editing_cashback_id']}")],
         [InlineKeyboardButton(text="❌ Отмена", callback_data="cashback_menu")]
     ])
     

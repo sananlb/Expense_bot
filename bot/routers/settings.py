@@ -361,7 +361,7 @@ async def configure_notifications(callback: CallbackQuery, state: FSMContext, la
                 text="⏰ Изменить время",
                 callback_data="notif_change_time"
             )],
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="settings")],
+            [InlineKeyboardButton(text="← Назад", callback_data="settings")],
             [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
         ])
         
@@ -424,7 +424,7 @@ async def change_notification_weekday(callback: CallbackQuery, state: FSMContext
             keyboard_buttons.append(row)
     
     keyboard_buttons.append([
-        InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_notifications")
+        InlineKeyboardButton(text="← Назад", callback_data="back_to_notifications")
     ])
     
     await callback.message.edit_text(
@@ -492,7 +492,7 @@ async def change_notification_time(callback: CallbackQuery, state: FSMContext, l
             keyboard_buttons.append(row)
     
     keyboard_buttons.append([
-        InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_notifications")
+        InlineKeyboardButton(text="← Назад", callback_data="back_to_notifications")
     ])
     
     await callback.message.edit_text(
@@ -619,7 +619,7 @@ async def process_time_input(message: Message, state: FSMContext, lang: str = 'r
                 text="⏰ Изменить время",
                 callback_data="notif_change_time"
             )],
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="settings")],
+            [InlineKeyboardButton(text="← Назад", callback_data="settings")],
             [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
         ])
         

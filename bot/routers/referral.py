@@ -221,7 +221,7 @@ async def show_referral_stats(callback: CallbackQuery, state: FSMContext):
     
     # Кнопка назад
     builder = InlineKeyboardBuilder()
-    builder.button(text="◀️ Назад", callback_data="menu_referral")
+    builder.button(text="← Назад", callback_data="menu_referral")
     
     try:
         await callback.message.edit_text(

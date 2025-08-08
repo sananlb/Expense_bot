@@ -97,6 +97,7 @@ async def send_message_with_cleanup(
     state: 'FSMContext',
     text: str,
     reply_markup: Optional[InlineKeyboardMarkup | ReplyKeyboardMarkup] = None,
+    keep_message: bool = False,
     **kwargs
 ) -> Message:
     """
@@ -107,6 +108,7 @@ async def send_message_with_cleanup(
         state: FSM контекст  
         text: Текст для отправки
         reply_markup: Клавиатура
+        keep_message: Если True, сообщение не будет удалено при следующем вызове
         **kwargs: Дополнительные параметры для send_message
     
     Returns:
@@ -136,7 +138,8 @@ async def send_message_with_cleanup(
                     **kwargs
                 )
                 # Важно: обновляем ID сообщения в состоянии даже при редактировании
-                await state.update_data(last_menu_message_id=edited_msg.message_id)
+                if not keep_message:
+                    await state.update_data(last_menu_message_id=edited_msg.message_id)
                 return edited_msg
             except Exception:
                 # Если не удалось отредактировать, отправляем новое
@@ -150,12 +153,12 @@ async def send_message_with_cleanup(
         **kwargs
     )
     
-    # Удаляем старое меню после успешной отправки нового
-    if old_menu_id and old_menu_id != sent_message.message_id:
+    # Удаляем старое меню после успешной отправки нового (только если это не сообщение о трате)
+    if old_menu_id and old_menu_id != sent_message.message_id and not keep_message:
         asyncio.create_task(delete_message_with_effect(bot, chat_id, old_menu_id))
     
-    # Сохраняем ID нового сообщения, если есть клавиатура
-    if reply_markup is not None:
+    # Сохраняем ID нового сообщения, если есть клавиатура и не надо сохранять сообщение
+    if reply_markup is not None and not keep_message:
         await state.update_data(last_menu_message_id=sent_message.message_id)
     
     return sent_message

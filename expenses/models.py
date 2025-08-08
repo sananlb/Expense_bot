@@ -372,6 +372,33 @@ class Subscription(models.Model):
         return self.is_active and self.end_date > timezone.now()
 
 
+class SubscriptionNotification(models.Model):
+    """Модель для отслеживания отправленных уведомлений о подписках"""
+    NOTIFICATION_TYPES = [
+        ('one_day', 'За день'),
+    ]
+    
+    subscription = models.ForeignKey(
+        Subscription,
+        on_delete=models.CASCADE,
+        related_name='notifications'
+    )
+    notification_type = models.CharField(
+        max_length=20,
+        choices=NOTIFICATION_TYPES
+    )
+    sent_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'subscription_notifications'
+        unique_together = ['subscription', 'notification_type']
+        verbose_name = 'Уведомление о подписке'
+        verbose_name_plural = 'Уведомления о подписках'
+    
+    def __str__(self):
+        return f"{self.subscription} - {self.get_notification_type_display()}"
+
+
 class PromoCode(models.Model):
     """Промокоды для активации подписок"""
     DISCOUNT_TYPES = [

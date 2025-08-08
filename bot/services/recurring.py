@@ -103,10 +103,10 @@ def get_recurring_payment_by_id(user_id: int, payment_id: int) -> Optional[Recur
 
 @sync_to_async
 @transaction.atomic
-def process_recurring_payments_for_today() -> int:
+def process_recurring_payments_for_today() -> tuple[int, list]:
     """
     Обработать регулярные платежи на сегодня
-    Возвращает количество обработанных платежей
+    Возвращает количество обработанных платежей и список обработанных платежей
     """
     today = date.today()
     current_day = today.day
@@ -122,6 +122,7 @@ def process_recurring_payments_for_today() -> int:
     ).select_related('profile', 'category')
     
     processed_count = 0
+    processed_payments = []
     
     for payment in payments:
         # Проверяем, не был ли уже обработан платеж сегодня
@@ -146,12 +147,17 @@ def process_recurring_payments_for_today() -> int:
             payment.save()
             
             processed_count += 1
+            processed_payments.append({
+                'user_id': payment.profile.telegram_id,
+                'expense': expense,
+                'payment': payment
+            })
             logger.info(f"Processed recurring payment {payment.id}: {payment.description}")
             
         except Exception as e:
             logger.error(f"Error processing recurring payment {payment.id}: {e}")
     
-    return processed_count
+    return processed_count, processed_payments
 
 
 @sync_to_async
