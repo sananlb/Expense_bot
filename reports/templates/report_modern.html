@@ -277,16 +277,16 @@
         </div>
         
         <!-- Charts -->
-        <div class="chart-section" style="display: flex; align-items: center; gap: 30px; margin-bottom: 15px;">
-            <div style="flex: 0 0 200px;">
-                <div class="chart-container pie-chart">
+        <div class="chart-section" style="display: flex; align-items: stretch; gap: 30px; margin-bottom: 15px; min-height: 250px;">
+            <div style="flex: 0 0 200px; display: flex; flex-direction: column;">
+                <h2 class="chart-title" style="text-align: left; margin-bottom: 0; font-size: 14px; margin-left: 0; padding-left: 0; position: absolute;">Расходы по категориям</h2>
+                <div class="chart-container pie-chart" style="display: flex; align-items: center; justify-content: center; margin-top: auto; margin-bottom: auto; height: 200px;">
                     <canvas id="pieChart"></canvas>
                 </div>
             </div>
             
-            <div style="flex: 1;">
-                <h2 class="chart-title" style="text-align: left;">Расходы по категориям</h2>
-                <div class="categories-list">
+            <div style="flex: 1; display: flex; align-items: center;">
+                <div class="categories-list" style="width: 100%;">
                     {% for cat in categories %}
                     <div class="category-item">
                         <div class="category-info">
@@ -306,7 +306,7 @@
         <!-- Daily Expenses Chart -->
         <div class="chart-section">
             <h2 class="chart-title">Динамика расходов по дням</h2>
-            <div class="chart-container" style="height: 200px;">
+            <div class="chart-container" style="height: 230px;">
                 <canvas id="barChart"></canvas>
             </div>
         </div>
@@ -345,35 +345,67 @@
             }
         });
         
-        // Bar Chart - Simple version with expenses and cashback
+        // Bar Chart - Stacked by categories
         const barCtx = document.getElementById('barChart').getContext('2d');
+        
+        // Подготавливаем данные для составных столбиков по категориям
+        const categoryDatasets = [];
+        if (dailyData.categoryBreakdown) {
+            // Используем данные по категориям если они есть
+            categoriesData.forEach((cat, index) => {
+                categoryDatasets.push({
+                    label: cat.icon + ' ' + cat.name,
+                    data: dailyData.categoryBreakdown[cat.name] || new Array(dailyData.days.length).fill(0),
+                    backgroundColor: cat.color,
+                    borderWidth: 0,
+                    barPercentage: 0.8
+                });
+            });
+        } else {
+            // Fallback на простые данные
+            categoryDatasets.push({
+                label: 'Расходы',
+                data: dailyData.expenses,
+                backgroundColor: '#667eea',
+                borderWidth: 0
+            });
+        }
+        
+        // Добавляем кешбек как отдельный dataset
+        if (dailyData.cashback && dailyData.cashback.some(v => v !== 0)) {
+            categoryDatasets.push({
+                label: 'Кешбек',
+                data: dailyData.cashback.map(v => -Math.abs(v)), // Отрицательные значения для отображения вниз
+                backgroundColor: '#10b981',
+                borderWidth: 0
+            });
+        }
+        
         new Chart(barCtx, {
             type: 'bar',
             data: {
                 labels: dailyData.days,
-                datasets: [{
-                    label: 'Расходы',
-                    data: dailyData.expenses,
-                    backgroundColor: '#667eea',
-                    borderRadius: 6
-                }, {
-                    label: 'Кешбек',
-                    data: dailyData.cashback,
-                    backgroundColor: '#10b981',
-                    borderRadius: 6
-                }]
+                datasets: categoryDatasets
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        display: true,
-                        position: 'top'
+                        display: false  // Отключаем легенду, так как категории уже показаны выше
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = Math.abs(context.parsed.y);
+                                return context.dataset.label + ': ' + value.toLocaleString('ru-RU') + ' ₽';
+                            }
+                        }
                     }
                 },
                 scales: {
                     x: {
+                        stacked: true,
                         grid: {
                             display: false
                         },
@@ -386,10 +418,11 @@
                         }
                     },
                     y: {
+                        stacked: true,
                         beginAtZero: true,
                         ticks: {
                             callback: function(value) {
-                                return value.toLocaleString('ru-RU') + ' ₽';
+                                return Math.abs(value).toLocaleString('ru-RU') + ' ₽';
                             }
                         }
                     }

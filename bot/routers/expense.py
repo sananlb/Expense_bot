@@ -54,7 +54,7 @@ async def cmd_expenses(message: types.Message, state: FSMContext, lang: str = 'r
     month_name = get_text(today.strftime('%B').lower(), lang)
     
     # Заголовок с датой
-    header = f"📊 {get_text('summary_for', lang)} {get_text('today', lang).lower()}, {today.strftime('%d')} {month_name}\n\n"
+    header = f"📊 <b>{get_text('summary_for', lang)} {get_text('today', lang).lower()}, {today.strftime('%d')} {month_name}</b>\n\n"
     
     if not summary or (not summary.get('currency_totals') or all(v == 0 for v in summary.get('currency_totals', {}).values())):
         text = header + f"💰 {get_text('total', lang)}: {format_currency(0, summary.get('currency', 'RUB'))}\n\n{get_text('no_expenses_today', lang)}."
@@ -68,7 +68,7 @@ async def cmd_expenses(message: types.Message, state: FSMContext, lang: str = 'r
         
         # Показываем категории для всех валют
         if summary.get('categories'):
-            text += f"\n📊 {get_text('by_categories', lang)}:"
+            text += f"\n📊 <b>{get_text('by_categories', lang)}:</b>"
             # Добавляем топ-8 категорий
             other_amount = {}
             for i, cat in enumerate(summary['categories']):
@@ -131,14 +131,14 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
     }
     
     if not summary or (not summary.get('currency_totals') or all(v == 0 for v in summary.get('currency_totals', {}).values())):
-        text = f"""📊 {get_text('summary_for', lang)} {month_names[today.month]} {today.year}
+        text = f"""📊 <b>{get_text('summary_for', lang)} {month_names[today.month]} {today.year}</b>
 
 💰 {get_text('total_spent_month', lang)}: 0 {get_text('rub', lang)}
 
 {get_text('no_expenses_this_month', lang)}"""
     else:
         # Форматируем текст согласно ТЗ
-        text = f"""📊 {get_text('summary_for', lang)} {month_names[today.month]} {today.year}
+        text = f"""📊 <b>{get_text('summary_for', lang)} {month_names[today.month]} {today.year}</b>
 
 💰 {get_text('total_spent_month', lang)}:
 """
@@ -150,7 +150,7 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
 
         # Показываем категории для всех валют
         if summary.get('categories'):
-            text += f"\n📊 {get_text('by_categories', lang)}:"
+            text += f"\n📊 <b>{get_text('by_categories', lang)}:</b>"
             # Добавляем топ-8 категорий
             other_amount = {}
             for i, cat in enumerate(summary['categories']):
@@ -234,14 +234,14 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
     }
     
     if not summary or (not summary.get('currency_totals') or all(v == 0 for v in summary.get('currency_totals', {}).values())):
-        text = f"""📊 {get_text('summary_for', lang)} {month_names[prev_month]} {prev_year}
+        text = f"""📊 <b>{get_text('summary_for', lang)} {month_names[prev_month]} {prev_year}</b>
 
 💰 {get_text('total_spent_month', lang)}: 0 {get_text('rub', lang)}
 
 {get_text('no_expenses_this_month', lang)}"""
     else:
         # Форматируем текст согласно ТЗ
-        text = f"""📊 {get_text('summary_for', lang)} {month_names[prev_month]} {prev_year}
+        text = f"""📊 <b>{get_text('summary_for', lang)} {month_names[prev_month]} {prev_year}</b>
 
 💰 {get_text('total_spent_month', lang)}:
 """
@@ -253,7 +253,7 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
 
         # Показываем категории для всех валют
         if summary.get('categories'):
-            text += f"\n📊 {get_text('by_categories', lang)}:"
+            text += f"\n📊 <b>{get_text('by_categories', lang)}:</b>"
             # Добавляем топ-8 категорий
             other_amount = {}
             for i, cat in enumerate(summary['categories']):
@@ -312,21 +312,24 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
     month = data.get('current_month', date.today().month)
     year = data.get('current_year', date.today().year)
     
-    # Отправляем индикатор "печатает"
-    await callback.bot.send_chat_action(callback.message.chat.id, "upload_document")
-    
-    # Добавляем задержку для увеличения времени отображения "Отправляет файл..."
     import asyncio
-    await asyncio.sleep(1.5)  # Дополнительная задержка
+    
+    # Создаем задачу для периодической отправки индикатора "отправляет файл"
+    async def keep_sending_action():
+        for _ in range(15):  # Отправляем 15 раз (каждые 1 сек = 15 секунд)
+            try:
+                await callback.bot.send_chat_action(callback.message.chat.id, "upload_document")
+                await asyncio.sleep(1)
+            except:
+                break
+    
+    # Запускаем задачу отправки индикатора
+    action_task = asyncio.create_task(keep_sending_action())
     
     try:
         # Импортируем сервис генерации PDF
-        # Используем Playwright версию - работает на всех платформах
         from ..services.pdf_report import PDFReportService
         pdf_service = PDFReportService()
-        
-        # Отправляем индикатор еще раз перед генерацией
-        await callback.bot.send_chat_action(callback.message.chat.id, "upload_document")
         
         pdf_bytes = await pdf_service.generate_monthly_report(
             user_id=callback.from_user.id,
@@ -365,6 +368,12 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
             )
         )
         
+        # Удаляем предыдущее сообщение со сводкой
+        try:
+            await callback.message.delete()
+        except:
+            pass  # Игнорируем ошибки если сообщение уже удалено
+        
         
     except Exception as e:
         logger.error(f"Error generating report: {e}")
@@ -373,6 +382,13 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
             "Попробуйте позже или обратитесь в поддержку.",
             parse_mode="HTML"
         )
+    finally:
+        # Останавливаем задачу отправки индикатора
+        action_task.cancel()
+        try:
+            await action_task
+        except asyncio.CancelledError:
+            pass
 
 
 # Обработчики ввода новых значений
