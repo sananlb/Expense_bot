@@ -45,9 +45,12 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright and browser with dependencies
-RUN playwright install chromium && \
-    playwright install-deps chromium
+# Install Playwright browsers
+# First ensure playwright is available in PATH
+ENV PATH="/root/.local/bin:${PATH}"
+RUN python -m playwright install chromium --with-deps && \
+    echo "Playwright version:" && playwright --version && \
+    echo "Installed browsers:" && playwright list
 
 # Copy project files
 COPY . .
