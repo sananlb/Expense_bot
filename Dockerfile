@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
     gettext \
     curl \
     netcat-openbsd \
-    # Dependencies for Playwright
+    # Dependencies for Playwright - complete list
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
@@ -30,15 +30,24 @@ RUN apt-get update && apt-get install -y \
     libxfixes3 \
     libxrandr2 \
     libgbm1 \
+    libgbm-dev \
     libasound2 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libgtk-3-0 \
+    libxshmfence1 \
+    libx11-6 \
+    libxcb1 \
+    libxext6 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright and browser
-RUN playwright install chromium
+# Install Playwright and browser with dependencies
+RUN playwright install chromium && \
+    playwright install-deps chromium
 
 # Copy project files
 COPY . .
