@@ -50,7 +50,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 ENV PATH="/root/.local/bin:${PATH}"
 RUN python -m playwright install chromium --with-deps && \
     echo "Playwright version:" && playwright --version && \
-    echo "Installed browsers:" && playwright list
+    echo "Chromium browser installed successfully"
 
 # Copy project files
 COPY . .
