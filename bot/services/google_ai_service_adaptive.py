@@ -120,11 +120,15 @@ class GoogleAIService:
             self.executor = ProcessPoolExecutor(max_workers=1, mp_context=ctx)
             logger.info("[GoogleAI-Adaptive] Process pool created for Windows")
         else:
-            # Для Linux/Mac импортируем genai если еще не импортирован
-            if 'genai' not in globals():
-                import google.generativeai as genai
-                genai.configure(api_key=self.api_key)
-            self.genai = genai
+            # Для Linux/Mac используем глобальный genai или импортируем его
+            try:
+                # Пробуем использовать глобальный genai
+                self.genai = genai
+            except NameError:
+                # Если не найден, импортируем
+                import google.generativeai as genai_local
+                genai_local.configure(api_key=self.api_key)
+                self.genai = genai_local
             logger.info("[GoogleAI-Adaptive] Using native async for Linux/Mac")
     
     async def categorize_expense(
