@@ -517,9 +517,17 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
 async def process_pre_checkout_updated(pre_checkout_query: PreCheckoutQuery):
     """Подтверждение оплаты перед списанием Stars"""
     # Проверяем payload
-    payload_parts = pre_checkout_query.invoice_payload.split("_")
+    payload = pre_checkout_query.invoice_payload
+    payload_parts = payload.split("_")
     
-    if len(payload_parts) < 4 or payload_parts[0] != "subscription":
+    # Логируем для отладки
+    logger.info(f"Pre-checkout query received. Payload: {payload}")
+    logger.info(f"Payload parts: {payload_parts}, count: {len(payload_parts)}")
+    
+    # Проверяем, что payload начинается с "subscription" и имеет минимум 3 части
+    # Формат: subscription_TYPE_USER_ID или subscription_TYPE_USER_ID_promo_PROMO_ID
+    if len(payload_parts) < 3 or payload_parts[0] != "subscription":
+        logger.error(f"Invalid payload format: {payload}")
         await pre_checkout_query.answer(
             ok=False,
             error_message="Ошибка в данных платежа"
@@ -527,6 +535,7 @@ async def process_pre_checkout_updated(pre_checkout_query: PreCheckoutQuery):
         return
     
     # Все проверки пройдены, подтверждаем оплату
+    logger.info(f"Payment pre-checkout approved for payload: {payload}")
     await pre_checkout_query.answer(ok=True)
 
 
@@ -534,6 +543,9 @@ async def process_pre_checkout_updated(pre_checkout_query: PreCheckoutQuery):
 @router.message(F.successful_payment)
 async def process_successful_payment_updated(message: Message, state: FSMContext):
     """Обработка успешной оплаты"""
+    # Логируем успешную оплату
+    logger.info(f"Successful payment from user {message.from_user.id}")
+    
     # Получаем сохраненные ID сообщений перед очисткой состояния
     data = await state.get_data()
     invoice_msg_id = data.get('invoice_msg_id')
@@ -553,7 +565,12 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     await state.clear()
     
     payment = message.successful_payment
-    payload_parts = payment.invoice_payload.split("_")
+    payload = payment.invoice_payload
+    payload_parts = payload.split("_")
+    
+    # Логируем payload для отладки
+    logger.info(f"Payment payload: {payload}")
+    logger.info(f"Payload parts: {payload_parts}")
     
     # Проверяем тип подписки
     if payload_parts[2] == "months":
