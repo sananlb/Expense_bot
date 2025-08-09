@@ -66,18 +66,18 @@ async def on_startup(bot: Bot):
     from bot.tasks.subscription_notifications import run_notification_task
     asyncio.create_task(run_notification_task(bot))
     
-    # Отправляем уведомление админу о запуске бота
-    from bot.services.admin_notifier import notify_bot_started
-    asyncio.create_task(notify_bot_started())
+    # Отправляем уведомление админу о запуске бота - отключено
+    # from bot.services.admin_notifier import notify_bot_started
+    # asyncio.create_task(notify_bot_started())
     
     logger.info("Бот запущен и готов к работе")
 
 
 async def on_shutdown(bot: Bot):
     """Действия при остановке бота"""
-    # Отправляем уведомление админу об остановке бота
-    from bot.services.admin_notifier import notify_bot_stopped
-    await notify_bot_stopped()
+    # Отправляем уведомление админу об остановке бота - отключено
+    # from bot.services.admin_notifier import notify_bot_stopped
+    # await notify_bot_stopped()
     
     # Закрываем AI сервисы если они есть
     try:
