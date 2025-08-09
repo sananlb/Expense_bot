@@ -281,9 +281,9 @@ def parse_expense_message(text: str, use_ai: bool = False) -> Optional[ParsedExp
     if not description:
         description = 'Расход'
     
-    # Капитализация первой буквы
-    if description and description[0].islower():
-        description = description[0].upper() + description[1:]
+    # Капитализация только первой буквы, не меняя регистр остальных
+    if description and len(description) > 0:
+        description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
     
     # Создаем результат
     result = ParsedExpense(

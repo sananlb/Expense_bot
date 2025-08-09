@@ -217,21 +217,26 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     if not text:
         return None
     
-    # Нормализуем текст
-    text = text.strip().lower()
+    # Сохраняем оригинальный текст и создаем версию в нижнем регистре для поиска
+    original_text = text.strip()
+    text_lower = original_text.lower()
     
     # Ищем сумму
     amount = None
     amount_str = None
+    text_without_amount = None
     
     for pattern in AMOUNT_PATTERNS:
-        match = re.search(pattern, text, re.IGNORECASE)
+        match = re.search(pattern, text_lower, re.IGNORECASE)
         if match:
             amount_str = match.group(1).replace(',', '.')
             try:
                 amount = Decimal(amount_str)
-                # Убираем найденную сумму из текста для получения описания
-                text_without_amount = text.replace(match.group(0), ' ').strip()
+                # Убираем найденную сумму из оригинального текста для получения описания
+                # Находим позицию совпадения в оригинальном тексте
+                match_start = match.start()
+                match_end = match.end()
+                text_without_amount = (original_text[:match_start] + ' ' + original_text[match_end:]).strip()
                 break
             except (ValueError, InvalidOperation) as e:
                 logger.debug(f"Ошибка при парсинге суммы '{amount_str}': {e}")
@@ -242,7 +247,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         if user_id:
             from bot.services.expense import get_last_expense_by_description
             # Пытаемся найти последнюю трату с похожим описанием
-            last_expense = await get_last_expense_by_description(user_id, text)
+            last_expense = await get_last_expense_by_description(user_id, original_text)
             if last_expense:
                 # Используем сумму и категорию из найденной траты
                 amount = last_expense.amount
@@ -256,8 +261,8 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                 except:
                     pass
                     
-                # Сохраняем оригинальное описание
-                description = text[0].upper() + text[1:] if text else 'Расход'
+                # Сохраняем оригинальное описание с капитализацией первой буквы
+                description = original_text[0].upper() + original_text[1:] if len(original_text) > 1 else original_text.upper() if original_text else 'Расход'
                 
                 result = {
                     'amount': float(amount),
@@ -278,7 +283,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     # Определяем категорию
     category = None
     max_score = 0
-    text_lower = text.lower()  # Приводим к нижнему регистру для поиска
+    # text_lower уже определен выше
     
     # Сначала проверяем пользовательские категории, если есть профиль
     if profile:
@@ -320,18 +325,18 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                 category = cat_name
     
     # Формируем описание (текст без суммы)
-    description = text_without_amount if 'text_without_amount' in locals() else text
+    description = text_without_amount if text_without_amount is not None else original_text
     
     # Убираем лишние пробелы
     description = ' '.join(description.split())
     
-    # Капитализируем первую букву
-    if description:
-        description = description[0].upper() + description[1:]
+    # Капитализируем только первую букву, не меняя регистр остальных
+    if description and len(description) > 0:
+        description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
     
     # Определяем валюту
     user_currency = profile.currency if profile else 'RUB'
-    currency = detect_currency(text, user_currency)
+    currency = detect_currency(original_text, user_currency)
     
     # Базовый результат (НЕ заполняем category если не найдена)
     result = {
@@ -402,7 +407,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         logger.info(f"Calling categorize_expense with timeout=15s...")
                         ai_result = await asyncio.wait_for(
                             ai_service.categorize_expense(
-                                text=text,
+                                text=original_text,
                                 amount=amount,
                                 currency=currency,
                                 categories=user_categories,
@@ -412,7 +417,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         )
                         logger.info(f"AI categorization completed")
                     except asyncio.TimeoutError:
-                        logger.warning(f"AI categorization timeout for '{text}'")
+                        logger.warning(f"AI categorization timeout for '{original_text}'")
                         ai_result = None
                     except Exception as e:
                         logger.error(f"AI categorization error: {e}")
@@ -426,7 +431,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                             openai_service = AISelector('openai')
                             ai_result = await asyncio.wait_for(
                                 openai_service.categorize_expense(
-                                    text=text,
+                                    text=original_text,
                                     amount=amount,
                                     currency=currency,
                                     categories=user_categories,
@@ -465,7 +470,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     # Финальный fallback - если категория все еще не определена
     if not result['category']:
         result['category'] = 'Прочие расходы'
-        logger.info(f"Using default category 'Прочие расходы' for '{text}'")
+        logger.info(f"Using default category 'Прочие расходы' for '{original_text}'")
     
     return result
 

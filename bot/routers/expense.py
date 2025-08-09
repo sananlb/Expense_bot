@@ -423,8 +423,9 @@ async def process_edit_description(message: types.Message, state: FSMContext):
         await message.answer("❌ Описание не может быть пустым")
         return
     
-    # Капитализация первой буквы
-    description = description[0].upper() + description[1:] if description else description
+    # Капитализация только первой буквы, не меняя регистр остальных
+    if description and len(description) > 0:
+        description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
     
     data = await state.get_data()
     expense_id = data.get('editing_expense_id')
