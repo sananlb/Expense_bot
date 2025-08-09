@@ -144,10 +144,16 @@ class ExpenseCategorizer:
     async def categorize_with_openai(self, text: str, categories: List[str],
                                     user_context: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         try:
+            from openai import OpenAI
+            
+            # Создаем клиент OpenAI с правильным API
+            client = OpenAI(api_key=AIConfig.OPENAI_API_KEY)
+            
             prompt = self.get_categorization_prompt(text, categories, user_context)
             
+            # Используем новый API
             response = await asyncio.to_thread(
-                openai.ChatCompletion.create,
+                client.chat.completions.create,
                 model=AIConfig.OPENAI_MODEL,
                 messages=[
                     {"role": "system", "content": self.get_system_prompt()},
