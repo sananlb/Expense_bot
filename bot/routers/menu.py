@@ -113,12 +113,10 @@ async def show_today_expenses(callback: types.CallbackQuery, state: FSMContext):
                 if cat['amount'] > 0:
                     text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])}"
         
-        # Добавляем потенциальный кешбэк
+        # Добавляем кешбэк только если он больше 0
         cashback = await calculate_potential_cashback(user_id, today, today)
         if cashback > 0:
-            text += f"\n\n💳 **Потенциальный кешбэк:**\n• {format_currency(cashback, 'RUB')}"
-        else:
-            text += f"\n\n💳 **Потенциальный кешбэк:**\n• 0 ₽"
+            text += f"\n\n💳 **Кешбэк:**\n• {format_currency(cashback, 'RUB')}"
     
     # Получаем сводку за месяц для проверки наличия трат
     month_summary = await get_month_summary(user_id, today.month, today.year)
