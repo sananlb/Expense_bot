@@ -30,14 +30,20 @@ def get_user_recurring_payments(user_id: int, active_only: bool = False) -> List
 
 @sync_to_async
 def create_recurring_payment(user_id: int, category_id: int, amount: float, 
-                           description: str, day_of_month: int) -> RecurringPayment:
+                           description: Optional[str], day_of_month: int) -> RecurringPayment:
     """Создать новый регулярный платеж"""
+    from expenses.models import ExpenseCategory
     profile = Profile.objects.get(telegram_id=user_id)
     
     # Проверяем лимит регулярных платежей (максимум 50)
     recurring_count = RecurringPayment.objects.filter(profile=profile).count()
     if recurring_count >= 50:
         raise ValueError("Достигнут лимит регулярных платежей (максимум 50)")
+    
+    # Если описание не указано, используем название категории
+    if not description:
+        category = ExpenseCategory.objects.get(id=category_id)
+        description = category.name
     
     # Проверяем длину описания (максимум 500 символов)
     if description and len(description) > 500:

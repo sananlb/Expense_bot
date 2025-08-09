@@ -43,25 +43,43 @@ async def validate_amount(text: str) -> Optional[float]:
         raise ValueError("Неверный формат суммы")
 
 
-def parse_description_amount(text: str) -> Dict[str, Any]:
+def parse_description_amount(text: str, allow_only_amount: bool = False) -> Dict[str, Any]:
     """
-    Парсит текст в формате 'Описание Сумма'
+    Парсит текст в формате 'Описание Сумма' или просто 'Сумма'
     
     Args:
         text: Текст для парсинга
+        allow_only_amount: Разрешить ввод только суммы без описания
         
     Returns:
-        dict: {'description': str, 'amount': float}
+        dict: {'description': str или None, 'amount': float}
         
     Raises:
         ValueError: Если формат неверный
     """
     parts = text.strip().split()
     
-    if len(parts) < 2:
-        raise ValueError("Неверный формат. Отправьте название и сумму через пробел.")
+    if len(parts) == 0:
+        raise ValueError("Пустой ввод. Отправьте сумму или название и сумму.")
     
-    # Последняя часть - сумма
+    # Если только одна часть
+    if len(parts) == 1:
+        if allow_only_amount:
+            # Пробуем парсить как сумму
+            try:
+                amount = float(parts[0].replace(',', '.'))
+                if amount <= 0:
+                    raise ValueError("Сумма должна быть больше 0")
+                return {
+                    'description': None,  # Описания нет
+                    'amount': amount
+                }
+            except ValueError:
+                raise ValueError("Неверный формат суммы")
+        else:
+            raise ValueError("Неверный формат. Отправьте название и сумму через пробел.")
+    
+    # Если несколько частей - последняя это сумма
     amount_str = parts[-1]
     
     try:
@@ -69,7 +87,11 @@ def parse_description_amount(text: str) -> Dict[str, Any]:
         if amount <= 0:
             raise ValueError("Сумма должна быть больше 0")
     except ValueError:
-        raise ValueError("Неверный формат суммы")
+        # Может быть это всё описание без суммы?
+        if allow_only_amount:
+            raise ValueError("Неверный формат. Отправьте сумму или название и сумму.")
+        else:
+            raise ValueError("Неверный формат суммы")
     
     # Собираем описание из всех частей кроме последней
     description = " ".join(parts[:-1])
@@ -79,7 +101,7 @@ def parse_description_amount(text: str) -> Dict[str, Any]:
         description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
     
     return {
-        'description': description,
+        'description': description if description else None,
         'amount': amount
     }
 

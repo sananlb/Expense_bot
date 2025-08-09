@@ -90,9 +90,11 @@ async def add_recurring_start(callback: types.CallbackQuery, state: FSMContext):
     """Начало добавления регулярного платежа"""
     await callback.message.edit_text(
         "➕ <b>Добавление регулярного платежа</b>\n\n"
-        "✅ Отправьте название и сумму в формате:\n"
-        "<i>Название Сумма</i>\n\n"
-        "Например: <i>Квартира 50000</i>",
+        "Отправьте сумму или название и сумму:\n\n"
+        "Примеры:\n"
+        "• <i>50000</i> - только сумма\n"
+        "• <i>Квартира 50000</i> - название и сумма\n\n"
+        "Если вы не укажете название, оно будет создано автоматически из категории.",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="❌ Отмена", callback_data="recurring_menu")]
         ]),
@@ -110,9 +112,9 @@ async def process_description(message: types.Message, state: FSMContext):
     text = message.text.strip()
     user_id = message.from_user.id
     
-    # Используем утилиту для парсинга
+    # Используем утилиту для парсинга с разрешением ввода только суммы
     try:
-        parsed = parse_description_amount(text)
+        parsed = parse_description_amount(text, allow_only_amount=True)
         description = parsed['description']
         amount = parsed['amount']
     except ValueError as e:
@@ -333,9 +335,9 @@ async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext):
 Дата: <i>{payment.day_of_month} число месяца</i>
 Статус: <i>{status_text}</i>
 
-✅ Чтобы изменить название и сумму, отправьте сообщение в формате:
-<i>Название Сумма</i>
-Например: <i>Квартира 50000</i>"""
+Чтобы изменить, отправьте:
+• Только сумму: <i>50000</i>
+• Название и сумму: <i>Квартира 50000</i>"""
     
     # Сохраняем данные платежа в состояние
     await state.update_data(
@@ -380,9 +382,9 @@ async def process_edit_data(message: types.Message, state: FSMContext):
     data = await state.get_data()
     user_id = message.from_user.id
     
-    # Используем утилиту для парсинга
+    # Используем утилиту для парсинга с разрешением ввода только суммы
     try:
-        parsed = parse_description_amount(text)
+        parsed = parse_description_amount(text, allow_only_amount=True)
         description = parsed['description']
         amount = parsed['amount']
     except ValueError as e:
