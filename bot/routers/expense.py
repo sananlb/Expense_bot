@@ -577,19 +577,32 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     
     # Создаем задачу для отправки индикатора "печатает..." с задержкой 2 секунды
     typing_task = None
+    typing_cancelled = False
+    
     async def delayed_typing():
+        nonlocal typing_cancelled
         await asyncio.sleep(2.0)  # Задержка 2 секунды
+        if typing_cancelled:
+            return
         await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
         # Планируем повторную отправку через 4 секунды
-        while True:
+        while not typing_cancelled:
             await asyncio.sleep(4.0)
-            try:
-                await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
-            except:
-                break
+            if not typing_cancelled:
+                try:
+                    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+                except:
+                    break
     
     # Запускаем задачу
     typing_task = asyncio.create_task(delayed_typing())
+    
+    # Функция для отмены индикатора печатания
+    def cancel_typing():
+        nonlocal typing_cancelled
+        typing_cancelled = True
+        if typing_task and not typing_task.done():
+            typing_task.cancel()
     
     # Если текст не передан явно, берем из сообщения
     if text is None:
@@ -672,6 +685,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 )
                 
                 # Отправляем подтверждение (сообщение о трате не должно исчезать)
+                cancel_typing()
                 await send_message_with_cleanup(message, state,
                     message_text,
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -691,6 +705,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 # Язык пользователя берём из middleware или используем русский по умолчанию
                 lang = 'ru'
                 
+                cancel_typing()
                 await message.answer(
                     f"💰 Вы хотите внести трату \"{text}\"?\n\n"
                     f"Укажите сумму траты:",
@@ -700,6 +715,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         
         # Не похоже на трату - обрабатываем как чат
         logger.info(f"Expense parser returned None for text: '{text}', processing as chat")
+        cancel_typing()
         await process_chat_message(message, state, text)
         return
     
@@ -755,6 +771,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         reused_from_last=reused_from_last
     )
     
+    cancel_typing()
     await send_message_with_cleanup(message, state,
         message_text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -766,6 +783,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         parse_mode="HTML",
         keep_message=True  # Не удалять это сообщение при следующих действиях
     )
+    
+    # Гарантируем отмену задачи
+    cancel_typing()
 
 
 # Обработчик голосовых сообщений
