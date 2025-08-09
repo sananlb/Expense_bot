@@ -54,21 +54,21 @@ async def cmd_expenses(message: types.Message, state: FSMContext, lang: str = 'r
     month_name = get_text(today.strftime('%B').lower(), lang)
     
     # Заголовок с датой
-    header = f"📊 <b>{get_text('summary_for', lang)} {get_text('today', lang).lower()}, {today.strftime('%d')} {month_name}</b>\n\n"
+    header = f"📊 <b>{today.strftime('%d')} {month_name}</b>\n\n"
     
     if not summary or (not summary.get('currency_totals') or all(v == 0 for v in summary.get('currency_totals', {}).values())):
-        text = header + f"💰 {get_text('total', lang)}: {format_currency(0, summary.get('currency', 'RUB'))}\n\n{get_text('no_expenses_today', lang)}."
+        text = header + f"💸 <b>Потрачено сегодня:</b>\n• {format_currency(0, summary.get('currency', 'RUB'))}\n\n{get_text('no_expenses_today', lang)}."
     else:
-        # Показываем все валюты в разделе "Всего"
-        text = header + f"💰 {get_text('total', lang)}:\n"
+        # Показываем все валюты в разделе "Потрачено сегодня"
+        text = header + f"💸 <b>Потрачено сегодня:</b>\n"
         currency_totals = summary.get('currency_totals', {})
         for curr, amount in sorted(currency_totals.items()):
             if amount > 0:
-                text += f"{format_currency(amount, curr)}\n"
+                text += f"• {format_currency(amount, curr)}\n"
         
         # Показываем категории для всех валют
         if summary.get('categories'):
-            text += f"\n📊 <b>{get_text('by_categories', lang)}:</b>"
+            text += f"\n📁 <b>{get_text('by_categories', lang)}:</b>"
             # Добавляем топ-8 категорий
             other_amount = {}
             for i, cat in enumerate(summary['categories']):
@@ -88,7 +88,7 @@ async def cmd_expenses(message: types.Message, state: FSMContext, lang: str = 'r
         
         # Добавляем потенциальный кешбэк
         cashback = await calculate_potential_cashback(user_id, today, today)
-        text += f"\n\n💳 {get_text('potential_cashback', lang)}: {format_currency(cashback, 'RUB')}"
+        text += f"\n\n💳 <b>{get_text('potential_cashback', lang)}:</b>\n• {format_currency(cashback, 'RUB')}"
     
     # Добавляем подсказку внизу курсивом
     text += "\n\n<i>Показать отчет за другой период?</i>"
@@ -131,26 +131,27 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
     }
     
     if not summary or (not summary.get('currency_totals') or all(v == 0 for v in summary.get('currency_totals', {}).values())):
-        text = f"""📊 <b>{get_text('summary_for', lang)} {month_names[today.month]} {today.year}</b>
+        text = f"""📊 <b>{month_names[today.month]} {today.year}</b>
 
-💰 {get_text('total_spent_month', lang)}: 0 {get_text('rub', lang)}
+💸 <b>Потрачено за месяц:</b>
+• 0 {get_text('rub', lang)}
 
 {get_text('no_expenses_this_month', lang)}"""
     else:
         # Форматируем текст согласно ТЗ
-        text = f"""📊 <b>{get_text('summary_for', lang)} {month_names[today.month]} {today.year}</b>
+        text = f"""📊 <b>{month_names[today.month]} {today.year}</b>
 
-💰 {get_text('total_spent_month', lang)}:
+💸 <b>Потрачено за месяц:</b>
 """
         # Показываем все валюты
         currency_totals = summary.get('currency_totals', {})
         for curr, amount in sorted(currency_totals.items()):
             if amount > 0:
-                text += f"{format_currency(amount, curr)}\n"
+                text += f"• {format_currency(amount, curr)}\n"
 
         # Показываем категории для всех валют
         if summary.get('categories'):
-            text += f"\n📊 <b>{get_text('by_categories', lang)}:</b>"
+            text += f"\n📁 <b>{get_text('by_categories', lang)}:</b>"
             # Добавляем топ-8 категорий
             other_amount = {}
             for i, cat in enumerate(summary['categories']):
@@ -175,7 +176,7 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
         
         # Добавляем потенциальный кешбэк
         cashback = await calculate_potential_cashback(user_id, start_date, today)
-        text += f"\n\n💳 Потенциальный кешбэк: {format_currency(cashback, 'RUB')}"
+        text += f"\n\n💳 <b>Потенциальный кешбэк:</b>\n• {format_currency(cashback, 'RUB')}"
     
     # Добавляем подсказку внизу курсивом
     text += "\n\n<i>Показать отчет за другой период?</i>"
@@ -234,26 +235,27 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
     }
     
     if not summary or (not summary.get('currency_totals') or all(v == 0 for v in summary.get('currency_totals', {}).values())):
-        text = f"""📊 <b>{get_text('summary_for', lang)} {month_names[prev_month]} {prev_year}</b>
+        text = f"""📊 <b>{month_names[prev_month]} {prev_year}</b>
 
-💰 {get_text('total_spent_month', lang)}: 0 {get_text('rub', lang)}
+💸 <b>Потрачено за месяц:</b>
+• 0 {get_text('rub', lang)}
 
 {get_text('no_expenses_this_month', lang)}"""
     else:
         # Форматируем текст согласно ТЗ
-        text = f"""📊 <b>{get_text('summary_for', lang)} {month_names[prev_month]} {prev_year}</b>
+        text = f"""📊 <b>{month_names[prev_month]} {prev_year}</b>
 
-💰 {get_text('total_spent_month', lang)}:
+💸 <b>Потрачено за месяц:</b>
 """
         # Показываем все валюты
         currency_totals = summary.get('currency_totals', {})
         for curr, amount in sorted(currency_totals.items()):
             if amount > 0:
-                text += f"{format_currency(amount, curr)}\n"
+                text += f"• {format_currency(amount, curr)}\n"
 
         # Показываем категории для всех валют
         if summary.get('categories'):
-            text += f"\n📊 <b>{get_text('by_categories', lang)}:</b>"
+            text += f"\n📁 <b>{get_text('by_categories', lang)}:</b>"
             # Добавляем топ-8 категорий
             other_amount = {}
             for i, cat in enumerate(summary['categories']):
@@ -283,7 +285,7 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
         end_date = date(prev_year, prev_month, last_day)
         
         cashback = await calculate_potential_cashback(user_id, start_date, end_date)
-        text += f"\n\n💳 Потенциальный кешбэк: {format_currency(cashback, 'RUB')}"
+        text += f"\n\n💳 <b>Потенциальный кешбэк:</b>\n• {format_currency(cashback, 'RUB')}"
     
     # Добавляем подсказку внизу курсивом
     text += "\n\n<i>Показать отчет за другой период?</i>"
@@ -543,8 +545,7 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
         message_text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
-                InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
+                InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
             ]
         ]),
         parse_mode="HTML",
@@ -691,8 +692,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     message_text,
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [
-                            InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
-                            InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
+                            InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
                         ]
                     ]),
                     parse_mode="HTML",
@@ -777,8 +777,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         message_text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
-                InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
+                InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
             ]
         ]),
         parse_mode="HTML",
@@ -868,6 +867,7 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: s
         [InlineKeyboardButton(text=f"💰 {get_text('sum', lang)}: {expense.amount:.0f} ₽", callback_data="edit_field_amount")],
         [InlineKeyboardButton(text=f"📝 {get_text('description', lang)}: {expense.description}", callback_data="edit_field_description")],
         [InlineKeyboardButton(text=f"📁 {get_text('category', lang)}: {expense.category.name}", callback_data="edit_field_category")],
+        [InlineKeyboardButton(text=f"🗑 Удалить", callback_data=f"delete_expense_{expense_id}")],
         [InlineKeyboardButton(text=f"✅ {get_text('edit_done', lang)}", callback_data="edit_done")]
     ])
     
@@ -1026,8 +1026,7 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext):
             message_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
-                    InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
+                    InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
                 ]
             ]),
             parse_mode="HTML"
@@ -1166,8 +1165,7 @@ async def show_updated_expense(message: types.Message, state: FSMContext, expens
             message_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
-                    InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
+                    InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
                 ]
             ]),
             parse_mode="HTML"
@@ -1200,8 +1198,7 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
             message_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
-                    InlineKeyboardButton(text="🗑 Не сохранять", callback_data=f"delete_expense_{expense.id}")
+                    InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
                 ]
             ]),
             parse_mode="HTML"

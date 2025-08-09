@@ -50,7 +50,7 @@ async def format_expense_added_message(
         description = description.replace("[Регулярный] ", "")
     
     message += f"✅ <b>{description}</b>{invisible_padding}\n\n"
-    message += f"💰 {amount_text}{cashback_text}\n"
+    message += f"🧾 {amount_text}{cashback_text}\n"
     # Если есть иконка у категории, добавляем её с пробелом, иначе только название
     if category.icon:
         message += f"{category.icon} {category.name}"
@@ -69,7 +69,7 @@ async def format_expense_added_message(
         today_summary = await get_today_summary(expense.profile.telegram_id)
         
         if today_summary and today_summary.get('currency_totals'):
-            message += "\n\n━━━━━━━━━━━━━━━━━━━━━━━"
+            message += "\n\n━━━━━━━━━━━━━━━"
             message += "\n💸 <b>Потрачено сегодня:</b>"
             
             # Показываем все валюты, в которых были траты
