@@ -48,7 +48,11 @@ def get_or_create_category(user_id: int, category_name: str) -> ExpenseCategory:
         import re
         name_without_emoji = re.sub(r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+\s*', '', cat.name)
         if name_without_emoji.lower() == category_name.lower():
-            logger.info(f"Found exact match (ignoring emoji): {cat.name}")
+            # Безопасное логирование для Windows
+            safe_name = cat.name.encode('ascii', 'ignore').decode('ascii').strip()
+            if not safe_name:
+                safe_name = "category with emoji"
+            logger.info(f"Found exact match (ignoring emoji): {safe_name}")
             return cat
     
     # Если не нашли точное, ищем частичное совпадение
@@ -59,13 +63,19 @@ def get_or_create_category(user_id: int, category_name: str) -> ExpenseCategory:
         
         # Проверяем, содержит ли категория искомое название
         if category_name_lower in name_lower:
-            logger.info(f"Found partial match: {cat.name}")
+            safe_name = cat.name.encode('ascii', 'ignore').decode('ascii').strip()
+            if not safe_name:
+                safe_name = "category with emoji"
+            logger.info(f"Found partial match: {safe_name}")
             return cat
         
         # Проверяем каждое слово из искомой категории
         words = category_name_lower.split()
         if any(word in name_lower for word in words if len(word) > 3):
-            logger.info(f"Found word match: {cat.name}")
+            safe_name = cat.name.encode('ascii', 'ignore').decode('ascii').strip()
+            if not safe_name:
+                safe_name = "category with emoji"
+            logger.info(f"Found word match: {safe_name}")
             return cat
     
     # Пробуем найти через словарь сопоставления
@@ -80,7 +90,10 @@ def get_or_create_category(user_id: int, category_name: str) -> ExpenseCategory:
                     name__icontains=keyword
                 ).first()
                 if category:
-                    logger.info(f"Found category '{category.name}' through mapping keyword '{keyword}'")
+                    safe_name = category.name.encode('ascii', 'ignore').decode('ascii').strip()
+                    if not safe_name:
+                        safe_name = "category with emoji"
+                    logger.info(f"Found category '{safe_name}' through mapping keyword '{keyword}'")
                     return category
                 
                 # Также пробуем поиск в верхнем регистре для кириллицы
@@ -89,14 +102,20 @@ def get_or_create_category(user_id: int, category_name: str) -> ExpenseCategory:
                     name__icontains=keyword.upper()
                 ).first()
                 if category:
-                    logger.info(f"Found category '{category.name}' through mapping keyword (uppercase) '{keyword.upper()}'")
+                    safe_name = category.name.encode('ascii', 'ignore').decode('ascii').strip()
+                    if not safe_name:
+                        safe_name = "category with emoji"
+                    logger.info(f"Found category '{safe_name}' through mapping keyword (uppercase) '{keyword.upper()}'")
                     return category
     
     # Дополнительная проверка: если category_name это "кафе", ищем любую категорию со словом "кафе"
     if 'кафе' in category_name.lower():
         for cat in all_categories:
             if 'кафе' in cat.name.lower() or 'ресторан' in cat.name.lower():
-                logger.info(f"Found category '{cat.name}' by cafe/restaurant keyword")
+                safe_name = cat.name.encode('ascii', 'ignore').decode('ascii').strip()
+                if not safe_name:
+                    safe_name = "category with emoji"
+                logger.info(f"Found category '{safe_name}' by cafe/restaurant keyword")
                 return cat
     
     # Если категория не найдена, возвращаем "Прочие расходы"
