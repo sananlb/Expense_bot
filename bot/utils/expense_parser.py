@@ -246,14 +246,23 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             if last_expense:
                 # Используем сумму и категорию из найденной траты
                 amount = last_expense.amount
-                category_id = last_expense.category_id if last_expense.category else None
+                category_id = last_expense.category_id
+                category_name = None
+                
+                # Безопасно получаем имя категории (уже должно быть загружено через select_related)
+                try:
+                    if last_expense.category:
+                        category_name = last_expense.category.name
+                except:
+                    pass
+                    
                 # Сохраняем оригинальное описание
                 description = text[0].upper() + text[1:] if text else 'Расход'
                 
                 result = {
                     'amount': float(amount),
                     'description': description,
-                    'category': last_expense.category.name if last_expense.category else None,
+                    'category': category_name,
                     'category_id': category_id,
                     'currency': last_expense.currency or 'RUB',
                     'confidence': 0.8,  # Высокая уверенность, так как нашли похожую трату

@@ -634,7 +634,7 @@ def get_last_expense_by_description(telegram_id: int, description: str) -> Optio
         expense = Expense.objects.filter(
             profile=profile,
             description__icontains=description.strip()
-        ).order_by('-expense_date', '-created_at').first()
+        ).select_related('category').order_by('-expense_date', '-created_at').first()
         return expense
     except Profile.DoesNotExist:
         return None

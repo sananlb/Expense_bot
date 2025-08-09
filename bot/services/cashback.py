@@ -180,7 +180,8 @@ def calculate_expense_cashback(user_id: int, category_id: int, amount: Decimal, 
     total_cashback = Decimal('0')
     
     for cashback in cashbacks:
-        cashback_amount = amount * (cashback.cashback_percent / 100)
+        # Преобразуем amount в Decimal для корректного умножения
+        cashback_amount = Decimal(str(amount)) * (cashback.cashback_percent / 100)
         
         # Учитываем лимит
         if cashback.limit_amount:
