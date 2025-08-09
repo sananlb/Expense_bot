@@ -120,6 +120,7 @@ async def show_categories_menu(message: types.Message | types.CallbackQuery, sta
 @router.callback_query(lambda c: c.data == "categories_menu")
 async def callback_categories_menu(callback: types.CallbackQuery, state: FSMContext):
     """Показать меню категорий через callback"""
+    await state.clear()  # Очищаем состояние при возврате в меню
     await callback.message.delete()
     await show_categories_menu(callback.message, state)
     await callback.answer()
@@ -190,7 +191,7 @@ async def process_category_name(message: types.Message, state: FSMContext):
         
         keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_icon")])
         keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_icon")])
-        # Убрали кнопку "Назад" по требованию пользователя
+        keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_category_creation")])
         
         await send_message_with_cleanup(
             message, state,
@@ -327,6 +328,9 @@ async def set_category_icon(callback: types.CallbackQuery, state: FSMContext):
 @router.callback_query(lambda c: c.data == "edit_categories")
 async def edit_categories_list(callback: types.CallbackQuery, state: FSMContext):
     """Показать список категорий для редактирования"""
+    # Очищаем состояние при возврате к списку категорий для редактирования
+    await state.clear()
+    
     user_id = callback.from_user.id
     categories = await get_user_categories(user_id)
     
@@ -615,3 +619,12 @@ async def cancel_category(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.delete()
     # Передаем callback вместо callback.message после удаления
     await show_categories_menu(callback, state)
+
+
+@router.callback_query(lambda c: c.data == "cancel_category_creation")
+async def cancel_category_creation(callback: types.CallbackQuery, state: FSMContext):
+    """Отмена создания категории"""
+    await state.clear()
+    await callback.message.delete()
+    await show_categories_menu(callback, state)
+    await callback.answer()

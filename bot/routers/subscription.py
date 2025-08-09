@@ -77,6 +77,7 @@ async def get_subscription_info_text(profile: Profile) -> str:
     ).order_by('-end_date').afirst()
     
     if active_subscription:
+        # Вычисляем оставшиеся дни (только полные дни)
         days_left = (active_subscription.end_date - timezone.now()).days
         subscription_type = active_subscription.get_type_display()
         

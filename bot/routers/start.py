@@ -46,17 +46,20 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
         language_code=message.from_user.language_code
     )
     
+    # Проверяем, новый ли это пользователь (по наличию подписок)
+    is_new_user = not await Subscription.objects.filter(profile=profile).aexists()
+    
     # Обновляем язык профиля если он не установлен или отличается
     if profile.language_code != display_lang:
         profile.language_code = display_lang
         await profile.asave()
     
     # Создаем базовые категории для нового пользователя
-    created = await create_default_categories(user_id)
+    categories_created = await create_default_categories(user_id)
     
     # Обработка реферальной ссылки для новых пользователей
     referral_message = ""
-    if created and referral_code:
+    if is_new_user and referral_code:
         try:
             # Находим реферера по коду
             referrer = await Profile.objects.filter(referral_code=referral_code).afirst()
@@ -80,8 +83,8 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
         end_date__gt=timezone.now()
     ).aexists()
     
-    # Если нет подписки, создаем пробный период на 7 дней
-    if not has_subscription and created:  # created = True означает, что это новый пользователь
+    # Если нет подписки и это новый пользователь, создаем пробный период на 7 дней
+    if not has_subscription and is_new_user:
         trial_end = timezone.now() + timedelta(days=7)
         await Subscription.objects.acreate(
             profile=profile,
@@ -92,6 +95,7 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
             end_date=trial_end,
             is_active=True
         )
+        logger.info(f"Created trial subscription for new user {user_id}")
     
     # Обновляем команды бота для пользователя
     await update_user_commands(message.bot, user_id)

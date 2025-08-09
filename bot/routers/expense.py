@@ -904,10 +904,16 @@ async def delete_expense(callback: types.CallbackQuery):
 @router.callback_query(lambda c: c.data == "edit_field_amount", EditExpenseForm.choosing_field)
 async def edit_field_amount(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Редактирование суммы"""
+    data = await state.get_data()
+    expense_id = data.get('editing_expense_id')
+    
     await callback.message.edit_text(
         f"💰 <b>{get_text('editing_amount', lang)}</b>\n\n"
         f"{get_text('enter_new_amount', lang)}",
-        parse_mode="HTML"
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_back_{expense_id}")]
+        ])
     )
     await state.set_state(EditExpenseForm.editing_amount)
     await callback.answer()
@@ -916,10 +922,16 @@ async def edit_field_amount(callback: types.CallbackQuery, state: FSMContext, la
 @router.callback_query(lambda c: c.data == "edit_field_description", EditExpenseForm.choosing_field)
 async def edit_field_description(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Редактирование описания"""
+    data = await state.get_data()
+    expense_id = data.get('editing_expense_id')
+    
     await callback.message.edit_text(
         f"📝 <b>{get_text('editing_description', lang)}</b>\n\n"
         f"{get_text('enter_new_description', lang)}",
-        parse_mode="HTML"
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_back_{expense_id}")]
+        ])
     )
     await state.set_state(EditExpenseForm.editing_description)
     await callback.answer()
@@ -932,6 +944,10 @@ async def edit_field_category(callback: types.CallbackQuery, state: FSMContext, 
     from ..services.category import get_user_categories
     
     categories = await get_user_categories(user_id)
+    
+    if not categories:
+        await callback.answer("У вас нет категорий. Создайте их через /categories", show_alert=True)
+        return
     
     keyboard_buttons = []
     # Группируем категории по 2 в строке
@@ -947,11 +963,11 @@ async def edit_field_category(callback: types.CallbackQuery, state: FSMContext, 
             ))
         keyboard_buttons.append(row)
     
-    keyboard_buttons.append([InlineKeyboardButton(text=get_text('cancel', lang), callback_data="edit_cancel")])
+    keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="edit_cancel")])
     
     await callback.message.edit_text(
-        f"📁 <b>{get_text('choose_new_category', lang)}</b>:\n\n"
-        f"<i>{get_text('learning_message', lang)}</i>",
+        f"📁 <b>Выберите новую категорию</b>:\n\n"
+        f"<i>Бот запомнит ваш выбор для похожих трат</i>",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons),
         parse_mode="HTML"
     )
@@ -962,15 +978,25 @@ async def edit_field_category(callback: types.CallbackQuery, state: FSMContext, 
 @router.callback_query(lambda c: c.data == "edit_cancel")
 async def edit_cancel(callback: types.CallbackQuery, state: FSMContext):
     """Отмена редактирования категории"""
-    # Возвращаемся к меню редактирования траты
+    # Проверяем, откуда пришли - из редактирования траты или из управления категориями
     data = await state.get_data()
     expense_id = data.get('editing_expense_id')
     
     if expense_id:
+        # Возвращаемся к меню редактирования траты
         await show_edit_menu_callback(callback, state, expense_id)
     else:
+        # Если это было управление категориями, просто удаляем сообщение
         await callback.message.delete()
         await state.clear()
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data.startswith("edit_back_"))
+async def edit_back_to_menu(callback: types.CallbackQuery, state: FSMContext):
+    """Возврат к меню редактирования траты"""
+    expense_id = int(callback.data.split("_")[-1])
+    await show_edit_menu_callback(callback, state, expense_id)
     await callback.answer()
 
 
