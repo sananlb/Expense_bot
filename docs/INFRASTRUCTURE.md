@@ -1,8 +1,10 @@
 # Инфраструктура проекта expense_bot
 
-## Сервер
+## Production Server
 - **IP:** 80.66.87.178
+- **Domain:** expensebot.duckdns.org
 - **OS:** Ubuntu 22.04.5 LTS
+- **Path:** /home/batman/expense_bot
 - **Hostname:** vm977127
 - **Пользователи:**
   - root (доступ отключен через SSH)
@@ -24,13 +26,43 @@
 - `database/` (данные БД)
 - `requirements.txt`
 
-## Docker контейнеры
-- **expense_bot_db** (PostgreSQL 15-alpine) - работает
-- **expense_bot_redis** (Redis 7-alpine) - работает  
-- **expense_bot_app** (основной бот) - работает
-- **expense_bot_celery** - работает
-- **expense_bot_celery_beat** - работает
-- **expense_bot_web** (Django admin) - работает
+## Infrastructure
+
+### Docker Containers
+- **expense_bot_web:** Django admin (port 8000)
+- **expense_bot_app:** Telegram bot
+- **expense_bot_celery:** Background tasks
+- **expense_bot_celery_beat:** Scheduled tasks
+- **expense_bot_db:** PostgreSQL 15
+- **expense_bot_redis:** Redis cache
+
+### Web Server
+- Nginx 1.18.0 with SSL (Let's Encrypt)
+- Reverse proxy to Django on localhost:8000
+- Static files served directly from /home/batman/expense_bot/staticfiles/
+
+### Database
+- PostgreSQL 15 (Alpine)
+- Database: expense_bot
+- User: batman
+- Container: expense_bot_db
+
+### Admin Panel
+- URL: https://expensebot.duckdns.org/admin/
+- Superuser: admin/batman
+
+### Deployment
+Standard update process:
+```bash
+cd /home/batman/expense_bot && \
+docker-compose down && \
+git fetch --all && \
+git reset --hard origin/master && \
+git pull origin master && \
+docker-compose build --no-cache && \
+docker-compose up -d --force-recreate && \
+docker image prune -f
+```
 
 ## Текущий статус
 - Контейнеры успешно перезапущены
@@ -110,9 +142,11 @@ file docker-entrypoint.sh
 
 ## Сетевая конфигурация
 - **SSH порт:** 22 (доступ только по ключу)
-- **HTTP порт:** 80 (Nginx)
-- **HTTPS порт:** 443 (Nginx)
+- **HTTP порт:** 80 (Nginx, redirect to HTTPS)
+- **HTTPS порт:** 443 (Nginx with Let's Encrypt SSL)
 - **Django admin:** 8000 (внутренний порт контейнера)
+- **Domain:** expensebot.duckdns.org
+- **Admin URL:** https://expensebot.duckdns.org/admin/
 
 ## Мониторинг и логирование
 - **Логи Docker:** `docker-compose logs`
