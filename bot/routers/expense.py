@@ -575,19 +575,21 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     
     user_id = message.from_user.id
     
-    # Отправляем "печатает..."
-    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+    # Создаем задачу для отправки индикатора "печатает..." с задержкой 2 секунды
+    typing_task = None
+    async def delayed_typing():
+        await asyncio.sleep(2.0)  # Задержка 2 секунды
+        await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        # Планируем повторную отправку через 4 секунды
+        while True:
+            await asyncio.sleep(4.0)
+            try:
+                await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+            except:
+                break
     
-    # Планируем второй "печатает..." через 4 секунды (как в nutrition_bot)
-    async def send_typing_again():
-        await asyncio.sleep(4)
-        try:
-            await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
-        except:
-            pass  # Игнорируем ошибки если чат уже недоступен
-    
-    # Запускаем асинхронную задачу для повторной отправки
-    asyncio.create_task(send_typing_again())
+    # Запускаем задачу
+    typing_task = asyncio.create_task(delayed_typing())
     
     # Если текст не передан явно, берем из сообщения
     if text is None:

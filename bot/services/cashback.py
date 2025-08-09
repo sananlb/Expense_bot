@@ -193,7 +193,7 @@ def calculate_expense_cashback(user_id: int, category_id: int, amount: Decimal, 
 
 
 def format_cashback_note(cashbacks: List[Cashback], month: int) -> str:
-    """Форматировать красивую заметку о кешбэках согласно ТЗ"""
+    """Форматировать красивую заметку о кешбэках с группировкой по банкам"""
     month_names = {
         1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
         5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
@@ -202,28 +202,41 @@ def format_cashback_note(cashbacks: List[Cashback], month: int) -> str:
     
     text = f"💳 <b>Кешбэки на {month_names[month]}</b>\n\n"
     
-    # Выводим каждый кешбэк отдельно
+    # Группируем кешбэки по банкам
+    banks_dict = {}
     for cb in cashbacks:
-        # Формат: Описание (Категория) - Банк 7%
-        if cb.description:
-            if cb.category:
-                text += f"{cb.description} ({cb.category.name}) - "
-            else:
-                text += f"{cb.description} (Все категории) - "
-        else:
-            if cb.category:
-                text += f"{cb.category.name} - "
-            else:
-                text += f"🌐 Все категории - "
-        
-        text += f"{cb.bank_name} {cb.cashback_percent}%"
-        
-        if cb.limit_amount:
-            text += f" (лимит {cb.limit_amount:,.0f} руб)"
-        
-        text += "\n\n"
+        if cb.bank_name not in banks_dict:
+            banks_dict[cb.bank_name] = []
+        banks_dict[cb.bank_name].append(cb)
     
-    return text
+    # Выводим по банкам
+    for bank_name, bank_cashbacks in banks_dict.items():
+        text += f"<b>{bank_name}</b>\n"
+        
+        for cb in bank_cashbacks:
+            # Форматируем процент без лишних нулей
+            percent_str = f"{cb.cashback_percent:.1f}".rstrip('0').rstrip('.')
+            
+            # Формат: Категория (описание) - процент%
+            if cb.category:
+                text += f"• {cb.category.name}"
+                if cb.description:
+                    text += f" ({cb.description})"
+            else:
+                text += f"• 🌐 Все категории"
+                if cb.description:
+                    text += f" ({cb.description})"
+            
+            text += f" - {percent_str}%"
+            
+            if cb.limit_amount:
+                text += f" (лимит {cb.limit_amount:,.0f} ₽)"
+            
+            text += "\n"
+        
+        text += "\n"  # Пустая строка между банками
+    
+    return text.rstrip()  # Убираем лишний перенос в конце
 
 
 # Старые функции для совместимости
