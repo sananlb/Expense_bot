@@ -708,12 +708,3 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
         f"Спасибо за поддержку проекта! 🙏",
         parse_mode="HTML"
     )
-    
-    # Показываем кнопку закрыть
-    builder = InlineKeyboardBuilder()
-    builder.button(text="❌ Закрыть", callback_data="close")
-    
-    await message.answer(
-        "Что дальше?",
-        reply_markup=builder.as_markup()
-    )
