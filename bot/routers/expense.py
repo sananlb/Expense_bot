@@ -117,10 +117,7 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
             other_amount = {}
             for i, cat in enumerate(summary['categories']):
                 if i < 8 and cat['amount'] > 0:
-                    # Для процентов используем сумму в валюте категории
-                    currency_total = summary.get('currency_totals', {}).get(cat['currency'], 0)
-                    percent = (float(cat['amount']) / float(currency_total)) * 100 if currency_total > 0 else 0
-                    text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])} ({percent:.1f}%)"
+                    text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])}"
                 elif i >= 8 and cat['amount'] > 0:
                     # Суммируем остальные категории по валютам
                     curr = cat['currency']
@@ -131,9 +128,7 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
             # Добавляем "Остальные расходы" если есть
             if other_amount:
                 for curr, amount in other_amount.items():
-                    currency_total = summary.get('currency_totals', {}).get(curr, 0)
-                    percent = (float(amount) / float(currency_total)) * 100 if currency_total > 0 else 0
-                    text += f"\n📊 Остальные расходы: {format_currency(amount, curr)} ({percent:.1f}%)"
+                    text += f"\n📊 Остальные расходы: {format_currency(amount, curr)}"
         
         # Добавляем потенциальный кешбэк только если он больше 0
         cashback = await calculate_potential_cashback(user_id, start_date, today)
@@ -220,10 +215,7 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
             other_amount = {}
             for i, cat in enumerate(summary['categories']):
                 if i < 8 and cat['amount'] > 0:
-                    # Для процентов используем сумму в валюте категории
-                    currency_total = summary.get('currency_totals', {}).get(cat['currency'], 0)
-                    percent = (float(cat['amount']) / float(currency_total)) * 100 if currency_total > 0 else 0
-                    text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])} ({percent:.1f}%)"
+                    text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])}"
                 elif i >= 8 and cat['amount'] > 0:
                     # Суммируем остальные категории по валютам
                     curr = cat['currency']
@@ -234,9 +226,7 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
             # Добавляем "Остальные расходы" если есть
             if other_amount:
                 for curr, amount in other_amount.items():
-                    currency_total = summary.get('currency_totals', {}).get(curr, 0)
-                    percent = (float(amount) / float(currency_total)) * 100 if currency_total > 0 else 0
-                    text += f"\n📊 Остальные расходы: {format_currency(amount, curr)} ({percent:.1f}%)"
+                    text += f"\n📊 Остальные расходы: {format_currency(amount, curr)}"
         
         # Добавляем потенциальный кешбэк
         start_date = date(prev_year, prev_month, 1)
@@ -1008,11 +998,26 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext):
             profile__telegram_id=callback.from_user.id
         )
         
+        # Рассчитываем кешбек если есть подписка
+        cashback_text = ""
+        has_subscription = await check_subscription(callback.from_user.id)
+        if has_subscription and expense.category:
+            current_month = datetime.now().month
+            cashback = await calculate_expense_cashback(
+                user_id=callback.from_user.id,
+                category_id=expense.category.id,
+                amount=expense.amount,
+                month=current_month
+            )
+            if cashback > 0:
+                cashback_text = f" (+{cashback:.0f} ₽)"
+        
         # Используем единый формат сообщения
         from ..utils.expense_messages import format_expense_added_message
         message_text = await format_expense_added_message(
             expense=expense,
-            category=expense.category
+            category=expense.category,
+            cashback_text=cashback_text
         )
         
         # Редактируем сообщение с кнопками редактирования
@@ -1211,10 +1216,25 @@ async def show_updated_expense(message: types.Message, state: FSMContext, expens
             profile__telegram_id=message.from_user.id
         )
         
+        # Рассчитываем кешбек если есть подписка
+        cashback_text = ""
+        has_subscription = await check_subscription(message.from_user.id)
+        if has_subscription and expense.category:
+            current_month = datetime.now().month
+            cashback = await calculate_expense_cashback(
+                user_id=message.from_user.id,
+                category_id=expense.category.id,
+                amount=expense.amount,
+                month=current_month
+            )
+            if cashback > 0:
+                cashback_text = f" (+{cashback:.0f} ₽)"
+        
         # Формируем сообщение с информацией о потраченном за день
         message_text = await format_expense_added_message(
             expense=expense,
-            category=expense.category
+            category=expense.category,
+            cashback_text=cashback_text
         )
         
         await send_message_with_cleanup(message, state,
@@ -1244,10 +1264,25 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
             profile__telegram_id=callback.from_user.id
         )
         
+        # Рассчитываем кешбек если есть подписка
+        cashback_text = ""
+        has_subscription = await check_subscription(callback.from_user.id)
+        if has_subscription and expense.category:
+            current_month = datetime.now().month
+            cashback = await calculate_expense_cashback(
+                user_id=callback.from_user.id,
+                category_id=expense.category.id,
+                amount=expense.amount,
+                month=current_month
+            )
+            if cashback > 0:
+                cashback_text = f" (+{cashback:.0f} ₽)"
+        
         # Формируем сообщение с информацией о потраченном за день
         message_text = await format_expense_added_message(
             expense=expense,
-            category=expense.category
+            category=expense.category,
+            cashback_text=cashback_text
         )
         
         await callback.message.edit_text(
