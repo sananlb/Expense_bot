@@ -15,6 +15,7 @@ import logging
 
 from expenses.models import Profile, Subscription, PromoCode, PromoCodeUsage, ReferralBonus
 from bot.utils.message_utils import send_message_with_cleanup
+from bot.utils import get_text
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ def get_subscription_keyboard():
     return builder.as_markup()
 
 
-async def get_subscription_info_text(profile: Profile) -> str:
+async def get_subscription_info_text(profile: Profile, lang: str = 'ru') -> str:
     """Получить текст с информацией о подписке"""
     # Проверяем активную подписку
     active_subscription = await profile.subscriptions.filter(
@@ -97,19 +98,13 @@ async def get_subscription_info_text(profile: Profile) -> str:
         )
     else:
         return (
-            "❌ <b>У вас нет активной подписки</b>\n\n"
-            "С подпиской вы получаете:\n"
-            "• Голосовой ввод расходов\n"
-            "• Редактирование категорий\n"
-            "• Управление кешбэками\n"
-            "• Экспорт отчетов в PDF\n"
-            "• Неограниченное количество трат\n\n"
-            "Выберите подходящий план:"
+            f"<b>{get_text('no_active_subscription', lang)}</b>\n\n"
+            f"{get_text('subscription_benefits', lang)}"
         )
 
 
 @router.callback_query(F.data == "menu_subscription")
-async def show_subscription_menu(callback: CallbackQuery, state: FSMContext):
+async def show_subscription_menu(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать меню подписки"""
     # Получаем сохраненные ID сообщений
     data = await state.get_data()
@@ -141,7 +136,7 @@ async def show_subscription_menu(callback: CallbackQuery, state: FSMContext):
     
     profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
     
-    text = await get_subscription_info_text(profile)
+    text = await get_subscription_info_text(profile, lang)
     
     # Отправляем новое сообщение с меню подписки
     await send_message_with_cleanup(
@@ -225,11 +220,11 @@ async def process_subscription_purchase(callback: CallbackQuery, state: FSMConte
 
 
 @router.message(Command("subscription"))
-async def cmd_subscription(message: Message, state: FSMContext):
+async def cmd_subscription(message: Message, state: FSMContext, lang: str = 'ru'):
     """Команда для просмотра подписки"""
     profile = await Profile.objects.aget(telegram_id=message.from_user.id)
     
-    text = await get_subscription_info_text(profile)
+    text = await get_subscription_info_text(profile, lang)
     
     await send_message_with_cleanup(
         message, 
@@ -285,7 +280,7 @@ async def process_promocode(message: Message, state: FSMContext):
             )
             await state.clear()
             # Показываем меню подписки
-            text = await get_subscription_info_text(profile)
+            text = await get_subscription_info_text(profile, lang)
             await send_message_with_cleanup(
                 message, 
                 state,
@@ -304,7 +299,7 @@ async def process_promocode(message: Message, state: FSMContext):
             )
             await state.clear()
             # Показываем меню подписки
-            text = await get_subscription_info_text(profile)
+            text = await get_subscription_info_text(profile, lang)
             await send_message_with_cleanup(
                 message, 
                 state,
@@ -328,7 +323,7 @@ async def process_promocode(message: Message, state: FSMContext):
             )
             await state.clear()
             # Показываем меню подписки
-            text = await get_subscription_info_text(profile)
+            text = await get_subscription_info_text(profile, lang)
             await send_message_with_cleanup(
                 message, 
                 state,

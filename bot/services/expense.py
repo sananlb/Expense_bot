@@ -151,7 +151,9 @@ def get_expenses_summary(
             'potential_cashback': Decimal
         }
     """
+    logger.info(f"get_expenses_summary called: user_id={user_id}, start={start_date}, end={end_date}")
     profile = get_or_create_user_profile_sync(user_id)
+    logger.info(f"Profile found/created: {profile.id} for telegram_id={profile.telegram_id}")
     
     try:
         expenses = Expense.objects.filter(
@@ -159,6 +161,7 @@ def get_expenses_summary(
             expense_date__gte=start_date,
             expense_date__lte=end_date
         )
+        logger.info(f"Query: profile={profile.id}, date>={start_date}, date<={end_date}, found={expenses.count()} expenses")
         
         # Общая сумма и количество
         total = expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0')
@@ -180,7 +183,7 @@ def get_expenses_summary(
             categories_list.append({
                 'id': cat['category__id'],
                 'name': cat['category__name'] or 'Без категории',
-                'icon': cat['category__icon'] or '💰',
+                'icon': cat['category__icon'] or '',
                 'total': cat['total'],
                 'count': cat['count']
             })
@@ -227,7 +230,6 @@ def get_expenses_summary(
             'potential_cashback': potential_cashback
         }
         
-        pass
     except Exception as e:
         logger.error(f"Error getting expenses summary: {e}")
         return {

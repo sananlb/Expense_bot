@@ -128,10 +128,8 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
     """Обработать сообщение как чат"""
     user_id = message.from_user.id
     
-    # Сначала проверяем, не запрос ли это дневника трат
-    diary_result = await check_and_process_diary_request(message, state, text)
-    if diary_result:
-        return  # Запрос дневника обработан
+    # УБРАНО: Больше не проверяем запросы дневника трат
+    # Все сообщения идут через AI
     
     # Проверяем подписку для AI чата (включая пробный период)
     has_subscription = await check_subscription(user_id, include_trial=True)
@@ -267,63 +265,11 @@ async def get_simple_response(text: str, user_id: int) -> str:
                "например 'Кофе 200' или спросите о ваших тратах.")
 
 
-async def check_and_process_diary_request(message: types.Message, state: FSMContext, text: str) -> bool:
-    """Проверить и обработать запрос дневника трат"""
-    text_lower = text.lower()
-    
-    # Ключевые слова для дневника трат
-    diary_keywords = ['дневник', 'траты за', 'расходы за', 'покажи траты', 'показать траты', 
-                      'потратил за', 'сколько потратил']
-    
-    # Проверяем наличие ключевых слов
-    is_diary_request = any(keyword in text_lower for keyword in diary_keywords)
-    
-    if not is_diary_request:
-        return False
-    
-    # Пытаемся распознать даты в тексте
-    dates = await parse_dates_from_text(text)
-    
-    if dates:
-        # Если даты найдены - показываем дневник за указанный период
-        start_date, end_date = dates
-        lang = 'ru'  # TODO: получить язык пользователя
-        
-        await show_expenses_summary(
-            message=message,
-            start_date=start_date,
-            end_date=end_date,
-            lang=lang
-        )
-        return True
-    
-    # Если даты не распознаны, но есть ключевые слова - используем простые периоды
-    if 'вчера' in text_lower:
-        yesterday = datetime.now().date() - timedelta(days=1)
-        await show_expenses_summary(message, yesterday, yesterday, 'ru')
-        return True
-    elif 'неделю' in text_lower or 'недели' in text_lower:
-        today = datetime.now().date()
-        week_start = today - timedelta(days=today.weekday())
-        await show_expenses_summary(message, week_start, today, 'ru')
-        return True
-    elif 'месяц' in text_lower and ('прошлый' in text_lower or 'прошлого' in text_lower):
-        today = datetime.now().date()
-        if today.month == 1:
-            prev_month = 12
-            prev_year = today.year - 1
-        else:
-            prev_month = today.month - 1
-            prev_year = today.year
-        
-        start_date = datetime(prev_year, prev_month, 1).date()
-        _, last_day = monthrange(prev_year, prev_month)
-        end_date = datetime(prev_year, prev_month, last_day).date()
-        
-        await show_expenses_summary(message, start_date, end_date, 'ru')
-        return True
-    
-    return False
+# ФУНКЦИЯ ОТКЛЮЧЕНА - весь чат идет через AI
+# async def check_and_process_diary_request(message: types.Message, state: FSMContext, text: str) -> bool:
+#     """Проверить и обработать запрос дневника трат"""
+#     # Эта функция больше не используется - все запросы обрабатываются через AI
+#     return False
 
 
 async def parse_dates_from_text(text: str) -> Optional[tuple[datetime.date, datetime.date]]:

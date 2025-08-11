@@ -35,12 +35,12 @@ class RecurringForm(StatesGroup):
 
 
 @router.message(Command("recurring"))
-async def cmd_recurring(message: types.Message, state: FSMContext):
+async def cmd_recurring(message: types.Message, state: FSMContext, lang: str = 'ru'):
     """Команда /recurring - управление регулярными платежами"""
-    await show_recurring_menu(message, state)
+    await show_recurring_menu(message, state, lang)
 
 
-async def show_recurring_menu(message: types.Message | types.CallbackQuery, state: FSMContext):
+async def show_recurring_menu(message: types.Message | types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать меню регулярных платежей"""
     # Получаем user_id в зависимости от типа сообщения
     if isinstance(message, types.CallbackQuery):
@@ -51,7 +51,7 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
     # Получаем регулярные платежи пользователя
     payments = await get_user_recurring_payments(user_id)
     
-    text = "🔄 <b>Регулярные платежи</b>"
+    text = f"<b>{get_text('recurring_payments', lang)}</b>"
     
     if payments:
         # Сортируем платежи: активные сначала, приостановленные в конце
@@ -62,41 +62,36 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
         for payment in sorted_payments:
             status = "✅" if payment.is_active else "⏸"
             text += f"\n\n{status} <b>{payment.description}</b>\n"
-            text += f"Сумма: <i>{format_currency(payment.amount, 'RUB')}</i>\n"
-            text += f"Дата: <i>{payment.day_of_month} число месяца</i>\n"
-            text += f"Категория: <i>{payment.category.name}</i>"
+            text += f"{get_text('recurring_amount', lang)}: <i>{format_currency(payment.amount, 'RUB')}</i>\n"
+            text += f"{get_text('recurring_date', lang)}: <i>{get_text('day_of_month', lang).format(day=payment.day_of_month)}</i>\n"
+            text += f"{get_text('recurring_category', lang)}: <i>{payment.category.name}</i>"
     else:
-        text += "\n\nУ вас пока нет регулярных платежей."
+        text += f"\n\n{get_text('no_recurring_payments', lang)}"
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➕ Добавить", callback_data="add_recurring")],
-        [InlineKeyboardButton(text="✏️ Редактировать", callback_data="edit_recurring")],
-        [InlineKeyboardButton(text="➖ Удалить", callback_data="delete_recurring")],
-        [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
+        [InlineKeyboardButton(text=get_text('add_recurring', lang), callback_data="add_recurring")],
+        [InlineKeyboardButton(text=get_text('edit_recurring', lang), callback_data="edit_recurring")],
+        [InlineKeyboardButton(text=get_text('delete_recurring', lang), callback_data="delete_recurring")],
+        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
     ])
     
     await send_message_with_cleanup(message, state, text, reply_markup=keyboard, parse_mode="HTML")
 
 
 @router.callback_query(lambda c: c.data == "recurring_menu")
-async def callback_recurring_menu(callback: types.CallbackQuery, state: FSMContext):
+async def callback_recurring_menu(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать меню регулярных платежей через callback"""
-    await show_recurring_menu(callback, state)
+    await show_recurring_menu(callback, state, lang)
     await callback.answer()
 
 
 @router.callback_query(lambda c: c.data == "add_recurring")
-async def add_recurring_start(callback: types.CallbackQuery, state: FSMContext):
+async def add_recurring_start(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Начало добавления регулярного платежа"""
     await callback.message.edit_text(
-        "➕ <b>Добавление регулярного платежа</b>\n\n"
-        "Отправьте сумму или название и сумму:\n\n"
-        "Примеры:\n"
-        "• <i>50000</i> - только сумма\n"
-        "• <i>Квартира 50000</i> - название и сумма\n\n"
-        "Если вы не укажете название, оно будет создано автоматически из категории.",
+        f"<b>{get_text('add_recurring_payment', lang)}</b>\n\n{get_text('recurring_payment_hint', lang)}",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Отмена", callback_data="recurring_menu")]
+            [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="recurring_menu")]
         ]),
         parse_mode="HTML"
     )
@@ -124,7 +119,9 @@ async def process_description(message: types.Message, state: FSMContext):
     await state.update_data(description=description, amount=amount)
     
     # Теперь сразу показываем выбор категории
-    await show_category_selection(message, state)
+    data = await state.get_data()
+    lang = data.get('lang', 'ru')
+    await show_category_selection(message, state, lang)
 
 
 # Удалены обработчики для суммы - теперь сумма вводится вместе с названием
@@ -159,7 +156,7 @@ async def show_category_selection(message: types.Message, state: FSMContext):
             ))
         keyboard_buttons.append(row)
     
-    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="recurring_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")])
     
     if isinstance(message, types.CallbackQuery):
         await message.message.edit_text(
@@ -176,7 +173,7 @@ async def show_category_selection(message: types.Message, state: FSMContext):
 
 
 @router.callback_query(lambda c: c.data.startswith("recurring_cat_"), RecurringForm.waiting_for_category)
-async def process_category(callback: types.CallbackQuery, state: FSMContext):
+async def process_category(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Обработка выбора категории"""
     category_id = int(callback.data.split("_")[-1])
     await state.update_data(category_id=category_id)
@@ -192,16 +189,15 @@ async def process_category(callback: types.CallbackQuery, state: FSMContext):
             if i + j < len(popular_days):
                 day = popular_days[i + j]
                 row.append(InlineKeyboardButton(
-                    text=f"{day} число", 
+                    text=get_text('day_number', lang).format(day=day), 
                     callback_data=f"recurring_day_{day}"
                 ))
         keyboard_buttons.append(row)
     
-    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="recurring_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")])
     
     await callback.message.edit_text(
-        "📅 В какой день месяца записывать платеж?\n\n"
-        "Выберите из списка или введите число от 1 до 30:",
+        get_text('choose_payment_day', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
     
@@ -236,8 +232,8 @@ async def process_day_button(callback: types.CallbackQuery, state: FSMContext):
             pass
         
         # Показываем меню регулярных платежей
-        await show_recurring_menu(callback, state)
-        await callback.answer("✅ Регулярный платеж добавлен")
+        await show_recurring_menu(callback, state, lang)
+        await callback.answer(get_text('recurring_payment_added', lang))
     except Exception as e:
         await callback.answer(f"Ошибка: {str(e)}", show_alert=True)
         await state.clear()
@@ -256,7 +252,9 @@ async def process_day_text(message: types.Message, state: FSMContext):
         day = int(message.text.strip())
         
         if day < 1 or day > 30:
-            await send_message_with_cleanup(message, state, "❌ День должен быть от 1 до 30")
+            data = await state.get_data()
+            lang = data.get('lang', 'ru')
+            await send_message_with_cleanup(message, state, get_text('day_should_be_1_30', lang))
             return
         
         # Создаем регулярный платеж
@@ -273,7 +271,9 @@ async def process_day_text(message: types.Message, state: FSMContext):
         await show_recurring_menu(message, state)
         
     except ValueError:
-        await send_message_with_cleanup(message, state, "❌ Введите число от 1 до 30")
+        data = await state.get_data()
+        lang = data.get('lang', 'ru')
+        await send_message_with_cleanup(message, state, get_text('enter_day_1_30', lang))
 
 
 @router.callback_query(lambda c: c.data == "edit_recurring")
@@ -302,7 +302,7 @@ async def edit_recurring_list(callback: types.CallbackQuery, state: FSMContext):
             )
         ])
     
-    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="recurring_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")])
     
     await callback.message.edit_text(
         "✏️ Выберите платеж для редактирования:",
@@ -439,7 +439,7 @@ async def delete_recurring_list(callback: types.CallbackQuery, state: FSMContext
             )
         ])
     
-    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="recurring_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")])
     
     await callback.message.edit_text(
         "🗑 Выберите платеж для удаления:",

@@ -11,7 +11,7 @@ from datetime import date
 import asyncio
 import logging
 
-from ..services.expense import get_today_summary, add_expense
+from ..services.expense import add_expense, get_month_summary
 from ..services.cashback import calculate_potential_cashback
 from ..services.category import get_or_create_category
 from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect
@@ -21,6 +21,7 @@ from ..utils.formatters import format_currency, format_expenses_summary, format_
 from ..utils.validators import validate_amount, parse_description_amount
 from ..utils.expense_messages import format_expense_added_message
 from ..decorators import require_subscription, rate_limit
+from ..keyboards import expenses_summary_keyboard
 from expenses.models import Profile
 
 router = Router(name="expense")
@@ -44,62 +45,24 @@ class EditExpenseForm(StatesGroup):
 @router.message(Command("expenses"))
 async def cmd_expenses(message: types.Message, state: FSMContext, lang: str = 'ru'):
     """Команда /expenses - показать траты за сегодня"""
-    user_id = message.from_user.id
     today = date.today()
     
-    # Получаем сводку за сегодня
-    summary = await get_today_summary(user_id)
+    # Перенаправляем на обработчик reports через callback
+    from ..routers.reports import callback_expenses_today
     
-    # Получаем название месяца
-    month_name = get_text(today.strftime('%B').lower(), lang)
+    # Создаем фейковый callback query для переиспользования логики
+    from aiogram.types import CallbackQuery
     
-    # Заголовок с датой
-    header = f"📊 <b>{today.strftime('%d')} {month_name}</b>\n\n"
-    
-    if not summary or (not summary.get('currency_totals') or all(v == 0 for v in summary.get('currency_totals', {}).values())):
-        text = header + f"💸 <b>Потрачено сегодня:</b>\n• {format_currency(0, summary.get('currency', 'RUB'))}\n\n{get_text('no_expenses_today', lang)}."
-    else:
-        # Показываем все валюты в разделе "Потрачено сегодня"
-        text = header + f"💸 <b>Потрачено сегодня:</b>\n"
-        currency_totals = summary.get('currency_totals', {})
-        for curr, amount in sorted(currency_totals.items()):
-            if amount > 0:
-                text += f"• {format_currency(amount, curr)}\n"
-        
-        # Показываем категории для всех валют
-        if summary.get('categories'):
-            text += f"\n📁 <b>{get_text('by_categories', lang)}:</b>"
-            # Добавляем топ-8 категорий
-            other_amount = {}
-            for i, cat in enumerate(summary['categories']):
-                if i < 8 and cat['amount'] > 0:
-                    text += f"\n{cat.get('icon', '💰')} {cat['name']}: {format_currency(cat['amount'], cat['currency'])}"
-                elif i >= 8 and cat['amount'] > 0:
-                    # Суммируем остальные категории по валютам
-                    curr = cat['currency']
-                    if curr not in other_amount:
-                        other_amount[curr] = 0
-                    other_amount[curr] += cat['amount']
-            
-            # Добавляем "Остальные расходы" если есть
-            if other_amount:
-                for curr, amount in other_amount.items():
-                    text += f"\n📊 Остальные расходы: {format_currency(amount, curr)}"
-        
-        # Добавляем потенциальный кешбэк
-        cashback = await calculate_potential_cashback(user_id, today, today)
-        text += f"\n\n💳 <b>{get_text('potential_cashback', lang)}:</b>\n• {format_currency(cashback, 'RUB')}"
-    
-    # Добавляем подсказку внизу курсивом
-    text += "\n\n<i>Показать отчет за другой период?</i>"
-    
-    # Кнопки навигации
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📅 С начала месяца", callback_data="expenses_month")],
-        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
-    ])
-    
-    await send_message_with_cleanup(message, state, text, reply_markup=keyboard, parse_mode="HTML")
+    # Просто вызываем show_expenses_summary напрямую
+    from ..routers.reports import show_expenses_summary
+    await show_expenses_summary(
+        message,
+        today,
+        today,
+        lang,
+        state=state,
+        edit=False
+    )
 
 
 @router.callback_query(lambda c: c.data == "expenses_month")
@@ -109,8 +72,6 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
     today = date.today()
     start_date = today.replace(day=1)
     
-    # Импортируем здесь чтобы избежать циклических импортов
-    from ..services.expense import get_month_summary
     
     # Получаем сводку за месяц
     summary = await get_month_summary(user_id, today.month, today.year)
@@ -174,9 +135,10 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
                     percent = (float(amount) / float(currency_total)) * 100 if currency_total > 0 else 0
                     text += f"\n📊 Остальные расходы: {format_currency(amount, curr)} ({percent:.1f}%)"
         
-        # Добавляем потенциальный кешбэк
+        # Добавляем потенциальный кешбэк только если он больше 0
         cashback = await calculate_potential_cashback(user_id, start_date, today)
-        text += f"\n\n💳 <b>Потенциальный кешбэк:</b>\n• {format_currency(cashback, 'RUB')}"
+        if cashback > 0:
+            text += f"\n\n💳 <b>Потенциальный кешбэк:</b>\n• {format_currency(cashback, 'RUB')}"
     
     # Добавляем подсказку внизу курсивом
     text += "\n\n<i>Показать отчет за другой период?</i>"
@@ -213,8 +175,6 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
         prev_month = current_month - 1
         prev_year = current_year
     
-    # Импортируем здесь чтобы избежать циклических импортов
-    from ..services.expense import get_month_summary
     
     # Получаем сводку за месяц
     summary = await get_month_summary(user_id, prev_month, prev_year)
@@ -285,7 +245,8 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
         end_date = date(prev_year, prev_month, last_day)
         
         cashback = await calculate_potential_cashback(user_id, start_date, end_date)
-        text += f"\n\n💳 <b>Потенциальный кешбэк:</b>\n• {format_currency(cashback, 'RUB')}"
+        if cashback > 0:
+            text += f"\n\n💳 <b>Потенциальный кешбэк:</b>\n• {format_currency(cashback, 'RUB')}"
     
     # Добавляем подсказку внизу курсивом
     text += "\n\n<i>Показать отчет за другой период?</i>"
@@ -453,10 +414,20 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
     from ..services.category import get_or_create_category
     from ..services.cashback import calculate_expense_cashback
     from ..services.subscription import check_subscription
+    from ..utils.expense_intent import is_show_expenses_request
     from datetime import datetime
     
     user_id = message.from_user.id
     text = message.text.strip()
+    
+    # УЛУЧШЕНИЕ: Используем единый модуль для проверки
+    is_show_request, confidence = is_show_expenses_request(text)
+    if is_show_request and confidence >= 0.7:
+        # Это команда показа трат, выходим из состояния и обрабатываем команду
+        await state.clear()
+        from ..routers.chat import process_chat_message
+        await process_chat_message(message, state, text)
+        return
     
     # Получаем сохраненное описание
     data = await state.get_data()
@@ -480,7 +451,11 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
     if not parsed_amount or not parsed_amount.get('amount'):
         await message.answer(
             "❌ Не удалось распознать сумму.\n"
-            "Пожалуйста, введите число (например: 750 или 10.50):"
+            "Пожалуйста, введите число (например: 750 или 10.50):\n\n"
+            "💡 Подсказка: Если хотите посмотреть траты, используйте команды:\n"
+            "• /expenses - траты за сегодня\n"
+            "• \"покажи траты вчера\" - траты за вчера\n"
+            "• \"траты за неделю\" - траты за неделю"
         )
         return
     
@@ -610,6 +585,16 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     if text is None:
         text = message.text
     
+    # НОВОЕ: Проверка на запрос показа трат ДО вызова AI парсера (экономия токенов)
+    from ..utils.expense_intent import is_show_expenses_request
+    is_show_request, confidence = is_show_expenses_request(text)
+    if is_show_request and confidence >= 0.7:
+        logger.info(f"Detected show expenses request: '{text}' (confidence: {confidence:.2f})")
+        cancel_typing()  # Отменяем индикатор печатания
+        from ..routers.chat import process_chat_message
+        await process_chat_message(message, state, text)
+        return
+    
     # Парсим сообщение с AI поддержкой
     from expenses.models import Profile
     try:
@@ -622,6 +607,15 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     logger.info(f"Parsing completed, result: {parsed!r}")
     
     if not parsed:
+        # Повторная проверка с использованием единого модуля (на случай если AI парсер не сработал)
+        is_show_request, show_confidence = is_show_expenses_request(text)
+        if is_show_request and show_confidence >= 0.6:
+            logger.info(f"Show expenses request detected after parsing failed: '{text}'")
+            cancel_typing()  # Отменяем индикатор печатания
+            from ..routers.chat import process_chat_message
+            await process_chat_message(message, state, text)
+            return
+        
         # Используем улучшенный классификатор для определения типа сообщения
         from ..utils.text_classifier import classify_message, get_expense_indicators
         
@@ -1083,6 +1077,68 @@ async def process_edit_category(callback: types.CallbackQuery, state: FSMContext
         await show_updated_expense_callback(callback, state, expense_id)
     else:
         await callback.answer("❌ Не удалось обновить категорию", show_alert=True)
+
+
+# Альтернативные обработчики БЕЗ привязки к состоянию
+# Срабатывают когда пользователь вернулся к редактированию после перехода в другое меню
+
+@router.callback_query(lambda c: c.data == "edit_field_amount")
+async def edit_amount_fallback(callback: types.CallbackQuery, state: FSMContext):
+    """Редактирование суммы когда состояние было сброшено"""
+    data = await state.get_data()
+    if data.get('editing_expense_id'):
+        await state.set_state(EditExpenseForm.choosing_field)
+        await edit_amount(callback, state)
+    else:
+        # Просто не реагируем, если нет контекста редактирования
+        await callback.answer()
+
+@router.callback_query(lambda c: c.data == "edit_field_description")
+async def edit_description_fallback(callback: types.CallbackQuery, state: FSMContext):
+    """Редактирование описания когда состояние было сброшено"""
+    data = await state.get_data()
+    if data.get('editing_expense_id'):
+        await state.set_state(EditExpenseForm.choosing_field)
+        await edit_description(callback, state)
+    else:
+        # Просто не реагируем, если нет контекста редактирования
+        await callback.answer()
+
+@router.callback_query(lambda c: c.data == "edit_field_category")
+async def edit_category_fallback(callback: types.CallbackQuery, state: FSMContext):
+    """Редактирование категории когда состояние было сброшено"""
+    data = await state.get_data()
+    if data.get('editing_expense_id'):
+        await state.set_state(EditExpenseForm.choosing_field)
+        await edit_category(callback, state)
+    else:
+        # Просто не реагируем, если нет контекста редактирования
+        await callback.answer()
+
+@router.callback_query(lambda c: c.data.startswith("expense_cat_"))
+async def process_edit_category_fallback(callback: types.CallbackQuery, state: FSMContext):
+    """Обработка выбора категории когда состояние было сброшено"""
+    data = await state.get_data()
+    expense_id = data.get('editing_expense_id')
+    
+    if not expense_id:
+        # Просто не реагируем, если нет контекста редактирования
+        await callback.answer()
+        return
+    
+    await state.set_state(EditExpenseForm.editing_category)
+    await process_edit_category(callback, state)
+
+@router.callback_query(lambda c: c.data == "edit_done")
+async def finish_edit_fallback(callback: types.CallbackQuery, state: FSMContext):
+    """Завершение редактирования когда состояние было сброшено"""
+    data = await state.get_data()
+    if data.get('editing_expense_id'):
+        await state.set_state(EditExpenseForm.choosing_field)
+        await finish_edit(callback, state)
+    else:
+        # Просто не реагируем, если нет контекста редактирования
+        await callback.answer()
 
 
 # Вспомогательная функция для показа меню редактирования

@@ -144,10 +144,9 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
     """Клавиатура для сводки расходов"""
     keyboard = InlineKeyboardBuilder()
     
-    # Кнопка дневника трат - добавляем для всех периодов
-    keyboard.button(text="📔 Дневник трат", callback_data="show_diary")
-    
+    # Кнопка дневника трат - добавляем только для периода 'today'
     if period == 'today':
+        keyboard.button(text="📋 Дневник трат", callback_data="show_diary")
         keyboard.button(text="📅 С начала месяца", callback_data="show_month_start")
     elif period == 'month' and show_pdf:
         # Для месячных отчетов показываем кнопку PDF
@@ -158,11 +157,11 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
     if period == 'today':
-        keyboard.adjust(1, 1, 1)  # 3 кнопки: дневник, с начала месяца, закрыть
+        keyboard.adjust(1, 1, 1)  # 3 кнопки по одной в ряд: дневник, с начала месяца, закрыть
     elif period == 'month' and show_pdf:
-        keyboard.adjust(1, 1, 1, 1)  # 4 кнопки по одной в ряд
+        keyboard.adjust(1, 1, 1)  # 3 кнопки по одной в ряд: PDF, предыдущий месяц, закрыть
     else:
-        keyboard.adjust(1, 1)  # Дневник и закрытия
+        keyboard.adjust(1)  # Только закрытие
     
     return keyboard.as_markup()
 

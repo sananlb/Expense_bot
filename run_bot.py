@@ -35,15 +35,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Для Windows устанавливаем UTF-8
-if platform.system() == 'Windows':
-    import locale
-    import codecs
-    # Устанавливаем UTF-8 для консоли
-    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
-    sys.stderr = codecs.getwriter('utf-8')(sys.stderr.buffer, 'strict')
-    os.system('chcp 65001 > nul 2>&1')
-
 
 def print_header():
     """Печать заголовка"""

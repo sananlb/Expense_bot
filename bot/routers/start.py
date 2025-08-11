@@ -28,10 +28,6 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
     """Обработка команды /start - показать информацию о боте"""
     user_id = message.from_user.id
     
-    # Определяем язык пользователя (если не русский, используем английский)
-    user_language_code = message.from_user.language_code or 'en'
-    display_lang = 'ru' if user_language_code.startswith('ru') else 'en'
-    
     # Проверяем, есть ли реферальный код в команде
     referral_code = None
     if command.args:
@@ -49,8 +45,16 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
     # Проверяем, новый ли это пользователь (по наличию подписок)
     is_new_user = not await Subscription.objects.filter(profile=profile).aexists()
     
-    # Обновляем язык профиля если он не установлен или отличается
-    if profile.language_code != display_lang:
+    # Определяем язык для отображения
+    # Если у пользователя уже есть сохраненный язык - используем его
+    # Если это новый пользователь - определяем по языку системы Telegram
+    if profile.language_code:
+        display_lang = profile.language_code
+    else:
+        # Для новых пользователей определяем язык по системному языку Telegram
+        user_language_code = message.from_user.language_code or 'en'
+        display_lang = 'ru' if user_language_code.startswith('ru') else 'en'
+        # Сохраняем язык только для новых пользователей
         profile.language_code = display_lang
         await profile.asave()
     

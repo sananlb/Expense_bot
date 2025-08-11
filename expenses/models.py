@@ -322,7 +322,8 @@ class Cashback(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.bank_name} - {self.category.name} - {self.cashback_percent}%"
+        category_name = self.category.name if self.category else "Без категории"
+        return f"{self.bank_name} - {category_name} - {self.cashback_percent}%"
 
 
 # Базовые категории для новых пользователей

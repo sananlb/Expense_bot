@@ -15,6 +15,7 @@ from bot.services.expense import get_expenses_summary, get_expenses_by_period, g
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ async def cmd_summary(message: Message, lang: str = 'ru'):
 
 
 @router.callback_query(F.data == "expenses_today")
-async def callback_expenses_today(callback: CallbackQuery, lang: str = 'ru'):
+async def callback_expenses_today(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать расходы за сегодня"""
     today = date.today()
     
@@ -41,14 +42,16 @@ async def callback_expenses_today(callback: CallbackQuery, lang: str = 'ru'):
         today,
         today,
         lang,
+        state=state,
         edit=True,
-        original_message=callback.message
+        original_message=callback.message,
+        callback=callback
     )
     await callback.answer()
 
 
 @router.callback_query(F.data == "show_month_start")
-async def callback_show_month_start(callback: CallbackQuery, lang: str = 'ru'):
+async def callback_show_month_start(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать расходы с начала месяца"""
     today = date.today()
     start_date = today.replace(day=1)
@@ -58,8 +61,10 @@ async def callback_show_month_start(callback: CallbackQuery, lang: str = 'ru'):
         start_date,
         today,
         lang,
+        state=state,
         edit=True,
-        original_message=callback.message
+        original_message=callback.message,
+        callback=callback
     )
     await callback.answer()
 
@@ -71,17 +76,32 @@ async def show_expenses_summary(
     start_date: date,
     end_date: date,
     lang: str,
+    state: FSMContext = None,
     edit: bool = False,
-    original_message: Message = None
+    original_message: Message = None,
+    callback: CallbackQuery = None
 ):
     """Показать сводку расходов за период"""
     try:
-        # Получаем данные
+        # Получаем данные - при edit берем user_id из callback
+        if callback:
+            user_id = callback.from_user.id
+        elif not edit:
+            user_id = message.from_user.id
+        else:
+            # Fallback - не должно происходить
+            logger.error("No callback provided for edit mode!")
+            user_id = message.chat.id
+        
+        logger.info(f"Getting expenses summary for user {user_id}, period: {start_date} to {end_date}")
+        
         summary = await get_expenses_summary(
-            telegram_id=message.from_user.id if not edit else original_message.from_user.id,
+            user_id=user_id,
             start_date=start_date,
             end_date=end_date
         )
+        
+        logger.info(f"Summary result: total={summary.get('total', 0)}, count={summary.get('count', 0)}, categories={len(summary.get('by_category', []))}")
         
         # Формируем текст
         if start_date == end_date:
@@ -109,7 +129,8 @@ async def show_expenses_summary(
                 text += f"📊 {get_text('by_categories', lang)}:\n"
                 for cat in summary['by_category'][:10]:  # Максимум 10 категорий
                     percentage = float(cat['total']) / float(summary['total']) * 100
-                    text += f"{cat['icon']} {cat['name']}: {format_amount(cat['total'], summary['currency'], lang)} ({percentage:.1f}%)\n"
+                    icon_text = f"{cat['icon']} " if cat.get('icon') else ""
+                    text += f"{icon_text}{cat['name']}: {format_amount(cat['total'], summary['currency'], lang)} ({percentage:.1f}%)\n"
                 
             # Потенциальный кешбэк
             if summary['potential_cashback'] > 0:
@@ -136,23 +157,17 @@ async def show_expenses_summary(
             period = 'custom'
             show_pdf = True
         
+        # Логирование для отладки
+        logger.info(f"Period determination: start_date={start_date}, end_date={end_date}, today={today}, is_today={is_today}, period={period}")
+        
         # Сохраняем даты в состоянии для генерации PDF
-        from aiogram.fsm.storage.base import StorageKey
-        storage_key = StorageKey(
-            bot_id=message.bot.id,
-            chat_id=message.chat.id if not edit else original_message.chat.id,
-            user_id=message.from_user.id if not edit else original_message.from_user.id
-        )
-        state = FSMContext(
-            storage=message.bot.fsm_storage,
-            key=storage_key
-        )
-        await state.update_data(
-            report_start_date=start_date,
-            report_end_date=end_date,
-            current_month=start_date.month if start_date.day == 1 else None,
-            current_year=start_date.year if start_date.day == 1 else None
-        )
+        if state:
+            await state.update_data(
+                report_start_date=start_date.isoformat(),
+                report_end_date=end_date.isoformat(),
+                current_month=start_date.month if start_date.day == 1 else None,
+                current_year=start_date.year if start_date.day == 1 else None
+            )
         
         # Отправляем или редактируем сообщение
         if edit and original_message:
@@ -172,7 +187,7 @@ async def show_expenses_summary(
         if edit and original_message:
             await original_message.edit_text(error_text)
         else:
-            await send_message_with_cleanup(message, state, error_text)
+            await message.answer(error_text)
 
 
 @router.message(Command("report"))
@@ -189,22 +204,49 @@ async def cmd_report(message: Message, lang: str = 'ru'):
 
 @router.callback_query(F.data == "show_diary")
 async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Показать дневник трат (последние 30 записей)"""
+    """Показать дневник трат (последние 2 дня, максимум 20 записей)"""
     try:
-        # Получаем последние 30 расходов
-        expenses = await get_last_expenses(callback.from_user.id, limit=30)
+        from datetime import datetime, timedelta
+        from expenses.models import Expense
+        from asgiref.sync import sync_to_async
+        
+        user_id = callback.from_user.id
+        
+        # Определяем период - последние 2 дня
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=2)
+        
+        # Получаем траты за последние 2 дня, но не более 20
+        @sync_to_async
+        def get_recent_expenses():
+            return list(Expense.objects.filter(
+                profile__telegram_id=user_id,
+                expense_date__gte=start_date,
+                expense_date__lte=end_date
+            ).select_related('category').order_by('-expense_date', '-created_at')[:20])
+        
+        expenses = await get_recent_expenses()
         
         if not expenses:
-            text = "📔 <b>Дневник трат</b>\n\n<i>У вас пока нет записей о тратах</i>"
+            text = "📋 <b>Дневник трат</b>\n\n<i>За последние 2 дня трат не найдено</i>"
         else:
-            text = "📔 <b>Дневник трат</b>\n<i>Последние 30 записей</i>\n\n"
+            text = "📋 <b>Дневник трат</b>\n<i>За последние 2 дня (макс. 20 записей)</i>\n\n"
             
+            total_amount = {}  # Для подсчета общей суммы по валютам
             current_date = None
+            
             for expense in expenses:
                 # Группируем по датам
                 if expense.expense_date != current_date:
                     current_date = expense.expense_date
-                    text += f"\n<b>{current_date.strftime('%d.%m.%Y')}</b>\n"
+                    # Форматируем дату
+                    if current_date == end_date:
+                        date_str = "Сегодня"
+                    elif current_date == end_date - timedelta(days=1):
+                        date_str = "Вчера"
+                    else:
+                        date_str = current_date.strftime('%d.%m.%Y')
+                    text += f"\n<b>📅 {date_str}</b>\n"
                 
                 # Форматируем время, описание и сумму в одну строку
                 time_str = expense.created_at.strftime('%H:%M')
@@ -215,7 +257,14 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                 
                 # Форматируем сумму с валютой
                 currency = expense.currency or 'RUB'
-                amount_str = f"{expense.amount:,.0f}".replace(',', ' ')
+                amount = float(expense.amount)
+                
+                # Добавляем к общей сумме
+                if currency not in total_amount:
+                    total_amount[currency] = 0
+                total_amount[currency] += amount
+                
+                amount_str = f"{amount:,.0f}".replace(',', ' ')
                 if currency == 'RUB':
                     amount_str += ' ₽'
                 elif currency == 'USD':
@@ -226,10 +275,18 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                     amount_str += f' {currency}'
                 
                 text += f"  {time_str} • {description} • {amount_str}\n"
+            
+            # Добавляем итоговую сумму
+            if total_amount:
+                text += "\n<b>💰 Итого:</b>\n"
+                for currency, total in total_amount.items():
+                    total_str = f"{total:,.0f}".replace(',', ' ')
+                    currency_symbol = {'RUB': '₽', 'USD': '$', 'EUR': '€'}.get(currency, currency)
+                    text += f"• {total_str} {currency_symbol}\n"
         
         # Добавляем кнопку "Назад"
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Назад к отчету", callback_data="back_to_summary")],
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="expenses_today")],
             [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
         ])
         
@@ -245,6 +302,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
         await callback.answer("Произошла ошибка при загрузке дневника", show_alert=True)
 
 
+
 @router.callback_query(F.data == "back_to_summary")
 async def callback_back_to_summary(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Вернуться к последнему отчету"""
@@ -253,13 +311,22 @@ async def callback_back_to_summary(callback: CallbackQuery, state: FSMContext, l
     end_date = data.get('report_end_date')
     
     if start_date and end_date:
+        # Преобразуем строки обратно в date объекты
+        from datetime import date as date_type
+        if isinstance(start_date, str):
+            start_date = date_type.fromisoformat(start_date)
+        if isinstance(end_date, str):
+            end_date = date_type.fromisoformat(end_date)
+            
         await show_expenses_summary(
             callback.message,
             start_date,
             end_date,
             lang,
+            state=state,
             edit=True,
-            original_message=callback.message
+            original_message=callback.message,
+            callback=callback
         )
     else:
         # Если нет сохраненных дат, показываем отчет за текущий месяц
@@ -270,8 +337,10 @@ async def callback_back_to_summary(callback: CallbackQuery, state: FSMContext, l
             start_date,
             today,
             lang,
+            state=state,
             edit=True,
-            original_message=callback.message
+            original_message=callback.message,
+            callback=callback
         )
     await callback.answer()
 

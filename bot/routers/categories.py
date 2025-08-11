@@ -120,9 +120,15 @@ async def show_categories_menu(message: types.Message | types.CallbackQuery, sta
 @router.callback_query(lambda c: c.data == "categories_menu")
 async def callback_categories_menu(callback: types.CallbackQuery, state: FSMContext):
     """Показать меню категорий через callback"""
-    await state.clear()  # Очищаем состояние при возврате в меню
+    # Проверяем, находимся ли мы в состоянии редактирования траты
+    current_state = await state.get_state()
+    
+    # Очищаем состояние только если НЕ редактируем трату
+    if current_state and not current_state.startswith("EditExpenseForm"):
+        await state.clear()
+    
     await callback.message.delete()
-    await show_categories_menu(callback.message, state)
+    await show_categories_menu(callback, state)
     await callback.answer()
 
 

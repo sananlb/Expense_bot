@@ -22,6 +22,8 @@ CHAT_INDICATORS = [
     'помоги', 'подскажи', 'расскажи', 'объясни', 'покажи',
     'умеешь', 'можешь', 'знаешь',
     'бот', 'ассистент',
+    'траты за', 'расходы за', 'траты вчера', 'траты сегодня',  # Запросы показа трат
+    'покажи траты', 'покажи расходы', 'показать траты', 'показать расходы',
 ]
 
 # Слова-индикаторы команд/запросов
@@ -109,6 +111,19 @@ def classify_message(text: str) -> Tuple[str, float]:
     text = text.strip()
     text_lower = text.lower()
     
+    # 0. НОВОЕ: Сначала используем специализированный модуль intent
+    from .expense_intent import is_show_expenses_request, is_expense_record_request
+    
+    # Проверяем, является ли это запросом показа трат
+    is_show, show_confidence = is_show_expenses_request(text)
+    if is_show and show_confidence >= 0.7:
+        return 'chat', show_confidence
+    
+    # Проверяем, является ли это записью траты
+    is_record, record_confidence = is_expense_record_request(text)
+    if is_record and record_confidence >= 0.7:
+        return 'record', record_confidence
+    
     # 1. Проверяем, является ли это вопросом
     for pattern in QUESTION_PATTERNS:
         if re.search(pattern, text_lower):
@@ -145,7 +160,10 @@ def classify_message(text: str) -> Tuple[str, float]:
     # 7. Если текст очень короткий (1-2 слова) и не вопрос - скорее всего трата
     word_count = len(text.split())
     if word_count <= 2 and not text.endswith('?'):
-        return 'record', 0.7
+        # Проверяем, не содержит ли текст слово "траты" или "расходы"
+        if 'трат' in text_lower or 'расход' in text_lower:
+            return 'chat', 0.8  # Скорее всего запрос показа трат
+        return 'record', 0.55  # Снижаем confidence для коротких фраз
     
     # 8. Длинные предложения без чисел - скорее всего чат
     if word_count > 5 and not has_numbers:

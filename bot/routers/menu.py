@@ -9,10 +9,7 @@ from datetime import datetime, date
 from decimal import Decimal
 import asyncio
 
-from ..services.expense import get_today_summary, get_month_summary
-from ..services.cashback import calculate_potential_cashback
 from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect
-from ..utils.formatters import format_currency, format_expenses_summary
 from ..decorators import rate_limit
 
 router = Router(name="menu")
@@ -79,66 +76,24 @@ async def show_main_menu(message: types.Message | types.CallbackQuery, state: FS
 
 
 @router.callback_query(lambda c: c.data == "expenses_today")
-async def show_today_expenses(callback: types.CallbackQuery, state: FSMContext):
+async def show_today_expenses(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать траты за сегодня"""
-    user_id = callback.from_user.id
+    # Импортируем функцию из reports
+    from ..routers.reports import show_expenses_summary
+    
     today = date.today()
     
-    # Получаем сводку за сегодня
-    summary = await get_today_summary(user_id)
-    
-    if not summary or (not summary.get('currency_totals') or all(v == 0 for v in summary.get('currency_totals', {}).values())):
-        text = f"""📊 {today.strftime('%d %B')}
-
-💸 **Потрачено сегодня:**
-• 0 ₽
-
-Сегодня трат пока нет."""
-    else:
-        # Форматируем текст согласно ТЗ
-        text = f"""📊 {today.strftime('%d %B')}
-
-💸 **Потрачено сегодня:**
-"""
-        # Показываем все валюты
-        currency_totals = summary.get('currency_totals', {})
-        for curr, amount in sorted(currency_totals.items()):
-            if amount > 0:
-                text += f"• {format_currency(amount, curr)}\n"
-        
-        # Показываем категории для всех валют
-        if summary.get('categories'):
-            text += f"\n📁 По категориям:\n"
-            for cat in summary['categories']:
-                if cat['amount'] > 0:
-                    text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])}"
-        
-        # Добавляем кешбэк только если он больше 0
-        cashback = await calculate_potential_cashback(user_id, today, today)
-        if cashback > 0:
-            text += f"\n\n💳 **Кешбэк:**\n• {format_currency(cashback, 'RUB')}"
-    
-    # Получаем сводку за месяц для проверки наличия трат
-    month_summary = await get_month_summary(user_id, today.month, today.year)
-    
-    # Кнопки навигации
-    keyboard_buttons = []
-    
-    # Показываем кнопку "с начала месяца" только если есть траты за месяц
-    if month_summary and month_summary.get('total', 0) > 0:
-        keyboard_buttons.append([InlineKeyboardButton(text="📅 Показать с начала месяца", callback_data="expenses_month")])
-    
-    keyboard_buttons.append([
-        InlineKeyboardButton(text="❌ Закрыть", callback_data="close")
-    ])
-    
-    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
-    
-    try:
-        await callback.message.edit_text(text, reply_markup=keyboard)
-    except Exception:
-        # Если не удалось отредактировать, отправляем новое
-        await send_message_with_cleanup(callback, state, text, reply_markup=keyboard)
+    # Используем единую функцию show_expenses_summary
+    await show_expenses_summary(
+        callback.message,
+        today,
+        today,
+        lang,
+        state=state,
+        edit=True,
+        original_message=callback.message,
+        callback=callback
+    )
     await callback.answer()
 
 

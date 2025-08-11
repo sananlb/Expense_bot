@@ -102,6 +102,13 @@ class SecurityCheckMiddleware(BaseMiddleware):
                 # Это команда, пропускаем проверку паттернов
                 return await handler(event, data)
             
+            # Пропускаем проверку при редактировании трат и добавлении новых трат
+            state = data.get('state')
+            if state:
+                current_state = await state.get_state()
+                if current_state and ('EditExpenseForm' in str(current_state) or 'ExpenseForm' in str(current_state)):
+                    return await handler(event, data)
+            
             # Создаем хеш сообщения для кеша
             message_hash = hashlib.md5(text.encode()).hexdigest()
             if message_hash in self.checked_messages:

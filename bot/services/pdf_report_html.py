@@ -204,7 +204,7 @@ class HTMLPDFReportService:
     def _get_category_color(self, category_id: int) -> str:
         """Получить цвет для категории"""
         colors = [
-            '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57',
+            '#FF6B6B', '#9B59B6', '#45B7D1', '#E74C3C', '#FECA57',
             '#FF9FF3', '#54A0FF', '#48DBFB', '#0ABDE3', '#EE5A6F'
         ]
         return colors[category_id % len(colors)]
