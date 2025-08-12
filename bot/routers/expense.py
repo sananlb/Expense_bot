@@ -1098,32 +1098,33 @@ async def remove_cashback(callback: types.CallbackQuery, state: FSMContext, lang
         expense.cashback_excluded = True
         await expense.asave()
         
-        # Показываем уведомление
-        await callback.answer("✅ Кешбек убран для этой траты")
+        # Без уведомления - сразу показываем обновленную трату
+        # Используем единый формат сообщения
+        from ..utils.expense_messages import format_expense_added_message
         
-        # Обновляем меню редактирования (без кнопки убрать кешбек)
-        # Сохраняем ID траты в состоянии
-        await state.update_data(editing_expense_id=expense_id)
+        # Кешбек не показываем, так как он исключен
+        message_text = await format_expense_added_message(
+            expense=expense,
+            category=expense.category,
+            cashback_text=""  # Пустой текст кешбека
+        )
         
-        # Показываем меню выбора поля для редактирования
-        buttons = [
-            [InlineKeyboardButton(text=f"💰 {get_text('sum', lang)}: {expense.amount:.0f} ₽", callback_data="edit_field_amount")],
-            [InlineKeyboardButton(text=f"📝 {get_text('description', lang)}: {expense.description}", callback_data="edit_field_description")],
-            [InlineKeyboardButton(text=f"📁 {get_text('category', lang)}: {expense.category.name}", callback_data="edit_field_category")],
-            [InlineKeyboardButton(text=f"🗑 Удалить", callback_data=f"delete_expense_{expense_id}")],
-            [InlineKeyboardButton(text=f"✅ {get_text('edit_done', lang)}", callback_data="edit_done")]
-        ]
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
-        
+        # Показываем обновленную трату с кнопкой редактирования
         await callback.message.edit_text(
-            f"✏️ <b>{get_text('editing_expense', lang)}</b>\n\n"
-            f"{get_text('choose_field_to_edit', lang)}",
-            reply_markup=keyboard,
+            message_text,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
+                ]
+            ]),
             parse_mode="HTML"
         )
         
-        await state.set_state(EditExpenseForm.choosing_field)
+        # Очищаем состояние редактирования
+        await state.clear()
+        
+        # Отвечаем на callback без уведомления
+        await callback.answer()
         
     except Expense.DoesNotExist:
         await callback.answer("❌ Трата не найдена", show_alert=True)
