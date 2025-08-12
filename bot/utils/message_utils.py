@@ -125,6 +125,19 @@ async def send_message_with_cleanup(
     # Удаляем старое меню если есть
     data = await state.get_data()
     old_menu_id = data.get('last_menu_message_id')
+    persistent_cashback = data.get('persistent_cashback_menu', False)
+    
+    # Если меню кешбека постоянное, не удаляем его
+    if persistent_cashback and old_menu_id:
+        # Просто отправляем новое сообщение без удаления старого
+        sent_message = await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=reply_markup,
+            **kwargs
+        )
+        # Не обновляем last_menu_message_id чтобы сохранить ссылку на меню кешбека
+        return sent_message
     
     # Если это callback query, отвечаем на него
     if isinstance(message, CallbackQuery):

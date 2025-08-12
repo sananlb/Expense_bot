@@ -768,6 +768,10 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     
     # Гарантируем отмену задачи
     cancel_typing()
+    
+    # Восстанавливаем меню кешбека если оно было активно
+    from ..routers.cashback import restore_cashback_menu_if_needed
+    await restore_cashback_menu_if_needed(state, message.bot, message.chat.id)
 
 
 # Обработчик голосовых сообщений
@@ -866,7 +870,7 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: s
 
 # Обработчик удаления траты
 @router.callback_query(lambda c: c.data.startswith("delete_expense_"))
-async def delete_expense(callback: types.CallbackQuery):
+async def delete_expense(callback: types.CallbackQuery, state: FSMContext):
     """Удаление траты"""
     expense_id = int(callback.data.split("_")[-1])
     from ..services.expense import delete_expense as delete_expense_service
@@ -878,6 +882,9 @@ async def delete_expense(callback: types.CallbackQuery):
     
     if success:
         await callback.message.delete()
+        # Восстанавливаем меню кешбека если оно было активно
+        from ..routers.cashback import restore_cashback_menu_if_needed
+        await restore_cashback_menu_if_needed(state, callback.bot, callback.message.chat.id)
     else:
         await callback.answer("❌ Не удалось удалить трату", show_alert=True)
 

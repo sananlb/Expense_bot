@@ -128,9 +128,8 @@ async def show_expenses_summary(
             if summary['by_category']:
                 text += f"📊 {get_text('by_categories', lang)}:\n"
                 for cat in summary['by_category'][:10]:  # Максимум 10 категорий
-                    percentage = float(cat['total']) / float(summary['total']) * 100
                     icon_text = f"{cat['icon']} " if cat.get('icon') else ""
-                    text += f"{icon_text}{cat['name']}: {format_amount(cat['total'], summary['currency'], lang)} ({percentage:.1f}%)\n"
+                    text += f"{icon_text}{cat['name']}: {format_amount(cat['total'], summary['currency'], lang)}\n"
                 
             # Потенциальный кешбэк
             if summary['potential_cashback'] > 0:
@@ -223,14 +222,14 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                 profile__telegram_id=user_id,
                 expense_date__gte=start_date,
                 expense_date__lte=end_date
-            ).select_related('category').order_by('-expense_date', '-created_at')[:20])
+            ).select_related('category').order_by('expense_date', 'created_at')[:20])
         
         expenses = await get_recent_expenses()
         
         if not expenses:
-            text = "📋 <b>Дневник трат</b>\n\n<i>За последние 2 дня трат не найдено</i>"
+            text = "📋 <b>Дневник трат</b>\n\n<i>Трат не найдено</i>"
         else:
-            text = "📋 <b>Дневник трат</b>\n<i>За последние 2 дня (макс. 20 записей)</i>\n\n"
+            text = "📋 <b>Дневник трат</b>\n\n"
             
             total_amount = {}  # Для подсчета общей суммы по валютам
             current_date = None
@@ -244,6 +243,8 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                         date_str = "Сегодня"
                     elif current_date == end_date - timedelta(days=1):
                         date_str = "Вчера"
+                    elif current_date == end_date - timedelta(days=2):
+                        date_str = "Позавчера"
                     else:
                         date_str = current_date.strftime('%d.%m.%Y')
                     text += f"\n<b>📅 {date_str}</b>\n"
@@ -274,7 +275,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                 else:
                     amount_str += f' {currency}'
                 
-                text += f"  {time_str} • {description} • {amount_str}\n"
+                text += f"  {time_str} — {description} {amount_str}\n"
             
             # Добавляем итоговую сумму
             if total_amount:

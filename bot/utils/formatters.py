@@ -222,8 +222,7 @@ def format_expenses_summary(summary: Dict, lang: str = 'ru') -> str:
         text += f"\n📂 {get_text('by_categories', lang)}:\n"
         
         for cat in categories:
-            percent = (float(cat['amount']) / float(total)) * 100 if total > 0 else 0
-            text += f"{cat.get('icon', '💰')} {cat['name']}: {format_currency(cat['amount'], currency)} ({percent:.1f}%)\n"
+            text += f"{cat.get('icon', '💰')} {cat['name']}: {format_currency(cat['amount'], currency)}\n"
     
     return text.strip()
 

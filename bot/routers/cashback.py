@@ -23,6 +23,27 @@ from ..utils import get_text
 router = Router(name="cashback")
 
 
+async def restore_cashback_menu_if_needed(state: FSMContext, bot, chat_id: int):
+    """Восстановить меню кешбека если оно было активно"""
+    data = await state.get_data()
+    if data.get('persistent_cashback_menu'):
+        # Получаем сохраненный месяц
+        month = data.get('cashback_menu_month')
+        # Создаем фиктивное сообщение для вызова show_cashback_menu
+        from aiogram.types import User, Chat
+        fake_user = User(id=chat_id, is_bot=False, first_name="User")
+        fake_chat = Chat(id=chat_id, type="private")
+        fake_message = types.Message(
+            message_id=0,
+            date=datetime.now(),
+            chat=fake_chat,
+            from_user=fake_user,
+            text=""
+        )
+        fake_message.bot = bot
+        await show_cashback_menu(fake_message, state, month=month)
+
+
 class CashbackForm(StatesGroup):
     """Состояния для добавления кешбэка"""
     waiting_for_category = State()
@@ -50,6 +71,12 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
         user_id = message.from_user.id
     current_date = date.today()
     target_month = month or current_date.month
+    
+    # Сохраняем информацию о том, что меню кешбека активно
+    await state.update_data(
+        persistent_cashback_menu=True,
+        cashback_menu_month=target_month
+    )
     
     # Получаем кешбэки пользователя
     cashbacks = await get_user_cashbacks(user_id, target_month)
@@ -85,7 +112,7 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
         # Если кешбеков нет, показываем только кнопки добавить и закрыть
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=get_text('add_cashback', lang), callback_data="cashback_add")],
-            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close_cashback_menu")]
         ])
     else:
         text = format_cashback_note(cashbacks, target_month)
@@ -100,7 +127,7 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
                 InlineKeyboardButton(text=get_text('remove_cashback', lang), callback_data="cashback_remove"),
                 InlineKeyboardButton(text=get_text('remove_all_cashback', lang), callback_data="cashback_remove_all")
             ],
-            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close_cashback_menu")]
         ])
     
     await send_message_with_cleanup(message, state, text, reply_markup=keyboard, parse_mode="HTML")
@@ -123,6 +150,18 @@ async def callback_cashback_menu(callback: types.CallbackQuery, state: FSMContex
         return
     
     await show_cashback_menu(callback, state)
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "close_cashback_menu")
+async def close_cashback_menu(callback: types.CallbackQuery, state: FSMContext):
+    """Закрыть меню кешбека"""
+    await callback.message.delete()
+    # Очищаем флаг постоянного меню кешбека и ID последнего меню
+    await state.update_data(
+        last_menu_message_id=None,
+        persistent_cashback_menu=False
+    )
     await callback.answer()
 
 
