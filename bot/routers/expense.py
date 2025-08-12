@@ -7,13 +7,14 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 # from aiogram.exceptions import CancelHandler  # Not available in aiogram 3.x
-from datetime import date
+from datetime import date, datetime
 import asyncio
 import logging
 
 from ..services.expense import add_expense, get_month_summary
-from ..services.cashback import calculate_potential_cashback
+from ..services.cashback import calculate_potential_cashback, calculate_expense_cashback
 from ..services.category import get_or_create_category
+from ..services.subscription import check_subscription
 from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect
 from ..utils import get_text
 from ..utils.expense_parser import parse_expense_message
@@ -403,9 +404,7 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
     from ..services.expense import add_expense
     from ..services.category import get_or_create_category
     from ..services.cashback import calculate_expense_cashback
-    from ..services.subscription import check_subscription
     from ..utils.expense_intent import is_show_expenses_request
-    from datetime import datetime
     
     user_id = message.from_user.id
     text = message.text.strip()
@@ -527,7 +526,6 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     from ..services.category import get_or_create_category
     from ..services.expense import add_expense
     from ..services.cashback import calculate_expense_cashback
-    from ..services.subscription import check_subscription
     from aiogram.fsm.context import FSMContext
     from ..routers.chat import process_chat_message
     import asyncio
