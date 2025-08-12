@@ -1088,8 +1088,8 @@ async def remove_cashback(callback: types.CallbackQuery, state: FSMContext, lang
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
     
     try:
-        # Получаем трату
-        expense = await Expense.objects.select_related('category').aget(
+        # Получаем трату с profile для корректной работы format_expense_added_message
+        expense = await Expense.objects.select_related('category', 'profile').aget(
             id=expense_id,
             profile__telegram_id=user_id
         )
