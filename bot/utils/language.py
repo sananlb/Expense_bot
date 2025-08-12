@@ -199,15 +199,27 @@ def format_amount(amount: float, currency: str = 'RUB', lang: str = 'ru') -> str
     """
     symbol = get_currency_symbol(currency)
     
-    if lang == 'en':
-        # В английском символ валюты идет перед суммой
-        if currency in ['USD', 'EUR', 'GBP']:
-            return f"{symbol}{amount:,.2f}"
+    # Для рублей и некоторых других валют округляем до целых
+    if currency in ['RUB', 'JPY', 'KRW', 'CLP', 'ISK', 'TWD', 'HUF', 'COP', 'IDR', 'VND']:
+        if lang == 'en':
+            # В английском символ валюты идет перед суммой
+            if currency in ['USD', 'EUR', 'GBP']:
+                return f"{symbol}{amount:,.0f}"
+            else:
+                return f"{amount:,.0f} {symbol}"
         else:
-            return f"{amount:,.2f} {symbol}"
+            # В русском символ валюты идет после суммы
+            return f"{amount:,.0f} {symbol}"
     else:
-        # В русском символ валюты идет после суммы
-        return f"{amount:,.2f} {symbol}"
+        if lang == 'en':
+            # В английском символ валюты идет перед суммой
+            if currency in ['USD', 'EUR', 'GBP']:
+                return f"{symbol}{amount:,.2f}"
+            else:
+                return f"{amount:,.2f} {symbol}"
+        else:
+            # В русском символ валюты идет после суммы
+            return f"{amount:,.2f} {symbol}"
 
 
 def get_available_languages() -> list:
