@@ -140,9 +140,13 @@ def get_currency_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     return keyboard.as_markup()
 
 
-def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf: bool = True) -> InlineKeyboardMarkup:
+def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf: bool = True, current_month: int = None, current_year: int = None) -> InlineKeyboardMarkup:
     """Клавиатура для сводки расходов"""
+    from datetime import date
+    from bot.utils import get_month_name
+    
     keyboard = InlineKeyboardBuilder()
+    today = date.today()
     
     # Кнопка дневника трат - добавляем только для периода 'today'
     if period == 'today':
@@ -151,7 +155,38 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
     elif period == 'month' and show_pdf:
         # Для месячных отчетов показываем кнопку PDF
         keyboard.button(text="📄 Сформировать PDF отчет", callback_data="pdf_generate_current")
-        keyboard.button(text="← Предыдущий месяц", callback_data="expenses_prev_month")
+        
+        # Кнопки навигации по месяцам
+        if current_month and current_year:
+            # Определяем предыдущий месяц
+            if current_month == 1:
+                prev_month = 12
+                prev_year = current_year - 1
+            else:
+                prev_month = current_month - 1
+                prev_year = current_year
+                
+            # Определяем следующий месяц
+            if current_month == 12:
+                next_month = 1
+                next_year = current_year + 1
+            else:
+                next_month = current_month + 1
+                next_year = current_year
+            
+            # Проверяем, не является ли следующий месяц будущим
+            is_future = (next_year > today.year) or (next_year == today.year and next_month > today.month)
+            
+            # Кнопка предыдущего месяца
+            prev_month_name = get_month_name(prev_month, lang).capitalize()
+            keyboard.button(text=f"← {prev_month_name}", callback_data="expenses_prev_month")
+            
+            # Кнопка следующего месяца (если не будущий)
+            if not is_future:
+                next_month_name = get_month_name(next_month, lang).capitalize()
+                keyboard.button(text=f"{next_month_name} →", callback_data="expenses_next_month")
+        else:
+            keyboard.button(text="← Предыдущий месяц", callback_data="expenses_prev_month")
     
     # Кнопка закрытия
     keyboard.button(text=get_text('close', lang), callback_data="close")
@@ -159,7 +194,15 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
     if period == 'today':
         keyboard.adjust(1, 1, 1)  # 3 кнопки по одной в ряд: дневник, с начала месяца, закрыть
     elif period == 'month' and show_pdf:
-        keyboard.adjust(1, 1, 1)  # 3 кнопки по одной в ряд: PDF, предыдущий месяц, закрыть
+        if current_month and current_year:
+            # Проверяем количество кнопок навигации
+            is_future = (current_year > today.year) or (current_year == today.year and current_month >= today.month)
+            if is_future:
+                keyboard.adjust(1, 1, 1)  # PDF, предыдущий месяц, закрыть
+            else:
+                keyboard.adjust(1, 2, 1)  # PDF, две кнопки навигации, закрыть
+        else:
+            keyboard.adjust(1, 1, 1)  # PDF, предыдущий месяц, закрыть
     else:
         keyboard.adjust(1)  # Только закрытие
     

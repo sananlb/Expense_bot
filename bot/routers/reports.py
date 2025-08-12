@@ -172,12 +172,20 @@ async def show_expenses_summary(
         if edit and original_message:
             await original_message.edit_text(
                 text,
-                reply_markup=expenses_summary_keyboard(lang, period, show_pdf)
+                reply_markup=expenses_summary_keyboard(
+                    lang, period, show_pdf,
+                    current_month=start_date.month if start_date.day == 1 else None,
+                    current_year=start_date.year if start_date.day == 1 else None
+                )
             )
         else:
             await send_message_with_cleanup(
                 message, state, text,
-                reply_markup=expenses_summary_keyboard(lang, period, show_pdf)
+                reply_markup=expenses_summary_keyboard(
+                    lang, period, show_pdf,
+                    current_month=start_date.month if start_date.day == 1 else None,
+                    current_year=start_date.year if start_date.day == 1 else None
+                )
             )
             
     except Exception as e:
