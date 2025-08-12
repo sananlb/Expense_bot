@@ -123,11 +123,12 @@ def calculate_potential_cashback(user_id: int, start_date: date, end_date: date)
     except Profile.DoesNotExist:
         return Decimal('0')
     
-    # Получаем все расходы за период
+    # Получаем все расходы за период (исключая те, где кешбек отключен)
     expenses = Expense.objects.filter(
         profile=profile,
         expense_date__gte=start_date,
-        expense_date__lte=end_date
+        expense_date__lte=end_date,
+        cashback_excluded=False  # Учитываем только траты с кешбеком
     ).select_related('category')
     
     total_cashback = Decimal('0')

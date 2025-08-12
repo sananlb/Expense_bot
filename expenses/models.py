@@ -205,6 +205,9 @@ class Expense(models.Model):
         validators=[MinValueValidator(0), MaxValueValidator(1)]
     )  # Уверенность AI в категории
     
+    # Кешбек
+    cashback_excluded = models.BooleanField(default=False)  # Исключить кешбек для этой траты
+    
     # Временные метки
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

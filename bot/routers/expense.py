@@ -142,10 +142,21 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
     # Сохраняем текущий период в состоянии
     await state.update_data(current_month=today.month, current_year=today.year)
     
+    # Определяем название предыдущего месяца для кнопки
+    if today.month == 1:
+        prev_button_month = 12
+        prev_button_year = today.year - 1
+    else:
+        prev_button_month = today.month - 1
+        prev_button_year = today.year
+    
     # Кнопки навигации с PDF отчетом
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📄 Сформировать PDF отчет", callback_data="pdf_generate_current")],
-        [InlineKeyboardButton(text="← Предыдущий месяц", callback_data="expenses_prev_month")],
+        [InlineKeyboardButton(
+            text=f"← {month_names[prev_button_month]}",
+            callback_data="expenses_prev_month"
+        )],
         [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
     ])
     
@@ -245,12 +256,184 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
     # Обновляем текущий период в состоянии
     await state.update_data(current_month=prev_month, current_year=prev_year)
     
+    # Определяем название предыдущего и следующего месяцев для кнопок
+    if prev_month == 1:
+        prev_button_month = 12
+        prev_button_year = prev_year - 1
+    else:
+        prev_button_month = prev_month - 1
+        prev_button_year = prev_year
+    
+    if prev_month == 12:
+        next_button_month = 1
+        next_button_year = prev_year + 1
+    else:
+        next_button_month = prev_month + 1
+        next_button_year = prev_year
+    
+    # Проверяем, не является ли следующий месяц будущим
+    today = date.today()
+    is_future = (next_button_year > today.year) or (next_button_year == today.year and next_button_month > today.month)
+    
     # Кнопки навигации с PDF отчетом
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📄 Сформировать PDF отчет", callback_data="pdf_generate_current")],
-        [InlineKeyboardButton(text="← Предыдущий месяц", callback_data="expenses_prev_month")],
-        [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
-    ])
+    keyboard_buttons = [
+        [InlineKeyboardButton(text="📄 Сформировать PDF отчет", callback_data="pdf_generate_current")]
+    ]
+    
+    # Добавляем кнопки навигации
+    nav_buttons = []
+    nav_buttons.append(InlineKeyboardButton(
+        text=f"← {month_names[prev_button_month]}",
+        callback_data="expenses_prev_month"
+    ))
+    
+    if not is_future:
+        nav_buttons.append(InlineKeyboardButton(
+            text=f"{month_names[next_button_month]} →",
+            callback_data="expenses_next_month"
+        ))
+    
+    keyboard_buttons.append(nav_buttons)
+    keyboard_buttons.append([InlineKeyboardButton(text="❌ Закрыть", callback_data="close")])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "expenses_next_month")
+async def show_next_month_expenses(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Показать траты за следующий месяц"""
+    user_id = callback.from_user.id
+    
+    # Получаем текущий период из состояния
+    data = await state.get_data()
+    current_month = data.get('current_month', date.today().month)
+    current_year = data.get('current_year', date.today().year)
+    
+    # Вычисляем следующий месяц
+    if current_month == 12:
+        next_month = 1
+        next_year = current_year + 1
+    else:
+        next_month = current_month + 1
+        next_year = current_year
+    
+    # Получаем сводку за месяц
+    summary = await get_month_summary(user_id, next_month, next_year)
+    
+    month_names = {
+        1: get_text('january', lang).capitalize(),
+        2: get_text('february', lang).capitalize(),
+        3: get_text('march', lang).capitalize(),
+        4: get_text('april', lang).capitalize(),
+        5: get_text('may', lang).capitalize(),
+        6: get_text('june', lang).capitalize(),
+        7: get_text('july', lang).capitalize(),
+        8: get_text('august', lang).capitalize(),
+        9: get_text('september', lang).capitalize(),
+        10: get_text('october', lang).capitalize(),
+        11: get_text('november', lang).capitalize(),
+        12: get_text('december', lang).capitalize()
+    }
+    
+    if not summary or (not summary.get('currency_totals') or all(v == 0 for v in summary.get('currency_totals', {}).values())):
+        text = f"""📊 <b>{month_names[next_month]} {next_year}</b>
+
+💸 <b>Потрачено за месяц:</b>
+• 0 {get_text('rub', lang)}
+
+{get_text('no_expenses_this_month', lang)}"""
+    else:
+        # Форматируем текст согласно ТЗ
+        text = f"""📊 <b>{month_names[next_month]} {next_year}</b>
+
+💸 <b>Потрачено за месяц:</b>
+"""
+        # Показываем все валюты
+        currency_totals = summary.get('currency_totals', {})
+        for curr, amount in sorted(currency_totals.items()):
+            if amount > 0:
+                text += f"• {format_currency(amount, curr)}\n"
+
+        # Показываем категории для всех валют
+        if summary.get('categories'):
+            text += f"\n📁 <b>{get_text('by_categories', lang)}:</b>"
+            # Добавляем топ-8 категорий
+            other_amount = {}
+            for i, cat in enumerate(summary['categories']):
+                if i < 8 and cat['amount'] > 0:
+                    text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])}"
+                elif i >= 8 and cat['amount'] > 0:
+                    # Суммируем остальные категории по валютам
+                    curr = cat['currency']
+                    if curr not in other_amount:
+                        other_amount[curr] = 0
+                    other_amount[curr] += cat['amount']
+            
+            # Добавляем "Остальные расходы" если есть
+            if other_amount:
+                for curr, amount in other_amount.items():
+                    text += f"\n📊 Остальные расходы: {format_currency(amount, curr)}"
+        
+        # Добавляем потенциальный кешбэк
+        start_date = date(next_year, next_month, 1)
+        import calendar
+        last_day = calendar.monthrange(next_year, next_month)[1]
+        end_date = date(next_year, next_month, last_day)
+        
+        cashback = await calculate_potential_cashback(user_id, start_date, end_date)
+        if cashback > 0:
+            text += f"\n\n💳 <b>Потенциальный кешбэк:</b>\n• {format_currency(cashback, 'RUB')}"
+    
+    # Добавляем подсказку внизу курсивом
+    text += "\n\n<i>Показать отчет за другой период?</i>"
+    
+    # Обновляем текущий период в состоянии
+    await state.update_data(current_month=next_month, current_year=next_year)
+    
+    # Определяем название предыдущего и следующего месяцев для кнопок
+    if next_month == 1:
+        prev_button_month = 12
+        prev_button_year = next_year - 1
+    else:
+        prev_button_month = next_month - 1
+        prev_button_year = next_year
+    
+    if next_month == 12:
+        next_button_month = 1
+        next_button_year = next_year + 1
+    else:
+        next_button_month = next_month + 1
+        next_button_year = next_year
+    
+    # Проверяем, не является ли следующий месяц будущим
+    today = date.today()
+    is_future = (next_button_year > today.year) or (next_button_year == today.year and next_button_month > today.month)
+    
+    # Кнопки навигации с PDF отчетом
+    keyboard_buttons = [
+        [InlineKeyboardButton(text="📄 Сформировать PDF отчет", callback_data="pdf_generate_current")]
+    ]
+    
+    # Добавляем кнопки навигации
+    nav_buttons = []
+    nav_buttons.append(InlineKeyboardButton(
+        text=f"← {month_names[prev_button_month]}",
+        callback_data="expenses_prev_month"
+    ))
+    
+    if not is_future:
+        nav_buttons.append(InlineKeyboardButton(
+            text=f"{month_names[next_button_month]} →",
+            callback_data="expenses_next_month"
+        ))
+    
+    keyboard_buttons.append(nav_buttons)
+    keyboard_buttons.append([InlineKeyboardButton(text="❌ Закрыть", callback_data="close")])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     await callback.answer()
@@ -848,14 +1031,38 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: s
     # Сохраняем ID траты в состоянии
     await state.update_data(editing_expense_id=expense_id)
     
+    # Проверяем, есть ли кешбек для этой траты
+    from bot.services.cashback import calculate_expense_cashback
+    from datetime import datetime
+    
+    has_cashback = False
+    if not expense.cashback_excluded:  # Если кешбек не исключен
+        current_month = datetime.now().month
+        cashback = await calculate_expense_cashback(
+            user_id=user_id,
+            category_id=expense.category.id if expense.category else None,
+            amount=float(expense.amount),
+            month=current_month
+        )
+        has_cashback = cashback > 0
+    
     # Показываем меню выбора поля для редактирования
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    buttons = [
         [InlineKeyboardButton(text=f"💰 {get_text('sum', lang)}: {expense.amount:.0f} ₽", callback_data="edit_field_amount")],
         [InlineKeyboardButton(text=f"📝 {get_text('description', lang)}: {expense.description}", callback_data="edit_field_description")],
         [InlineKeyboardButton(text=f"📁 {get_text('category', lang)}: {expense.category.name}", callback_data="edit_field_category")],
+    ]
+    
+    # Добавляем кнопку удаления кешбека только если он есть и не исключен
+    if has_cashback and not expense.cashback_excluded:
+        buttons.append([InlineKeyboardButton(text="💸 Убрать кешбек", callback_data=f"remove_cashback_{expense_id}")])
+    
+    buttons.extend([
         [InlineKeyboardButton(text=f"🗑 Удалить", callback_data=f"delete_expense_{expense_id}")],
         [InlineKeyboardButton(text=f"✅ {get_text('edit_done', lang)}", callback_data="edit_done")]
     ])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     
     await callback.message.edit_text(
         f"✏️ <b>{get_text('editing_expense', lang)}</b>\n\n"
@@ -869,6 +1076,40 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: s
 
 
 # Обработчик удаления траты
+@router.callback_query(lambda c: c.data.startswith("remove_cashback_"))
+async def remove_cashback(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Удаление кешбека из траты"""
+    expense_id = int(callback.data.split("_")[-1])
+    user_id = callback.from_user.id
+    
+    from expenses.models import Expense
+    
+    try:
+        # Получаем трату
+        expense = await Expense.objects.select_related('category').aget(
+            id=expense_id,
+            profile__telegram_id=user_id
+        )
+        
+        # Устанавливаем флаг исключения кешбека
+        expense.cashback_excluded = True
+        await expense.asave()
+        
+        # Показываем уведомление
+        await callback.answer("✅ Кешбек убран для этой траты")
+        
+        # Сразу возвращаемся к редактированию траты
+        # Эмулируем нажатие на кнопку редактирования
+        callback.data = f"edit_expense_{expense_id}"
+        await edit_expense(callback, state, lang)
+        
+    except Expense.DoesNotExist:
+        await callback.answer("❌ Трата не найдена", show_alert=True)
+    except Exception as e:
+        logger.error(f"Error removing cashback: {e}")
+        await callback.answer("❌ Ошибка при удалении кешбека", show_alert=True)
+
+
 @router.callback_query(lambda c: c.data.startswith("delete_expense_"))
 async def delete_expense(callback: types.CallbackQuery, state: FSMContext):
     """Удаление траты"""
