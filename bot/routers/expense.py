@@ -1083,6 +1083,9 @@ async def remove_cashback(callback: types.CallbackQuery, state: FSMContext, lang
     user_id = callback.from_user.id
     
     from expenses.models import Expense
+    from bot.services.cashback import calculate_expense_cashback
+    from datetime import datetime
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
     
     try:
         # Получаем трату
@@ -1098,10 +1101,29 @@ async def remove_cashback(callback: types.CallbackQuery, state: FSMContext, lang
         # Показываем уведомление
         await callback.answer("✅ Кешбек убран для этой траты")
         
-        # Сразу возвращаемся к редактированию траты
-        # Эмулируем нажатие на кнопку редактирования
-        callback.data = f"edit_expense_{expense_id}"
-        await edit_expense(callback, state, lang)
+        # Обновляем меню редактирования (без кнопки убрать кешбек)
+        # Сохраняем ID траты в состоянии
+        await state.update_data(editing_expense_id=expense_id)
+        
+        # Показываем меню выбора поля для редактирования
+        buttons = [
+            [InlineKeyboardButton(text=f"💰 {get_text('sum', lang)}: {expense.amount:.0f} ₽", callback_data="edit_field_amount")],
+            [InlineKeyboardButton(text=f"📝 {get_text('description', lang)}: {expense.description}", callback_data="edit_field_description")],
+            [InlineKeyboardButton(text=f"📁 {get_text('category', lang)}: {expense.category.name}", callback_data="edit_field_category")],
+            [InlineKeyboardButton(text=f"🗑 Удалить", callback_data=f"delete_expense_{expense_id}")],
+            [InlineKeyboardButton(text=f"✅ {get_text('edit_done', lang)}", callback_data="edit_done")]
+        ]
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+        
+        await callback.message.edit_text(
+            f"✏️ <b>{get_text('editing_expense', lang)}</b>\n\n"
+            f"{get_text('choose_field_to_edit', lang)}",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        
+        await state.set_state(EditExpenseForm.choosing_field)
         
     except Expense.DoesNotExist:
         await callback.answer("❌ Трата не найдена", show_alert=True)
@@ -1244,10 +1266,10 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext):
             profile__telegram_id=callback.from_user.id
         )
         
-        # Рассчитываем кешбек если есть подписка
+        # Рассчитываем кешбек если есть подписка и кешбек не исключен
         cashback_text = ""
         has_subscription = await check_subscription(callback.from_user.id)
-        if has_subscription and expense.category:
+        if has_subscription and expense.category and not expense.cashback_excluded:
             current_month = datetime.now().month
             cashback = await calculate_expense_cashback(
                 user_id=callback.from_user.id,
@@ -1510,10 +1532,10 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
             profile__telegram_id=callback.from_user.id
         )
         
-        # Рассчитываем кешбек если есть подписка
+        # Рассчитываем кешбек если есть подписка и кешбек не исключен
         cashback_text = ""
         has_subscription = await check_subscription(callback.from_user.id)
-        if has_subscription and expense.category:
+        if has_subscription and expense.category and not expense.cashback_excluded:
             current_month = datetime.now().month
             cashback = await calculate_expense_cashback(
                 user_id=callback.from_user.id,
