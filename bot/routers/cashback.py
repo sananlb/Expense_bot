@@ -75,7 +75,8 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
     # Сохраняем информацию о том, что меню кешбека активно
     await state.update_data(
         persistent_cashback_menu=True,
-        cashback_menu_month=target_month
+        cashback_menu_month=target_month,
+        cashback_menu_message_id=None  # Будет установлен после отправки
     )
     
     # Получаем кешбэки пользователя
@@ -130,7 +131,35 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close_cashback_menu")]
         ])
     
-    await send_message_with_cleanup(message, state, text, reply_markup=keyboard, parse_mode="HTML", update_cashback_menu=True)
+    # Отправляем меню кешбека особым способом
+    if isinstance(message, (types.Message, types.CallbackQuery)):
+        bot = message.bot if hasattr(message, 'bot') else message.message.bot
+        chat_id = message.chat.id if hasattr(message, 'chat') else message.message.chat.id
+        
+        # Удаляем старое меню кешбека если оно есть
+        data = await state.get_data()
+        old_cashback_menu_id = data.get('cashback_menu_message_id')
+        if old_cashback_menu_id:
+            try:
+                await bot.delete_message(chat_id=chat_id, message_id=old_cashback_menu_id)
+            except:
+                pass
+        
+        # Отправляем новое меню
+        sent_message = await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        
+        # Сохраняем ID меню кешбека в ОБА места для полной защиты
+        await state.update_data(
+            cashback_menu_message_id=sent_message.message_id,
+            last_menu_message_id=sent_message.message_id,  # ВАЖНО: также сохраняем как last_menu для совместимости
+            persistent_cashback_menu=True,
+            cashback_menu_month=target_month
+        )
 
 
 @router.callback_query(lambda c: c.data == "cashback_menu")
@@ -157,9 +186,10 @@ async def callback_cashback_menu(callback: types.CallbackQuery, state: FSMContex
 async def close_cashback_menu(callback: types.CallbackQuery, state: FSMContext):
     """Закрыть меню кешбека"""
     await callback.message.delete()
-    # Очищаем флаг постоянного меню кешбека и ID последнего меню
+    # Очищаем флаг постоянного меню кешбека и оба ID
     await state.update_data(
-        last_menu_message_id=None,
+        cashback_menu_message_id=None,
+        last_menu_message_id=None,  # Также очищаем last_menu_message_id
         persistent_cashback_menu=False
     )
     await callback.answer()
