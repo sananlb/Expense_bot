@@ -136,14 +136,8 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
         bot = message.bot if hasattr(message, 'bot') else message.message.bot
         chat_id = message.chat.id if hasattr(message, 'chat') else message.message.chat.id
         
-        # Удаляем старое меню кешбека если оно есть
-        data = await state.get_data()
-        old_cashback_menu_id = data.get('cashback_menu_message_id')
-        if old_cashback_menu_id:
-            try:
-                await bot.delete_message(chat_id=chat_id, message_id=old_cashback_menu_id)
-            except:
-                pass
+        # НЕ удаляем старое меню кешбека - оно должно оставаться на экране
+        # Пользователь может иметь несколько меню кешбека одновременно
         
         # Отправляем новое меню
         sent_message = await bot.send_message(
@@ -153,9 +147,18 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
             parse_mode="HTML"
         )
         
-        # Сохраняем ID меню кешбека в ОБА места для полной защиты
+        # Получаем текущие данные состояния
+        data = await state.get_data()
+        cashback_menu_ids = data.get('cashback_menu_ids', [])
+        
+        # Добавляем новый ID в список меню кешбека
+        if sent_message.message_id not in cashback_menu_ids:
+            cashback_menu_ids.append(sent_message.message_id)
+        
+        # Сохраняем обновленный список ID и флаги
         await state.update_data(
-            cashback_menu_message_id=sent_message.message_id,
+            cashback_menu_ids=cashback_menu_ids,  # Список всех ID меню кешбека
+            cashback_menu_message_id=sent_message.message_id,  # Последний ID для совместимости
             last_menu_message_id=sent_message.message_id,  # ВАЖНО: также сохраняем как last_menu для совместимости
             persistent_cashback_menu=True,
             cashback_menu_month=target_month
@@ -185,13 +188,36 @@ async def callback_cashback_menu(callback: types.CallbackQuery, state: FSMContex
 @router.callback_query(lambda c: c.data == "close_cashback_menu")
 async def close_cashback_menu(callback: types.CallbackQuery, state: FSMContext):
     """Закрыть меню кешбека"""
+    message_id = callback.message.message_id
+    
+    # Получаем список ID меню кешбека
+    data = await state.get_data()
+    cashback_menu_ids = data.get('cashback_menu_ids', [])
+    
+    # Удаляем текущий ID из списка
+    if message_id in cashback_menu_ids:
+        cashback_menu_ids.remove(message_id)
+    
+    # Удаляем само сообщение
     await callback.message.delete()
-    # Очищаем флаг постоянного меню кешбека и оба ID
-    await state.update_data(
-        cashback_menu_message_id=None,
-        last_menu_message_id=None,  # Также очищаем last_menu_message_id
-        persistent_cashback_menu=False
-    )
+    
+    # Если это было последнее меню кешбека, очищаем все флаги
+    if not cashback_menu_ids:
+        await state.update_data(
+            cashback_menu_ids=[],
+            cashback_menu_message_id=None,
+            last_menu_message_id=None,
+            persistent_cashback_menu=False
+        )
+    else:
+        # Если остались другие меню кешбека, обновляем список но оставляем флаг
+        await state.update_data(
+            cashback_menu_ids=cashback_menu_ids,
+            # Оставляем последний ID из списка для совместимости
+            cashback_menu_message_id=cashback_menu_ids[-1] if cashback_menu_ids else None,
+            last_menu_message_id=cashback_menu_ids[-1] if cashback_menu_ids else None
+        )
+    
     await callback.answer()
 
 

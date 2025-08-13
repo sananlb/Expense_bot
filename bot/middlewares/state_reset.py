@@ -35,22 +35,25 @@ class StateResetMiddleware(BaseMiddleware):
                 # Сохраняем данные о персистентном меню кешбека перед очисткой
                 state_data = await state.get_data()
                 persistent_cashback = state_data.get('persistent_cashback_menu', False)
-                cashback_menu_id = state_data.get('cashback_menu_message_id')
+                cashback_menu_ids = state_data.get('cashback_menu_ids', [])
                 cashback_menu_month = state_data.get('cashback_menu_month')
                 
                 # Сбрасываем состояние при любой команде
                 await state.clear()
                 logger.info(f"State cleared for user {event.from_user.id} on command {event.text}")
                 
-                # Восстанавливаем флаг персистентного меню кешбека
-                if persistent_cashback and cashback_menu_id:
+                # Восстанавливаем флаг персистентного меню кешбека и список ID
+                if persistent_cashback and cashback_menu_ids:
+                    # Используем последний ID из списка для совместимости
+                    last_id = cashback_menu_ids[-1] if cashback_menu_ids else None
                     await state.update_data(
                         persistent_cashback_menu=True,
-                        cashback_menu_message_id=cashback_menu_id,
+                        cashback_menu_ids=cashback_menu_ids,  # Сохраняем весь список
+                        cashback_menu_message_id=last_id,  # Для совместимости
                         cashback_menu_month=cashback_menu_month,
-                        last_menu_message_id=cashback_menu_id  # ВАЖНО: сохраняем ID как last_menu для защиты от удаления
+                        last_menu_message_id=last_id  # ВАЖНО: сохраняем ID как last_menu для защиты от удаления
                     )
-                    logger.info(f"Restored persistent cashback menu for user {event.from_user.id}")
+                    logger.info(f"Restored persistent cashback menus ({len(cashback_menu_ids)} menus) for user {event.from_user.id}")
             
             # Проверяем состояние ожидания процента кешбэка (при добавлении или редактировании)
             elif current_state in [CashbackForm.waiting_for_percent.state, CashbackForm.editing_percent.state]:
