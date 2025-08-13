@@ -220,8 +220,8 @@ Get beautiful PDF reports with charts"""
 async def close_message(callback: types.CallbackQuery, state: FSMContext):
     """Закрытие сообщения"""
     await callback.message.delete()
-    # Очищаем последнее сохраненное сообщение меню и флаг persistent меню
+    # Очищаем последнее сохраненное сообщение меню
+    # НЕ трогаем флаг persistent_cashback_menu - он управляется только в cashback.py
     await state.update_data(
-        last_menu_message_id=None,
-        persistent_cashback_menu=False
+        last_menu_message_id=None
     )
