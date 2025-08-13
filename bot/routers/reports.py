@@ -211,7 +211,7 @@ async def cmd_report(message: Message, lang: str = 'ru'):
 
 @router.callback_query(F.data == "show_diary")
 async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Показать дневник трат (последние 2 дня, максимум 25 записей)"""
+    """Показать дневник трат (последние 3 дня, максимум 30 записей)"""
     try:
         from datetime import datetime, timedelta
         from expenses.models import Expense, Profile
@@ -234,28 +234,42 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
         # Определяем "сегодня" с учетом часового пояса пользователя
         now_user_tz = datetime.now(user_tz)
         end_date = now_user_tz.date()
-        start_date = end_date - timedelta(days=2)
+        start_date = end_date - timedelta(days=3)  # Расширяем до 3 дней
         
-        # Получаем траты за последние 2 дня, но не более 25
+        # Получаем траты за последние 3 дня, но не более 30
         @sync_to_async
         def get_recent_expenses():
             return list(Expense.objects.filter(
                 profile__telegram_id=user_id,
                 expense_date__gte=start_date,
                 expense_date__lte=end_date
-            ).select_related('category').order_by('expense_date', 'expense_time')[:25])
+            ).select_related('category').order_by('-expense_date', '-expense_time')[:30])
+        
+        # Получаем общее количество трат за период для проверки
+        @sync_to_async
+        def get_total_count_for_period():
+            return Expense.objects.filter(
+                profile__telegram_id=user_id,
+                expense_date__gte=start_date,
+                expense_date__lte=end_date
+            ).count()
         
         expenses = await get_recent_expenses()
+        total_count = await get_total_count_for_period()
         
         if not expenses:
             text = "📋 <b>Дневник трат</b>\n\n<i>Трат не найдено</i>"
         else:
             text = "📋 <b>Дневник трат</b>\n\n"
             
+            # Сортируем траты по дате (от старых к новым)
+            expenses = sorted(expenses, key=lambda x: (x.expense_date, x.expense_time or x.created_at))
+            
             current_date = None
             day_total = {}  # Для подсчета суммы по валютам за текущий день
             day_expenses = []  # Список трат текущего дня
             all_days_data = []  # Список для хранения данных по всем дням
+            first_day_date = None  # Запоминаем дату первого дня
             
             for expense in expenses:
                 # Если дата изменилась, сохраняем данные предыдущего дня
@@ -265,11 +279,14 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                         all_days_data.append({
                             'date': current_date,
                             'expenses': day_expenses,
-                            'totals': day_total
+                            'totals': day_total,
+                            'is_complete': True  # По умолчанию день полный
                         })
                     
                     # Начинаем новый день
                     current_date = expense.expense_date
+                    if first_day_date is None:
+                        first_day_date = current_date
                     day_total = {}
                     day_expenses = []
                 
@@ -304,11 +321,31 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                 all_days_data.append({
                     'date': current_date,
                     'expenses': day_expenses,
-                    'totals': day_total
+                    'totals': day_total,
+                    'is_complete': True
                 })
             
-            # Формируем текст вывода (дни уже отсортированы по возрастанию даты)
-            for day_data in all_days_data:
+            # Проверяем, все ли траты показаны
+            if len(expenses) == 30 and total_count > 30:
+                # Если показано ровно 30 записей и всего их больше, 
+                # значит первый день может быть неполным
+                if all_days_data and all_days_data[0]['date'] == first_day_date:
+                    # Проверяем есть ли еще траты за первый день
+                    @sync_to_async
+                    def check_first_day_completeness():
+                        return Expense.objects.filter(
+                            profile__telegram_id=user_id,
+                            expense_date=first_day_date
+                        ).count()
+                    
+                    first_day_total = await check_first_day_completeness()
+                    first_day_shown = len(all_days_data[0]['expenses'])
+                    
+                    if first_day_total > first_day_shown:
+                        all_days_data[0]['is_complete'] = False
+            
+            # Формируем текст вывода
+            for i, day_data in enumerate(all_days_data):
                 # Форматируем дату
                 if day_data['date'] == end_date:
                     date_str = "Сегодня"
@@ -323,6 +360,10 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                     date_str = f"{day} {month_name}"
                 
                 text += f"\n<b>📅 {date_str}</b>\n"
+                
+                # Если день неполный (в начале списка), показываем индикатор
+                if not day_data['is_complete'] and i == 0:
+                    text += "  ...\n  ...\n"
                 
                 # Выводим траты дня
                 for expense in day_data['expenses']:
@@ -340,13 +381,21 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                 
                 # Добавляем итог дня
                 if day_data['totals']:
-                    text += "  💰 <b>Итого за день:</b> "
+                    # Если день неполный, добавляем пометку
+                    if not day_data['is_complete']:
+                        text += "  💰 <b>Итого показано:</b> "
+                    else:
+                        text += "  💰 <b>Итого за день:</b> "
+                    
                     totals_list = []
                     for currency, total in day_data['totals'].items():
                         total_str = f"{total:,.0f}".replace(',', ' ')
                         currency_symbol = {'RUB': '₽', 'USD': '$', 'EUR': '€'}.get(currency, currency)
                         totals_list.append(f"{total_str} {currency_symbol}")
                     text += ", ".join(totals_list) + "\n"
+        
+        # Добавляем вопрос в конце
+        text += "\n<i>💡 Показать траты в другие дни?</i>"
         
         # Добавляем кнопку "Назад"
         keyboard = InlineKeyboardMarkup(inline_keyboard=[

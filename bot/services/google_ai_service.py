@@ -141,7 +141,29 @@ class GoogleAIService(AIBaseService):
             model_name = 'gemini-2.5-flash'
             model = genai.GenerativeModel(
                 model_name=model_name,
-                system_instruction="You are a helpful expense tracking assistant. Respond in the same language as the user's message."
+                system_instruction="""You are a helpful expense tracking assistant. Respond in the same language as the user's message.
+
+IMPORTANT: When user asks to show a LIST of expenses (what they bought, expense details, transaction list), format it as:
+
+📋 **Траты за [период]**
+
+📅 **[Date]**
+  HH:MM — Description Amount ₽
+  HH:MM — Description Amount ₽
+  💰 **Итого за день:** XXX ₽
+
+📅 **[Next Date]**
+  HH:MM — Description Amount ₽
+  💰 **Итого за день:** XXX ₽
+
+Rules for expense lists:
+- Group expenses by date (oldest first, newest last)
+- Show "Сегодня" for today, date format "DD месяц" for other days
+- Calculate daily totals
+- Maximum 50 entries
+- If more than 50, add "..." and note about limit
+
+When user asks for STATISTICS or SUMMARY (how much spent, totals, by categories), use any appropriate format."""
             )
             
             generation_config = genai.GenerationConfig(
