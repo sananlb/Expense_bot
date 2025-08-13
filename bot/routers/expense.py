@@ -596,7 +596,8 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
     is_show_request, confidence = is_show_expenses_request(text)
     if is_show_request and confidence >= 0.7:
         # Это команда показа трат, выходим из состояния и обрабатываем команду
-        await state.clear()
+        from bot.utils.state_utils import clear_state_keep_cashback
+        await clear_state_keep_cashback(state)
         from ..routers.chat import process_chat_message
         await process_chat_message(message, state, text)
         return
@@ -606,7 +607,8 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
     description = data.get('expense_description', '')
     
     if not description:
-        await state.clear()
+        from bot.utils.state_utils import clear_state_keep_cashback
+        await clear_state_keep_cashback(state)
         await message.answer("❌ Произошла ошибка. Попробуйте еще раз.")
         return
     
@@ -678,7 +680,8 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
             cashback_text = f" (+{cashback:.0f} ₽)"
     
     # Очищаем состояние
-    await state.clear()
+    from bot.utils.state_utils import clear_state_keep_cashback
+    await clear_state_keep_cashback(state)
     
     # Формируем сообщение с информацией о потраченном за день
     message_text = await format_expense_added_message(
@@ -1121,7 +1124,8 @@ async def remove_cashback(callback: types.CallbackQuery, state: FSMContext, lang
         )
         
         # Очищаем состояние редактирования
-        await state.clear()
+        from bot.utils.state_utils import clear_state_keep_cashback
+        await clear_state_keep_cashback(state)
         
         # Отвечаем на callback без уведомления
         await callback.answer()
@@ -1241,7 +1245,8 @@ async def edit_cancel(callback: types.CallbackQuery, state: FSMContext):
     else:
         # Если это было управление категориями, просто удаляем сообщение
         await callback.message.delete()
-        await state.clear()
+        from bot.utils.state_utils import clear_state_keep_cashback
+        await clear_state_keep_cashback(state)
     await callback.answer()
 
 
@@ -1302,7 +1307,8 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext):
     except Expense.DoesNotExist:
         await callback.message.edit_text("❌ Ошибка при получении данных траты")
     
-    await state.clear()
+    from bot.utils.state_utils import clear_state_keep_cashback
+    await clear_state_keep_cashback(state)
     await callback.answer()
 
 
@@ -1517,10 +1523,12 @@ async def show_updated_expense(message: types.Message, state: FSMContext, expens
         )
         
         # Очищаем состояние
-        await state.clear()
+        from bot.utils.state_utils import clear_state_keep_cashback
+        await clear_state_keep_cashback(state)
     except Expense.DoesNotExist:
         await message.answer("❌ Трата не найдена")
-        await state.clear()
+        from bot.utils.state_utils import clear_state_keep_cashback
+        await clear_state_keep_cashback(state)
 
 
 async def show_updated_expense_callback(callback: types.CallbackQuery, state: FSMContext, expense_id: int):
@@ -1565,8 +1573,10 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
         )
         
         # Очищаем состояние
-        await state.clear()
+        from bot.utils.state_utils import clear_state_keep_cashback
+        await clear_state_keep_cashback(state)
         await callback.answer()
     except Expense.DoesNotExist:
         await callback.answer("❌ Трата не найдена", show_alert=True)
-        await state.clear()
+        from bot.utils.state_utils import clear_state_keep_cashback
+        await clear_state_keep_cashback(state)

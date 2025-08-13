@@ -39,7 +39,8 @@ class NotificationStates(StatesGroup):
 @router.message(Command("settings"))
 async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
     """Показать меню настроек"""
-    await state.clear()
+    from bot.utils.state_utils import clear_state_keep_cashback
+    await clear_state_keep_cashback(state)
     
     try:
         profile = await get_or_create_profile(message.from_user.id)
