@@ -47,6 +47,13 @@ async def delete_last_menu(state: 'FSMContext', bot: Bot, chat_id: int) -> None:
     try:
         data = await state.get_data()
         last_menu_id = data.get('last_menu_message_id')
+        persistent_cashback = data.get('persistent_cashback_menu', False)
+        
+        # НЕ удаляем меню кешбека если оно помечено как постоянное
+        if persistent_cashback:
+            logger.debug(f"Skipping deletion of persistent cashback menu {last_menu_id}")
+            return
+            
         if last_menu_id:
             await bot.delete_message(chat_id=chat_id, message_id=last_menu_id)
             # Очищаем ID после успешного удаления
@@ -54,8 +61,10 @@ async def delete_last_menu(state: 'FSMContext', bot: Bot, chat_id: int) -> None:
     except Exception as e:
         # Логируем только на уровне debug, так как это нормальная ситуация
         logger.debug(f"Не удалось удалить меню: {e}")
-        # Очищаем ID в любом случае
-        await state.update_data(last_menu_message_id=None)
+        # Очищаем ID в любом случае, но только если это НЕ постоянное меню кешбека
+        data = await state.get_data()
+        if not data.get('persistent_cashback_menu', False):
+            await state.update_data(last_menu_message_id=None)
 
 
 async def delete_subscription_messages(state: 'FSMContext', bot: Bot, chat_id: int) -> None:
@@ -98,6 +107,7 @@ async def send_message_with_cleanup(
     text: str,
     reply_markup: Optional[InlineKeyboardMarkup | ReplyKeyboardMarkup] = None,
     keep_message: bool = False,
+    update_cashback_menu: bool = False,
     **kwargs
 ) -> Message:
     """
@@ -109,6 +119,7 @@ async def send_message_with_cleanup(
         text: Текст для отправки
         reply_markup: Клавиатура
         keep_message: Если True, сообщение не будет удалено при следующем вызове
+        update_cashback_menu: Если True, это обновление меню кешбека - нужно обновить ID
         **kwargs: Дополнительные параметры для send_message
     
     Returns:
@@ -127,8 +138,8 @@ async def send_message_with_cleanup(
     old_menu_id = data.get('last_menu_message_id')
     persistent_cashback = data.get('persistent_cashback_menu', False)
     
-    # Если меню кешбека постоянное, не удаляем его
-    if persistent_cashback and old_menu_id:
+    # Если меню кешбека постоянное и это НЕ обновление меню кешбека, не удаляем его
+    if persistent_cashback and old_menu_id and not update_cashback_menu:
         # Просто отправляем новое сообщение без удаления старого
         sent_message = await bot.send_message(
             chat_id=chat_id,

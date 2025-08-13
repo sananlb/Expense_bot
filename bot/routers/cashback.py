@@ -130,7 +130,7 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close_cashback_menu")]
         ])
     
-    await send_message_with_cleanup(message, state, text, reply_markup=keyboard, parse_mode="HTML")
+    await send_message_with_cleanup(message, state, text, reply_markup=keyboard, parse_mode="HTML", update_cashback_menu=True)
 
 
 @router.callback_query(lambda c: c.data == "cashback_menu")
@@ -912,11 +912,10 @@ async def select_other_month(callback: types.CallbackQuery):
 
 
 @router.callback_query(lambda c: c.data.startswith("view_cb_month_"))
-async def view_cashback_month(callback: types.CallbackQuery):
+async def view_cashback_month(callback: types.CallbackQuery, state: FSMContext):
     """Просмотр кешбэков за выбранный месяц"""
     month = int(callback.data.split("_")[-1])
-    await callback.message.delete()
-    await show_cashback_menu(callback.message, month)
+    await show_cashback_menu(callback, state, month=month)
     await callback.answer()
 
 
