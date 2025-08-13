@@ -211,7 +211,7 @@ async def cmd_report(message: Message, lang: str = 'ru'):
 
 @router.callback_query(F.data == "show_diary")
 async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Показать дневник трат (последние 2 дня, максимум 20 записей)"""
+    """Показать дневник трат (последние 2 дня, максимум 25 записей)"""
     try:
         from datetime import datetime, timedelta
         from expenses.models import Expense, Profile
@@ -236,14 +236,14 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
         end_date = now_user_tz.date()
         start_date = end_date - timedelta(days=2)
         
-        # Получаем траты за последние 2 дня, но не более 20
+        # Получаем траты за последние 2 дня, но не более 25
         @sync_to_async
         def get_recent_expenses():
             return list(Expense.objects.filter(
                 profile__telegram_id=user_id,
                 expense_date__gte=start_date,
                 expense_date__lte=end_date
-            ).select_related('category').order_by('expense_date', 'expense_time')[:20])
+            ).select_related('category').order_by('expense_date', 'expense_time')[:25])
         
         expenses = await get_recent_expenses()
         
@@ -252,67 +252,101 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
         else:
             text = "📋 <b>Дневник трат</b>\n\n"
             
-            total_amount = {}  # Для подсчета общей суммы по валютам
             current_date = None
+            day_total = {}  # Для подсчета суммы по валютам за текущий день
+            day_expenses = []  # Список трат текущего дня
+            all_days_data = []  # Список для хранения данных по всем дням
             
             for expense in expenses:
-                # Группируем по датам
+                # Если дата изменилась, сохраняем данные предыдущего дня
                 if expense.expense_date != current_date:
+                    if current_date is not None and day_expenses:
+                        # Сохраняем данные предыдущего дня
+                        all_days_data.append({
+                            'date': current_date,
+                            'expenses': day_expenses,
+                            'totals': day_total
+                        })
+                    
+                    # Начинаем новый день
                     current_date = expense.expense_date
-                    # Форматируем дату - только "Сегодня" остается словом, остальное как даты
-                    if current_date == end_date:
-                        date_str = "Сегодня"
-                    else:
-                        # Для остальных дней показываем дату в формате "ДД месяц"
-                        months_ru = {
-                            1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
-                            5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
-                            9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
-                        }
-                        day = current_date.day
-                        month_name = months_ru.get(current_date.month, current_date.strftime('%B'))
-                        date_str = f"{day} {month_name}"
-                    text += f"\n<b>📅 {date_str}</b>\n"
+                    day_total = {}
+                    day_expenses = []
                 
-                # Форматируем время, описание и сумму в одну строку
-                # Используем expense_time если есть, иначе created_at
+                # Форматируем время, описание и сумму
                 if expense.expense_time:
                     time_str = expense.expense_time.strftime('%H:%M')
                 else:
                     time_str = expense.created_at.strftime('%H:%M')
+                
                 description = expense.description or "Без описания"
-                # Обрезаем длинное описание
                 if len(description) > 30:
                     description = description[:27] + "..."
                 
-                # Форматируем сумму с валютой
                 currency = expense.currency or 'RUB'
                 amount = float(expense.amount)
                 
-                # Добавляем к общей сумме
-                if currency not in total_amount:
-                    total_amount[currency] = 0
-                total_amount[currency] += amount
+                # Добавляем к сумме дня
+                if currency not in day_total:
+                    day_total[currency] = 0
+                day_total[currency] += amount
                 
-                amount_str = f"{amount:,.0f}".replace(',', ' ')
-                if currency == 'RUB':
-                    amount_str += ' ₽'
-                elif currency == 'USD':
-                    amount_str += ' $'
-                elif currency == 'EUR':
-                    amount_str += ' €'
-                else:
-                    amount_str += f' {currency}'
-                
-                text += f"  {time_str} — {description} {amount_str}\n"
+                # Добавляем трату в список дня
+                day_expenses.append({
+                    'time': time_str,
+                    'description': description,
+                    'amount': amount,
+                    'currency': currency
+                })
             
-            # Добавляем итоговую сумму
-            if total_amount:
-                text += "\n<b>💰 Итого:</b>\n"
-                for currency, total in total_amount.items():
-                    total_str = f"{total:,.0f}".replace(',', ' ')
-                    currency_symbol = {'RUB': '₽', 'USD': '$', 'EUR': '€'}.get(currency, currency)
-                    text += f"• {total_str} {currency_symbol}\n"
+            # Добавляем последний день
+            if current_date is not None and day_expenses:
+                all_days_data.append({
+                    'date': current_date,
+                    'expenses': day_expenses,
+                    'totals': day_total
+                })
+            
+            # Формируем текст вывода (дни уже отсортированы по возрастанию даты)
+            for day_data in all_days_data:
+                # Форматируем дату
+                if day_data['date'] == end_date:
+                    date_str = "Сегодня"
+                else:
+                    months_ru = {
+                        1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
+                        5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
+                        9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
+                    }
+                    day = day_data['date'].day
+                    month_name = months_ru.get(day_data['date'].month, day_data['date'].strftime('%B'))
+                    date_str = f"{day} {month_name}"
+                
+                text += f"\n<b>📅 {date_str}</b>\n"
+                
+                # Выводим траты дня
+                for expense in day_data['expenses']:
+                    amount_str = f"{expense['amount']:,.0f}".replace(',', ' ')
+                    if expense['currency'] == 'RUB':
+                        amount_str += ' ₽'
+                    elif expense['currency'] == 'USD':
+                        amount_str += ' $'
+                    elif expense['currency'] == 'EUR':
+                        amount_str += ' €'
+                    else:
+                        amount_str += f" {expense['currency']}"
+                    
+                    text += f"  {expense['time']} — {expense['description']} {amount_str}\n"
+                
+                # Добавляем итог дня
+                if day_data['totals']:
+                    text += "  💰 <b>Итого за день:</b> "
+                    totals_list = []
+                    for currency, total in day_data['totals'].items():
+                        total_str = f"{total:,.0f}".replace(',', ' ')
+                        currency_symbol = {'RUB': '₽', 'USD': '$', 'EUR': '€'}.get(currency, currency)
+                        totals_list.append(f"{total_str} {currency_symbol}")
+                    text += ", ".join(totals_list) + "\n"
         
         # Добавляем кнопку "Назад"
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
