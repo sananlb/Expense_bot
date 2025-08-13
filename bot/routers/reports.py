@@ -214,13 +214,26 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
     """Показать дневник трат (последние 2 дня, максимум 20 записей)"""
     try:
         from datetime import datetime, timedelta
-        from expenses.models import Expense
+        from expenses.models import Expense, Profile
         from asgiref.sync import sync_to_async
+        import pytz
         
         user_id = callback.from_user.id
         
-        # Определяем период - последние 2 дня
-        end_date = datetime.now().date()
+        # Получаем профиль пользователя с часовым поясом
+        @sync_to_async
+        def get_user_profile():
+            try:
+                return Profile.objects.get(telegram_id=user_id)
+            except Profile.DoesNotExist:
+                return None
+        
+        profile = await get_user_profile()
+        user_tz = pytz.timezone(profile.timezone if profile else 'UTC')
+        
+        # Определяем "сегодня" с учетом часового пояса пользователя
+        now_user_tz = datetime.now(user_tz)
+        end_date = now_user_tz.date()
         start_date = end_date - timedelta(days=2)
         
         # Получаем траты за последние 2 дня, но не более 20
@@ -230,7 +243,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                 profile__telegram_id=user_id,
                 expense_date__gte=start_date,
                 expense_date__lte=end_date
-            ).select_related('category').order_by('expense_date', 'created_at')[:20])
+            ).select_related('category').order_by('expense_date', 'expense_time')[:20])
         
         expenses = await get_recent_expenses()
         
@@ -246,19 +259,27 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                 # Группируем по датам
                 if expense.expense_date != current_date:
                     current_date = expense.expense_date
-                    # Форматируем дату
+                    # Форматируем дату - только "Сегодня" остается словом, остальное как даты
                     if current_date == end_date:
                         date_str = "Сегодня"
-                    elif current_date == end_date - timedelta(days=1):
-                        date_str = "Вчера"
-                    elif current_date == end_date - timedelta(days=2):
-                        date_str = "Позавчера"
                     else:
-                        date_str = current_date.strftime('%d.%m.%Y')
+                        # Для остальных дней показываем дату в формате "ДД месяц"
+                        months_ru = {
+                            1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
+                            5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
+                            9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
+                        }
+                        day = current_date.day
+                        month_name = months_ru.get(current_date.month, current_date.strftime('%B'))
+                        date_str = f"{day} {month_name}"
                     text += f"\n<b>📅 {date_str}</b>\n"
                 
                 # Форматируем время, описание и сумму в одну строку
-                time_str = expense.created_at.strftime('%H:%M')
+                # Используем expense_time если есть, иначе created_at
+                if expense.expense_time:
+                    time_str = expense.expense_time.strftime('%H:%M')
+                else:
+                    time_str = expense.created_at.strftime('%H:%M')
                 description = expense.description or "Без описания"
                 # Обрезаем длинное описание
                 if len(description) > 30:

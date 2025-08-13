@@ -326,7 +326,7 @@ try:
     },
     'send-daily-admin-report': {
         'task': 'expense_bot.celery_tasks.send_daily_admin_report',
-        'schedule': crontab(hour=9, minute=0),  # 9 AM daily
+        'schedule': crontab(hour=10, minute=0),  # 10 AM daily
         'options': {'queue': 'reports'}
     }
 }

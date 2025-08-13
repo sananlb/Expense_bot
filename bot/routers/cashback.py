@@ -150,19 +150,26 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
         # Получаем текущие данные состояния
         data = await state.get_data()
         cashback_menu_ids = data.get('cashback_menu_ids', [])
+        current_last_menu = data.get('last_menu_message_id')
         
         # Добавляем новый ID в список меню кешбека
         if sent_message.message_id not in cashback_menu_ids:
             cashback_menu_ids.append(sent_message.message_id)
         
         # Сохраняем обновленный список ID и флаги
-        await state.update_data(
-            cashback_menu_ids=cashback_menu_ids,  # Список всех ID меню кешбека
-            cashback_menu_message_id=sent_message.message_id,  # Последний ID для совместимости
-            last_menu_message_id=sent_message.message_id,  # ВАЖНО: также сохраняем как last_menu для совместимости
-            persistent_cashback_menu=True,
-            cashback_menu_month=target_month
-        )
+        update_data = {
+            'cashback_menu_ids': cashback_menu_ids,  # Список всех ID меню кешбека
+            'cashback_menu_message_id': sent_message.message_id,  # Последний ID для совместимости
+            'persistent_cashback_menu': True,
+            'cashback_menu_month': target_month
+        }
+        
+        # НЕ перезаписываем last_menu_message_id если там уже есть ID другого (не кешбек) меню
+        # Это позволит правильно удалять обычные меню при навигации
+        if not current_last_menu or current_last_menu in cashback_menu_ids:
+            update_data['last_menu_message_id'] = sent_message.message_id
+            
+        await state.update_data(**update_data)
 
 
 @router.callback_query(lambda c: c.data == "cashback_menu")

@@ -37,14 +37,13 @@ class CategoryStates(StatesGroup):
 @router.message(Command("categories"))
 async def cmd_categories(message: types.Message, state: FSMContext):
     """Команда /categories - управление категориями"""
-    # Удаляем предыдущее меню ТОЛЬКО если это НЕ персистентное меню кешбека
+    # Удаляем предыдущее меню ТОЛЬКО если это НЕ меню кешбека
     data = await state.get_data()
     old_menu_id = data.get('last_menu_message_id')
-    persistent_cashback = data.get('persistent_cashback_menu', False)
     cashback_menu_ids = data.get('cashback_menu_ids', [])
     
-    # Проверяем, не является ли это персистентным меню кешбека
-    if old_menu_id and not (persistent_cashback and old_menu_id in cashback_menu_ids):
+    # Проверяем, не является ли это меню кешбека
+    if old_menu_id and old_menu_id not in cashback_menu_ids:
         try:
             await message.bot.delete_message(chat_id=message.chat.id, message_id=old_menu_id)
             await state.update_data(last_menu_message_id=None)

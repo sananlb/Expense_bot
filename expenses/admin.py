@@ -88,20 +88,46 @@ class ProfileAdmin(admin.ModelAdmin):
         )
     
     def subscription_status(self, obj):
-        """Статус подписки"""
+        """Статус подписки (суммарно по всем активным)"""
         from django.utils import timezone
-        active_sub = obj.subscriptions.filter(
+        from django.db.models import Max
+        
+        # Получаем все активные подписки
+        active_subs = obj.subscriptions.filter(
             is_active=True,
             end_date__gt=timezone.now()
-        ).first()
+        )
         
-        if active_sub:
-            days_left = (active_sub.end_date - timezone.now()).days
-            color = 'green' if days_left > 7 else 'orange'
-            return format_html(
-                '<span style="color: {};">✅ {} дней</span>',
-                color, days_left
-            )
+        if active_subs.exists():
+            # Берем максимальную дату окончания среди всех активных подписок
+            max_end_date = active_subs.aggregate(Max('end_date'))['end_date__max']
+            total_days = (max_end_date - timezone.now()).days
+            
+            # Считаем количество активных подписок
+            sub_count = active_subs.count()
+            
+            # Определяем цвет
+            if total_days > 30:
+                color = 'green'
+            elif total_days > 7:
+                color = 'orange'
+            else:
+                color = 'red'
+            
+            # Если несколько подписок, показываем их количество
+            if sub_count > 1:
+                return format_html(
+                    '<span style="color: {};">✅ {} дней ({} подп.)</span>',
+                    color, total_days, sub_count
+                )
+            else:
+                # Определяем тип подписки для единственной
+                sub_type = active_subs.first().type
+                type_label = {'trial': 'проб.', 'month': 'мес.', 'six_months': '6 мес.'}.get(sub_type, '')
+                return format_html(
+                    '<span style="color: {};">✅ {} дней {}</span>',
+                    color, total_days, f'({type_label})' if type_label else ''
+                )
         return format_html('<span style="color: red;">❌ Нет</span>')
     
     subscription_status.short_description = 'Подписка'

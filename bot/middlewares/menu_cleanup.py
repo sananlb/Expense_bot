@@ -43,15 +43,14 @@ class MenuCleanupMiddleware(BaseMiddleware):
                 # Проверяем, что меню еще не было удалено обработчиком
                 state_data = await state.get_data()
                 current_menu_id = state_data.get('last_menu_message_id')
-                persistent_cashback = state_data.get('persistent_cashback_menu', False)
                 cashback_menu_ids = state_data.get('cashback_menu_ids', [])
                 
                 # ВАЖНОЕ ЛОГИРОВАНИЕ для отладки
-                logger.info(f"MenuCleanup CHECK: old_menu={old_menu_id}, current_menu={current_menu_id}, persistent={persistent_cashback}, cashback_ids={cashback_menu_ids}")
+                logger.debug(f"MenuCleanup CHECK: old_menu={old_menu_id}, current_menu={current_menu_id}, cashback_ids={cashback_menu_ids}")
                 
-                # НЕ удаляем меню кешбека если оно в списке персистентных
-                if persistent_cashback and old_menu_id in cashback_menu_ids:
-                    logger.info(f"SKIPPING deletion - cashback menu is persistent! old_menu={old_menu_id}")
+                # НЕ удаляем ТОЛЬКО если это меню кешбека из списка
+                if old_menu_id in cashback_menu_ids:
+                    logger.info(f"SKIPPING deletion - this is a cashback menu! old_menu={old_menu_id}")
                     return result
                 
                 # Удаляем только если ID изменился (значит было отправлено новое меню)

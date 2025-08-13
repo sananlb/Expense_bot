@@ -171,16 +171,38 @@ def calculate_expense_cashback(user_id: int, category_id: int, amount: Decimal, 
     except Profile.DoesNotExist:
         return Decimal('0')
     
-    # Получаем кешбэки для категории и месяца
-    cashbacks = Cashback.objects.filter(
+    # Сначала проверяем кешбэк для конкретной категории
+    category_cashbacks = Cashback.objects.filter(
         profile=profile,
         category_id=category_id,
         month=month
     )
     
-    total_cashback = Decimal('0')
+    # Если есть кешбэк для конкретной категории - используем максимальный из них
+    if category_cashbacks.exists():
+        max_cashback_amount = Decimal('0')
+        for cashback in category_cashbacks:
+            # Преобразуем amount в Decimal для корректного умножения
+            cashback_amount = Decimal(str(amount)) * (cashback.cashback_percent / 100)
+            
+            # Учитываем лимит
+            if cashback.limit_amount:
+                cashback_amount = min(cashback_amount, cashback.limit_amount)
+            
+            # Берем максимальный кешбэк
+            max_cashback_amount = max(max_cashback_amount, cashback_amount)
+        return max_cashback_amount
     
-    for cashback in cashbacks:
+    # Если нет кешбэка для конкретной категории, проверяем кешбэк на все категории
+    all_categories_cashbacks = Cashback.objects.filter(
+        profile=profile,
+        category_id=None,  # None означает все категории
+        month=month
+    )
+    
+    # Выбираем максимальный кешбэк из доступных
+    max_cashback_amount = Decimal('0')
+    for cashback in all_categories_cashbacks:
         # Преобразуем amount в Decimal для корректного умножения
         cashback_amount = Decimal(str(amount)) * (cashback.cashback_percent / 100)
         
@@ -188,9 +210,10 @@ def calculate_expense_cashback(user_id: int, category_id: int, amount: Decimal, 
         if cashback.limit_amount:
             cashback_amount = min(cashback_amount, cashback.limit_amount)
         
-        total_cashback += cashback_amount
+        # Берем максимальный кешбэк
+        max_cashback_amount = max(max_cashback_amount, cashback_amount)
     
-    return total_cashback
+    return max_cashback_amount
 
 
 def format_cashback_note(cashbacks: List[Cashback], month: int) -> str:

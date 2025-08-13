@@ -222,33 +222,59 @@ def cleanup_old_expenses():
 def send_daily_admin_report():
     """Отправка ежедневного отчета администратору"""
     try:
-        from expenses.models import UserProfile, Expense, ExpenseCategory
+        from expenses.models import Profile, Expense, ExpenseCategory, Subscription
         from bot.services.admin_notifier import send_admin_alert
         from django.utils import timezone
         
         yesterday = timezone.now().date() - timedelta(days=1)
         today = timezone.now().date()
         
-        # Собираем статистику
-        total_users = UserProfile.objects.count()
+        # Собираем статистику по пользователям
+        total_users = Profile.objects.count()
         active_users = Expense.objects.filter(
-            created_at__date=yesterday
+            expense_date=yesterday
         ).values('profile').distinct().count()
         
-        expenses_stats = Expense.objects.filter(
+        new_users = Profile.objects.filter(
             created_at__date=yesterday
+        ).count()
+        
+        # Статистика по расходам
+        expenses_stats = Expense.objects.filter(
+            expense_date=yesterday
         ).aggregate(
             total=Sum('amount'),
             count=Count('id')
         )
         
-        new_users = UserProfile.objects.filter(
-            created_at__date=yesterday
+        # Статистика по подпискам за вчера
+        new_subscriptions = Subscription.objects.filter(
+            created_at__date=yesterday,
+            payment_method__in=['stars', 'referral', 'promo']
+        ).values('type').annotate(
+            count=Count('id')
+        ).order_by('type')
+        
+        subscriptions_text = ""
+        total_subs = 0
+        for sub in new_subscriptions:
+            sub_type = {
+                'trial': 'Пробных',
+                'month': 'Месячных', 
+                'six_months': 'Полугодовых'
+            }.get(sub['type'], sub['type'])
+            subscriptions_text += f"  • {sub_type}: {sub['count']}\n"
+            total_subs += sub['count']
+        
+        # Активные подписки на сегодня
+        active_subscriptions = Subscription.objects.filter(
+            is_active=True,
+            end_date__gt=timezone.now()
         ).count()
         
         # Топ категорий
         top_categories = Expense.objects.filter(
-            created_at__date=yesterday
+            expense_date=yesterday
         ).values('category__name').annotate(
             total=Sum('amount'),
             count=Count('id')
@@ -256,26 +282,39 @@ def send_daily_admin_report():
         
         categories_text = "\n".join([
             f"  • {cat['category__name'] or 'Без категории'}: "
-            f"{cat['total']:.2f} ({cat['count']} записей)"
+            f"{cat['total']:,.0f} ₽ ({cat['count']} зап.)"
             for cat in top_categories
         ])
         
         # Формируем отчет
         report = (
-            f"📊 *Ежедневный отчет за {yesterday.strftime('%d.%m.%Y')}*\n\n"
+            f"📊 *Ежедневный отчет ExpenseBot*\n"
+            f"📅 За {yesterday.strftime('%d.%m.%Y')}\n\n"
             f"👥 *Пользователи:*\n"
-            f"  • Всего: {total_users}\n"
+            f"  • Всего: {total_users:,}\n"
             f"  • Активных вчера: {active_users}\n"
-            f"  • Новых: {new_users}\n\n"
-            f"💰 *Расходы:*\n"
-            f"  • Количество: {expenses_stats['count'] or 0}\n"
-            f"  • Сумма: {expenses_stats['total'] or 0:.2f}\n\n"
+            f"  • Новых регистраций: {new_users}\n\n"
+            f"💰 *Расходы за вчера:*\n"
+            f"  • Записей: {expenses_stats['count'] or 0:,}\n"
+            f"  • Общая сумма: {expenses_stats['total'] or 0:,.0f} ₽\n"
         )
         
-        if categories_text:
-            report += f"📂 *Топ категорий:*\n{categories_text}\n\n"
+        if expenses_stats['count'] and expenses_stats['count'] > 0:
+            avg_expense = expenses_stats['total'] / expenses_stats['count']
+            report += f"  • Средний чек: {avg_expense:,.0f} ₽\n"
         
-        report += f"🕐 Отчет сформирован: {datetime.now().strftime('%H:%M:%S')}"
+        report += f"\n⭐ *Подписки:*\n"
+        report += f"  • Активных всего: {active_subscriptions}\n"
+        if total_subs > 0:
+            report += f"  • Куплено вчера: {total_subs}\n"
+            report += subscriptions_text
+        else:
+            report += f"  • Куплено вчера: 0\n"
+        
+        if categories_text:
+            report += f"\n📂 *Топ-5 категорий вчера:*\n{categories_text}\n"
+        
+        report += f"\n⏰ Отчет сформирован: {datetime.now().strftime('%H:%M')}"
         
         # Отправляем отчет асинхронно
         loop = asyncio.new_event_loop()
