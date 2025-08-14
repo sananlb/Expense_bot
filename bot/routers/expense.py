@@ -439,6 +439,30 @@ async def show_next_month_expenses(callback: types.CallbackQuery, state: FSMCont
     await callback.answer()
 
 
+@router.callback_query(lambda c: c.data == "expenses_today_view")
+async def show_today_expenses(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Вернуться к сегодняшним тратам"""
+    from bot.routers.reports import show_expenses_summary
+    
+    today = date.today()
+    
+    # Сбрасываем состояние месяца
+    await state.update_data(current_month=None, current_year=None)
+    
+    # Показываем траты за сегодня
+    await show_expenses_summary(
+        callback.message,
+        today,
+        today,
+        lang,
+        state=state,
+        edit=True,
+        original_message=callback.message,
+        callback=callback
+    )
+    await callback.answer()
+
+
 @router.callback_query(lambda c: c.data == "pdf_generate_current")
 async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Генерация PDF отчета за текущий выбранный месяц"""
