@@ -41,6 +41,21 @@ async def check_expiring_subscriptions(bot: Bot):
                 logger.info(f"Уведомление для подписки {subscription.id} уже отправлено")
                 continue
             
+            # НОВАЯ ПРОВЕРКА: Если у пользователя есть другие активные подписки, не отправляем уведомление
+            # Проверяем наличие других активных подписок, которые будут действовать после истечения текущей
+            other_active_subscriptions = await Subscription.objects.filter(
+                profile=subscription.profile,
+                is_active=True,
+                end_date__gt=subscription.end_date  # Подписки, которые заканчиваются позже текущей
+            ).aexists()
+            
+            if other_active_subscriptions:
+                logger.info(
+                    f"Пользователь {subscription.profile.telegram_id} имеет другие активные подписки. "
+                    f"Не отправляем уведомление об истечении подписки {subscription.id}"
+                )
+                continue
+            
             # Формируем сообщение
             if subscription.type == 'trial':
                 message = (
