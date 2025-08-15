@@ -4,10 +4,19 @@
 import re
 import logging
 import asyncio
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from decimal import Decimal, InvalidOperation
+from datetime import datetime, date, time
+from dateutil import parser as date_parser
 
 logger = logging.getLogger(__name__)
+
+# Паттерны для извлечения даты
+DATE_PATTERNS = [
+    r'(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})',  # дд.мм.гггг или дд/мм/гггг
+    r'(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2})',    # дд.мм.гг или дд/мм/гг
+    r'(\d{1,2})[.\/-](\d{1,2})\s',              # дд.мм (текущий год)
+]
 
 # Паттерны для извлечения суммы
 AMOUNT_PATTERNS = [
@@ -45,6 +54,63 @@ CURRENCY_PATTERNS = {
 
 # Импортируем словарь ключевых слов из models
 from expenses.models import CATEGORY_KEYWORDS as MODEL_CATEGORY_KEYWORDS
+
+def extract_date_from_text(text: str) -> Tuple[Optional[date], str]:
+    """
+    Извлекает дату из текста и возвращает кортеж (дата, текст_без_даты)
+    
+    Примеры:
+    - "Кофе 200 15.03.2024" -> (date(2024, 3, 15), "Кофе 200")
+    - "25.12.2023 подарки 5000" -> (date(2023, 12, 25), "подарки 5000")
+    - "Продукты 1500" -> (None, "Продукты 1500")
+    """
+    for pattern in DATE_PATTERNS:
+        match = re.search(pattern, text)
+        if match:
+            try:
+                if len(match.groups()) == 3:
+                    # Полная дата дд.мм.гггг или дд.мм.гг
+                    day = int(match.group(1))
+                    month = int(match.group(2))
+                    year_str = match.group(3)
+                    
+                    # Обработка двузначного года
+                    if len(year_str) == 2:
+                        year = 2000 + int(year_str)
+                    else:
+                        year = int(year_str)
+                    
+                    # Валидация даты
+                    if 1 <= day <= 31 and 1 <= month <= 12:
+                        expense_date = date(year, month, day)
+                        
+                        # Убираем дату из текста
+                        text_without_date = text[:match.start()] + text[match.end():]
+                        text_without_date = ' '.join(text_without_date.split())  # Убираем лишние пробелы
+                        
+                        return expense_date, text_without_date
+                        
+                elif len(match.groups()) == 2:
+                    # Короткая дата дд.мм (используем текущий год)
+                    day = int(match.group(1))
+                    month = int(match.group(2))
+                    
+                    if 1 <= day <= 31 and 1 <= month <= 12:
+                        current_year = datetime.now().year
+                        expense_date = date(current_year, month, day)
+                        
+                        # Убираем дату из текста
+                        text_without_date = text[:match.start()] + text[match.end():]
+                        text_without_date = ' '.join(text_without_date.split())
+                        
+                        return expense_date, text_without_date
+                        
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Ошибка при парсинге даты из текста '{text}': {e}")
+                continue
+    
+    # Если дата не найдена, возвращаем None и оригинальный текст
+    return None, text
 
 # Старый словарь для обратной совместимости
 OLD_CATEGORY_KEYWORDS = {
@@ -213,13 +279,21 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     - "Кофе 200" -> {'amount': 200, 'description': 'Кофе', 'category': 'кафе'}
     - "Дизель 4095 АЗС" -> {'amount': 4095, 'description': 'Дизель АЗС', 'category': 'транспорт'}
     - "Продукты в пятерочке 1500" -> {'amount': 1500, 'description': 'Продукты в пятерочке', 'category': 'продукты'}
+    - "Кофе 200 15.03.2024" -> {'amount': 200, 'description': 'Кофе', 'expense_date': date(2024, 3, 15)}
+    - "25.12.2023 подарки 5000" -> {'amount': 5000, 'description': 'подарки', 'expense_date': date(2023, 12, 25)}
     """
     if not text:
         return None
     
-    # Сохраняем оригинальный текст и создаем версию в нижнем регистре для поиска
+    # Сохраняем оригинальный текст
     original_text = text.strip()
-    text_lower = original_text.lower()
+    
+    # Сначала извлекаем дату, если она есть
+    expense_date, text_without_date = extract_date_from_text(original_text)
+    
+    # Используем текст без даты для дальнейшего парсинга
+    text_to_parse = text_without_date
+    text_lower = text_to_parse.lower()
     
     # Ищем сумму
     amount = None
@@ -271,7 +345,8 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                     'category_id': category_id,
                     'currency': last_expense.currency or 'RUB',
                     'confidence': 0.8,  # Высокая уверенность, так как нашли похожую трату
-                    'reused_from_last': True  # Флаг, что данные взяты из предыдущей траты
+                    'reused_from_last': True,  # Флаг, что данные взяты из предыдущей траты
+                    'expense_date': expense_date  # Добавляем дату, если она была указана
                 }
                 
                 logger.info(f"Нашли похожую трату '{last_expense.description}' с суммой {amount}")
@@ -344,7 +419,8 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         'description': description or 'Расход',
         'category': category,  # Оставляем None если не найдено
         'currency': currency,
-        'confidence': 0.5 if category else 0.2
+        'confidence': 0.5 if category else 0.2,
+        'expense_date': expense_date  # Добавляем дату, если она была указана
     }
     
     # Попробуем улучшить с помощью AI, если:

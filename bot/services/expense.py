@@ -62,6 +62,13 @@ def create_expense(
             logger.warning(f"User {user_id} provided too long description: {len(description)} chars")
             raise ValueError("Описание слишком длинное (максимум 500 символов)")
             
+        # Если дата указана вручную (не сегодня), устанавливаем время 12:00
+        from datetime import time as datetime_time
+        if expense_date and expense_date != date.today():
+            expense_time = datetime_time(12, 0)  # 12:00 для трат задним числом
+        else:
+            expense_time = datetime.now().time()  # Текущее время для сегодняшних трат
+            
         expense = Expense.objects.create(
             profile=profile,
             category_id=category_id,
@@ -69,6 +76,7 @@ def create_expense(
             currency=currency,
             description=description,
             expense_date=expense_date,
+            expense_time=expense_time,
             ai_categorized=ai_categorized,
             ai_confidence=ai_confidence
         )

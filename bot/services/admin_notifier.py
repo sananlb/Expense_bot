@@ -119,6 +119,9 @@ async def send_admin_alert(message: str, disable_notification: bool = False) -> 
         logger.warning("ADMIN_TELEGRAM_ID не настроен")
         return False
     
+    logger.info(f"Попытка отправки админского уведомления. ADMIN_TELEGRAM_ID: {admin_id}")
+    logger.info(f"Используется токен бота: {'MONITORING_BOT_TOKEN' if os.getenv('MONITORING_BOT_TOKEN') else 'TELEGRAM_BOT_TOKEN'}")
+    
     try:
         await admin_notifier.send_message(
             chat_id=int(admin_id),
@@ -130,6 +133,7 @@ async def send_admin_alert(message: str, disable_notification: bool = False) -> 
         return True
     except Exception as e:
         logger.error(f"Ошибка отправки админского алерта: {e}")
+        logger.error(f"Детали ошибки: chat_id={admin_id}, message_length={len(message)}")
         return False
 
 
@@ -139,6 +143,8 @@ async def send_daily_report():
     from django.db.models import Sum, Count
     from django.utils import timezone
     from asgiref.sync import sync_to_async
+    
+    logger.info("Начинаем формирование ежедневного отчета администратору")
     
     yesterday = timezone.now().date() - timedelta(days=1)
     today = timezone.now().date()
@@ -205,12 +211,16 @@ async def send_daily_report():
     report += f"🕐 Отчет сформирован: {escape_markdown_v2(datetime.now().strftime('%H:%M:%S'))}"
     
     try:
-        await send_admin_alert(report, disable_notification=True)
-        logger.info(f"Ежедневный отчет за {yesterday} отправлен администратору")
-        cache.delete('daily_errors_count')
-        return True
+        logger.info(f"Отправляем ежедневный отчет за {yesterday}")
+        result = await send_admin_alert(report, disable_notification=True)
+        if result:
+            logger.info(f"Ежедневный отчет за {yesterday} отправлен администратору успешно")
+            cache.delete('daily_errors_count')
+        else:
+            logger.error(f"Не удалось отправить ежедневный отчет за {yesterday}")
+        return result
     except Exception as e:
-        logger.error(f"Ошибка отправки ежедневного отчета: {e}")
+        logger.error(f"Ошибка отправки ежедневного отчета: {e}", exc_info=True)
         return False
 
 

@@ -678,12 +678,14 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
     category = await get_or_create_category(user_id, category_name)
     
     # Сохраняем трату
+    expense_date = parsed_full.get('expense_date') if parsed_full else parsed_amount.get('expense_date')
     expense = await add_expense(
         user_id=user_id,
         category_id=category.id,
         amount=amount,
         description=final_description,
-        currency=currency
+        currency=currency,
+        expense_date=expense_date  # Добавляем дату, если она была указана
     )
     
     # Форматируем сообщение с учетом валюты
@@ -850,7 +852,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     category_id=category.id,
                     amount=amount,
                     description=text,
-                    currency=currency
+                    currency=currency,
+                    expense_date=parsed.get('expense_date')  # Добавляем дату, если она была указана
                 )
                 
                 # Форматируем сообщение с учетом валюты
@@ -928,7 +931,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         category_id=category.id,
         amount=amount,
         description=parsed['description'],
-        currency=currency
+        currency=currency,
+        expense_date=parsed.get('expense_date')  # Добавляем дату, если она была указана
     )
     
     # Формируем ответ (убираем вывод AI уверенности)
