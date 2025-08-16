@@ -705,6 +705,17 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
         if cashback > 0:
             cashback_text = f" (+{cashback:.0f} ₽)"
     
+    # Удаляем сообщение с запросом суммы
+    clarification_message_id = data.get('clarification_message_id')
+    if clarification_message_id:
+        try:
+            await message.bot.delete_message(
+                chat_id=user_id,
+                message_id=clarification_message_id
+            )
+        except Exception as e:
+            logger.debug(f"Could not delete clarification message: {e}")
+    
     # Очищаем состояние
     from bot.utils.state_utils import clear_state_keep_cashback
     await clear_state_keep_cashback(state)
@@ -727,6 +738,32 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
         parse_mode="HTML",
         keep_message=True  # Не удалять это сообщение при следующих действиях
     )
+
+
+# Обработчик кнопки отмены ввода траты
+@router.callback_query(lambda c: c.data == "cancel_expense_input")
+async def cancel_expense_input(callback: types.CallbackQuery, state: FSMContext):
+    """Отмена ввода траты и удаление сообщения"""
+    # Получаем данные из состояния
+    data = await state.get_data()
+    clarification_message_id = data.get('clarification_message_id')
+    
+    # Очищаем состояние
+    from bot.utils.state_utils import clear_state_keep_cashback
+    await clear_state_keep_cashback(state)
+    
+    # Удаляем сообщение с запросом суммы
+    try:
+        if clarification_message_id:
+            await callback.bot.delete_message(
+                chat_id=callback.from_user.id,
+                message_id=clarification_message_id
+            )
+    except Exception as e:
+        logger.error(f"Error deleting clarification message: {e}")
+    
+    # Просто подтверждаем нажатие кнопки без текста
+    await callback.answer()
 
 
 # Обработчик текстовых сообщений
@@ -804,7 +841,13 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     
     logger.info(f"Starting parse_expense_message for text: '{text}', user_id: {user_id}")
     parsed = await parse_expense_message(text, user_id=user_id, profile=profile, use_ai=True)
-    logger.info(f"Parsing completed, result: {parsed!r}")
+    # Убираем эмодзи из логов для Windows
+    if parsed:
+        safe_parsed = {k: v.encode('ascii', 'ignore').decode('ascii') if isinstance(v, str) else v 
+                       for k, v in parsed.items()}
+        logger.info(f"Parsing completed, result: {safe_parsed}")
+    else:
+        logger.info("Parsing completed, result: None")
     
     if not parsed:
         # Повторная проверка с использованием единого модуля (на случай если AI парсер не сработал)
@@ -826,8 +869,16 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             indicators = get_expense_indicators(text)
             logger.info(f"Classified '{text}' as {message_type} (confidence: {confidence:.2f}), indicators: {indicators}")
         
-        # Если классификатор уверен, что это трата
-        might_be_expense = (message_type == 'record' and confidence >= 0.6)
+        # Если классификатор определил это как чат - направляем в чат
+        if message_type == 'chat':
+            logger.info(f"Message classified as chat, redirecting: '{text}'")
+            cancel_typing()  # Отменяем индикатор печатания
+            from ..routers.chat import process_chat_message
+            await process_chat_message(message, state, text)
+            return
+        
+        # Иначе это трата (message_type == 'record')
+        might_be_expense = True
         
         if might_be_expense and len(text) > 2:  # Минимальная длина для осмысленного описания
             # Сначала ищем похожие траты за последний год
@@ -902,11 +953,20 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 lang = 'ru'
                 
                 cancel_typing()
-                await message.answer(
+                
+                # Создаем inline клавиатуру с кнопкой отмены
+                cancel_keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
+                    [types.InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_expense_input")]
+                ])
+                
+                sent_message = await message.answer(
                     f"💰 Вы хотите внести трату \"{text}\"?\n\n"
                     f"Укажите сумму траты:",
-                    reply_markup=types.ReplyKeyboardRemove()
+                    reply_markup=cancel_keyboard
                 )
+                
+                # Сохраняем ID сообщения для возможного удаления
+                await state.update_data(clarification_message_id=sent_message.message_id)
             return
         
         # Не похоже на трату - обрабатываем как чат

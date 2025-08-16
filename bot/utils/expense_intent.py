@@ -190,12 +190,8 @@ def is_expense_record_request(text: str) -> Tuple[bool, float]:
     text_lower = text.lower().strip()
     
     # Индикаторы записи траты
+    # Оставляем пустым - глаголы покупки обычно используются в вопросах
     record_verbs = [
-        'купил', 'купила', 'купили', 'покупал',
-        'заплатил', 'заплатила', 'оплатил', 'оплатила',
-        'потратил', 'потратила', 'потратили',
-        'взял', 'взяла', 'взяли',
-        'заказал', 'заказала', 'заказали'
     ]
     
     has_record_verb = any(verb in text_lower for verb in record_verbs)

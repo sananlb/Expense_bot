@@ -38,9 +38,9 @@ async def restore_cashback_menu_if_needed(state: FSMContext, bot, chat_id: int):
             date=datetime.now(),
             chat=fake_chat,
             from_user=fake_user,
-            text=""
+            text="",
+            bot=bot
         )
-        fake_message.bot = bot
         await show_cashback_menu(fake_message, state, month=month)
 
 

@@ -34,13 +34,8 @@ COMMAND_INDICATORS = [
 ]
 
 # Слова-индикаторы трат (глаголы покупки)
+# Оставляем пустым - все глаголы покупки обычно используются в вопросах
 EXPENSE_VERBS = [
-    'купил', 'купила', 'купили', 'покупал', 'покупала',
-    'заплатил', 'заплатила', 'оплатил', 'оплатила',
-    'потратил', 'потратила', 'потратили',
-    'взял', 'взяла', 'взяли',
-    'заказал', 'заказала', 'заказали',
-    'приобрел', 'приобрела', 'приобрели',
 ]
 
 # Предлоги и союзы для фильтрации
@@ -111,7 +106,16 @@ def classify_message(text: str) -> Tuple[str, float]:
     text = text.strip()
     text_lower = text.lower()
     
-    # 0. НОВОЕ: Сначала используем специализированный модуль intent
+    # 0. ПРИОРИТЕТ 1: Сначала проверяем вопросительный знак - это всегда чат
+    if text.strip().endswith('?'):
+        return 'chat', 1.0
+    
+    # 1. ПРИОРИТЕТ 2: Проверяем вопросительные слова и глаголы-просьбы
+    for pattern in QUESTION_PATTERNS[1:]:  # Пропускаем первый паттерн (уже проверили)
+        if re.search(pattern, text_lower):
+            return 'chat', 0.95
+    
+    # 1. НОВОЕ: Затем используем специализированный модуль intent
     from .expense_intent import is_show_expenses_request, is_expense_record_request
     
     # Проверяем, является ли это запросом показа трат
@@ -123,11 +127,6 @@ def classify_message(text: str) -> Tuple[str, float]:
     is_record, record_confidence = is_expense_record_request(text)
     if is_record and record_confidence >= 0.7:
         return 'record', record_confidence
-    
-    # 1. Проверяем, является ли это вопросом
-    for pattern in QUESTION_PATTERNS:
-        if re.search(pattern, text_lower):
-            return 'chat', 0.95
     
     # 2. Проверяем наличие чат-индикаторов
     for indicator in CHAT_INDICATORS:
