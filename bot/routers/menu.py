@@ -66,7 +66,7 @@ async def show_main_menu(message: types.Message | types.CallbackQuery, state: FS
         keyboard_buttons.append([InlineKeyboardButton(text="🎁 Реферальная программа", callback_data="menu_referral")])
     
     keyboard_buttons.extend([
-        [InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings_menu")],
+        [InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")],
         [InlineKeyboardButton(text="📖 Информация", callback_data="start")]
     ])
     

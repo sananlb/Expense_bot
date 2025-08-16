@@ -103,7 +103,8 @@ async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
 @router.callback_query(F.data == "settings")
 async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать меню настроек по callback"""
-    await state.clear()
+    from bot.utils.state_utils import clear_state_keep_cashback
+    await clear_state_keep_cashback(state)
     
     try:
         profile = await get_or_create_profile(callback.from_user.id)
