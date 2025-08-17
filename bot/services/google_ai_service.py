@@ -229,7 +229,7 @@ class GoogleAIService(AIBaseService):
 
 Ошибка: {result.get('message', 'Неизвестная ошибка')}
 
-Скажи что произошла ошибка."""
+Дай краткий ответ об ошибке, без длинных объяснений."""
                         
                         # Второй вызов AI для форматирования ответа
                         final_response = await self._call_ai_simple(result_prompt)
