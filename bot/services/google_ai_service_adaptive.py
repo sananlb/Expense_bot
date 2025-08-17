@@ -267,7 +267,9 @@ class GoogleAIService:
             # На Unix-системах используем версию с function calling
             from .google_ai_service import GoogleAIService as FunctionService
             func_service = FunctionService()
-            return await func_service.chat_with_functions(message, context, user_context)
+            # Извлекаем user_id из user_context
+            user_id = user_context.get('user_id') if user_context else None
+            return await func_service.chat_with_functions(message, context, user_context, user_id)
     
     def get_expense_categorization_prompt(self, text, amount, currency, categories, user_context):
         """Для совместимости с AIBaseService"""
