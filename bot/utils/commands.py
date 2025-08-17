@@ -12,7 +12,7 @@ async def set_bot_commands(bot: Bot):
         BotCommand(command="expenses", description="📊 Расходы"),
         BotCommand(command="cashback", description="💳 Кешбэк"),
         BotCommand(command="categories", description="📁 Категории"),
-        BotCommand(command="recurring", description="🔄 Регулярные платежи"),
+        BotCommand(command="recurring", description="🔄 Ежемесячные платежи"),
         BotCommand(command="subscription", description="⭐ Подписка"),
         BotCommand(command="settings", description="⚙️ Настройки"),
         BotCommand(command="start", description="📖 Информация"),

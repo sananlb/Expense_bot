@@ -254,7 +254,7 @@ class Budget(models.Model):
 
 
 class RecurringPayment(models.Model):
-    """Регулярные платежи пользователя"""
+    """Ежемесячные платежи пользователя"""
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='recurring_payments')
     category = models.ForeignKey(ExpenseCategory, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0.01)])
@@ -271,8 +271,8 @@ class RecurringPayment(models.Model):
     
     class Meta:
         db_table = 'expenses_recurring_payment'
-        verbose_name = 'Регулярный платеж'
-        verbose_name_plural = 'Регулярные платежи'
+        verbose_name = 'Ежемесячный платеж'
+        verbose_name_plural = 'Ежемесячные платежи'
         indexes = [
             models.Index(fields=['profile', 'is_active']),
             models.Index(fields=['day_of_month', 'is_active']),

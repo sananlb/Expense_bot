@@ -1,5 +1,5 @@
 """
-Сервис для работы с регулярными платежами
+Сервис для работы с ежемесячными платежами
 """
 from typing import List, Optional
 from datetime import date, datetime
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 @sync_to_async
 def get_user_recurring_payments(user_id: int, active_only: bool = False) -> List[RecurringPayment]:
-    """Получить регулярные платежи пользователя"""
+    """Получить ежемесячные платежи пользователя"""
     try:
         profile = Profile.objects.get(telegram_id=user_id)
     except Profile.DoesNotExist:
@@ -31,14 +31,14 @@ def get_user_recurring_payments(user_id: int, active_only: bool = False) -> List
 @sync_to_async
 def create_recurring_payment(user_id: int, category_id: int, amount: float, 
                            description: Optional[str], day_of_month: int) -> RecurringPayment:
-    """Создать новый регулярный платеж"""
+    """Создать новый ежемесячный платеж"""
     from expenses.models import ExpenseCategory
     profile = Profile.objects.get(telegram_id=user_id)
     
-    # Проверяем лимит регулярных платежей (максимум 50)
+    # Проверяем лимит ежемесячных платежей (максимум 50)
     recurring_count = RecurringPayment.objects.filter(profile=profile).count()
     if recurring_count >= 50:
-        raise ValueError("Достигнут лимит регулярных платежей (максимум 50)")
+        raise ValueError("Достигнут лимит ежемесячных платежей (максимум 50)")
     
     # Если описание не указано, используем название категории
     if not description:
@@ -143,7 +143,7 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
                 category=payment.category,
                 amount=payment.amount,
                 currency=payment.currency,
-                description=f"[Регулярный] {payment.description}",
+                description=f"[Ежемесячный] {payment.description}",
                 expense_date=today,
                 expense_time=datetime.now().time()
             )

@@ -57,7 +57,7 @@ async def show_main_menu(message: types.Message | types.CallbackQuery, state: FS
     
     keyboard_buttons.extend([
         [InlineKeyboardButton(text="📁 Категории", callback_data="categories_menu")],
-        [InlineKeyboardButton(text="🔄 Регулярные платежи", callback_data="recurring_menu")],
+        [InlineKeyboardButton(text="🔄 Ежемесячные платежи", callback_data="recurring_menu")],
         [InlineKeyboardButton(text="⭐ Подписка", callback_data="menu_subscription")],
     ])
     

@@ -1,5 +1,5 @@
 """
-Обработчик регулярных платежей
+Обработчик ежемесячных платежей
 """
 from aiogram import Router, types, F
 from aiogram.filters import Command
@@ -26,7 +26,7 @@ router = Router(name="recurring")
 
 
 class RecurringForm(StatesGroup):
-    """Состояния для добавления регулярного платежа"""
+    """Состояния для добавления ежемесячного платежа"""
     waiting_for_description = State()
     waiting_for_amount = State()
     waiting_for_category = State()
@@ -36,12 +36,12 @@ class RecurringForm(StatesGroup):
 
 @router.message(Command("recurring"))
 async def cmd_recurring(message: types.Message, state: FSMContext, lang: str = 'ru'):
-    """Команда /recurring - управление регулярными платежами"""
+    """Команда /recurring - управление ежемесячными платежами"""
     await show_recurring_menu(message, state, lang)
 
 
 async def show_recurring_menu(message: types.Message | types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Показать меню регулярных платежей"""
+    """Показать меню ежемесячных платежей"""
     # Получаем user_id в зависимости от типа сообщения
     if isinstance(message, types.CallbackQuery):
         user_id = message.from_user.id

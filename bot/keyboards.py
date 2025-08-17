@@ -13,7 +13,7 @@ def main_menu_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard.button(text=get_text('expenses_today', lang), callback_data="expenses_today")
     keyboard.button(text=get_text('cashback_menu', lang), callback_data="cashback_menu")
     keyboard.button(text=get_text('categories_menu', lang), callback_data="categories_menu")
-    keyboard.button(text="🔄 Регулярные платежи", callback_data="recurring_menu")
+    keyboard.button(text="🔄 Ежемесячные платежи", callback_data="recurring_menu")
     keyboard.button(text=get_text('settings_menu', lang), callback_data="settings")
     keyboard.button(text=get_text('info', lang), callback_data="start")
     

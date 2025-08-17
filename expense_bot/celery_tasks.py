@@ -350,14 +350,14 @@ def process_recurring_payments():
             process_recurring_payments_for_today()
         )
         
-        # Отправляем уведомления пользователям о списанных регулярных платежах
+        # Отправляем уведомления пользователям о списанных ежемесячных платежах
         for payment_info in processed_payments:
             try:
                 user_id = payment_info['user_id']
                 expense = payment_info['expense']
                 payment = payment_info['payment']
                 
-                # Для регулярных платежей не считаем кешбэк
+                # Для ежемесячных платежей не считаем кешбэк
                 cashback_text = ""
                 
                 # Форматируем сообщение используя стандартную функцию
@@ -366,7 +366,7 @@ def process_recurring_payments():
                         expense=expense,
                         category=expense.category,
                         cashback_text=cashback_text,
-                        is_recurring=True  # Флаг для регулярного платежа
+                        is_recurring=True  # Флаг для ежемесячного платежа
                     )
                 )
                 
