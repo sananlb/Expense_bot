@@ -182,7 +182,11 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
             
             # Получаем AI сервис и генерируем ответ
             ai_service = get_service('chat')
+            logger.info(f"[Chat] Got AI service: {type(ai_service).__name__}")
+            logger.info(f"[Chat] Calling AI with user_id={user_id}, message={text[:50]}...")
+            
             response = await ai_service.chat(text, context, user_context)
+            logger.info(f"[Chat] AI response received: {response[:100] if response else 'None'}...")
             
         except Exception as e:
             logger.error(f"AI chat error with primary service: {e}")

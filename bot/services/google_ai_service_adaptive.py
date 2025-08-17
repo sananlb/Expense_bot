@@ -265,11 +265,27 @@ class GoogleAIService:
                 raise
         else:
             # На Unix-системах используем версию с function calling
-            from .google_ai_service import GoogleAIService as FunctionService
-            func_service = FunctionService()
-            # Извлекаем user_id из user_context
-            user_id = user_context.get('user_id') if user_context else None
-            return await func_service.chat_with_functions(message, context, user_context, user_id)
+            logger.info(f"[GoogleAI-Adaptive] Linux branch - redirecting to chat_with_functions")
+            logger.info(f"[GoogleAI-Adaptive] user_context: {user_context}")
+            
+            try:
+                from .google_ai_service import GoogleAIService as FunctionService
+                logger.info("[GoogleAI-Adaptive] FunctionService imported successfully")
+                
+                func_service = FunctionService()
+                logger.info("[GoogleAI-Adaptive] FunctionService instance created")
+                
+                # Извлекаем user_id из user_context
+                user_id = user_context.get('user_id') if user_context else None
+                logger.info(f"[GoogleAI-Adaptive] Calling chat_with_functions with user_id={user_id}")
+                
+                result = await func_service.chat_with_functions(message, context, user_context, user_id)
+                logger.info(f"[GoogleAI-Adaptive] Got result: {result[:100] if result else 'None'}...")
+                
+                return result
+            except Exception as e:
+                logger.error(f"[GoogleAI-Adaptive] Error in Linux branch: {e}", exc_info=True)
+                raise
     
     def get_expense_categorization_prompt(self, text, amount, currency, categories, user_context):
         """Для совместимости с AIBaseService"""
