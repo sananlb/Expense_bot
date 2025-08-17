@@ -132,7 +132,7 @@ def get_provider_settings(provider: str) -> Dict[str, Any]:
         return {
             'api_key': api_key,
             'default_model': 'gemini-2.5-flash',
-            'max_tokens': 150,
+            'max_tokens': 1500,
             'temperature': 0.1
         }
     elif provider == 'openai':
@@ -149,7 +149,7 @@ def get_provider_settings(provider: str) -> Dict[str, Any]:
         return {
             'api_key': api_key,
             'default_model': 'gpt-4o-mini',
-            'max_tokens': 150,
+            'max_tokens': 1500,
             'temperature': 0.1
         }
     else:

@@ -1,25 +1,25 @@
 """
-Google AI Service для expense_bot - упрощенная рабочая версия на основе nutrition_bot
+Google AI Service - основной сервис для работы с Google Gemini
 """
-import logging
-import json
-import asyncio
+
 import os
-from typing import Dict, List, Optional, Any
+import json
+import logging
+from typing import List, Dict, Any, Optional
 import google.generativeai as genai
 from .ai_base_service import AIBaseService
-from dotenv import load_dotenv
+from .ai_selector import get_model
 
-# Загружаем переменные окружения
-load_dotenv()
-
+# Настройка логирования
 logger = logging.getLogger(__name__)
 
-# Глобальная инициализация клиента при загрузке модуля
+# Загружаем API ключ
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
-    logger.info("[GoogleAI] Module configured with API key")
+    logger.info("[GoogleAI] API key configured")
+else:
+    logger.error("[GoogleAI] GOOGLE_API_KEY not found in environment")
 
 
 class GoogleAIService(AIBaseService):
@@ -32,43 +32,43 @@ class GoogleAIService(AIBaseService):
         
         self.api_key = GOOGLE_API_KEY
         logger.info("[GoogleAI] Service initialized (fixed version)")
-        
+    
     async def categorize_expense(
-        self, 
-        text: str, 
+        self,
+        text: str,
         amount: float,
         currency: str,
         categories: List[str],
         user_context: Optional[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
         """
-        Категоризация расхода через Google AI
+        Категоризация расхода с помощью Google AI
+        
+        Args:
+            text: Текст описания расхода
+            amount: Сумма расхода
+            currency: Валюта
+            categories: Список доступных категорий
+            user_context: Дополнительный контекст пользователя
+            
+        Returns:
+            Словарь с категорией и уверенностью или None при ошибке
         """
         try:
-            logger.info(f"[GoogleAI] Starting categorization for: {text[:30]}")
+            prompt = self.get_expense_categorization_prompt(text, amount, currency, categories, user_context)
             
-            # Создаем промпт
-            prompt = self.get_expense_categorization_prompt(
-                text, amount, currency, categories, user_context
-            )
-            
-            # Создаем модель
             model_name = 'gemini-2.5-flash'  # Используем фиксированную модель
             model = genai.GenerativeModel(
                 model_name=model_name,
-                system_instruction="You are an expense categorization assistant. Return ONLY valid JSON without any additional text or markdown formatting."
+                system_instruction="You are an expense categorization assistant. Always respond with a valid category name from the provided list."
             )
             
-            # Настройки генерации
             generation_config = genai.GenerationConfig(
-                temperature=0.1,
-                max_output_tokens=1000,
-                candidate_count=1,
-                top_p=0.95,
-                top_k=40
+                temperature=0.3,
+                max_output_tokens=1500,
+                top_p=0.8
             )
             
-            # Safety settings
             safety_settings = [
                 {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                 {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -76,55 +76,228 @@ class GoogleAIService(AIBaseService):
                 {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
             ]
             
-            # Простой асинхронный вызов без лишних оберток
             response = await model.generate_content_async(
                 prompt,
                 generation_config=generation_config,
                 safety_settings=safety_settings
             )
             
-            logger.info(f"[GoogleAI] Got response")
-            
-            # Проверяем блокировку контента
-            if not response.parts:
-                logger.warning(f"[GoogleAI] Empty response or content blocked")
-                return None
-            
-            # Обрабатываем ответ
-            response_text = response.text.strip()
-            
-            # Убираем markdown блоки если есть
-            if response_text.startswith('```json'):
-                response_text = response_text[7:]
-            if response_text.startswith('```'):
-                response_text = response_text[3:]
-            if response_text.endswith('```'):
-                response_text = response_text[:-3]
-            response_text = response_text.strip()
-            
-            # Парсим JSON
-            try:
-                result = json.loads(response_text)
+            if response and response.parts:
+                text_response = response.text.strip()
                 
-                if 'category' in result and result['category'] in categories:
-                    logger.info(f"[GoogleAI] Categorized successfully: {result['category']}")
-                    return {
-                        'category': result['category'],
-                        'confidence': result.get('confidence', 0.8),
-                        'reasoning': result.get('reasoning', ''),
-                        'provider': 'google'
-                    }
-                else:
-                    logger.warning(f"[GoogleAI] Invalid category in response: {result.get('category')}")
-                    return None
-                    
-            except json.JSONDecodeError as e:
-                logger.error(f"[GoogleAI] JSON parse error: {e}, response: {response_text[:200]}")
-                return None
-                    
+                # Парсим ответ
+                import json
+                try:
+                    # Пробуем распарсить как JSON
+                    if text_response.startswith('{'):
+                        result = json.loads(text_response)
+                        return {
+                            'category': result.get('category', categories[0] if categories else 'Прочее'),
+                            'confidence': float(result.get('confidence', 0.5))
+                        }
+                except:
+                    pass
+                
+                # Если не JSON, ищем категорию в тексте
+                text_lower = text_response.lower()
+                for category in categories:
+                    if category.lower() in text_lower:
+                        return {
+                            'category': category,
+                            'confidence': 0.7
+                        }
+                
+                # Если ничего не нашли, возвращаем первую категорию
+                return {
+                    'category': categories[0] if categories else 'Прочее',
+                    'confidence': 0.3
+                }
+            
+            return None
+            
         except Exception as e:
             logger.error(f"[GoogleAI] Error: {type(e).__name__}: {str(e)[:200]}")
             return None
+    
+    async def chat_with_functions(
+        self,
+        message: str,
+        context: List[Dict[str, str]],
+        user_context: Optional[Dict[str, Any]] = None,
+        user_id: int = None
+    ) -> str:
+        """
+        Чат с Google AI и поддержкой функций
+        """
+        try:
+            # Первый вызов AI для определения нужной функции
+            response = await self._call_ai_with_functions(message, context, user_context, user_id)
+            
+            # Проверяем, нужно ли вызвать функцию
+            if response and response.startswith("FUNCTION_CALL:"):
+                # Извлекаем вызов функции
+                function_call = response.replace("FUNCTION_CALL:", "").strip()
+                logger.info(f"AI requested function: {function_call}")
+                
+                # Выполняем функцию
+                from .expense_functions import ExpenseFunctions
+                functions = ExpenseFunctions()
+                
+                # Парсим вызов функции
+                import re
+                match = re.match(r'(\w+)\((.*)\)', function_call)
+                if match:
+                    func_name = match.group(1)
+                    params_str = match.group(2)
+                    
+                    # Парсим параметры
+                    params = {'user_id': user_id}
+                    if params_str:
+                        # Простой парсинг параметров
+                        for param in params_str.split(','):
+                            if '=' in param:
+                                key, value = param.split('=', 1)
+                                key = key.strip()
+                                value = value.strip().strip('"\'')
+                                # Преобразуем типы
+                                if value.isdigit():
+                                    value = int(value)
+                                elif value.replace('.', '').isdigit():
+                                    value = float(value)
+                                params[key] = value
+                    
+                    # Вызываем функцию
+                    if hasattr(functions, func_name):
+                        func = getattr(functions, func_name)
+                        result = await func(**params)
+                        
+                        # Формируем промпт с результатом функции
+                        result_prompt = f"""Пользователь спросил: {message}
+Функция {func_name} вернула: {json.dumps(result, ensure_ascii=False, indent=2)}
+
+Пожалуйста, сформулируй красивый ответ на русском языке на основе этих данных.
+Если success=False, объясни что произошла ошибка."""
+                        
+                        # Второй вызов AI для форматирования ответа
+                        final_response = await self._call_ai_simple(result_prompt)
+                        return final_response
+                    else:
+                        logger.error(f"Function {func_name} not found")
+                        return f"Извините, не могу выполнить запрос. Функция {func_name} не найдена."
+            
+            # Если функция не нужна, возвращаем обычный ответ
+            return response
+            
+        except Exception as e:
+            logger.error(f"[GoogleAI Chat] Error: {type(e).__name__}: {str(e)[:200]}")
+            return "Извините, произошла ошибка при обработке вашего сообщения."
+    
+    async def _call_ai_with_functions(
+        self,
+        message: str,
+        context: List[Dict[str, str]],
+        user_context: Optional[Dict[str, Any]] = None,
+        user_id: int = None
+    ) -> str:
+        """
+        Вызов AI с инструкциями о функциях
+        """
+        try:
+            prompt = f"""Ты - помощник по учету расходов. У тебя есть доступ к функциям для анализа трат.
+
+ДОСТУПНЫЕ ФУНКЦИИ:
+1. get_max_expense_day() - для вопросов "В какой день я больше всего потратил?"
+2. get_period_total(period='today'|'yesterday'|'week'|'month'|'year') - для "Сколько я потратил сегодня/вчера/на этой неделе?"
+3. get_max_single_expense() - для "Какая моя самая большая трата?"
+4. get_category_statistics() - для "На что я трачу больше всего?"
+5. get_average_expenses() - для "Сколько я трачу в среднем?"
+6. get_recent_expenses(limit=10) - для "Покажи последние траты"
+7. search_expenses(query='текст') - для "Когда я покупал..."
+8. get_weekday_statistics() - для "В какие дни недели я трачу больше?"
+9. predict_month_expense() - для "Сколько я потрачу в этом месяце?"
+10. check_budget_status(budget_amount=50000) - для "Уложусь ли я в бюджет?"
+11. compare_periods() - для "Я стал тратить больше или меньше?"
+12. get_expense_trend() - для "Покажи динамику трат"
+13. get_expenses_by_amount_range(min_amount=1000) - для "Покажи траты больше 1000"
+14. get_category_total(category='продукты', period='month') - для "Сколько я трачу на продукты?"
+
+ВАЖНО: Если вопрос требует анализа данных, ответь ТОЛЬКО в формате:
+FUNCTION_CALL: имя_функции(параметр1=значение1, параметр2=значение2)
+
+Если вопрос не требует анализа данных (приветствие, общий вопрос), отвечай обычным текстом.
+
+Вопрос пользователя: {message}"""
+
+            model = genai.GenerativeModel(
+                model_name='gemini-2.5-flash',
+                system_instruction="You are an expense tracking assistant. Analyze the user's question and determine if a function call is needed."
+            )
+            
+            generation_config = genai.GenerationConfig(
+                temperature=0.3,
+                max_output_tokens=200,
+                top_p=0.9
+            )
+            
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+            ]
+            
+            response = await model.generate_content_async(
+                prompt,
+                generation_config=generation_config,
+                safety_settings=safety_settings
+            )
+            
+            if response and response.parts:
+                return response.text.strip()
+            else:
+                return "Извините, не удалось получить ответ от AI."
+                
+        except Exception as e:
+            logger.error(f"[GoogleAI] Error in _call_ai_with_functions: {e}")
+            return "Извините, произошла ошибка."
+    
+    async def _call_ai_simple(self, prompt: str) -> str:
+        """
+        Простой вызов AI для форматирования ответа
+        """
+        try:
+            model = genai.GenerativeModel(
+                model_name='gemini-2.5-flash',
+                system_instruction="You are a helpful assistant. Format the response nicely in Russian."
+            )
+            
+            generation_config = genai.GenerationConfig(
+                temperature=0.7,
+                max_output_tokens=1500,
+                top_p=0.9
+            )
+            
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+            ]
+            
+            response = await model.generate_content_async(
+                prompt,
+                generation_config=generation_config,
+                safety_settings=safety_settings
+            )
+            
+            if response and response.parts:
+                return response.text.strip()
+            else:
+                return "Извините, не удалось получить ответ от AI."
+                
+        except Exception as e:
+            logger.error(f"[GoogleAI] Error in _call_ai_simple: {e}")
+            return "Извините, произошла ошибка."
     
     async def chat(
         self,
@@ -133,42 +306,29 @@ class GoogleAIService(AIBaseService):
         user_context: Optional[Dict[str, Any]] = None
     ) -> str:
         """
-        Чат с Google AI
+        Обычный чат с Google AI (для обратной совместимости)
         """
         try:
+            # Если есть user_context с user_id, используем функции
+            if user_context and 'user_id' in user_context:
+                return await self.chat_with_functions(
+                    message=message,
+                    context=context,
+                    user_context=user_context,
+                    user_id=user_context['user_id']
+                )
+            
+            # Иначе обычный чат
             prompt = self.get_chat_prompt(message, context, user_context)
             
-            model_name = 'gemini-2.5-flash'
             model = genai.GenerativeModel(
-                model_name=model_name,
-                system_instruction="""You are a helpful expense tracking assistant. Respond in the same language as the user's message.
-
-IMPORTANT: When user asks to show a LIST of expenses (what they bought, expense details, transaction list), format it as:
-
-📋 **Траты за [период]**
-
-📅 **[Date]**
-  HH:MM — Description Amount ₽
-  HH:MM — Description Amount ₽
-  💰 **Итого за день:** XXX ₽
-
-📅 **[Next Date]**
-  HH:MM — Description Amount ₽
-  💰 **Итого за день:** XXX ₽
-
-Rules for expense lists:
-- Group expenses by date (oldest first, newest last)
-- Show "Сегодня" for today, date format "DD месяц" for other days
-- Calculate daily totals
-- Maximum 50 entries
-- If more than 50, add "..." and note about limit
-
-When user asks for STATISTICS or SUMMARY (how much spent, totals, by categories), use any appropriate format."""
+                model_name='gemini-2.5-flash',
+                system_instruction="You are a helpful expense tracking assistant. Respond in the same language as the user's message."
             )
             
             generation_config = genai.GenerationConfig(
                 temperature=0.7,
-                max_output_tokens=1000,
+                max_output_tokens=1500,
                 top_p=0.9
             )
             

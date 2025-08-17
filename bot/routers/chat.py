@@ -176,7 +176,8 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
             
             user_context = {
                 'total_today': today_summary.get('total', 0) if today_summary else 0,
-                'expenses_data': recent_expenses
+                'expenses_data': recent_expenses,
+                'user_id': user_id  # Добавляем user_id для function calling
             }
             
             # Получаем AI сервис и генерируем ответ
