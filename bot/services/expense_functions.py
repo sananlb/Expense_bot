@@ -6,7 +6,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from asgiref.sync import sync_to_async
-from expenses.models import Expense, UserProfile
+from expenses.models import Expense, Profile
 from django.db.models import Sum, Avg, Max, Min, Count, Q
 from collections import defaultdict
 import logging
@@ -31,7 +31,7 @@ class ExpenseFunctions:
             Информация о дне с максимальными тратами
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             end_date = date.today()
             start_date = end_date - timedelta(days=period_days)
             
@@ -76,7 +76,7 @@ class ExpenseFunctions:
                 'details': details
             }
             
-        except UserProfile.DoesNotExist:
+        except Profile.DoesNotExist:
             return {
                 'success': False,
                 'message': 'Профиль пользователя не найден'
@@ -99,7 +99,7 @@ class ExpenseFunctions:
             period: Период (today, yesterday, week, month, year)
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             today = date.today()
             
             # Определяем даты периода
@@ -155,7 +155,7 @@ class ExpenseFunctions:
                 'categories': categories[:5]  # Топ-5 категорий
             }
             
-        except UserProfile.DoesNotExist:
+        except Profile.DoesNotExist:
             return {
                 'success': False,
                 'message': 'Профиль пользователя не найден'
@@ -178,7 +178,7 @@ class ExpenseFunctions:
             period_days: Период в днях
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             end_date = date.today()
             start_date = end_date - timedelta(days=period_days)
             
@@ -219,7 +219,7 @@ class ExpenseFunctions:
                 'categories': categories
             }
             
-        except UserProfile.DoesNotExist:
+        except Profile.DoesNotExist:
             return {
                 'success': False,
                 'message': 'Профиль пользователя не найден'
@@ -242,7 +242,7 @@ class ExpenseFunctions:
             days: Количество дней
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             end_date = date.today()
             start_date = end_date - timedelta(days=days)
             
@@ -288,7 +288,7 @@ class ExpenseFunctions:
                 'currency': 'RUB'
             }
             
-        except UserProfile.DoesNotExist:
+        except Profile.DoesNotExist:
             return {
                 'success': False,
                 'message': 'Профиль пользователя не найден'
@@ -312,7 +312,7 @@ class ExpenseFunctions:
             limit: Максимальное количество результатов
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             
             # Поиск по описанию и категориям
             expenses = Expense.objects.filter(
@@ -340,7 +340,7 @@ class ExpenseFunctions:
                 'results': results
             }
             
-        except UserProfile.DoesNotExist:
+        except Profile.DoesNotExist:
             return {
                 'success': False,
                 'message': 'Профиль пользователя не найден'
@@ -363,7 +363,7 @@ class ExpenseFunctions:
             period_days: Период для расчета
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             end_date = date.today()
             start_date = end_date - timedelta(days=period_days)
             
@@ -392,7 +392,7 @@ class ExpenseFunctions:
                 'currency': 'RUB'
             }
             
-        except UserProfile.DoesNotExist:
+        except Profile.DoesNotExist:
             return {
                 'success': False,
                 'message': 'Профиль пользователя не найден'
@@ -411,7 +411,7 @@ class ExpenseFunctions:
         Получить список трат за период
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             
             # Парсим даты
             if start_date:
@@ -461,7 +461,7 @@ class ExpenseFunctions:
         Найти самую большую единичную трату
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             end_date = date.today()
             start_date = end_date - timedelta(days=period_days)
             
@@ -497,7 +497,7 @@ class ExpenseFunctions:
         Получить траты по конкретной категории
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             today = date.today()
             
             # Определяем период
@@ -540,7 +540,7 @@ class ExpenseFunctions:
         Сравнить траты за два периода
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             today = date.today()
             
             # Определяем первый период
@@ -613,7 +613,7 @@ class ExpenseFunctions:
         Получить траты в диапазоне сумм
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             
             expenses = Expense.objects.filter(profile=profile)
             
@@ -651,7 +651,7 @@ class ExpenseFunctions:
         Получить динамику трат
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             today = date.today()
             
             trends = []
@@ -697,7 +697,7 @@ class ExpenseFunctions:
         Статистика трат по дням недели
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             end_date = date.today()
             start_date = end_date - timedelta(days=period_days)
             
@@ -744,7 +744,7 @@ class ExpenseFunctions:
         Прогноз трат на текущий месяц
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             today = date.today()
             month_start = today.replace(day=1)
             days_passed = today.day
@@ -789,7 +789,7 @@ class ExpenseFunctions:
         Проверить статус бюджета
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             today = date.today()
             month_start = today.replace(day=1)
             
@@ -838,7 +838,7 @@ class ExpenseFunctions:
         Получить последние траты
         """
         try:
-            profile = UserProfile.objects.get(telegram_id=user_id)
+            profile = Profile.objects.get(telegram_id=user_id)
             
             expenses = Expense.objects.filter(
                 profile=profile
