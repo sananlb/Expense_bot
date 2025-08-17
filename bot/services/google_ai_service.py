@@ -202,19 +202,17 @@ class GoogleAIService(AIBaseService):
                         
                         # Формируем промпт с результатом функции
                         if result.get('success'):
-                            result_prompt = f"""Пользователь спросил: {message}
+                            result_prompt = f"""Вопрос: {message}
 
-Данные для ответа: {json.dumps(result, ensure_ascii=False, indent=2)}
+Данные: {json.dumps(result, ensure_ascii=False, indent=2)}
 
-Сформулируй краткий и понятный ответ на русском языке, используя эти данные.
-НЕ показывай техническую информацию типа success, НЕ используй условные конструкции.
-Просто дай прямой ответ на вопрос пользователя."""
+Дай прямой ответ на вопрос, используя эти данные. Без лишних формальностей."""
                         else:
-                            result_prompt = f"""Пользователь спросил: {message}
+                            result_prompt = f"""Вопрос: {message}
 
-Произошла ошибка: {result.get('message', 'Неизвестная ошибка')}
+Ошибка: {result.get('message', 'Неизвестная ошибка')}
 
-Вежливо объясни пользователю, что произошла ошибка."""
+Скажи что произошла ошибка."""
                         
                         # Второй вызов AI для форматирования ответа
                         final_response = await self._call_ai_simple(result_prompt)
@@ -306,7 +304,7 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
         try:
             model = genai.GenerativeModel(
                 model_name='gemini-2.5-flash',
-                system_instruction="You are a helpful assistant. Format the response nicely in Russian."
+                system_instruction="Answer directly in Russian. Be concise and natural, not overly polite."
             )
             
             generation_config = genai.GenerationConfig(
@@ -361,7 +359,7 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
             
             model = genai.GenerativeModel(
                 model_name='gemini-2.5-flash',
-                system_instruction="You are a helpful expense tracking assistant. Respond in the same language as the user's message."
+                system_instruction="You are an expense tracking bot. Answer naturally and concisely in the user's language."
             )
             
             generation_config = genai.GenerationConfig(
