@@ -264,10 +264,10 @@ class GoogleAIService:
                 logger.error(f"[GoogleAI-Adaptive] Chat error: {e}")
                 raise
         else:
-            # На Unix-системах используем асинхронную версию
-            from .google_ai_service_async import GoogleAIService as AsyncService
-            async_service = AsyncService()
-            return await async_service.chat(message, context, user_context)
+            # На Unix-системах используем версию с function calling
+            from .google_ai_service import GoogleAIService as FunctionService
+            func_service = FunctionService()
+            return await func_service.chat_with_functions(message, context, user_context)
     
     def get_expense_categorization_prompt(self, text, amount, currency, categories, user_context):
         """Для совместимости с AIBaseService"""
