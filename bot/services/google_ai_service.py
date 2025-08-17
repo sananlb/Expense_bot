@@ -168,8 +168,69 @@ class GoogleAIService(AIBaseService):
                     
                     # Вызываем функцию
                     if hasattr(functions, func_name):
-                        func = getattr(functions, func_name)
-                        result = await func(**params)
+                        try:
+                            logger.info(f"[GoogleAI] Calling function {func_name} with params: {params}")
+                            # Используем run_in_executor для вызова синхронной функции
+                            import asyncio
+                            from concurrent.futures import ThreadPoolExecutor
+                            
+                            # Получаем синхронную версию функции (без декоратора)
+                            sync_func_name = f"_{func_name}_sync"
+                            
+                            # Создаем синхронную обертку
+                            def sync_wrapper():
+                                # Импортируем Django и настраиваем
+                                import django
+                                django.setup()
+                                from expenses.models import Profile, Expense
+                                from django.db.models import Sum
+                                from datetime import date, timedelta
+                                
+                                # Вызываем функцию напрямую без async
+                                if func_name == 'get_max_expense_day':
+                                    try:
+                                        profile = Profile.objects.get(telegram_id=params['user_id'])
+                                        end_date = date.today()
+                                        start_date = end_date - timedelta(days=params.get('period_days', 60))
+                                        
+                                        expenses = Expense.objects.filter(
+                                            profile=profile,
+                                            expense_date__gte=start_date,
+                                            expense_date__lte=end_date
+                                        ).values('expense_date').annotate(
+                                            total=Sum('amount')
+                                        ).order_by('-total')
+                                        
+                                        if not expenses:
+                                            return {'success': False, 'message': 'Нет трат за указанный период'}
+                                        
+                                        max_day = expenses.first()
+                                        return {
+                                            'success': True,
+                                            'date': max_day['expense_date'].isoformat(),
+                                            'total': float(max_day['total']),
+                                            'currency': 'RUB'
+                                        }
+                                    except Profile.DoesNotExist:
+                                        return {'success': False, 'message': 'Профиль пользователя не найден'}
+                                    except Exception as e:
+                                        return {'success': False, 'message': str(e)}
+                                else:
+                                    # Для других функций пока возвращаем ошибку
+                                    return {'success': False, 'message': f'Функция {func_name} временно недоступна'}
+                            
+                            # Выполняем в thread pool
+                            loop = asyncio.get_event_loop()
+                            with ThreadPoolExecutor() as executor:
+                                result = await loop.run_in_executor(executor, sync_wrapper)
+                            
+                            logger.info(f"[GoogleAI] Function {func_name} returned: {result}")
+                        except Exception as e:
+                            logger.error(f"[GoogleAI] Error calling function {func_name}: {e}", exc_info=True)
+                            result = {
+                                'success': False,
+                                'message': f'Ошибка при выполнении функции: {str(e)}'
+                            }
                         
                         # Формируем промпт с результатом функции
                         result_prompt = f"""Пользователь спросил: {message}
