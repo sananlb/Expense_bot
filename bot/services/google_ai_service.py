@@ -130,8 +130,19 @@ class GoogleAIService(AIBaseService):
         Чат с Google AI и поддержкой функций
         """
         try:
+            # Добавляем контекст предыдущих сообщений для связанных вопросов
+            enhanced_message = message
+            if context and len(context) > 0:
+                # Проверяем, является ли вопрос уточняющим
+                clarifying_keywords = ['дата', 'когда', 'день', 'какой день', 'в какой', 'число']
+                if any(keyword in message.lower() for keyword in clarifying_keywords):
+                    # Добавляем контекст последних сообщений
+                    recent_context = context[-2:] if len(context) >= 2 else context
+                    context_str = ' '.join([f"{msg.get('role', '')}: {msg.get('content', '')}" for msg in recent_context])
+                    enhanced_message = f"Контекст диалога: {context_str}\nТекущий вопрос: {message}"
+            
             # Первый вызов AI для определения нужной функции
-            response = await self._call_ai_with_functions(message, context, user_context, user_id)
+            response = await self._call_ai_with_functions(enhanced_message, context, user_context, user_id)
             
             # Проверяем, нужно ли вызвать функцию
             if response and response.startswith("FUNCTION_CALL:"):
@@ -206,7 +217,13 @@ class GoogleAIService(AIBaseService):
 
 Данные: {json.dumps(result, ensure_ascii=False, indent=2)}
 
-Дай прямой ответ на вопрос, используя эти данные. Без лишних формальностей."""
+ВАЖНО: Дай полный ответ с максимумом деталей из данных:
+- ВСЕГДА указывай точную дату (число, месяц, год)
+- ВСЕГДА указывай сумму и валюту
+- Включи описание траты если есть
+- Укажи день недели если есть
+- Укажи категорию если есть
+Отвечай естественно, но с полной информацией."""
                         else:
                             result_prompt = f"""Вопрос: {message}
 
@@ -304,7 +321,7 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
         try:
             model = genai.GenerativeModel(
                 model_name='gemini-2.5-flash',
-                system_instruction="Answer directly in Russian. Be concise and natural, not overly polite."
+                system_instruction="Answer in Russian with complete information. Always include dates, amounts, descriptions when available. Be natural but informative."
             )
             
             generation_config = genai.GenerationConfig(

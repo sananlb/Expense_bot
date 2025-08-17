@@ -78,9 +78,14 @@ class ExpenseFunctions:
                     'description': exp.description
                 })
             
+            # Добавляем день недели
+            weekdays = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
+            weekday = weekdays[max_day['expense_date'].weekday()]
+            
             return {
                 'success': True,
                 'date': max_day['expense_date'].isoformat(),
+                'weekday': weekday,
                 'total': float(max_day['total']),
                 'currency': 'RUB',
                 'expenses_count': len(details),
@@ -510,9 +515,14 @@ class ExpenseFunctions:
                     'message': 'Нет трат за указанный период'
                 }
             
+            # Добавляем день недели
+            weekdays = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
+            weekday = weekdays[max_expense.expense_date.weekday()]
+            
             return {
                 'success': True,
                 'date': max_expense.expense_date.isoformat(),
+                'weekday': weekday,
                 'time': max_expense.expense_time.strftime('%H:%M') if max_expense.expense_time else None,
                 'amount': float(max_expense.amount),
                 'category': max_expense.category.name if max_expense.category else 'Без категории',
