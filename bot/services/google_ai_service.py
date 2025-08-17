@@ -201,11 +201,20 @@ class GoogleAIService(AIBaseService):
                             }
                         
                         # Формируем промпт с результатом функции
-                        result_prompt = f"""Пользователь спросил: {message}
-Функция {func_name} вернула: {json.dumps(result, ensure_ascii=False, indent=2)}
+                        if result.get('success'):
+                            result_prompt = f"""Пользователь спросил: {message}
 
-Пожалуйста, сформулируй красивый ответ на русском языке на основе этих данных.
-Если success=False, объясни что произошла ошибка."""
+Данные для ответа: {json.dumps(result, ensure_ascii=False, indent=2)}
+
+Сформулируй краткий и понятный ответ на русском языке, используя эти данные.
+НЕ показывай техническую информацию типа success, НЕ используй условные конструкции.
+Просто дай прямой ответ на вопрос пользователя."""
+                        else:
+                            result_prompt = f"""Пользователь спросил: {message}
+
+Произошла ошибка: {result.get('message', 'Неизвестная ошибка')}
+
+Вежливо объясни пользователю, что произошла ошибка."""
                         
                         # Второй вызов AI для форматирования ответа
                         final_response = await self._call_ai_simple(result_prompt)
