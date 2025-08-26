@@ -15,30 +15,39 @@ logger = logging.getLogger(__name__)
 
 @shared_task
 def send_monthly_reports():
-    """Send monthly expense reports"""
+    """Send monthly expense reports to all users on the last day at 20:00"""
     try:
-        from expenses.models import Profile, UserSettings
+        from expenses.models import Profile, Expense
         from bot.services.notifications import NotificationService
         from calendar import monthrange
         
         bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
         service = NotificationService(bot)
         
-        # Check if today is the last day of month
+        # Check if today is the last day of month and time is 20:00
         today = datetime.now()
         last_day = monthrange(today.year, today.month)[1]
         
         if today.day != last_day:
+            logger.info(f"Not the last day of month ({today.day}/{last_day}), skipping monthly reports")
             return
         
-        current_time = today.time()
+        if today.hour != 20:
+            logger.info(f"Not 20:00 ({today.hour}:00), skipping monthly reports")
+            return
         
-        # Get users with monthly reports enabled
+        # Get all active profiles who have expenses this month
+        month_start = today.replace(day=1)
+        profiles_with_expenses = Expense.objects.filter(
+            expense_date__gte=month_start,
+            expense_date__lte=today
+        ).values_list('profile_id', flat=True).distinct()
+        
         profiles = Profile.objects.filter(
-            settings__monthly_summary_enabled=True
-        ).select_related('settings')
+            id__in=profiles_with_expenses
+        )
         
-        logger.info(f"Sending monthly reports to {profiles.count()} users")
+        logger.info(f"Sending monthly reports to {profiles.count()} users with expenses")
         
         # Run async function in sync context
         loop = asyncio.new_event_loop()
@@ -49,6 +58,7 @@ def send_monthly_reports():
                 loop.run_until_complete(
                     service.send_monthly_report(profile.telegram_id, profile)
                 )
+                logger.info(f"Monthly report sent to user {profile.telegram_id}")
             except Exception as e:
                 logger.error(f"Error sending monthly report to user {profile.telegram_id}: {e}")
         

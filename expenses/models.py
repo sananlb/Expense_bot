@@ -103,11 +103,7 @@ class UserSettings(models.Model):
     profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name='settings')
     
     # Уведомления
-    monthly_summary_enabled = models.BooleanField(default=True)  # Всегда включено
     budget_alerts_enabled = models.BooleanField(default=True)
-    
-    # Время для уведомлений
-    notification_time = models.TimeField(default=time(18, 0))  # Общее время для месячных уведомлений (18:00 по умолчанию)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

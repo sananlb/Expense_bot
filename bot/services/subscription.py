@@ -17,6 +17,10 @@ async def check_subscription(telegram_id: int, include_trial: bool = True) -> bo
     try:
         profile = await Profile.objects.aget(telegram_id=telegram_id)
         
+        # Бета-тестеры имеют полный доступ без подписки
+        if profile.is_beta_tester:
+            return True
+        
         # Проверяем наличие активной подписки
         if include_trial:
             # Учитываем любую активную подписку включая пробный период
