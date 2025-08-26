@@ -845,6 +845,121 @@ class ExpenseFunctions:
     
     @staticmethod
     @sync_to_async
+    def get_month_expenses(user_id: int, month: str = None, year: int = None) -> Dict[str, Any]:
+        """
+        Получить все траты за конкретный месяц
+        
+        Args:
+            user_id: ID пользователя Telegram
+            month: Название месяца ('январь', 'февраль', ..., 'август', ...) или номер (1-12)
+            year: Год (если не указан, берется текущий)
+            
+        Returns:
+            Список всех трат за указанный месяц
+        """
+        try:
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
+            
+            # Определяем месяц и год
+            today = date.today()
+            if year is None:
+                year = today.year
+                
+            # Маппинг названий месяцев
+            month_names = {
+                'январь': 1, 'февраль': 2, 'март': 3, 'апрель': 4,
+                'май': 5, 'июнь': 6, 'июль': 7, 'август': 8,
+                'сентябрь': 9, 'октябрь': 10, 'ноябрь': 11, 'декабрь': 12,
+                'january': 1, 'february': 2, 'march': 3, 'april': 4,
+                'may': 5, 'june': 6, 'july': 7, 'august': 8,
+                'september': 9, 'october': 10, 'november': 11, 'december': 12
+            }
+            
+            if month is None:
+                month_num = today.month
+            elif isinstance(month, str):
+                month_lower = month.lower()
+                month_num = month_names.get(month_lower, None)
+                if month_num is None:
+                    try:
+                        month_num = int(month)
+                    except:
+                        month_num = today.month
+            else:
+                month_num = month
+                
+            # Определяем границы месяца
+            month_start = date(year, month_num, 1)
+            if month_num == 12:
+                month_end = date(year + 1, 1, 1) - timedelta(days=1)
+            else:
+                month_end = date(year, month_num + 1, 1) - timedelta(days=1)
+            
+            # Получаем все траты за месяц
+            expenses = Expense.objects.filter(
+                profile=profile,
+                expense_date__gte=month_start,
+                expense_date__lte=month_end
+            ).select_related('category').order_by('-expense_date', '-expense_time')
+            
+            # Формируем список трат
+            expenses_list = []
+            total_amount = Decimal('0')
+            categories_total = defaultdict(Decimal)
+            
+            for exp in expenses:
+                expense_data = {
+                    'date': exp.expense_date.isoformat(),
+                    'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
+                    'amount': float(exp.amount),
+                    'category': exp.category.name if exp.category else 'Без категории',
+                    'category_icon': exp.category.icon if exp.category else '💰',
+                    'description': exp.description,
+                    'currency': exp.currency
+                }
+                expenses_list.append(expense_data)
+                total_amount += exp.amount
+                if exp.category:
+                    categories_total[exp.category.name] += exp.amount
+            
+            # Статистика по категориям
+            category_stats = [
+                {
+                    'category': cat,
+                    'total': float(total),
+                    'percentage': float(total / total_amount * 100) if total_amount > 0 else 0
+                }
+                for cat, total in sorted(categories_total.items(), key=lambda x: x[1], reverse=True)
+            ]
+            
+            # Названия месяцев для вывода
+            month_display_names = [
+                'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+                'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'
+            ]
+            
+            return {
+                'success': True,
+                'month': month_display_names[month_num - 1],
+                'year': year,
+                'period_start': month_start.isoformat(),
+                'period_end': month_end.isoformat(),
+                'total_amount': float(total_amount),
+                'currency': 'RUB',
+                'expenses_count': len(expenses_list),
+                'expenses': expenses_list,
+                'category_statistics': category_stats
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in get_month_expenses: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
     def check_budget_status(user_id: int, budget_amount: float) -> Dict[str, Any]:
         """
         Проверить статус бюджета

@@ -264,28 +264,79 @@ class GoogleAIService:
                 logger.error(f"[GoogleAI-Adaptive] Chat error: {e}")
                 raise
         else:
-            # На Unix-системах используем версию с function calling
-            logger.info(f"[GoogleAI-Adaptive] Linux branch - redirecting to chat_with_functions")
-            logger.info(f"[GoogleAI-Adaptive] user_context: {user_context}")
-            
-            try:
-                from .google_ai_service import GoogleAIService as FunctionService
-                logger.info("[GoogleAI-Adaptive] FunctionService imported successfully")
+            # На Unix-системах 
+            # Проверяем, если это запрос на показ трат, используем простой подход
+            message_lower = message.lower()
+            if any(phrase in message_lower for phrase in [
+                'покажи все траты', 'показать все траты', 'все траты за', 
+                'траты в августе', 'траты за август', 'список трат'
+            ]):
+                logger.info(f"[GoogleAI-Adaptive] Linux branch - detected expense listing request, using direct approach")
                 
-                func_service = FunctionService()
-                logger.info("[GoogleAI-Adaptive] FunctionService instance created")
+                # Используем прямой подход как на Windows
+                context_str = ""
+                if context:
+                    for msg in context[-10:]:
+                        role = msg.get('role', 'user')
+                        content = msg.get('content', '')
+                        context_str += f"{role}: {content}\n"
                 
-                # Извлекаем user_id из user_context
-                user_id = user_context.get('user_id') if user_context else None
-                logger.info(f"[GoogleAI-Adaptive] Calling chat_with_functions with user_id={user_id}")
+                user_info = ""
+                if user_context:
+                    if user_context.get('total_today'):
+                        user_info += f"Пользователь потратил сегодня: {user_context['total_today']} ₽\n"
+                    if user_context.get('expenses_data'):
+                        user_info += f"Данные о расходах: {json.dumps(user_context['expenses_data'], ensure_ascii=False)}\n"
                 
-                result = await func_service.chat_with_functions(message, context, user_context, user_id)
-                logger.info(f"[GoogleAI-Adaptive] Got result: {result[:100] if result else 'None'}...")
+                prompt = f"""Ты - помощник по учету расходов. Отвечай на русском языке.
                 
-                return result
-            except Exception as e:
-                logger.error(f"[GoogleAI-Adaptive] Error in Linux branch: {e}", exc_info=True)
-                raise
+{user_info}
+Контекст разговора:
+{context_str}
+
+Вопрос пользователя: {message}
+
+Дай полезный и точный ответ на вопрос пользователя. Если спрашивают о тратах за конкретный месяц, покажи все траты из данных за этот месяц с датами и суммами."""
+                
+                model = self.genai.GenerativeModel('gemini-2.5-flash')
+                generation_config = self.genai.GenerationConfig(
+                    temperature=0.7,
+                    max_output_tokens=7500,
+                    top_p=0.95
+                )
+                
+                response = await model.generate_content_async(
+                    prompt,
+                    generation_config=generation_config
+                )
+                
+                if response and response.text:
+                    return response.text.strip()
+                else:
+                    return "Не удалось получить ответ от AI"
+            else:
+                # Для остальных запросов используем function calling
+                logger.info(f"[GoogleAI-Adaptive] Linux branch - redirecting to chat_with_functions")
+                logger.info(f"[GoogleAI-Adaptive] user_context: {user_context}")
+                
+                try:
+                    from .google_ai_service import GoogleAIService as FunctionService
+                    logger.info("[GoogleAI-Adaptive] FunctionService imported successfully")
+                    
+                    func_service = FunctionService()
+                    logger.info("[GoogleAI-Adaptive] FunctionService instance created")
+                    
+                    # Извлекаем user_id из user_context
+                    user_id = user_context.get('user_id') if user_context else None
+                    logger.info(f"[GoogleAI-Adaptive] Calling chat_with_functions with user_id={user_id}")
+                    
+                    result = await func_service.chat_with_functions(message, context, user_context, user_id)
+                    logger.info(f"[GoogleAI-Adaptive] Got result: {result[:100] if result else 'None'}...")
+                    
+                    return result
+                except Exception as e:
+                    logger.error(f"[GoogleAI-Adaptive] Error in Linux branch: {e}", exc_info=True)
+                    raise
     
     def get_expense_categorization_prompt(self, text, amount, currency, categories, user_context):
         """Для совместимости с AIBaseService"""
