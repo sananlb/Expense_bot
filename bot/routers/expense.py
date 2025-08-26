@@ -904,7 +904,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     amount=amount,
                     description=text,
                     currency=currency,
-                    expense_date=parsed.get('expense_date')  # Добавляем дату, если она была указана
+                    expense_date=parsed.get('expense_date') if parsed else None  # Добавляем дату, если она была указана
                 )
                 
                 # Форматируем сообщение с учетом валюты
@@ -1043,9 +1043,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     # Гарантируем отмену задачи
     cancel_typing()
     
-    # Восстанавливаем меню кешбека если оно было активно
-    from ..routers.cashback import restore_cashback_menu_if_needed
-    await restore_cashback_menu_if_needed(state, message.bot, message.chat.id)
+    # # Восстанавливаем меню кешбека если оно было активно
+    # from ..routers.cashback import restore_cashback_menu_if_needed
+    # await restore_cashback_menu_if_needed(state, message.bot, message.chat.id)
 
 
 # Обработчик голосовых сообщений
@@ -1238,9 +1238,9 @@ async def delete_expense(callback: types.CallbackQuery, state: FSMContext):
     
     if success:
         await callback.message.delete()
-        # Восстанавливаем меню кешбека если оно было активно
-        from ..routers.cashback import restore_cashback_menu_if_needed
-        await restore_cashback_menu_if_needed(state, callback.bot, callback.message.chat.id)
+        # # Восстанавливаем меню кешбека если оно было активно
+        # from ..routers.cashback import restore_cashback_menu_if_needed
+        # await restore_cashback_menu_if_needed(state, callback.bot, callback.message.chat.id)
     else:
         await callback.answer("❌ Не удалось удалить трату", show_alert=True)
 
