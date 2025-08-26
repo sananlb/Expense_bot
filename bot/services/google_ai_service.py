@@ -228,25 +228,75 @@ class GoogleAIService(AIBaseService):
                         if result.get('success') and func_name in large_data_functions:
                             # Форматируем результат в зависимости от функции
                             if func_name == 'get_expenses_list':
-                                expenses = result.get('expenses', [])
+                                expenses_data = result.get('expenses', [])
                                 total = result.get('total', 0)
-                                count = result.get('count', len(expenses))
+                                count = result.get('count', len(expenses_data))
+                                start_date = result.get('start_date', '')
+                                end_date = result.get('end_date', '')
                                 
-                                if expenses:
-                                    response_text = f"Найдено {count} трат на сумму {total:,.0f} ₽\n"
-                                    response_text += f"Период: с {result.get('start_date', '')} по {result.get('end_date', '')}\n\n"
+                                if expenses_data:
+                                    # Преобразуем данные в объекты-заглушки для форматтера
+                                    from datetime import datetime
+                                    from types import SimpleNamespace
                                     
-                                    for exp in expenses[:50]:  # Показываем первые 50
-                                        date = exp.get('date', '')
-                                        time = exp.get('time', '')
-                                        desc = exp.get('description', '')
-                                        amount = exp.get('amount', 0)
+                                    expense_objects = []
+                                    for exp in expenses_data[:50]:  # Ограничиваем 50 записями
+                                        expense_obj = SimpleNamespace()
+                                        expense_obj.expense_date = datetime.fromisoformat(exp.get('date', '2024-01-01')).date()
                                         
-                                        time_str = f" {time}" if time else ""
-                                        response_text += f"• {date}{time_str}: {desc} - {amount:,.0f} ₽\n"
+                                        # Парсим время если есть
+                                        time_str = exp.get('time', '')
+                                        if time_str:
+                                            try:
+                                                expense_obj.expense_time = datetime.strptime(time_str, '%H:%M').time()
+                                            except:
+                                                expense_obj.expense_time = None
+                                        else:
+                                            expense_obj.expense_time = None
+                                        
+                                        expense_obj.created_at = datetime.now()
+                                        expense_obj.description = exp.get('description', 'Без описания')
+                                        expense_obj.amount = exp.get('amount', 0)
+                                        expense_obj.currency = 'RUB'
+                                        
+                                        expense_objects.append(expense_obj)
                                     
-                                    if count > 50:
-                                        response_text += f"\n... и еще {count - 50} трат"
+                                    # Форматируем с помощью стандартного форматтера
+                                    from bot.utils.expense_formatter import format_expenses_diary_style
+                                    
+                                    # Определяем описание периода
+                                    try:
+                                        start = datetime.fromisoformat(start_date)
+                                        end = datetime.fromisoformat(end_date)
+                                        
+                                        # Если это один месяц
+                                        if start.month == end.month and start.year == end.year:
+                                            months_ru = {
+                                                1: 'январь', 2: 'февраль', 3: 'март', 4: 'апрель',
+                                                5: 'май', 6: 'июнь', 7: 'июль', 8: 'август',
+                                                9: 'сентябрь', 10: 'октябрь', 11: 'ноябрь', 12: 'декабрь'
+                                            }
+                                            period_desc = f"за {months_ru[start.month]} {start.year}"
+                                        else:
+                                            period_desc = f"с {start_date} по {end_date}"
+                                    except:
+                                        period_desc = f"с {start_date} по {end_date}"
+                                    
+                                    response_text = format_expenses_diary_style(
+                                        expense_objects, 
+                                        max_expenses=50,
+                                        show_warning=(count > 50)
+                                    )
+                                    
+                                    # Заменяем заголовок на более подходящий
+                                    response_text = response_text.replace(
+                                        "📋 <b>Дневник трат</b>",
+                                        f"📋 <b>Траты {period_desc}</b>\n<i>Всего: {count} трат на сумму {total:,.0f} ₽</i>"
+                                    )
+                                    
+                                    # Убираем HTML теги для чистого текста
+                                    import re
+                                    response_text = re.sub(r'<[^>]+>', '', response_text)
                                     
                                     return response_text
                                 else:
@@ -551,22 +601,47 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
                         data = json.loads(json_str)
                         
                         if 'expenses' in data:
-                            expenses = data['expenses']
+                            expenses_data = data['expenses']
                             total = data.get('total', 0)
-                            count = data.get('count', len(expenses))
+                            count = data.get('count', len(expenses_data))
                             remaining = data.get('remaining_count', 0)
                             
-                            if expenses:
-                                result_text = f"Найдено {count} трат на сумму {total:,.0f} ₽:\n\n"
-                                for exp in expenses[:50]:  # Ограничиваем первыми 50 записями
-                                    date = exp.get('date', '')
-                                    desc = exp.get('description', '')
-                                    amount = exp.get('amount', 0)
-                                    currency = exp.get('currency', '₽')
-                                    result_text += f"• {date}: {desc} - {amount:,.0f} {currency}\n"
+                            if expenses_data:
+                                # Используем форматирование в стиле дневника
+                                from datetime import datetime
+                                from types import SimpleNamespace
+                                from bot.utils.expense_formatter import format_expenses_diary_style
+                                import re
                                 
-                                if remaining > 0:
-                                    result_text += f"\n... и еще {remaining} трат"
+                                expense_objects = []
+                                for exp in expenses_data[:50]:
+                                    expense_obj = SimpleNamespace()
+                                    expense_obj.expense_date = datetime.fromisoformat(exp.get('date', '2024-01-01')).date()
+                                    
+                                    time_str = exp.get('time', '')
+                                    if time_str:
+                                        try:
+                                            expense_obj.expense_time = datetime.strptime(time_str, '%H:%M').time()
+                                        except:
+                                            expense_obj.expense_time = None
+                                    else:
+                                        expense_obj.expense_time = None
+                                    
+                                    expense_obj.created_at = datetime.now()
+                                    expense_obj.description = exp.get('description', 'Без описания')
+                                    expense_obj.amount = exp.get('amount', 0)
+                                    expense_obj.currency = 'RUB'
+                                    
+                                    expense_objects.append(expense_obj)
+                                
+                                result_text = format_expenses_diary_style(
+                                    expense_objects,
+                                    max_expenses=50,
+                                    show_warning=(remaining > 0)
+                                )
+                                
+                                # Убираем HTML теги для чистого текста
+                                result_text = re.sub(r'<[^>]+>', '', result_text)
                                 
                                 logger.info(f"[GoogleAI] Fallback formatting successful, returning {len(result_text)} chars")
                                 return result_text
