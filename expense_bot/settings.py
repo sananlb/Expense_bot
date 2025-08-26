@@ -299,11 +299,6 @@ try:
     #     'schedule': crontab(hour=20, minute=0),  # 8 PM daily
     #     'options': {'queue': 'reports'}
     # },
-    'send-weekly-reports': {
-        'task': 'expense_bot.celery_tasks.send_weekly_reports',
-        'schedule': crontab(minute=0),  # Every hour at minute 0
-        'options': {'queue': 'reports'}
-    },
     'send-monthly-reports': {
         'task': 'expense_bot.celery_tasks.send_monthly_reports',
         'schedule': crontab(minute=0),  # Every hour at minute 0

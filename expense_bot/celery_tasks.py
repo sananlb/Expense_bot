@@ -14,45 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task
-def send_weekly_reports():
-    """Send weekly expense reports"""
-    try:
-        from expenses.models import Profile, UserSettings
-        from bot.services.notifications import NotificationService
-        
-        bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
-        service = NotificationService(bot)
-        
-        current_weekday = datetime.now().weekday()
-        current_time = datetime.now().time()
-        
-        # Get users with weekly reports enabled for current weekday and time
-        profiles = Profile.objects.filter(
-            settings__weekly_summary_enabled=True,
-            settings__weekly_summary_day=current_weekday
-        ).select_related('settings')
-        
-        logger.info(f"Sending weekly reports to {profiles.count()} users")
-        
-        # Run async function in sync context
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        for profile in profiles:
-            try:
-                loop.run_until_complete(
-                    service.send_weekly_report(profile.telegram_id, profile)
-                )
-            except Exception as e:
-                logger.error(f"Error sending weekly report to user {profile.telegram_id}: {e}")
-        
-        loop.close()
-        
-    except Exception as e:
-        logger.error(f"Error in send_weekly_reports task: {e}")
-
-
-@shared_task
 def send_monthly_reports():
     """Send monthly expense reports"""
     try:

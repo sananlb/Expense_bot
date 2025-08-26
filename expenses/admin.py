@@ -244,10 +244,9 @@ class ProfileAdmin(admin.ModelAdmin):
 
 @admin.register(UserSettings)
 class UserSettingsAdmin(admin.ModelAdmin):
-    list_display = ['profile', 'notification_time', 'weekly_summary_day',
-                    'weekly_summary_enabled', 'monthly_summary_enabled']
-    list_filter = ['weekly_summary_enabled', 
-                   'monthly_summary_enabled', 'budget_alerts_enabled']
+    list_display = ['profile', 'notification_time', 
+                    'monthly_summary_enabled', 'budget_alerts_enabled']
+    list_filter = ['monthly_summary_enabled', 'budget_alerts_enabled']
     search_fields = ['profile__telegram_id']
     
     fieldsets = (
@@ -255,8 +254,8 @@ class UserSettingsAdmin(admin.ModelAdmin):
             'fields': ('profile',)
         }),
         ('Уведомления', {
-            'fields': ('notification_time', 'weekly_summary_day',
-                      'weekly_summary_enabled', 'monthly_summary_enabled',
+            'fields': ('notification_time',
+                      'monthly_summary_enabled',
                       'budget_alerts_enabled')
         }),
         ('Системные', {

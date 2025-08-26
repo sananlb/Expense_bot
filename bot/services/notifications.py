@@ -19,42 +19,6 @@ class NotificationService:
     def __init__(self, bot: Bot):
         self.bot = bot
         
-    async def send_weekly_report(self, user_id: int, profile: Profile):
-        """Send weekly expense report for last 7 days"""
-        try:
-            from ..services.pdf_report import PDFReportService
-            from aiogram.types import BufferedInputFile
-            
-            today = date.today()
-            week_start = today - timedelta(days=6)  # Последние 7 дней включая сегодня
-            
-            # Генерируем PDF отчет за текущий месяц (так работает существующая функция)
-            pdf_service = PDFReportService()
-            pdf_bytes = await pdf_service.generate_monthly_report(
-                user_id=user_id,
-                year=today.year,
-                month=today.month
-            )
-            
-            if pdf_bytes:
-                # Отправляем PDF файл
-                pdf_file = BufferedInputFile(
-                    pdf_bytes,
-                    filename=f"weekly_report_{week_start.strftime('%Y%m%d')}_{today.strftime('%Y%m%d')}.pdf"
-                )
-                
-                await self.bot.send_document(
-                    chat_id=user_id,
-                    document=pdf_file,
-                    caption=f"📊 Недельный отчет за последние 7 дней\n{week_start.strftime('%d.%m.%Y')} - {today.strftime('%d.%m.%Y')}"
-                )
-                
-                logger.info(f"Weekly PDF report sent to user {user_id}")
-            # Если расходов не было - ничего не отправляем
-            
-        except Exception as e:
-            logger.error(f"Error sending weekly report to user {user_id}: {e}")
-    
     async def send_monthly_report(self, user_id: int, profile: Profile):
         """Send monthly expense report"""
         try:
