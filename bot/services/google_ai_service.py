@@ -296,7 +296,7 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
             
             generation_config = genai.GenerationConfig(
                 temperature=0.3,
-                max_output_tokens=1500,  # Увеличено с 200 для обработки больших запросов
+                max_output_tokens=5000,  # Увеличено для обработки больших списков трат
                 top_p=0.9
             )
             
@@ -350,7 +350,7 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
             
             generation_config = genai.GenerationConfig(
                 temperature=0.7,
-                max_output_tokens=1500,
+                max_output_tokens=5000,  # Увеличено для полных ответов с большим количеством трат
                 top_p=0.9
             )
             
@@ -416,7 +416,7 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
             
             generation_config = genai.GenerationConfig(
                 temperature=0.7,
-                max_output_tokens=1500,
+                max_output_tokens=5000,  # Увеличено для полных ответов с большим количеством трат
                 top_p=0.9
             )
             
