@@ -14,7 +14,7 @@ import logging
 from bot.keyboards import settings_keyboard, back_close_keyboard, get_language_keyboard, get_timezone_keyboard, get_currency_keyboard
 from bot.utils import get_text, set_user_language, get_user_language, format_amount
 from bot.services.profile import get_or_create_profile
-from bot.middleware.language import update_user_commands
+from bot.utils.commands import update_user_commands
 from bot.utils.state_utils import clear_state_with_message, get_clean_state
 from bot.utils.message_utils import send_message_with_cleanup
 
