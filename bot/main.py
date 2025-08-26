@@ -159,11 +159,6 @@ def create_dispatcher() -> Dispatcher:
     dp.message.middleware(MenuCleanupMiddleware())
     dp.message.middleware(StateResetMiddleware())
     
-    # 9. Notification Settings - управление состояниями настроек уведомлений
-    from bot.middleware.notification_settings import NotificationSettingsMiddleware
-    dp.message.middleware(NotificationSettingsMiddleware())
-    dp.callback_query.middleware(NotificationSettingsMiddleware())
-    
     # Подключение роутеров (порядок важен для приоритета обработки)
     dp.include_router(start_router)
     dp.include_router(menu_router)
