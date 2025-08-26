@@ -256,6 +256,7 @@ class GoogleAIService(AIBaseService):
         Вызов AI с инструкциями о функциях
         """
         try:
+            logger.info(f"[GoogleAI] _call_ai_with_functions started for message: {message[:100]}")
             prompt = f"""Ты - помощник по учету расходов. У тебя есть доступ к функциям для анализа трат.
 
 ДОСТУПНЫЕ ФУНКЦИИ:
@@ -299,11 +300,16 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
                 {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
             ]
             
+            logger.info(f"[GoogleAI] Calling generate_content_async with prompt length: {len(prompt)}")
+            logger.info(f"[GoogleAI] Generation config: max_output_tokens={generation_config.max_output_tokens}")
+            
             response = await model.generate_content_async(
                 prompt,
                 generation_config=generation_config,
                 safety_settings=safety_settings
             )
+            
+            logger.info(f"[GoogleAI] generate_content_async completed")
             
             # Детальное логирование для диагностики
             logger.info(f"[GoogleAI] Response received: response={response is not None}")
