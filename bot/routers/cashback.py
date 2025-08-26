@@ -19,8 +19,93 @@ from ..services.category import get_user_categories
 from expenses.models import Cashback
 from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect
 from ..utils import get_text
+from ..utils.formatters import format_currency
+import logging
 
+logger = logging.getLogger(__name__)
 router = Router(name="cashback")
+
+
+async def send_cashback_menu_direct(bot, chat_id: int, state: FSMContext, month: int = None):
+    """Отправить меню кешбека напрямую без message объекта"""
+    from datetime import date
+    target_month = month or date.today().month
+    current_date = date.today()
+    
+    # Получаем язык из состояния
+    state_data = await state.get_data()
+    lang = state_data.get('lang', 'ru')
+    
+    # Сохраняем информацию о том, что меню кешбека активно
+    await state.update_data(
+        persistent_cashback_menu=True,
+        cashback_menu_month=target_month,
+        cashback_menu_message_id=None  # Будет установлен после отправки
+    )
+    
+    # Получаем кешбэки пользователя
+    cashbacks = await get_user_cashbacks(chat_id, target_month)
+    
+    # Формируем текст
+    import locale
+    try:
+        locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
+    except locale.Error:
+        try:
+            locale.setlocale(locale.LC_TIME, 'Russian_Russia.1251')
+        except locale.Error:
+            pass
+    
+    # Определяем название месяца
+    month_name = date(current_date.year, target_month, 1).strftime('%B').lower()
+    
+    text = f"💳 <b>Кешбэки за {month_name}</b>\n\n"
+    
+    if cashbacks:
+        for cb in cashbacks:
+            text += f"• <b>{cb['category']}</b> - {cb['bank']}: {cb['percent']}%\n"
+        text += f"\n💰 <b>Потенциальный кешбэк: {format_currency(sum(cb['potential_cashback'] for cb in cashbacks), 'RUB')}</b>"
+    else:
+        text += "У вас пока нет активных кешбэков.\n\nДобавьте кешбэк с помощью кнопки ниже."
+    
+    # Формируем клавиатуру
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="◀️", callback_data=f"cashback_month_{target_month - 1 if target_month > 1 else 12}"),
+            InlineKeyboardButton(text="▶️", callback_data=f"cashback_month_{target_month + 1 if target_month < 12 else 1}")
+        ],
+        [
+            InlineKeyboardButton(text="➕ Добавить кешбэк", callback_data="add_cashback"),
+            InlineKeyboardButton(text="✏️ Изменить", callback_data="edit_cashbacks")
+        ],
+        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close_cashback_menu")]
+    ])
+    
+    # Отправляем меню
+    sent_message = await bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
+    
+    # Получаем текущие данные состояния
+    data = await state.get_data()
+    cashback_menu_ids = data.get('cashback_menu_ids', [])
+    
+    # Добавляем новый ID в список меню кешбека
+    if sent_message.message_id not in cashback_menu_ids:
+        cashback_menu_ids.append(sent_message.message_id)
+    
+    # Сохраняем обновленный список ID и флаги
+    await state.update_data(
+        persistent_cashback_menu=True,
+        cashback_menu_month=target_month,
+        cashback_menu_ids=cashback_menu_ids,
+        cashback_menu_message_id=sent_message.message_id,
+        last_menu_message_id=sent_message.message_id
+    )
 
 
 async def restore_cashback_menu_if_needed(state: FSMContext, bot, chat_id: int):
@@ -29,19 +114,8 @@ async def restore_cashback_menu_if_needed(state: FSMContext, bot, chat_id: int):
     if data.get('persistent_cashback_menu'):
         # Получаем сохраненный месяц
         month = data.get('cashback_menu_month')
-        # Создаем фиктивное сообщение для вызова show_cashback_menu
-        from aiogram.types import User, Chat
-        fake_user = User(id=chat_id, is_bot=False, first_name="User")
-        fake_chat = Chat(id=chat_id, type="private")
-        fake_message = types.Message(
-            message_id=0,
-            date=datetime.now(),
-            chat=fake_chat,
-            from_user=fake_user,
-            text="",
-            bot=bot
-        )
-        await show_cashback_menu(fake_message, state, month=month)
+        # Вызываем функцию отправки меню напрямую с bot объектом
+        await send_cashback_menu_direct(bot, chat_id, state, month=month)
 
 
 class CashbackForm(StatesGroup):
@@ -133,8 +207,17 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
     
     # Отправляем меню кешбека особым способом
     if isinstance(message, (types.Message, types.CallbackQuery)):
-        bot = message.bot if hasattr(message, 'bot') else message.message.bot
-        chat_id = message.chat.id if hasattr(message, 'chat') else message.message.chat.id
+        # Безопасно получаем bot объект
+        if isinstance(message, types.Message):
+            bot = message.bot if message.bot else None
+            chat_id = message.chat.id if hasattr(message, 'chat') else None
+        elif isinstance(message, types.CallbackQuery):
+            bot = message.bot if hasattr(message, 'bot') else None
+            chat_id = message.message.chat.id if hasattr(message.message, 'chat') else None
+        
+        if not bot or not chat_id:
+            logger.error(f"Bot or chat_id is None: bot={bot}, chat_id={chat_id}")
+            return
         
         # НЕ удаляем старое меню кешбека - оно должно оставаться на экране
         # Пользователь может иметь несколько меню кешбека одновременно
