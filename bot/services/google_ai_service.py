@@ -240,7 +240,7 @@ class GoogleAIService(AIBaseService):
                                     from types import SimpleNamespace
                                     
                                     expense_objects = []
-                                    for exp in expenses_data[:50]:  # Ограничиваем 50 записями
+                                    for exp in expenses_data[:100]:  # Увеличиваем лимит до 100 записей
                                         expense_obj = SimpleNamespace()
                                         expense_obj.expense_date = datetime.fromisoformat(exp.get('date', '2024-01-01')).date()
                                         
@@ -284,8 +284,8 @@ class GoogleAIService(AIBaseService):
                                     
                                     response_text = format_expenses_diary_style(
                                         expense_objects, 
-                                        max_expenses=50,
-                                        show_warning=(count > 50)
+                                        max_expenses=100,
+                                        show_warning=(count > 100)
                                     )
                                     
                                     # Заменяем заголовок на более подходящий
@@ -313,15 +313,15 @@ class GoogleAIService(AIBaseService):
                                 
                                 if details:
                                     response_text += "Детали:\n"
-                                    for exp in details[:20]:  # Ограничиваем 20 записями
+                                    for exp in details[:50]:  # Увеличиваем до 50 записей
                                         time = exp.get('time', '')
                                         desc = exp.get('description', '')
                                         amount = exp.get('amount', 0)
                                         category = exp.get('category', '')
                                         response_text += f"• {time}: {desc} - {amount:,.0f} ₽ [{category}]\n"
                                     
-                                    if len(details) > 20:
-                                        response_text += f"\n... и еще {len(details) - 20} трат"
+                                    if len(details) > 50:
+                                        response_text += f"\n... и еще {len(details) - 50} трат"
                                 
                                 return response_text
                             
@@ -331,15 +331,15 @@ class GoogleAIService(AIBaseService):
                                 
                                 response_text = f"Статистика по категориям (всего: {total:,.0f} ₽)\n\n"
                                 
-                                for cat in categories[:10]:  # Топ 10 категорий
+                                for cat in categories[:20]:  # Увеличиваем до топ-20 категорий
                                     name = cat.get('name', '')
                                     cat_total = cat.get('total', 0)
                                     count = cat.get('count', 0)
                                     percent = cat.get('percentage', 0)
                                     response_text += f"• {name}: {cat_total:,.0f} ₽ ({count} шт., {percent:.1f}%)\n"
                                 
-                                if len(categories) > 10:
-                                    response_text += f"\n... и еще {len(categories) - 10} категорий"
+                                if len(categories) > 20:
+                                    response_text += f"\n... и еще {len(categories) - 20} категорий"
                                 
                                 return response_text
                             
@@ -350,14 +350,14 @@ class GoogleAIService(AIBaseService):
                                 
                                 response_text = f"Траты по дням (всего: {total:,.0f} ₽, среднее: {average:,.0f} ₽/день)\n\n"
                                 
-                                # Показываем последние 10 дней
-                                dates = sorted(daily.keys(), reverse=True)[:10]
+                                # Показываем последние 30 дней
+                                dates = sorted(daily.keys(), reverse=True)[:30]
                                 for date in dates:
                                     amount = daily[date]
                                     if amount > 0:
                                         response_text += f"• {date}: {amount:,.0f} ₽\n"
                                 
-                                if len(daily) > 10:
+                                if len(daily) > 30:
                                     response_text += f"\n... данные за {len(daily)} дней"
                                 
                                 return response_text
@@ -387,14 +387,14 @@ class GoogleAIService(AIBaseService):
                                 response_text = f"Траты от {min_amt:,.0f} до {max_amt:,.0f} ₽\n"
                                 response_text += f"Найдено: {count} трат на сумму {total:,.0f} ₽\n\n"
                                 
-                                for exp in expenses[:20]:  # Первые 20
+                                for exp in expenses[:50]:  # Увеличиваем до 50
                                     date = exp.get('date', '')
                                     desc = exp.get('description', '')
                                     amount = exp.get('amount', 0)
                                     response_text += f"• {date}: {desc} - {amount:,.0f} ₽\n"
                                 
-                                if count > 20:
-                                    response_text += f"\n... и еще {count - 20} трат"
+                                if count > 50:
+                                    response_text += f"\n... и еще {count - 50} трат"
                                 
                                 return response_text
                             
@@ -614,7 +614,7 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
                                 import re
                                 
                                 expense_objects = []
-                                for exp in expenses_data[:50]:
+                                for exp in expenses_data[:100]:
                                     expense_obj = SimpleNamespace()
                                     expense_obj.expense_date = datetime.fromisoformat(exp.get('date', '2024-01-01')).date()
                                     
@@ -636,7 +636,7 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
                                 
                                 result_text = format_expenses_diary_style(
                                     expense_objects,
-                                    max_expenses=50,
+                                    max_expenses=100,
                                     show_warning=(remaining > 0)
                                 )
                                 

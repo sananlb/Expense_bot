@@ -9,7 +9,7 @@ from decimal import Decimal
 def format_expenses_diary_style(
     expenses: List[Any],
     today: date = None,
-    max_expenses: int = 50,
+    max_expenses: int = 100,
     show_warning: bool = True
 ) -> str:
     """
@@ -150,7 +150,7 @@ def format_expenses_diary_style(
 def format_expenses_list(
     expenses: List[Any],
     period_description: str = None,
-    max_expenses: int = 50
+    max_expenses: int = 100
 ) -> str:
     """
     Форматирует СПИСОК трат в стиле дневника.
