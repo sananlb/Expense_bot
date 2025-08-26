@@ -128,30 +128,33 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
     """Обработать сообщение как чат"""
     user_id = message.from_user.id
     
-    # УБРАНО: Больше не проверяем запросы дневника трат
-    # Все сообщения идут через AI
-    
-    # Проверяем подписку для AI чата (включая пробный период)
-    has_subscription = await check_subscription(user_id, include_trial=True)
-    
-    # Получаем или создаем сессию
-    session_id = await ChatContextManager.get_or_create_session(user_id, state)
-    
-    # Добавляем сообщение пользователя в контекст
-    await ChatContextManager.add_message(state, 'user', text)
-    
-    # Если есть подписка (включая пробный период) и включен AI - используем AI для ответа
-    if has_subscription and use_ai:
-        try:
-            # Получаем контекст
-            context = await ChatContextManager.get_context(state)
-            
-            # Получаем дополнительную информацию о пользователе
-            from expenses.models import Expense
-            from datetime import timedelta
-            
-            today = datetime.now().date()
-            today_summary = await get_today_summary(user_id)
+    # Запускаем индикацию "печатает..."
+    from ..utils.typing_action import TypingAction
+    async with TypingAction(message):
+        # УБРАНО: Больше не проверяем запросы дневника трат
+        # Все сообщения идут через AI
+        
+        # Проверяем подписку для AI чата (включая пробный период)
+        has_subscription = await check_subscription(user_id, include_trial=True)
+        
+        # Получаем или создаем сессию
+        session_id = await ChatContextManager.get_or_create_session(user_id, state)
+        
+        # Добавляем сообщение пользователя в контекст
+        await ChatContextManager.add_message(state, 'user', text)
+        
+        # Если есть подписка (включая пробный период) и включен AI - используем AI для ответа
+        if has_subscription and use_ai:
+            try:
+                # Получаем контекст
+                context = await ChatContextManager.get_context(state)
+                
+                # Получаем дополнительную информацию о пользователе
+                from expenses.models import Expense
+                from datetime import timedelta
+                
+                today = datetime.now().date()
+                today_summary = await get_today_summary(user_id)
             
             # Получаем последние расходы для контекста
             recent_expenses = []

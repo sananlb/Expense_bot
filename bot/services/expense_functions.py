@@ -473,7 +473,8 @@ class ExpenseFunctions:
                     'date': exp.expense_date.isoformat(),
                     'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
                     'amount': float(exp.amount),
-                    'category': exp.category.name if exp.category else 'Без категории',
+                    # Убираем категорию для уменьшения объема данных
+                    # 'category': exp.category.name if exp.category else 'Без категории',
                     'description': exp.description
                 })
             

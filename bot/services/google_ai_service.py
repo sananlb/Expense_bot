@@ -214,29 +214,165 @@ class GoogleAIService(AIBaseService):
                                 'message': f'Ошибка при выполнении функции: {str(e)}'
                             }
                         
-                        # Формируем промпт с результатом функции
-                        if result.get('success'):
+                        # Определяем функции с большим объемом данных
+                        large_data_functions = {
+                            'get_expenses_list',
+                            'get_max_expense_day', 
+                            'get_category_statistics',
+                            'get_daily_totals',
+                            'search_expenses',
+                            'get_expenses_by_amount_range'
+                        }
+                        
+                        # Для функций с большим объемом данных форматируем локально
+                        if result.get('success') and func_name in large_data_functions:
+                            # Форматируем результат в зависимости от функции
+                            if func_name == 'get_expenses_list':
+                                expenses = result.get('expenses', [])
+                                total = result.get('total', 0)
+                                count = result.get('count', len(expenses))
+                                
+                                if expenses:
+                                    response_text = f"Найдено {count} трат на сумму {total:,.0f} ₽\n"
+                                    response_text += f"Период: с {result.get('start_date', '')} по {result.get('end_date', '')}\n\n"
+                                    
+                                    for exp in expenses[:50]:  # Показываем первые 50
+                                        date = exp.get('date', '')
+                                        time = exp.get('time', '')
+                                        desc = exp.get('description', '')
+                                        amount = exp.get('amount', 0)
+                                        
+                                        time_str = f" {time}" if time else ""
+                                        response_text += f"• {date}{time_str}: {desc} - {amount:,.0f} ₽\n"
+                                    
+                                    if count > 50:
+                                        response_text += f"\n... и еще {count - 50} трат"
+                                    
+                                    return response_text
+                                else:
+                                    return "Траты за указанный период не найдены."
+                            
+                            elif func_name == 'get_max_expense_day':
+                                date = result.get('date', '')
+                                total = result.get('total', 0)
+                                count = result.get('count', 0)
+                                details = result.get('details', [])
+                                
+                                response_text = f"День с максимальными тратами: {date}\n"
+                                response_text += f"Всего: {total:,.0f} ₽ ({count} трат)\n\n"
+                                
+                                if details:
+                                    response_text += "Детали:\n"
+                                    for exp in details[:20]:  # Ограничиваем 20 записями
+                                        time = exp.get('time', '')
+                                        desc = exp.get('description', '')
+                                        amount = exp.get('amount', 0)
+                                        category = exp.get('category', '')
+                                        response_text += f"• {time}: {desc} - {amount:,.0f} ₽ [{category}]\n"
+                                    
+                                    if len(details) > 20:
+                                        response_text += f"\n... и еще {len(details) - 20} трат"
+                                
+                                return response_text
+                            
+                            elif func_name == 'get_category_statistics':
+                                categories = result.get('categories', [])
+                                total = result.get('total', 0)
+                                
+                                response_text = f"Статистика по категориям (всего: {total:,.0f} ₽)\n\n"
+                                
+                                for cat in categories[:10]:  # Топ 10 категорий
+                                    name = cat.get('name', '')
+                                    cat_total = cat.get('total', 0)
+                                    count = cat.get('count', 0)
+                                    percent = cat.get('percentage', 0)
+                                    response_text += f"• {name}: {cat_total:,.0f} ₽ ({count} шт., {percent:.1f}%)\n"
+                                
+                                if len(categories) > 10:
+                                    response_text += f"\n... и еще {len(categories) - 10} категорий"
+                                
+                                return response_text
+                            
+                            elif func_name == 'get_daily_totals':
+                                daily = result.get('daily_totals', {})
+                                total = result.get('total', 0)
+                                average = result.get('average', 0)
+                                
+                                response_text = f"Траты по дням (всего: {total:,.0f} ₽, среднее: {average:,.0f} ₽/день)\n\n"
+                                
+                                # Показываем последние 10 дней
+                                dates = sorted(daily.keys(), reverse=True)[:10]
+                                for date in dates:
+                                    amount = daily[date]
+                                    if amount > 0:
+                                        response_text += f"• {date}: {amount:,.0f} ₽\n"
+                                
+                                if len(daily) > 10:
+                                    response_text += f"\n... данные за {len(daily)} дней"
+                                
+                                return response_text
+                            
+                            elif func_name == 'search_expenses':
+                                results = result.get('results', [])
+                                count = result.get('count', len(results))
+                                query = result.get('query', '')
+                                
+                                response_text = f"Найдено {count} трат по запросу '{query}':\n\n"
+                                
+                                for exp in results:
+                                    date = exp.get('date', '')
+                                    desc = exp.get('description', '')
+                                    amount = exp.get('amount', 0)
+                                    response_text += f"• {date}: {desc} - {amount:,.0f} ₽\n"
+                                
+                                return response_text
+                            
+                            elif func_name == 'get_expenses_by_amount_range':
+                                expenses = result.get('expenses', [])
+                                total = result.get('total', 0)
+                                count = result.get('count', len(expenses))
+                                min_amt = result.get('min_amount', 0)
+                                max_amt = result.get('max_amount', 0)
+                                
+                                response_text = f"Траты от {min_amt:,.0f} до {max_amt:,.0f} ₽\n"
+                                response_text += f"Найдено: {count} трат на сумму {total:,.0f} ₽\n\n"
+                                
+                                for exp in expenses[:20]:  # Первые 20
+                                    date = exp.get('date', '')
+                                    desc = exp.get('description', '')
+                                    amount = exp.get('amount', 0)
+                                    response_text += f"• {date}: {desc} - {amount:,.0f} ₽\n"
+                                
+                                if count > 20:
+                                    response_text += f"\n... и еще {count - 20} трат"
+                                
+                                return response_text
+                            
+                            else:
+                                # Для других больших функций возвращаем JSON (fallback)
+                                return f"Результат:\n{json.dumps(result, ensure_ascii=False, indent=2)}"
+                        
+                        # Для функций с малым объемом данных используем второй вызов AI
+                        elif result.get('success'):
+                            # Формируем промпт для AI
                             result_prompt = f"""Вопрос: {message}
 
 Данные: {json.dumps(result, ensure_ascii=False, indent=2)}
 
 ВАЖНО: Дай полный ответ с максимумом деталей из данных:
-- ВСЕГДА указывай точную дату (число, месяц, год)
+- ВСЕГДА указывай точную дату (число, месяц, год) если есть
 - ВСЕГДА указывай сумму и валюту
 - Включи описание траты если есть
 - Укажи день недели если есть
 - Укажи категорию если есть
 Отвечай естественно, но с полной информацией."""
+                            
+                            # Второй вызов AI для форматирования ответа
+                            final_response = await self._call_ai_simple(result_prompt)
+                            return final_response
                         else:
-                            result_prompt = f"""Вопрос: {message}
-
-Ошибка: {result.get('message', 'Неизвестная ошибка')}
-
-Дай краткий ответ об ошибке, без длинных объяснений."""
-                        
-                        # Второй вызов AI для форматирования ответа
-                        final_response = await self._call_ai_simple(result_prompt)
-                        return final_response
+                            # Ошибка выполнения функции
+                            return f"Ошибка: {result.get('message', 'Неизвестная ошибка')}"
                     else:
                         logger.error(f"Function {func_name} not found")
                         return f"Извините, не могу выполнить запрос. Функция {func_name} не найдена."
@@ -400,6 +536,45 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
                 return response.text.strip()
             else:
                 logger.warning(f"[GoogleAI] Empty response from API - response={response}, parts={response.parts if response else None}")
+                
+                # Попробуем извлечь данные из промпта для форматирования локально
+                try:
+                    if "Данные:" in prompt and "expenses" in prompt:
+                        logger.info("[GoogleAI] Attempting local fallback formatting")
+                        # Извлекаем JSON из промпта
+                        json_start = prompt.find("Данные:") + len("Данные:")
+                        json_end = prompt.find("\n\nВАЖНО:")
+                        if json_end == -1:
+                            json_end = len(prompt)
+                        
+                        json_str = prompt[json_start:json_end].strip()
+                        data = json.loads(json_str)
+                        
+                        if 'expenses' in data:
+                            expenses = data['expenses']
+                            total = data.get('total', 0)
+                            count = data.get('count', len(expenses))
+                            remaining = data.get('remaining_count', 0)
+                            
+                            if expenses:
+                                result_text = f"Найдено {count} трат на сумму {total:,.0f} ₽:\n\n"
+                                for exp in expenses[:50]:  # Ограничиваем первыми 50 записями
+                                    date = exp.get('date', '')
+                                    desc = exp.get('description', '')
+                                    amount = exp.get('amount', 0)
+                                    currency = exp.get('currency', '₽')
+                                    result_text += f"• {date}: {desc} - {amount:,.0f} {currency}\n"
+                                
+                                if remaining > 0:
+                                    result_text += f"\n... и еще {remaining} трат"
+                                
+                                logger.info(f"[GoogleAI] Fallback formatting successful, returning {len(result_text)} chars")
+                                return result_text
+                            else:
+                                return "Траты за указанный период не найдены."
+                except Exception as fallback_error:
+                    logger.error(f"[GoogleAI] Fallback formatting failed: {fallback_error}")
+                
                 return "Извините, не удалось получить ответ от AI."
                 
         except Exception as e:
