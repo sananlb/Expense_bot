@@ -144,11 +144,14 @@ class GoogleAIService(AIBaseService):
             # Первый вызов AI для определения нужной функции
             response = await self._call_ai_with_functions(enhanced_message, context, user_context, user_id)
             
+            logger.info(f"[GoogleAI] chat_with_functions - AI response type: {type(response)}, length: {len(response) if response else 0}")
+            logger.info(f"[GoogleAI] chat_with_functions - AI response preview: {response[:200] if response else 'None'}")
+            
             # Проверяем, нужно ли вызвать функцию
             if response and response.startswith("FUNCTION_CALL:"):
                 # Извлекаем вызов функции
                 function_call = response.replace("FUNCTION_CALL:", "").strip()
-                logger.info(f"AI requested function: {function_call}")
+                logger.info(f"[GoogleAI] Function requested: {function_call}")
                 
                 # Выполняем функцию
                 from .expense_functions import ExpenseFunctions
@@ -323,6 +326,22 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
             if response:
                 logger.info(f"[GoogleAI] Response details: parts={response.parts is not None and len(response.parts) if response.parts else 0}")
                 logger.info(f"[GoogleAI] Response candidates: {len(response.candidates) if hasattr(response, 'candidates') and response.candidates else 0}")
+                
+                # Логируем текст ответа
+                if hasattr(response, 'text'):
+                    try:
+                        response_text = response.text
+                        logger.info(f"[GoogleAI] Response text length: {len(response_text) if response_text else 0}")
+                        logger.info(f"[GoogleAI] Response text preview: {response_text[:500] if response_text else 'No text'}")
+                        
+                        # Проверяем наличие FUNCTION_CALL
+                        if response_text and 'FUNCTION_CALL:' in response_text:
+                            logger.info(f"[GoogleAI] FUNCTION_CALL detected in response")
+                        elif response_text:
+                            logger.warning(f"[GoogleAI] No FUNCTION_CALL found, AI returned plain text")
+                    except Exception as e:
+                        logger.error(f"[GoogleAI] Error accessing response text: {e}")
+                
                 if hasattr(response, 'prompt_feedback'):
                     logger.info(f"[GoogleAI] Prompt feedback: {response.prompt_feedback}")
                 if response.parts and len(response.parts) > 0:
