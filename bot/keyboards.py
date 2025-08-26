@@ -38,12 +38,11 @@ def settings_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard.button(text=get_text('change_language', lang), callback_data="change_language")
     keyboard.button(text=get_text('change_timezone', lang), callback_data="change_timezone")
     keyboard.button(text=get_text('change_currency', lang), callback_data="change_currency")
-    keyboard.button(text=get_text('configure_reports', lang), callback_data="configure_reports")
     
     # Кнопка навигации
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
-    keyboard.adjust(1, 1, 1, 1, 1)
+    keyboard.adjust(1, 1, 1, 1)
     return keyboard.as_markup()
 
 
