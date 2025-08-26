@@ -288,7 +288,7 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
             
             generation_config = genai.GenerationConfig(
                 temperature=0.3,
-                max_output_tokens=200,
+                max_output_tokens=1500,  # Увеличено с 200 для обработки больших запросов
                 top_p=0.9
             )
             
@@ -305,9 +305,20 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
                 safety_settings=safety_settings
             )
             
+            # Детальное логирование для диагностики
+            logger.info(f"[GoogleAI] Response received: response={response is not None}")
+            if response:
+                logger.info(f"[GoogleAI] Response details: parts={response.parts is not None and len(response.parts) if response.parts else 0}")
+                logger.info(f"[GoogleAI] Response candidates: {len(response.candidates) if hasattr(response, 'candidates') and response.candidates else 0}")
+                if hasattr(response, 'prompt_feedback'):
+                    logger.info(f"[GoogleAI] Prompt feedback: {response.prompt_feedback}")
+                if response.parts and len(response.parts) > 0:
+                    logger.info(f"[GoogleAI] First part text preview: {str(response.parts[0])[:100]}")
+            
             if response and response.parts:
                 return response.text.strip()
             else:
+                logger.warning(f"[GoogleAI] Empty response from API - response={response}, parts={response.parts if response else None}")
                 return "Извините, не удалось получить ответ от AI."
                 
         except Exception as e:
@@ -343,9 +354,20 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
                 safety_settings=safety_settings
             )
             
+            # Детальное логирование для диагностики
+            logger.info(f"[GoogleAI] Response received: response={response is not None}")
+            if response:
+                logger.info(f"[GoogleAI] Response details: parts={response.parts is not None and len(response.parts) if response.parts else 0}")
+                logger.info(f"[GoogleAI] Response candidates: {len(response.candidates) if hasattr(response, 'candidates') and response.candidates else 0}")
+                if hasattr(response, 'prompt_feedback'):
+                    logger.info(f"[GoogleAI] Prompt feedback: {response.prompt_feedback}")
+                if response.parts and len(response.parts) > 0:
+                    logger.info(f"[GoogleAI] First part text preview: {str(response.parts[0])[:100]}")
+            
             if response and response.parts:
                 return response.text.strip()
             else:
+                logger.warning(f"[GoogleAI] Empty response from API - response={response}, parts={response.parts if response else None}")
                 return "Извините, не удалось получить ответ от AI."
                 
         except Exception as e:
@@ -398,9 +420,20 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
                 safety_settings=safety_settings
             )
             
+            # Детальное логирование для диагностики
+            logger.info(f"[GoogleAI] Response received: response={response is not None}")
+            if response:
+                logger.info(f"[GoogleAI] Response details: parts={response.parts is not None and len(response.parts) if response.parts else 0}")
+                logger.info(f"[GoogleAI] Response candidates: {len(response.candidates) if hasattr(response, 'candidates') and response.candidates else 0}")
+                if hasattr(response, 'prompt_feedback'):
+                    logger.info(f"[GoogleAI] Prompt feedback: {response.prompt_feedback}")
+                if response.parts and len(response.parts) > 0:
+                    logger.info(f"[GoogleAI] First part text preview: {str(response.parts[0])[:100]}")
+            
             if response and response.parts:
                 return response.text.strip()
             else:
+                logger.warning(f"[GoogleAI] Empty response from API - response={response}, parts={response.parts if response else None}")
                 return "Извините, не удалось получить ответ от AI."
                 
         except Exception as e:
