@@ -155,58 +155,58 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
                 
                 today = datetime.now().date()
                 today_summary = await get_today_summary(user_id)
-            
-            # Получаем последние расходы для контекста
-            recent_expenses = []
-            try:
-                from asgiref.sync import sync_to_async
-                expenses = await sync_to_async(list)(
-                    Expense.objects.filter(
-                        profile__telegram_id=user_id,
-                        expense_date__gte=today - timedelta(days=30)
-                    ).select_related('category').order_by('-expense_date', '-id')[:20]
-                )
                 
-                for exp in expenses:
-                    recent_expenses.append({
-                        'date': exp.expense_date.isoformat(),
-                        'amount': float(exp.amount),
-                        'category': exp.category.name,
-                        'description': exp.description or ''
-                    })
+                # Получаем последние расходы для контекста
+                recent_expenses = []
+                try:
+                    from asgiref.sync import sync_to_async
+                    expenses = await sync_to_async(list)(
+                        Expense.objects.filter(
+                            profile__telegram_id=user_id,
+                            expense_date__gte=today - timedelta(days=30)
+                        ).select_related('category').order_by('-expense_date', '-id')[:20]
+                    )
+                    
+                    for exp in expenses:
+                        recent_expenses.append({
+                            'date': exp.expense_date.isoformat(),
+                            'amount': float(exp.amount),
+                            'category': exp.category.name,
+                            'description': exp.description or ''
+                        })
+                except Exception as e:
+                    logger.error(f"Error getting recent expenses: {e}")
+                
+                user_context = {
+                    'total_today': today_summary.get('total', 0) if today_summary else 0,
+                    'expenses_data': recent_expenses,
+                    'user_id': user_id  # Добавляем user_id для function calling
+                }
+                
+                # Получаем AI сервис и генерируем ответ
+                ai_service = get_service('chat')
+                logger.info(f"[Chat] Got AI service: {type(ai_service).__name__}")
+                logger.info(f"[Chat] Calling AI with user_id={user_id}, message={text[:50]}...")
+                
+                response = await ai_service.chat(text, context, user_context)
+                logger.info(f"[Chat] AI response received: {response[:100] if response else 'None'}...")
+                
             except Exception as e:
-                logger.error(f"Error getting recent expenses: {e}")
-            
-            user_context = {
-                'total_today': today_summary.get('total', 0) if today_summary else 0,
-                'expenses_data': recent_expenses,
-                'user_id': user_id  # Добавляем user_id для function calling
-            }
-            
-            # Получаем AI сервис и генерируем ответ
-            ai_service = get_service('chat')
-            logger.info(f"[Chat] Got AI service: {type(ai_service).__name__}")
-            logger.info(f"[Chat] Calling AI with user_id={user_id}, message={text[:50]}...")
-            
-            response = await ai_service.chat(text, context, user_context)
-            logger.info(f"[Chat] AI response received: {response[:100] if response else 'None'}...")
-            
-        except Exception as e:
-            logger.error(f"AI chat error with primary service: {e}")
-            # Fallback на OpenAI
-            try:
-                logger.info("Trying fallback to OpenAI service...")
-                from ..services.openai_service import OpenAIService
-                openai_service = OpenAIService()
-                response = await openai_service.chat(text, context, user_context)
-                logger.info("OpenAI fallback successful")
-            except Exception as fallback_error:
-                logger.error(f"OpenAI fallback also failed: {fallback_error}")
-                # Крайний случай - простые ответы
-                response = "AI сервис временно недоступен. Попробуйте позже."
-    else:
-        # Простые ответы без AI для пользователей без подписки
-        response = await get_simple_response(text, user_id)
+                logger.error(f"AI chat error with primary service: {e}")
+                # Fallback на OpenAI
+                try:
+                    logger.info("Trying fallback to OpenAI service...")
+                    from ..services.openai_service import OpenAIService
+                    openai_service = OpenAIService()
+                    response = await openai_service.chat(text, context, user_context)
+                    logger.info("OpenAI fallback successful")
+                except Exception as fallback_error:
+                    logger.error(f"OpenAI fallback also failed: {fallback_error}")
+                    # Крайний случай - простые ответы
+                    response = "AI сервис временно недоступен. Попробуйте позже."
+        else:
+            # Простые ответы без AI для пользователей без подписки
+            response = await get_simple_response(text, user_id)
         
         # Если нет подписки и пробного периода, предлагаем оформить
         if not has_subscription and use_ai:
