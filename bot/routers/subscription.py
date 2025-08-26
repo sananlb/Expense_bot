@@ -591,16 +591,19 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     
     # Создаем подписку
     sub_info = SUBSCRIPTION_PRICES[sub_type]
-    start_date = timezone.now()
     
-    # Если есть активная подписка, продлеваем от её окончания
-    active_sub = await profile.subscriptions.filter(
-        is_active=True,
-        end_date__gt=timezone.now()
+    # Ищем последнюю подписку (активную или будущую)
+    # Это включает и пробный период
+    last_subscription = await profile.subscriptions.filter(
+        end_date__gt=timezone.now()  # Все подписки, которые еще не закончились
     ).order_by('-end_date').afirst()
     
-    if active_sub:
-        start_date = active_sub.end_date
+    if last_subscription:
+        # Новая подписка начинается после окончания последней
+        start_date = last_subscription.end_date
+    else:
+        # Если нет активных подписок, начинаем с текущего момента
+        start_date = timezone.now()
     
     # Продлеваем по месяцам
     end_date = start_date + relativedelta(months=sub_info['months'])
@@ -661,30 +664,30 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
                 is_activated=False
             )
             
-            # Проверяем активную подписку реферера
-            referrer_active_sub = await referrer.subscriptions.filter(
-                is_active=True,
+            # Ищем последнюю подписку реферера (включая будущие)
+            referrer_last_sub = await referrer.subscriptions.filter(
                 end_date__gt=timezone.now()
             ).order_by('-end_date').afirst()
             
-            if referrer_active_sub:
-                # Продлеваем существующую подписку
-                referrer_active_sub.end_date = referrer_active_sub.end_date + timedelta(days=30)
-                await referrer_active_sub.asave()
+            if referrer_last_sub:
+                # Создаем новую бонусную подписку после окончания последней
+                bonus_start = referrer_last_sub.end_date
             else:
-                # Создаем новую подписку на 30 дней
+                # Если нет активных подписок, начинаем с текущего момента
                 bonus_start = timezone.now()
-                bonus_end = bonus_start + timedelta(days=30)
-                
-                await Subscription.objects.acreate(
-                    profile=referrer,
-                    type='month',
-                    payment_method='stars',
-                    amount=0,  # Бесплатно за реферала
-                    start_date=bonus_start,
-                    end_date=bonus_end,
-                    is_active=True
-                )
+            
+            bonus_end = bonus_start + timedelta(days=30)
+            
+            # Создаем новую бонусную подписку
+            await Subscription.objects.acreate(
+                profile=referrer,
+                type='month',
+                payment_method='referral',
+                amount=0,  # Бесплатно за реферала
+                start_date=bonus_start,
+                end_date=bonus_end,
+                is_active=True
+            )
             
             # Активируем бонус
             bonus.is_activated = True

@@ -176,15 +176,14 @@ class ProfileAdmin(admin.ModelAdmin):
         from django.utils import timezone
         count = 0
         for profile in queryset:
-            # Проверяем активную подписку
-            active_sub = profile.subscriptions.filter(
-                is_active=True,
+            # Ищем последнюю подписку (включая будущие)
+            last_sub = profile.subscriptions.filter(
                 end_date__gt=timezone.now()
             ).order_by('-end_date').first()
             
-            if active_sub:
-                # Продлеваем от текущей
-                start_date = active_sub.end_date
+            if last_sub:
+                # Продлеваем от окончания последней
+                start_date = last_sub.end_date
             else:
                 # Новая подписка с текущего момента
                 start_date = timezone.now()
@@ -211,15 +210,14 @@ class ProfileAdmin(admin.ModelAdmin):
         from django.utils import timezone
         count = 0
         for profile in queryset:
-            # Проверяем активную подписку
-            active_sub = profile.subscriptions.filter(
-                is_active=True,
+            # Ищем последнюю подписку (включая будущие)
+            last_sub = profile.subscriptions.filter(
                 end_date__gt=timezone.now()
             ).order_by('-end_date').first()
             
-            if active_sub:
-                # Продлеваем от текущей
-                start_date = active_sub.end_date
+            if last_sub:
+                # Продлеваем от окончания последней
+                start_date = last_sub.end_date
             else:
                 # Новая подписка с текущего момента
                 start_date = timezone.now()
