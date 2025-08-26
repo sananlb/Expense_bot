@@ -178,6 +178,88 @@ def format_expenses_list(
     return text
 
 
+def format_expenses_from_dict_list(
+    expenses_data: List[Dict[str, Any]],
+    title: str = "📋 Список трат",
+    subtitle: str = None,
+    max_expenses: int = 100,
+    show_warning: bool = None
+) -> str:
+    """
+    Универсальная функция для форматирования списка трат из словарей в стиле дневника.
+    
+    Args:
+        expenses_data: Список словарей с данными трат
+        title: Заголовок списка
+        subtitle: Подзаголовок (например, "Всего: 100 трат на сумму 50000 ₽")
+        max_expenses: Максимальное количество трат для показа
+        show_warning: Показывать ли предупреждение о лимите
+    
+    Returns:
+        Отформатированная строка в стиле дневника (без HTML тегов)
+    """
+    if not expenses_data:
+        return f"{title}\n\nТраты не найдены."
+    
+    from datetime import datetime
+    from types import SimpleNamespace
+    import re
+    
+    # Преобразуем словари в объекты-заглушки
+    expense_objects = []
+    for exp_data in expenses_data[:max_expenses]:
+        expense_obj = SimpleNamespace()
+        
+        # Парсим дату
+        date_str = exp_data.get('date', '2024-01-01')
+        try:
+            expense_obj.expense_date = datetime.fromisoformat(date_str).date()
+        except:
+            expense_obj.expense_date = datetime.now().date()
+        
+        # Парсим время
+        time_str = exp_data.get('time', '')
+        if time_str:
+            try:
+                expense_obj.expense_time = datetime.strptime(time_str, '%H:%M').time()
+            except:
+                expense_obj.expense_time = None
+        else:
+            expense_obj.expense_time = None
+        
+        expense_obj.created_at = datetime.now()
+        expense_obj.description = exp_data.get('description', 'Без описания')
+        expense_obj.amount = exp_data.get('amount', 0)
+        expense_obj.currency = exp_data.get('currency', 'RUB')
+        
+        expense_objects.append(expense_obj)
+    
+    # Форматируем с помощью стандартного форматтера
+    if show_warning is None:
+        show_warning = len(expenses_data) > max_expenses
+    
+    result = format_expenses_diary_style(
+        expense_objects,
+        max_expenses=max_expenses,
+        show_warning=show_warning
+    )
+    
+    # Заменяем заголовок
+    full_title = f"{title}"
+    if subtitle:
+        full_title += f"\n<i>{subtitle}</i>"
+    
+    result = result.replace(
+        "📋 <b>Дневник трат</b>",
+        f"<b>{full_title}</b>"
+    )
+    
+    # Убираем HTML теги для чистого текста
+    result = re.sub(r'<[^>]+>', '', result)
+    
+    return result
+
+
 def is_list_expenses_request(text: str) -> bool:
     """
     Проверяет, запрашивает ли пользователь именно СПИСОК трат,
