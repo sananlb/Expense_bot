@@ -91,3 +91,53 @@ async def send_typing_action(message: Message, immediate: bool = False):
             chat_id=message.chat.id,
             action="typing"
         )
+
+
+class TypingAction:
+    """Простой контекстный менеджер для немедленной отправки индикатора печатания"""
+    
+    def __init__(self, message: Message):
+        """
+        Инициализация
+        
+        Args:
+            message: Сообщение от пользователя
+        """
+        self.message = message
+        self.task: Optional[asyncio.Task] = None
+        self._cancelled = False
+        
+    async def _typing_loop(self):
+        """Цикл отправки индикатора печатания"""
+        try:
+            while not self._cancelled:
+                await self.message.bot.send_chat_action(
+                    chat_id=self.message.chat.id,
+                    action="typing"
+                )
+                await asyncio.sleep(4)  # Повторяем каждые 4 секунды
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass  # Игнорируем ошибки
+            
+    async def __aenter__(self):
+        """Запуск задачи при входе в контекст"""
+        # Сразу отправляем индикатор
+        await self.message.bot.send_chat_action(
+            chat_id=self.message.chat.id,
+            action="typing"
+        )
+        # И запускаем цикл для поддержания
+        self.task = asyncio.create_task(self._typing_loop())
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Отмена задачи при выходе из контекста"""
+        self._cancelled = True
+        if self.task and not self.task.done():
+            self.task.cancel()
+            try:
+                await self.task
+            except asyncio.CancelledError:
+                pass
