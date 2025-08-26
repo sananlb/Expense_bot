@@ -47,40 +47,52 @@ async def send_cashback_menu_direct(bot, chat_id: int, state: FSMContext, month:
     cashbacks = await get_user_cashbacks(chat_id, target_month)
     
     # Формируем текст
-    import locale
-    try:
-        locale.setlocale(locale.LC_TIME, 'ru_RU.UTF-8')
-    except locale.Error:
-        try:
-            locale.setlocale(locale.LC_TIME, 'Russian_Russia.1251')
-        except locale.Error:
-            pass
+    # Названия месяцев
+    month_names = {
+        1: get_text('january', lang).capitalize(),
+        2: get_text('february', lang).capitalize(),
+        3: get_text('march', lang).capitalize(),
+        4: get_text('april', lang).capitalize(),
+        5: get_text('may', lang).capitalize(),
+        6: get_text('june', lang).capitalize(),
+        7: get_text('july', lang).capitalize(),
+        8: get_text('august', lang).capitalize(),
+        9: get_text('september', lang).capitalize(),
+        10: get_text('october', lang).capitalize(),
+        11: get_text('november', lang).capitalize(),
+        12: get_text('december', lang).capitalize()
+    }
     
-    # Определяем название месяца
-    month_name = date(current_date.year, target_month, 1).strftime('%B').lower()
-    
-    text = f"💳 <b>Кешбэки за {month_name}</b>\n\n"
-    
-    if cashbacks:
-        for cb in cashbacks:
-            text += f"• <b>{cb['category']}</b> - {cb['bank']}: {cb['percent']}%\n"
-        text += f"\n💰 <b>Потенциальный кешбэк: {format_currency(sum(cb['potential_cashback'] for cb in cashbacks), 'RUB')}</b>"
+    if not cashbacks:
+        text = f"💳 {get_text('cashbacks', lang)} {month_names[target_month]}\n\n"
+        text += f"{get_text('no_cashback_info', lang)}\n\n"
+        text += get_text('add_cashback_hint', lang)
     else:
-        text += "У вас пока нет активных кешбэков.\n\nДобавьте кешбэк с помощью кнопки ниже."
+        # Используем format_cashback_note для форматирования
+        text = format_cashback_note(cashbacks, target_month)
     
     # Формируем клавиатуру
     from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="◀️", callback_data=f"cashback_month_{target_month - 1 if target_month > 1 else 12}"),
-            InlineKeyboardButton(text="▶️", callback_data=f"cashback_month_{target_month + 1 if target_month < 12 else 1}")
-        ],
-        [
-            InlineKeyboardButton(text="➕ Добавить кешбэк", callback_data="add_cashback"),
-            InlineKeyboardButton(text="✏️ Изменить", callback_data="edit_cashbacks")
-        ],
-        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close_cashback_menu")]
-    ])
+    
+    if not cashbacks:
+        # Если кешбеков нет, показываем только кнопки добавить и закрыть
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=get_text('add_cashback', lang), callback_data="cashback_add")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close_cashback_menu")]
+        ])
+    else:
+        # Если кешбеки есть, показываем все кнопки управления
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text=get_text('add_cashback', lang), callback_data="cashback_add"),
+                InlineKeyboardButton(text="✏️ Редактировать", callback_data="cashback_edit")
+            ],
+            [
+                InlineKeyboardButton(text=get_text('remove_cashback', lang), callback_data="cashback_remove"),
+                InlineKeyboardButton(text=get_text('remove_all_cashback', lang), callback_data="cashback_remove_all")
+            ],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close_cashback_menu")]
+        ])
     
     # Отправляем меню
     sent_message = await bot.send_message(
