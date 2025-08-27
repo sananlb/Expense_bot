@@ -399,8 +399,8 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
         
         # Добавляем кнопку "Назад"
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="expenses_today")],
-            [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
+            [InlineKeyboardButton(text=get_text('back_button', lang), callback_data="expenses_today")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
         ])
         
         await callback.message.edit_text(

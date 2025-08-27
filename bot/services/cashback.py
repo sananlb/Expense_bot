@@ -216,15 +216,27 @@ def calculate_expense_cashback(user_id: int, category_id: int, amount: Decimal, 
     return max_cashback_amount
 
 
-def format_cashback_note(cashbacks: List[Cashback], month: int) -> str:
+def format_cashback_note(cashbacks: List[Cashback], month: int, lang: str = 'ru') -> str:
     """Форматировать красивую заметку о кешбэках с группировкой по банкам"""
+    from bot.utils import get_text, translate_category_name
+    
+    # Названия месяцев
     month_names = {
-        1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель",
-        5: "Май", 6: "Июнь", 7: "Июль", 8: "Август",
-        9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
+        1: get_text('january', lang).capitalize(),
+        2: get_text('february', lang).capitalize(),
+        3: get_text('march', lang).capitalize(),
+        4: get_text('april', lang).capitalize(),
+        5: get_text('may', lang).capitalize(),
+        6: get_text('june', lang).capitalize(),
+        7: get_text('july', lang).capitalize(),
+        8: get_text('august', lang).capitalize(),
+        9: get_text('september', lang).capitalize(),
+        10: get_text('october', lang).capitalize(),
+        11: get_text('november', lang).capitalize(),
+        12: get_text('december', lang).capitalize()
     }
     
-    text = f"💳 <b>Кешбэки на {month_names[month]}</b>\n\n"
+    text = f"💳 <b>{get_text('cashbacks_for', lang)} {month_names[month]}</b>\n\n"
     
     # Группируем кешбэки по банкам
     banks_dict = {}
@@ -243,18 +255,21 @@ def format_cashback_note(cashbacks: List[Cashback], month: int) -> str:
             
             # Формат: Категория (описание) - процент%
             if cb.category:
-                text += f"• {cb.category.name}"
+                # Переводим название категории на язык пользователя
+                category_name = translate_category_name(cb.category.name, lang)
+                text += f"• {category_name}"
                 if cb.description:
                     text += f" ({cb.description})"
             else:
-                text += f"• 🌐 Все категории"
+                text += f"• 🌐 {get_text('all_categories', lang)}"
                 if cb.description:
                     text += f" ({cb.description})"
             
             text += f" - {percent_str}%"
             
             if cb.limit_amount:
-                text += f" (лимит {cb.limit_amount:,.0f} ₽)"
+                limit_text = get_text('limit', lang)
+                text += f" ({limit_text} {cb.limit_amount:,.0f} ₽)"
             
             text += "\n"
         
@@ -265,15 +280,16 @@ def format_cashback_note(cashbacks: List[Cashback], month: int) -> str:
 
 # Старые функции для совместимости
 @sync_to_async
-def get_cashbacks_for_month(user_id: int, month: int) -> List[Dict]:
+def get_cashbacks_for_month(user_id: int, month: int, lang: str = 'ru') -> List[Dict]:
     """Получить кешбэки пользователя на месяц (устаревшая)"""
+    from bot.utils import get_text
     cashbacks = get_user_cashbacks(user_id, month)
     
     result = []
     for cb in cashbacks:
         result.append({
             'id': cb.id,
-            'category': cb.category.name if cb.category else 'Все категории',
+            'category': cb.category.name if cb.category else get_text('all_categories', lang),
             'icon': cb.category.icon if cb.category else '🌐',
             'bank': cb.bank_name,
             'percent': cb.cashback_percent,

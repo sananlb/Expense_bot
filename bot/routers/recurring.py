@@ -127,16 +127,16 @@ async def process_description(message: types.Message, state: FSMContext):
 # Удалены обработчики для суммы - теперь сумма вводится вместе с названием
 
 
-async def show_category_selection(message: types.Message, state: FSMContext):
+async def show_category_selection(message: types.Message, state: FSMContext, lang: str = 'ru'):
     """Показать выбор категории"""
     user_id = message.chat.id if hasattr(message, 'chat') else message.from_user.id
     categories = await get_user_categories(user_id)
     
     if not categories:
         await send_message_with_cleanup(message, state,
-            "❌ У вас нет категорий. Сначала создайте категории.",
+            get_text('no_categories_create_first', lang),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📁 К категориям", callback_data="categories_menu")]
+                [InlineKeyboardButton(text=get_text('to_categories', lang), callback_data="categories_menu")]
             ])
         )
         await state.clear()
@@ -160,12 +160,12 @@ async def show_category_selection(message: types.Message, state: FSMContext):
     
     if isinstance(message, types.CallbackQuery):
         await message.message.edit_text(
-            "📁 Выберите категорию для платежа:",
+            get_text('select_payment_category', lang),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         )
     else:
         await send_message_with_cleanup(message, state,
-            "📁 Выберите категорию для платежа:",
+            get_text('select_payment_category', lang),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         )
     
@@ -206,7 +206,7 @@ async def process_category(callback: types.CallbackQuery, state: FSMContext, lan
 
 
 @router.callback_query(lambda c: c.data.startswith("recurring_day_"), RecurringForm.waiting_for_day)
-async def process_day_button(callback: types.CallbackQuery, state: FSMContext):
+async def process_day_button(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Обработка выбора дня кнопкой и сохранение платежа"""
     day = int(callback.data.split("_")[-1])
     data = await state.get_data()
@@ -277,13 +277,13 @@ async def process_day_text(message: types.Message, state: FSMContext):
 
 
 @router.callback_query(lambda c: c.data == "edit_recurring")
-async def edit_recurring_list(callback: types.CallbackQuery, state: FSMContext):
+async def edit_recurring_list(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать список платежей для редактирования"""
     user_id = callback.from_user.id
     payments = await get_user_recurring_payments(user_id)
     
     if not payments:
-        await callback.answer("У вас нет регулярных платежей", show_alert=True)
+        await callback.answer(get_text('no_recurring_payments', lang), show_alert=True)
         return
     
     # Сортируем платежи: активные сначала, приостановленные в конце
@@ -305,7 +305,7 @@ async def edit_recurring_list(callback: types.CallbackQuery, state: FSMContext):
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")])
     
     await callback.message.edit_text(
-        "✏️ Выберите платеж для редактирования:",
+        get_text('select_payment_to_edit', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
     # Обновляем ID сообщения в состоянии
@@ -314,30 +314,26 @@ async def edit_recurring_list(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(lambda c: c.data.startswith("edit_recurring_"))
-async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext):
+async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Меню редактирования платежа"""
     payment_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
     
     payment = await get_recurring_payment_by_id(user_id, payment_id)
     if not payment:
-        await callback.answer("Платеж не найден", show_alert=True)
+        await callback.answer(get_text('payment_not_found', lang), show_alert=True)
         return
     
-    status_text = "Активен ✅" if payment.is_active else "Приостановлен ⏸"
-    toggle_text = "⏸ Приостановить" if payment.is_active else "▶️ Возобновить"
+    status_text = get_text('payment_active', lang) if payment.is_active else get_text('payment_paused', lang)
+    toggle_text = get_text('pause_payment', lang) if payment.is_active else get_text('resume_payment', lang)
     
-    text = f"""✏️ <b>Редактирование платежа</b>
-
-Регулярный платеж: <i>{payment.description}</i>
-Сумма: <i>{format_currency(payment.amount, 'RUB')}</i>
-Категория: <i>{payment.category.name}</i>
-Дата: <i>{payment.day_of_month} число месяца</i>
-Статус: <i>{status_text}</i>
-
-Чтобы изменить, отправьте:
-• Только сумму: <i>50000</i>
-• Название и сумму: <i>Квартира 50000</i>"""
+    text = get_text('edit_payment_text', lang).format(
+        description=payment.description,
+        amount=format_currency(payment.amount, 'RUB'),
+        category=payment.category.name,
+        day=payment.day_of_month,
+        status=status_text
+    )
     
     # Сохраняем данные платежа в состояние
     await state.update_data(
@@ -349,7 +345,7 @@ async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext):
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=toggle_text, callback_data=f"toggle_recurring_{payment_id}")],
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="recurring_menu")]
+        [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="recurring_menu")]
     ])
     
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
@@ -357,7 +353,7 @@ async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(lambda c: c.data.startswith("toggle_recurring_"))
-async def toggle_recurring(callback: types.CallbackQuery, state: FSMContext):
+async def toggle_recurring(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Включить/отключить регулярный платеж"""
     payment_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
@@ -369,10 +365,10 @@ async def toggle_recurring(callback: types.CallbackQuery, state: FSMContext):
         await update_recurring_payment(user_id, payment_id, is_active=new_status)
         
         # Сразу показываем основное меню регулярных платежей
-        await callback.answer("✅ Статус платежа изменен")
-        await show_recurring_menu(callback, state)
+        await callback.answer(get_text('payment_status_changed', lang))
+        await show_recurring_menu(callback, state, lang)
     else:
-        await callback.answer("Платеж не найден", show_alert=True)
+        await callback.answer(get_text('payment_not_found', lang), show_alert=True)
 
 
 @router.message(RecurringForm.waiting_for_edit_data)
@@ -414,13 +410,13 @@ async def process_edit_data(message: types.Message, state: FSMContext):
 
 
 @router.callback_query(lambda c: c.data == "delete_recurring")
-async def delete_recurring_list(callback: types.CallbackQuery, state: FSMContext):
+async def delete_recurring_list(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать список платежей для удаления"""
     user_id = callback.from_user.id
     payments = await get_user_recurring_payments(user_id)
     
     if not payments:
-        await callback.answer("У вас нет регулярных платежей", show_alert=True)
+        await callback.answer(get_text('no_recurring_payments', lang), show_alert=True)
         return
     
     # Сортируем платежи: активные сначала, приостановленные в конце
@@ -442,7 +438,7 @@ async def delete_recurring_list(callback: types.CallbackQuery, state: FSMContext
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")])
     
     await callback.message.edit_text(
-        "🗑 Выберите платеж для удаления:",
+        get_text('select_payment_to_delete', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
     # Обновляем ID сообщения в состоянии
@@ -451,7 +447,7 @@ async def delete_recurring_list(callback: types.CallbackQuery, state: FSMContext
 
 
 @router.callback_query(lambda c: c.data.startswith("del_recurring_"))
-async def delete_recurring_confirm(callback: types.CallbackQuery, state: FSMContext):
+async def delete_recurring_confirm(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Удаление регулярного платежа"""
     payment_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
@@ -459,8 +455,8 @@ async def delete_recurring_confirm(callback: types.CallbackQuery, state: FSMCont
     success = await delete_recurring_payment(user_id, payment_id)
     
     if success:
-        await callback.answer("✅ Платеж удален")
+        await callback.answer(get_text('payment_deleted', lang))
         # Показываем меню регулярных платежей
-        await show_recurring_menu(callback, state)
+        await show_recurring_menu(callback, state, lang)
     else:
-        await callback.answer("❌ Не удалось удалить платеж", show_alert=True)
+        await callback.answer(get_text('payment_delete_failed', lang), show_alert=True)

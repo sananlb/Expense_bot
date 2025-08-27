@@ -16,6 +16,7 @@ from ..services.category import (
 )
 from ..services.expense import get_month_summary
 from ..utils.message_utils import send_message_with_cleanup
+from ..utils import get_text, get_user_language, translate_category_name
 from datetime import date
 
 router = Router(name="categories")
@@ -66,6 +67,9 @@ async def show_categories_menu(message: types.Message | types.CallbackQuery, sta
     
     logger.info(f"show_categories_menu called for user_id: {user_id}")
     
+    # Получаем язык пользователя
+    lang = await get_user_language(user_id)
+    
     # Проверяем подписку
     from bot.services.subscription import check_subscription
     has_subscription = await check_subscription(user_id)
@@ -73,31 +77,33 @@ async def show_categories_menu(message: types.Message | types.CallbackQuery, sta
     categories = await get_user_categories(user_id)
     logger.info(f"Found {len(categories)} categories for user {user_id}")
     
-    text = "📁 <b>Управление категориями</b>\n\nВаши категории:"
+    text = get_text('manage_categories', lang)
     
     # Показываем все категории пользователя
     if categories:
         text += "\n"
         # Категории уже отсортированы в get_user_categories
         for cat in categories:
-            text += f"\n\n• {cat.name}"
+            # Переводим название категории если нужно
+            translated_name = translate_category_name(cat.name, lang)
+            text += f"\n\n• {translated_name}"
     else:
-        text += "\n\nУ вас пока нет категорий."
+        text += "\n\n" + get_text('no_categories_yet', lang)
     
     # Формируем клавиатуру в зависимости от подписки
     if has_subscription:
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="➕ Добавить", callback_data="add_category")],
-            [InlineKeyboardButton(text="✏️ Редактировать", callback_data="edit_categories")],
-            [InlineKeyboardButton(text="➖ Удалить", callback_data="delete_categories")],
-            [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
+            [InlineKeyboardButton(text=get_text('add_button', lang), callback_data="add_category")],
+            [InlineKeyboardButton(text=get_text('edit_button', lang), callback_data="edit_categories")],
+            [InlineKeyboardButton(text=get_text('delete_button', lang), callback_data="delete_categories")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
         ])
     else:
         # Без подписки можно только просматривать
-        text += "\n\n⚠️ <i>Редактирование категорий доступно только с подпиской</i>"
+        text += "\n\n" + get_text('categories_subscription_note', lang)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="⭐ Оформить подписку", callback_data="menu_subscription")],
-            [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
+            [InlineKeyboardButton(text=get_text('get_subscription', lang), callback_data="menu_subscription")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
         ])
     
     # Используем send_message_with_cleanup для правильной работы с меню
@@ -138,11 +144,11 @@ async def callback_categories_menu(callback: types.CallbackQuery, state: FSMCont
 @router.callback_query(lambda c: c.data == "add_category")
 async def add_category_start(callback: types.CallbackQuery, state: FSMContext):
     """Начало добавления категории"""
+    lang = await get_user_language(callback.from_user.id)
     await callback.message.edit_text(
-        "➕ Добавление новой категории\n\n"
-        "Введите название категории:",
+        get_text('adding_category', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Отмена", callback_data="categories_menu")]
+            [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="categories_menu")]
         ])
     )
     # Обновляем ID сообщения в состоянии

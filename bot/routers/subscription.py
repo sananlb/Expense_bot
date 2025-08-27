@@ -44,24 +44,27 @@ SUBSCRIPTION_PRICES = {
 }
 
 
-def get_subscription_keyboard():
+def get_subscription_keyboard(is_beta_tester: bool = False, lang: str = 'ru'):
     """Клавиатура выбора подписки"""
     builder = InlineKeyboardBuilder()
     
+    # Для бета-тестеров показываем только кнопку закрыть
+    if not is_beta_tester:
+        builder.button(
+            text=get_text('month_stars', lang),
+            callback_data="subscription_buy_month"
+        )
+        builder.button(
+            text=get_text('six_months_stars', lang),
+            callback_data="subscription_buy_six_months"
+        )
+        builder.button(
+            text=get_text('have_promocode', lang),
+            callback_data="subscription_promo"
+        )
+    
     builder.button(
-        text="⭐ На месяц - 100 звёзд",
-        callback_data="subscription_buy_month"
-    )
-    builder.button(
-        text="⭐ На 6 месяцев - 500 звёзд",
-        callback_data="subscription_buy_six_months"
-    )
-    builder.button(
-        text="🎟️ У меня есть промокод",
-        callback_data="subscription_promo"
-    )
-    builder.button(
-        text="❌ Закрыть",
+        text=get_text('close', lang),
         callback_data="close"
     )
     
@@ -75,9 +78,8 @@ async def get_subscription_info_text(profile: Profile, lang: str = 'ru') -> str:
     # Проверяем, является ли пользователь бета-тестером
     if profile.is_beta_tester:
         return (
-            f"🔬 <b>У вас статус бета-тестера</b>\n\n"
-            f"Вы имеете полный доступ ко всем функциям бота.\n"
-            f"Спасибо за участие в тестировании! 🙏"
+            f"{get_text('beta_tester_status', lang)}\n\n"
+            f"{get_text('beta_access_text', lang)}"
         )
     
     # Проверяем активную подписку
@@ -94,16 +96,17 @@ async def get_subscription_info_text(profile: Profile, lang: str = 'ru') -> str:
         # Добавляем информацию о пробном периоде
         if active_subscription.type == 'trial':
             emoji = "🎁"
-            subscription_type = "Пробный период"
+            subscription_type = get_text('trial_period', lang) if lang == 'ru' else "Trial period"
         else:
             emoji = "✅"
+            subscription_type = active_subscription.get_type_display()
             
         return (
-            f"{emoji} <b>У вас есть активная подписка</b>\n\n"
-            f"Тип: {subscription_type}\n"
-            f"Действует до: {active_subscription.end_date.strftime('%d.%m.%Y')}\n"
-            f"Осталось дней: {days_left}\n\n"
-            f"Вы можете продлить подписку заранее."
+            f"{emoji} <b>{get_text('active_subscription_text', lang)}</b>\n\n"
+            f"{get_text('subscription_type', lang)}: {subscription_type}\n"
+            f"{get_text('valid_until', lang)}: {active_subscription.end_date.strftime('%d.%m.%Y')}\n"
+            f"{get_text('days_left', lang)}: {days_left}\n\n"
+            f"{get_text('can_extend_early', lang)}"
         )
     else:
         return (
@@ -152,7 +155,7 @@ async def show_subscription_menu(callback: CallbackQuery, state: FSMContext, lan
         callback.message, 
         state, 
         text, 
-        reply_markup=get_subscription_keyboard(), 
+        reply_markup=get_subscription_keyboard(is_beta_tester=profile.is_beta_tester, lang=lang), 
         parse_mode="HTML"
     )
     
@@ -239,7 +242,7 @@ async def cmd_subscription(message: Message, state: FSMContext, lang: str = 'ru'
         message, 
         state,
         text,
-        reply_markup=get_subscription_keyboard(),
+        reply_markup=get_subscription_keyboard(is_beta_tester=profile.is_beta_tester, lang=lang),
         parse_mode="HTML"
     )
 

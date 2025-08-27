@@ -316,9 +316,36 @@ def create_default_categories(user_id: int) -> bool:
         if ExpenseCategory.objects.filter(profile=profile).exists():
             return False
             
-        # Импортируем новые категории из models.py
-        from expenses.models import DEFAULT_CATEGORIES
-        default_categories = DEFAULT_CATEGORIES
+        # Определяем язык пользователя
+        lang = profile.language_code or 'ru'
+        
+        # Базовые категории с переводами
+        if lang == 'en':
+            default_categories = [
+                ('Supermarkets', '🛒'),
+                ('Other Products', '🫑'),
+                ('Restaurants and Cafes', '🍽️'),
+                ('Gas Stations', '⛽'),
+                ('Taxi', '🚕'),
+                ('Public Transport', '🚌'),
+                ('Car', '🚗'),
+                ('Housing', '🏠'),
+                ('Pharmacies', '💊'),
+                ('Medicine', '🏥'),
+                ('Sports', '🏃'),
+                ('Sports Goods', '🏀'),
+                ('Clothes and Shoes', '👔'),
+                ('Flowers', '🌹'),
+                ('Entertainment', '🎭'),
+                ('Education', '📚'),
+                ('Gifts', '🎁'),
+                ('Travel', '✈️'),
+                ('Communication and Internet', '📱'),
+                ('Other Expenses', '💰')
+            ]
+        else:
+            from expenses.models import DEFAULT_CATEGORIES
+            default_categories = DEFAULT_CATEGORIES
         
         # Создаем категории с эмодзи в поле name
         categories = []

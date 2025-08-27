@@ -10,6 +10,7 @@ from decimal import Decimal
 import asyncio
 
 from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect
+from ..utils import get_text
 from ..decorators import rate_limit
 
 router = Router(name="menu")
@@ -23,15 +24,13 @@ async def callback_menu(callback: types.CallbackQuery, state: FSMContext):
     await show_main_menu(callback, state)
 
 
-async def show_main_menu(message: types.Message | types.CallbackQuery, state: FSMContext):
+async def show_main_menu(message: types.Message | types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Отображение главного меню согласно ТЗ"""
     import logging
     logger = logging.getLogger(__name__)
     logger.info("Showing main menu")
     
-    text = """💰 Главное меню
-
-Выберите действие:"""
+    text = get_text('main_menu_title', lang)
     
     # Проверяем подписку для отображения кешбэка
     from bot.services.subscription import check_subscription
@@ -48,26 +47,26 @@ async def show_main_menu(message: types.Message | types.CallbackQuery, state: FS
     
     # Формируем кнопки меню
     keyboard_buttons = [
-        [InlineKeyboardButton(text="📊 Расходы", callback_data="expenses_today")],
+        [InlineKeyboardButton(text=get_text('expenses_button', lang), callback_data="expenses_today")],
     ]
     
     # Кешбэк только для подписчиков
     if has_subscription:
-        keyboard_buttons.append([InlineKeyboardButton(text="💳 Кешбэк", callback_data="cashback_menu")])
+        keyboard_buttons.append([InlineKeyboardButton(text=get_text('cashback_button', lang), callback_data="cashback_menu")])
     
     keyboard_buttons.extend([
-        [InlineKeyboardButton(text="📁 Категории", callback_data="categories_menu")],
-        [InlineKeyboardButton(text="🔄 Ежемесячные платежи", callback_data="recurring_menu")],
-        [InlineKeyboardButton(text="⭐ Подписка", callback_data="menu_subscription")],
+        [InlineKeyboardButton(text=get_text('categories_button', lang), callback_data="categories_menu")],
+        [InlineKeyboardButton(text=get_text('recurring_button', lang), callback_data="recurring_menu")],
+        [InlineKeyboardButton(text=get_text('subscription_button', lang), callback_data="menu_subscription")],
     ])
     
     # Реферальная программа только для подписчиков
     if has_subscription:
-        keyboard_buttons.append([InlineKeyboardButton(text="🎁 Реферальная программа", callback_data="menu_referral")])
+        keyboard_buttons.append([InlineKeyboardButton(text=get_text('referral_button', lang), callback_data="menu_referral")])
     
     keyboard_buttons.extend([
-        [InlineKeyboardButton(text="⚙️ Настройки", callback_data="settings")],
-        [InlineKeyboardButton(text="📖 Информация", callback_data="start")]
+        [InlineKeyboardButton(text=get_text('settings_button', lang), callback_data="settings")],
+        [InlineKeyboardButton(text=get_text('info_button', lang), callback_data="start")]
     ])
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)

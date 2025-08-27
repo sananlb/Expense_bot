@@ -13,7 +13,7 @@ def main_menu_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard.button(text=get_text('expenses_today', lang), callback_data="expenses_today")
     keyboard.button(text=get_text('cashback_menu', lang), callback_data="cashback_menu")
     keyboard.button(text=get_text('categories_menu', lang), callback_data="categories_menu")
-    keyboard.button(text="🔄 Ежемесячные платежи", callback_data="recurring_menu")
+    keyboard.button(text=get_text('recurring_menu', lang), callback_data="recurring_menu")
     keyboard.button(text=get_text('settings_menu', lang), callback_data="settings")
     keyboard.button(text=get_text('info', lang), callback_data="start")
     
@@ -54,7 +54,7 @@ def get_language_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard.button(text="🇬🇧 English", callback_data="lang_en")
     
     # Кнопки навигации
-    keyboard.button(text="← Назад", callback_data="settings")
+    keyboard.button(text=get_text('back_arrow', lang), callback_data="settings")
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
     keyboard.adjust(2, 1, 1)
@@ -83,7 +83,7 @@ def get_timezone_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         )
     
     # Кнопки навигации
-    keyboard.button(text="← Назад", callback_data="settings")
+    keyboard.button(text=get_text('back_arrow', lang), callback_data="settings")
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
     # Группируем кнопки по 3 в ряд, последние по одной для навигации
@@ -131,7 +131,7 @@ def get_currency_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         keyboard.button(text=text, callback_data=callback_data)
     
     # Кнопки навигации
-    keyboard.button(text="← Назад", callback_data="settings")
+    keyboard.button(text=get_text('back_arrow', lang), callback_data="settings")
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
     # Группируем по 3 кнопки в ряд (теперь у нас 25 валют + 2 навигационные кнопки)
@@ -149,11 +149,11 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
     
     # Кнопка дневника трат - добавляем только для периода 'today'
     if period == 'today':
-        keyboard.button(text="📋 Дневник трат", callback_data="show_diary")
-        keyboard.button(text="📅 С начала месяца", callback_data="show_month_start")
+        keyboard.button(text=get_text('diary_button', lang), callback_data="show_diary")
+        keyboard.button(text=get_text('month_start_button', lang), callback_data="show_month_start")
     elif period == 'month' and show_pdf:
         # Для месячных отчетов показываем кнопку PDF
-        keyboard.button(text="📄 Сформировать PDF отчет", callback_data="pdf_generate_current")
+        keyboard.button(text=get_text('generate_pdf', lang), callback_data="pdf_generate_current")
         
         # Кнопки навигации по месяцам
         if current_month and current_year:
@@ -181,14 +181,14 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
             keyboard.button(text=f"← {prev_month_name}", callback_data="expenses_prev_month")
             
             # Кнопка "Сегодня" - всегда показываем для месячных отчетов
-            keyboard.button(text="Сегодня →", callback_data="expenses_today_view")
+            keyboard.button(text=get_text('today_arrow', lang), callback_data="expenses_today_view")
             
             # Кнопка следующего месяца (если не будущий)
             if not is_future:
                 next_month_name = get_month_name(next_month, lang).capitalize()
                 keyboard.button(text=f"{next_month_name} →", callback_data="expenses_next_month")
         else:
-            keyboard.button(text="← Предыдущий месяц", callback_data="expenses_prev_month")
+            keyboard.button(text=get_text('prev_month_arrow', lang), callback_data="expenses_prev_month")
     
     # Кнопка закрытия
     keyboard.button(text=get_text('close', lang), callback_data="close")

@@ -88,7 +88,7 @@ class ExpenseFunctions:
                 'weekday': weekday,
                 'total': float(max_day['total']),
                 'currency': 'RUB',
-                'expenses_count': len(details),
+                'count': len(details),
                 'details': details
             }
             

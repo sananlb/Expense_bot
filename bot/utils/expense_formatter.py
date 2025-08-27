@@ -4,13 +4,15 @@
 from typing import List, Dict, Any
 from datetime import date, datetime
 from decimal import Decimal
+from . import get_text
 
 
 def format_expenses_diary_style(
     expenses: List[Any],
     today: date = None,
     max_expenses: int = 100,
-    show_warning: bool = True
+    show_warning: bool = True,
+    lang: str = 'ru'
 ) -> str:
     """
     Форматирует список трат в стиле дневника
@@ -25,12 +27,12 @@ def format_expenses_diary_style(
         Отформатированная строка с тратами
     """
     if not expenses:
-        return "📋 <b>Дневник трат</b>\n\n<i>Трат не найдено</i>"
+        return f"{get_text('diary_title', lang)}\n\n{get_text('no_expenses_found', lang)}"
     
     if today is None:
         today = date.today()
     
-    text = "📋 <b>Дневник трат</b>\n\n"
+    text = f"{get_text('diary_title', lang)}\n\n"
     
     # Ограничиваем количество трат
     total_count = len(expenses)
@@ -150,7 +152,8 @@ def format_expenses_diary_style(
 def format_expenses_list(
     expenses: List[Any],
     period_description: str = None,
-    max_expenses: int = 100
+    max_expenses: int = 100,
+    lang: str = 'ru'
 ) -> str:
     """
     Форматирует СПИСОК трат в стиле дневника.
@@ -166,12 +169,12 @@ def format_expenses_list(
         Отформатированная строка со списком трат
     """
     # Используем стандартное форматирование дневника
-    text = format_expenses_diary_style(expenses, max_expenses=max_expenses)
+    text = format_expenses_diary_style(expenses, max_expenses=max_expenses, lang=lang)
     
     # Если есть описание периода, добавляем его в заголовок
     if period_description and expenses:
         text = text.replace(
-            "📋 <b>Дневник трат</b>",
+            get_text('diary_title', lang),
             f"📋 <b>Траты {period_description}</b>"
         )
     
@@ -180,10 +183,11 @@ def format_expenses_list(
 
 def format_expenses_from_dict_list(
     expenses_data: List[Dict[str, Any]],
-    title: str = "📋 Список трат",
+    title: str = None,
     subtitle: str = None,
     max_expenses: int = 100,
-    show_warning: bool = None
+    show_warning: bool = None,
+    lang: str = 'ru'
 ) -> str:
     """
     Универсальная функция для форматирования списка трат из словарей в стиле дневника.
@@ -198,6 +202,9 @@ def format_expenses_from_dict_list(
     Returns:
         Отформатированная строка в стиле дневника (без HTML тегов)
     """
+    if title is None:
+        title = get_text('expense_list_title', lang)
+    
     if not expenses_data:
         return f"{title}\n\nТраты не найдены."
     
@@ -250,7 +257,7 @@ def format_expenses_from_dict_list(
         full_title += f"\n<i>{subtitle}</i>"
     
     result = result.replace(
-        "📋 <b>Дневник трат</b>",
+        get_text('diary_title', lang),
         f"<b>{full_title}</b>"
     )
     

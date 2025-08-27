@@ -233,3 +233,105 @@ def get_available_languages() -> list:
         ('ru', 'Русский'),
         ('en', 'English')
     ]
+
+
+def translate_category_name(category_name: str, to_lang: str = 'en') -> str:
+    """
+    Перевести название категории
+    
+    Args:
+        category_name: Название категории с эмодзи
+        to_lang: Целевой язык
+        
+    Returns:
+        Переведенное название с той же эмодзи
+    """
+    # Словарь переводов стандартных категорий
+    translations = {
+        # Русский -> Английский
+        'Супермаркеты': 'Supermarkets',
+        'Продукты': 'Products',
+        'Другие продукты': 'Other Products',
+        'Рестораны и кафе': 'Restaurants and Cafes',
+        'Кафе и рестораны': 'Restaurants and Cafes',
+        'АЗС': 'Gas Stations',
+        'Такси': 'Taxi',
+        'Общественный транспорт': 'Public Transport',
+        'Автомобиль': 'Car',
+        'Транспорт': 'Transport',
+        'Жилье': 'Housing',
+        'Аптеки': 'Pharmacies',
+        'Медицина': 'Medicine',
+        'Спорт': 'Sports',
+        'Спорт и фитнес': 'Sports and Fitness',
+        'Спортивные товары': 'Sports Goods',
+        'Одежда и обувь': 'Clothes and Shoes',
+        'Цветы': 'Flowers',
+        'Развлечения': 'Entertainment',
+        'Образование': 'Education',
+        'Подарки': 'Gifts',
+        'Путешествия': 'Travel',
+        'Связь и интернет': 'Communication and Internet',
+        'Коммунальные услуги и подписки': 'Utilities and Subscriptions',
+        'Прочие расходы': 'Other Expenses',
+        'Благотворительность': 'Charity',
+        'Родственники': 'Relatives',
+        'Красотища': 'Beauty',
+        'Красота': 'Beauty',
+        'Улулу': 'Ululu',
+        # Английский -> Русский (обратные)
+        'Supermarkets': 'Супермаркеты',
+        'Products': 'Продукты',
+        'Other Products': 'Другие продукты',
+        'Restaurants and Cafes': 'Рестораны и кафе',
+        'Gas Stations': 'АЗС',
+        'Taxi': 'Такси',
+        'Public Transport': 'Общественный транспорт',
+        'Car': 'Автомобиль',
+        'Transport': 'Транспорт',
+        'Housing': 'Жилье',
+        'Pharmacies': 'Аптеки',
+        'Medicine': 'Медицина',
+        'Sports': 'Спорт',
+        'Sports and Fitness': 'Спорт и фитнес',
+        'Sports Goods': 'Спортивные товары',
+        'Clothes and Shoes': 'Одежда и обувь',
+        'Flowers': 'Цветы',
+        'Entertainment': 'Развлечения',
+        'Education': 'Образование',
+        'Gifts': 'Подарки',
+        'Travel': 'Путешествия',
+        'Communication and Internet': 'Связь и интернет',
+        'Utilities and Subscriptions': 'Коммунальные услуги и подписки',
+        'Other Expenses': 'Прочие расходы',
+        'Charity': 'Благотворительность',
+        'Relatives': 'Родственники',
+        'Beauty': 'Красота',
+        'Ululu': 'Улулу'
+    }
+    
+    # Извлекаем эмодзи и текст из названия
+    emoji = ''
+    text = category_name
+    
+    # Находим эмодзи в начале строки
+    import re
+    emoji_pattern = re.compile(r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u27BF]+')
+    match = emoji_pattern.match(category_name)
+    
+    if match:
+        emoji = match.group()
+        text = category_name[len(emoji):].strip()
+    
+    # Если целевой язык русский и текст на английском
+    if to_lang == 'ru' and text in translations:
+        translated = translations[text]
+        return f"{emoji} {translated}" if emoji else translated
+    
+    # Если целевой язык английский и текст на русском
+    if to_lang == 'en' and text in translations:
+        translated = translations[text]
+        return f"{emoji} {translated}" if emoji else translated
+    
+    # Если перевод не найден, возвращаем как есть
+    return category_name
