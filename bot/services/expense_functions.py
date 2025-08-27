@@ -55,10 +55,14 @@ class ExpenseFunctions:
             
             logger.info(f"[get_max_expense_day] Found {len(expenses)} days with expenses")
             
+            # Получаем язык пользователя
+            lang = profile.language_code or 'ru'
+            
             if not expenses:
+                from bot.utils import get_text
                 return {
                     'success': False,
-                    'message': 'Нет трат за указанный период'
+                    'message': get_text('no_expenses_period', lang)
                 }
             
             max_day = expenses.first()
@@ -69,18 +73,25 @@ class ExpenseFunctions:
                 expense_date=max_day['expense_date']
             ).select_related('category')
             
+            from bot.utils import get_text, translate_category_name
+            
             details = []
             for exp in day_expenses:
+                category_name = exp.category.name if exp.category else get_text('no_category', lang)
+                # Переводим название категории
+                if exp.category:
+                    category_name = translate_category_name(category_name, lang)
+                    
                 details.append({
                     'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
                     'amount': float(exp.amount),
-                    'category': exp.category.name if exp.category else 'Без категории',
+                    'category': category_name,
                     'description': exp.description
                 })
             
             # Добавляем день недели
-            weekdays = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
-            weekday = weekdays[max_day['expense_date'].weekday()]
+            weekday_num = max_day['expense_date'].weekday()
+            weekday = get_text(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'][weekday_num], lang)
             
             return {
                 'success': True,
@@ -94,15 +105,23 @@ class ExpenseFunctions:
             
         except Profile.DoesNotExist:
             logger.error(f"[get_max_expense_day] Profile not found for telegram_id={user_id}")
+            from bot.utils import get_text
             return {
                 'success': False,
-                'message': 'Профиль пользователя не найден'
+                'message': get_text('profile_not_found', 'ru')
             }
         except Exception as e:
             logger.error(f"[get_max_expense_day] Unexpected error for user {user_id}: {e}", exc_info=True)
+            from bot.utils import get_text
+            lang = 'ru'  # Default language for errors
+            try:
+                profile = Profile.objects.get(telegram_id=user_id)
+                lang = profile.language_code or 'ru'
+            except:
+                pass
             return {
                 'success': False,
-                'message': f'Ошибка: {str(e)}'
+                'message': f"{get_text('error', lang)}: {str(e)}"
             }
     
     @staticmethod
@@ -137,9 +156,11 @@ class ExpenseFunctions:
                 start_date = today.replace(month=1, day=1)
                 end_date = today
             else:
+                from bot.utils import get_text
+                lang = profile.language_code or 'ru'
                 return {
                     'success': False,
-                    'message': f'Неизвестный период: {period}'
+                    'message': f"{get_text('unknown_period', lang)}: {period}"
                 }
             
             # Получаем траты
@@ -152,6 +173,10 @@ class ExpenseFunctions:
             total = expenses.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
             count = expenses.count()
             
+            # Получаем язык пользователя
+            from bot.utils import get_text, translate_category_name
+            lang = profile.language_code or 'ru'
+            
             # Группируем по категориям
             by_category = expenses.values('category__name').annotate(
                 total=Sum('amount')
@@ -159,8 +184,13 @@ class ExpenseFunctions:
             
             categories = []
             for cat in by_category:
+                category_name = cat['category__name'] or get_text('no_category', lang)
+                # Переводим название категории
+                if cat['category__name']:
+                    category_name = translate_category_name(category_name, lang)
+                    
                 categories.append({
-                    'name': cat['category__name'] or 'Без категории',
+                    'name': category_name,
                     'amount': float(cat['total'])
                 })
             
@@ -176,15 +206,23 @@ class ExpenseFunctions:
             }
             
         except Profile.DoesNotExist:
+            from bot.utils import get_text
             return {
                 'success': False,
-                'message': 'Профиль пользователя не найден'
+                'message': get_text('profile_not_found', 'ru')
             }
         except Exception as e:
             logger.error(f"Error in get_period_total: {e}")
+            from bot.utils import get_text
+            lang = 'ru'
+            try:
+                profile = Profile.objects.get(telegram_id=user_id)
+                lang = profile.language_code or 'ru'
+            except:
+                pass
             return {
                 'success': False,
-                'message': f'Ошибка: {str(e)}'
+                'message': f"{get_text('error', lang)}: {str(e)}"
             }
     
     @staticmethod
@@ -243,9 +281,10 @@ class ExpenseFunctions:
             }
             
         except Profile.DoesNotExist:
+            from bot.utils import get_text
             return {
                 'success': False,
-                'message': 'Профиль пользователя не найден'
+                'message': get_text('profile_not_found', 'ru')
             }
         except Exception as e:
             logger.error(f"Error in get_category_statistics: {e}")
@@ -315,9 +354,10 @@ class ExpenseFunctions:
             }
             
         except Profile.DoesNotExist:
+            from bot.utils import get_text
             return {
                 'success': False,
-                'message': 'Профиль пользователя не найден'
+                'message': get_text('profile_not_found', 'ru')
             }
         except Exception as e:
             logger.error(f"Error in get_daily_totals: {e}")
@@ -370,9 +410,10 @@ class ExpenseFunctions:
             }
             
         except Profile.DoesNotExist:
+            from bot.utils import get_text
             return {
                 'success': False,
-                'message': 'Профиль пользователя не найден'
+                'message': get_text('profile_not_found', 'ru')
             }
         except Exception as e:
             logger.error(f"Error in search_expenses: {e}")
@@ -425,9 +466,10 @@ class ExpenseFunctions:
             }
             
         except Profile.DoesNotExist:
+            from bot.utils import get_text
             return {
                 'success': False,
-                'message': 'Профиль пользователя не найден'
+                'message': get_text('profile_not_found', 'ru')
             }
         except Exception as e:
             logger.error(f"Error in get_average_expenses: {e}")

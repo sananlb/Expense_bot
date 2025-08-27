@@ -295,7 +295,7 @@ class GoogleAIService(AIBaseService):
                                     response_text += f"• {name}: {cat_total:,.0f} ₽ ({count} шт., {percent:.1f}%)\n"
                                 
                                 if len(categories) > 20:
-                                    response_text += f"\n... и еще {len(categories) - 20} категорий"
+                                    response_text += f"\n... {get_text('and_more', lang)} {len(categories) - 20} {get_text('categories', lang)}"
                                 
                                 return response_text
                             

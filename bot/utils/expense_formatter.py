@@ -206,7 +206,7 @@ def format_expenses_from_dict_list(
         title = get_text('expense_list_title', lang)
     
     if not expenses_data:
-        return f"{title}\n\nТраты не найдены."
+        return f"{title}\n\n{get_text('no_expenses_found', lang)}"
     
     from datetime import datetime
     from types import SimpleNamespace
