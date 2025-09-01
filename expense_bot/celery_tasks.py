@@ -72,8 +72,7 @@ def send_monthly_reports():
 def check_budget_limits():
     """Check budget limits and send warnings"""
     try:
-        from profiles.models import Profile
-        from expenses.models import Budget, Expense
+        from expenses.models import Profile, Budget, Expense
         from bot.services.notifications import NotificationService
         from decimal import Decimal
         
@@ -463,8 +462,7 @@ def extract_words_from_description(description: str) -> List[str]:
 
 def recalculate_normalized_weights(profile_id: int, words: List[str]):
     """Пересчитывает нормализованные веса для слов, встречающихся в нескольких категориях"""
-    from expenses.models import CategoryKeyword
-    from profiles.models import Profile
+    from expenses.models import CategoryKeyword, Profile
     
     try:
         profile = Profile.objects.get(id=profile_id)
