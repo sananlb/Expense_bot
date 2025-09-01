@@ -293,6 +293,87 @@ def get_category_by_id(user_id: int, category_id: int) -> Optional[ExpenseCatego
 
 
 @sync_to_async
+def update_default_categories_language(user_id: int, new_lang: str) -> bool:
+    """
+    Обновить язык стандартных категорий при смене языка пользователя
+    
+    Args:
+        user_id: ID пользователя
+        new_lang: Новый язык ('ru' или 'en')
+        
+    Returns:
+        True если обновление прошло успешно
+    """
+    from bot.utils.language import translate_category_name
+    from expenses.models import DEFAULT_CATEGORIES
+    import re
+    
+    try:
+        profile = Profile.objects.get(telegram_id=user_id)
+        
+        # Получаем все категории пользователя
+        user_categories = ExpenseCategory.objects.filter(profile=profile)
+        
+        # Паттерн для извлечения эмодзи
+        emoji_pattern = re.compile(
+            r'^['
+            r'\U0001F000-\U0001F9FF'  # Основные эмодзи
+            r'\U00002600-\U000027BF'  # Разные символы
+            r'\U0001F300-\U0001F5FF'  # Символы и пиктограммы
+            r'\U0001F600-\U0001F64F'  # Эмоции
+            r'\U0001F680-\U0001F6FF'  # Транспорт и символы
+            r'\u2600-\u27BF'          # Разные символы (короткий диапазон)
+            r'\u2300-\u23FF'          # Технические символы
+            r'\u2B00-\u2BFF'          # Стрелки и символы
+            r'\u26A0-\u26FF'          # Предупреждающие знаки
+            r']+'
+        )
+        
+        # Создаем список стандартных категорий для сравнения
+        default_names_ru = {name for name, _ in DEFAULT_CATEGORIES}
+        default_names_en = {
+            'Products', 'Restaurants and Cafes', 'Gas Stations', 'Transport',
+            'Car', 'Housing', 'Pharmacies', 'Medicine', 'Beauty',
+            'Sports and Fitness', 'Clothes and Shoes', 'Entertainment',
+            'Education', 'Gifts', 'Travel', 'Relatives',
+            'Utilities and Subscriptions', 'Other Expenses'
+        }
+        
+        updated_count = 0
+        for category in user_categories:
+            # Извлекаем эмодзи и текст
+            match = emoji_pattern.match(category.name)
+            if match:
+                emoji = match.group()
+                text = category.name[len(emoji):].strip()
+            else:
+                text = category.name.strip()
+                emoji = ''
+            
+            # Проверяем, является ли это стандартной категорией
+            is_default = text in default_names_ru or text in default_names_en
+            
+            if is_default:
+                # Переводим только стандартные категории
+                translated_name = translate_category_name(category.name, new_lang)
+                if translated_name != category.name:
+                    category.name = translated_name
+                    category.save()
+                    updated_count += 1
+                    logger.info(f"Updated category '{text}' to '{translated_name}' for user {user_id}")
+        
+        logger.info(f"Updated {updated_count} default categories for user {user_id} to language '{new_lang}'")
+        return True
+        
+    except Profile.DoesNotExist:
+        logger.error(f"Profile not found for user {user_id}")
+        return False
+    except Exception as e:
+        logger.error(f"Error updating categories language for user {user_id}: {e}")
+        return False
+
+
+@sync_to_async
 def create_default_categories(user_id: int) -> bool:
     """
     Создать базовые категории для нового пользователя

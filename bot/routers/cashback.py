@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 router = Router(name="cashback")
 
 
+
+
 async def send_cashback_menu_direct(bot, chat_id: int, state: FSMContext, month: int = None):
     """Отправить меню кешбека напрямую без message объекта"""
     from datetime import date
@@ -231,13 +233,32 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
         # НЕ удаляем старое меню кешбека - оно должно оставаться на экране
         # Пользователь может иметь несколько меню кешбека одновременно
         
-        # Отправляем новое меню
-        sent_message = await bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            reply_markup=keyboard,
-            parse_mode="HTML"
-        )
+        # Если это CallbackQuery, редактируем существующее сообщение
+        if isinstance(message, types.CallbackQuery):
+            try:
+                await message.message.edit_text(
+                    text=text,
+                    reply_markup=keyboard,
+                    parse_mode="HTML"
+                )
+                sent_message = message.message
+            except Exception as e:
+                # Если не удалось отредактировать, отправляем новое
+                logger.warning(f"Failed to edit message: {e}")
+                sent_message = await bot.send_message(
+                    chat_id=chat_id,
+                    text=text,
+                    reply_markup=keyboard,
+                    parse_mode="HTML"
+                )
+        else:
+            # Для обычного сообщения отправляем новое
+            sent_message = await bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
         
         # Получаем текущие данные состояния
         data = await state.get_data()
@@ -267,10 +288,18 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
 @router.callback_query(lambda c: c.data == "cashback_menu")
 async def callback_cashback_menu(callback: types.CallbackQuery, state: FSMContext):
     """Показать меню кешбэков через callback"""
-    # Проверяем подписку
-    from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
+    # Проверяем, включен ли кешбэк
+    from bot.services.profile import get_user_settings
+    user_settings = await get_user_settings(callback.from_user.id)
     
     lang = await get_user_language(callback.from_user.id)
+    
+    if not user_settings.cashback_enabled:
+        await callback.answer(get_text('cashback_disabled_message', lang), show_alert=True)
+        return
+    
+    # Проверяем подписку
+    from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
     
     has_subscription = await check_subscription(callback.from_user.id)
     if not has_subscription:
@@ -419,7 +448,7 @@ async def process_cashback_category(callback: types.CallbackQuery, state: FSMCon
 
 
 @router.callback_query(lambda c: c.data.startswith("cashback_bank_"), CashbackForm.waiting_for_bank)
-async def process_cashback_bank(callback: types.CallbackQuery, state: FSMContext):
+async def process_cashback_bank(callback: types.CallbackQuery, state: FSMContext, lang: str):
     """Обработка выбора банка"""
     bank = callback.data.replace("cashback_bank_", "")
     
@@ -556,7 +585,7 @@ async def process_percent_text(message: types.Message, state: FSMContext):
 # Обработчики редактирования кешбека
 
 @router.callback_query(lambda c: c.data == "cashback_edit")
-async def edit_cashback_list(callback: types.CallbackQuery, state: FSMContext):
+async def edit_cashback_list(callback: types.CallbackQuery, state: FSMContext, lang: str):
     """Показать список кешбеков для редактирования"""
     user_id = callback.from_user.id
     current_month = date.today().month
@@ -573,7 +602,7 @@ async def edit_cashback_list(callback: types.CallbackQuery, state: FSMContext):
             category_name = translate_category_name(cb.category.name, lang)
             text = f"{category_name} - {cb.bank_name} {cb.cashback_percent}%"
         else:
-            text = f"🌐 {get_text('all_categories', lang)} - {cb.bank_name} {cb.cashback_percent}%"
+            text = f"{get_text('all_categories', lang)} - {cb.bank_name} {cb.cashback_percent}%"
         
         # Добавляем описание, если есть
         if cb.description:
@@ -966,13 +995,15 @@ async def process_cashback_month(callback: types.CallbackQuery, state: FSMContex
         await state.clear()
 
 
-@router.callback_query(lambda c: c.data == "cashback_remove")
 async def remove_cashback_list(callback: types.CallbackQuery, state: FSMContext):
     """Показать список кешбэков для удаления"""
+    logger.info(f"remove_cashback_list called for user {callback.from_user.id}")
     user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
     current_month = date.today().month
     
     cashbacks = await get_user_cashbacks(user_id, current_month)
+    logger.info(f"Found {len(cashbacks) if cashbacks else 0} cashbacks for user {user_id}")
     
     if not cashbacks:
         await callback.answer("У вас нет кешбэков для удаления", show_alert=True)
@@ -984,7 +1015,7 @@ async def remove_cashback_list(callback: types.CallbackQuery, state: FSMContext)
             category_name = translate_category_name(cb.category.name, lang)
             text = f"{category_name} - {cb.bank_name} {cb.cashback_percent}%"
         else:
-            text = f"🌐 {get_text('all_categories', lang)} - {cb.bank_name} {cb.cashback_percent}%"
+            text = f"{get_text('all_categories', lang)} - {cb.bank_name} {cb.cashback_percent}%"
         keyboard_buttons.append([
             InlineKeyboardButton(text=text, callback_data=f"remove_cb_{cb.id}")
         ])
@@ -1003,8 +1034,8 @@ async def remove_cashback_list(callback: types.CallbackQuery, state: FSMContext)
 @router.callback_query(lambda c: c.data.startswith("remove_cb_"))
 async def confirm_remove_cashback(callback: types.CallbackQuery):
     """Подтверждение удаления кешбэка"""
-    cashback_id = int(callback.data.split("_")[-1])
     lang = await get_user_language(callback.from_user.id)
+    cashback_id = int(callback.data.split("_")[-1])
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -1075,9 +1106,9 @@ async def view_cashback_month(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.callback_query(lambda c: c.data == "cashback_remove_all")
 async def confirm_remove_all_cashback(callback: types.CallbackQuery):
     """Подтверждение удаления всех кешбэков"""
+    logger.info(f"confirm_remove_all_cashback called for user {callback.from_user.id}")
     lang = await get_user_language(callback.from_user.id)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -1098,8 +1129,8 @@ async def confirm_remove_all_cashback(callback: types.CallbackQuery):
 async def remove_all_cashback_confirmed(callback: types.CallbackQuery, state: FSMContext):
     """Удаление всех кешбэков подтверждено"""
     user_id = callback.from_user.id
-    current_month = date.today().month
     lang = await get_user_language(user_id)
+    current_month = date.today().month
     
     # Получаем все кешбэки пользователя
     cashbacks = await get_user_cashbacks(user_id, current_month)
@@ -1200,3 +1231,118 @@ async def process_limit_text(message: types.Message, state: FSMContext):
     except ValueError:
         await send_message_with_cleanup(message, state, "❌ Введите корректную сумму (например: 1000 или 1000.50)")
 '''  # Конец закомментированного кода
+
+# Регистрация обработчиков для кнопок удаления - в самом конце файла
+@router.callback_query(F.data == "cashback_remove")
+async def handle_cashback_remove(callback: types.CallbackQuery, state: FSMContext):
+    """Обработчик кнопки удаления"""
+    logger.info(f"handle_cashback_remove called for user {callback.from_user.id}")
+    user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
+    current_month = date.today().month
+    
+    cashbacks = await get_user_cashbacks(user_id, current_month)
+    logger.info(f"Found {len(cashbacks) if cashbacks else 0} cashbacks for user {user_id}")
+    
+    if not cashbacks:
+        await callback.answer("У вас нет кешбэков для удаления", show_alert=True)
+        return
+    
+    keyboard_buttons = []
+    for cb in cashbacks:
+        if cb.category:
+            category_name = translate_category_name(cb.category.name, lang)
+            text = f"{category_name} - {cb.bank_name} {cb.cashback_percent}%"
+        else:
+            text = f"{get_text('all_categories', lang)} - {cb.bank_name} {cb.cashback_percent}%"
+        keyboard_buttons.append([
+            InlineKeyboardButton(text=text, callback_data=f"remove_cb_{cb.id}")
+        ])
+    
+    await callback.message.edit_text(
+        "➖ Выберите кешбэк для удаления:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+    )
+    await state.update_data(last_menu_message_id=callback.message.message_id)
+    await callback.answer()
+
+@router.callback_query(F.data == "cashback_remove_all")
+async def handle_cashback_remove_all(callback: types.CallbackQuery):
+    """Обработчик кнопки удаления всех"""
+    logger.info(f"handle_cashback_remove_all called for user {callback.from_user.id}")
+    lang = await get_user_language(callback.from_user.id)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu"),
+            InlineKeyboardButton(text=get_text('yes_delete_all', lang), callback_data="confirm_remove_all")
+        ]
+    ])
+    
+    await callback.message.edit_text(
+        get_text('confirm_delete_all_cashbacks', lang),
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+# Обработчик выбора конкретного кешбэка для удаления
+@router.callback_query(lambda c: c.data.startswith("remove_cb_"))
+async def handle_confirm_remove_cashback(callback: types.CallbackQuery):
+    """Подтверждение удаления кешбэка"""
+    lang = await get_user_language(callback.from_user.id)
+    cashback_id = int(callback.data.split("_")[-1])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text=get_text('yes_delete', lang), callback_data=f"confirm_remove_cb_{cashback_id}"),
+            InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu")
+        ]
+    ])
+    
+    await callback.message.edit_text(
+        get_text('confirm_delete_cashback', lang),
+        reply_markup=keyboard
+    )
+    await callback.answer()
+
+# Обработчик подтверждения удаления конкретного кешбэка
+@router.callback_query(lambda c: c.data.startswith("confirm_remove_cb_"))
+async def handle_remove_cashback_confirmed(callback: types.CallbackQuery, state: FSMContext):
+    """Удаление кешбэка подтверждено"""
+    cashback_id = int(callback.data.split("_")[-1])
+    user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
+    
+    success = await delete_cashback(user_id, cashback_id)
+    
+    if success:
+        # Показываем меню кешбэков, редактируя текущее сообщение
+        await show_cashback_menu(callback, state, lang)
+        await callback.answer(get_text('cashback_deleted', lang) if 'cashback_deleted' in get_text.__globals__ else "✅ Кешбэк удален")
+    else:
+        await callback.answer(get_text('cashback_delete_failed', lang), show_alert=True)
+
+# Обработчик подтверждения удаления всех кешбэков
+@router.callback_query(lambda c: c.data == "confirm_remove_all")
+async def handle_remove_all_cashback_confirmed(callback: types.CallbackQuery, state: FSMContext):
+    """Удаление всех кешбэков подтверждено"""
+    user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
+    current_month = date.today().month
+    
+    # Получаем все кешбэки пользователя
+    cashbacks = await get_user_cashbacks(user_id, current_month)
+    
+    if cashbacks:
+        # Удаляем все кешбэки
+        deleted_count = 0
+        for cashback in cashbacks:
+            success = await delete_cashback(user_id, cashback.id)
+            if success:
+                deleted_count += 1
+        
+        # Показываем меню кешбэков, редактируя текущее сообщение
+        await show_cashback_menu(callback, state, lang)
+        await callback.answer(f"✅ Удалено кешбэков: {deleted_count}")
+    else:
+        await callback.answer(get_text('no_cashbacks_to_delete', lang), show_alert=True)

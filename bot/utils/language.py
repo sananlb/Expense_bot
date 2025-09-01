@@ -248,90 +248,91 @@ def translate_category_name(category_name: str, to_lang: str = 'en') -> str:
     """
     # Словарь переводов стандартных категорий
     translations = {
-        # Русский -> Английский
-        'Супермаркеты': 'Supermarkets',
+        # Русский -> Английский (только стандартные категории из DEFAULT_CATEGORIES)
         'Продукты': 'Products',
-        'Другие продукты': 'Other Products',
-        'Рестораны и кафе': 'Restaurants and Cafes',
         'Кафе и рестораны': 'Restaurants and Cafes',
         'АЗС': 'Gas Stations',
-        'Такси': 'Taxi',
-        'Общественный транспорт': 'Public Transport',
-        'Автомобиль': 'Car',
         'Транспорт': 'Transport',
+        'Автомобиль': 'Car',
         'Жилье': 'Housing',
         'Аптеки': 'Pharmacies',
         'Медицина': 'Medicine',
-        'Спорт': 'Sports',
+        'Красота': 'Beauty',
         'Спорт и фитнес': 'Sports and Fitness',
-        'Спортивные товары': 'Sports Goods',
         'Одежда и обувь': 'Clothes and Shoes',
-        'Цветы': 'Flowers',
         'Развлечения': 'Entertainment',
         'Образование': 'Education',
         'Подарки': 'Gifts',
         'Путешествия': 'Travel',
-        'Связь и интернет': 'Communication and Internet',
+        'Родственники': 'Relatives',
         'Коммунальные услуги и подписки': 'Utilities and Subscriptions',
         'Прочие расходы': 'Other Expenses',
-        'Благотворительность': 'Charity',
-        'Родственники': 'Relatives',
-        'Красотища': 'Beauty',
-        'Красота': 'Beauty',
-        'Улулу': 'Ululu',
-        # Английский -> Русский (обратные)
-        'Supermarkets': 'Супермаркеты',
+        # Английский -> Русский (обратные переводы)
         'Products': 'Продукты',
-        'Other Products': 'Другие продукты',
-        'Restaurants and Cafes': 'Рестораны и кафе',
+        'Restaurants and Cafes': 'Кафе и рестораны',
         'Gas Stations': 'АЗС',
-        'Taxi': 'Такси',
-        'Public Transport': 'Общественный транспорт',
-        'Car': 'Автомобиль',
         'Transport': 'Транспорт',
+        'Car': 'Автомобиль',
         'Housing': 'Жилье',
         'Pharmacies': 'Аптеки',
         'Medicine': 'Медицина',
-        'Sports': 'Спорт',
+        'Beauty': 'Красота',
         'Sports and Fitness': 'Спорт и фитнес',
-        'Sports Goods': 'Спортивные товары',
         'Clothes and Shoes': 'Одежда и обувь',
-        'Flowers': 'Цветы',
         'Entertainment': 'Развлечения',
         'Education': 'Образование',
         'Gifts': 'Подарки',
         'Travel': 'Путешествия',
-        'Communication and Internet': 'Связь и интернет',
-        'Utilities and Subscriptions': 'Коммунальные услуги и подписки',
-        'Other Expenses': 'Прочие расходы',
-        'Charity': 'Благотворительность',
         'Relatives': 'Родственники',
-        'Beauty': 'Красота',
-        'Ululu': 'Улулу'
+        'Utilities and Subscriptions': 'Коммунальные услуги и подписки',
+        'Other Expenses': 'Прочие расходы'
     }
     
     # Извлекаем эмодзи и текст из названия
     emoji = ''
     text = category_name
     
-    # Находим эмодзи в начале строки
+    # Находим эмодзи в начале строки (расширенный паттерн для всех эмодзи)
     import re
-    emoji_pattern = re.compile(r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F5FF\U0001F600-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u27BF]+')
+    # Более полный паттерн для эмодзи
+    emoji_pattern = re.compile(
+        r'^['
+        r'\U0001F000-\U0001F9FF'  # Основные эмодзи
+        r'\U00002600-\U000027BF'  # Разные символы
+        r'\U0001F300-\U0001F5FF'  # Символы и пиктограммы
+        r'\U0001F600-\U0001F64F'  # Эмоции
+        r'\U0001F680-\U0001F6FF'  # Транспорт и символы
+        r'\u2600-\u27BF'          # Разные символы (короткий диапазон)
+        r'\u2300-\u23FF'          # Технические символы
+        r'\u2B00-\u2BFF'          # Стрелки и символы
+        r'\u26A0-\u26FF'          # Предупреждающие знаки
+        r']+'
+    )
     match = emoji_pattern.match(category_name)
     
     if match:
         emoji = match.group()
         text = category_name[len(emoji):].strip()
     
+    # Для отладки
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.debug(f"translate_category_name: input='{category_name}', emoji='{emoji}', text='{text}', to_lang='{to_lang}'")
+    
     # Если целевой язык русский и текст на английском
     if to_lang == 'ru' and text in translations:
         translated = translations[text]
-        return f"{emoji} {translated}" if emoji else translated
+        result = f"{emoji} {translated}" if emoji else translated
+        logger.debug(f"Translated EN->RU: '{text}' -> '{translated}', result='{result}'")
+        return result
     
     # Если целевой язык английский и текст на русском
     if to_lang == 'en' and text in translations:
         translated = translations[text]
-        return f"{emoji} {translated}" if emoji else translated
+        result = f"{emoji} {translated}" if emoji else translated
+        logger.debug(f"Translated RU->EN: '{text}' -> '{translated}', result='{result}'")
+        return result
     
     # Если перевод не найден, возвращаем как есть
+    logger.debug(f"No translation found for '{text}' to '{to_lang}'")
     return category_name

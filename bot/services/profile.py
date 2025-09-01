@@ -11,6 +11,73 @@ logger = logging.getLogger(__name__)
 
 
 @sync_to_async
+def get_user_settings(telegram_id: int) -> UserSettings:
+    """
+    Получить настройки пользователя
+    
+    Args:
+        telegram_id: ID пользователя в Telegram
+        
+    Returns:
+        UserSettings instance
+    """
+    try:
+        profile = Profile.objects.get(telegram_id=telegram_id)
+        if not hasattr(profile, 'settings'):
+            settings = UserSettings.objects.create(profile=profile)
+        else:
+            settings = profile.settings
+        return settings
+    except Profile.DoesNotExist:
+        # Создаем профиль если не существует
+        profile = Profile.objects.create(
+            telegram_id=telegram_id,
+            language_code='ru',
+            timezone='Europe/Moscow',
+            currency='RUB',
+            is_active=True
+        )
+        settings = UserSettings.objects.create(profile=profile)
+        return settings
+
+
+@sync_to_async
+def toggle_cashback(telegram_id: int) -> bool:
+    """
+    Переключить состояние кешбэка
+    
+    Args:
+        telegram_id: ID пользователя в Telegram
+        
+    Returns:
+        Новое состояние кешбэка (True - включен, False - выключен)
+    """
+    try:
+        profile = Profile.objects.get(telegram_id=telegram_id)
+        if not hasattr(profile, 'settings'):
+            settings = UserSettings.objects.create(profile=profile)
+        else:
+            settings = profile.settings
+        
+        settings.cashback_enabled = not settings.cashback_enabled
+        settings.save()
+        return settings.cashback_enabled
+    except Profile.DoesNotExist:
+        # Создаем профиль если не существует
+        profile = Profile.objects.create(
+            telegram_id=telegram_id,
+            language_code='ru',
+            timezone='Europe/Moscow',
+            currency='RUB',
+            is_active=True
+        )
+        settings = UserSettings.objects.create(profile=profile)
+        settings.cashback_enabled = False
+        settings.save()
+        return settings.cashback_enabled
+
+
+@sync_to_async
 def get_or_create_profile(telegram_id: int, **user_data) -> Profile:
     """
     Получить или создать профиль пользователя

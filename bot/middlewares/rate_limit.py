@@ -22,16 +22,16 @@ class RateLimitMiddleware(BaseMiddleware):
     def __init__(self, 
                  requests_per_minute: int = None,
                  requests_per_hour: int = None,
-                 burst_size: int = 5,
+                 burst_size: int = 10,
                  use_redis: bool = True):
         super().__init__()
         
         # Используем настройки из settings.py или переданные параметры
         self.requests_per_minute = requests_per_minute or getattr(
-            settings, 'BOT_RATE_LIMIT_MESSAGES_PER_MINUTE', 50
+            settings, 'BOT_RATE_LIMIT_MESSAGES_PER_MINUTE', 100
         )
         self.requests_per_hour = requests_per_hour or getattr(
-            settings, 'BOT_RATE_LIMIT_MESSAGES_PER_HOUR', 1000
+            settings, 'BOT_RATE_LIMIT_MESSAGES_PER_HOUR', 2000
         )
         self.burst_size = burst_size
         self.use_redis = use_redis

@@ -120,6 +120,11 @@ def calculate_potential_cashback(user_id: int, start_date: date, end_date: date)
     """Рассчитать потенциальный кешбэк за период"""
     try:
         profile = Profile.objects.get(telegram_id=user_id)
+        
+        # Проверяем, включен ли кешбэк
+        if hasattr(profile, 'settings') and hasattr(profile.settings, 'cashback_enabled'):
+            if not profile.settings.cashback_enabled:
+                return Decimal('0')
     except Profile.DoesNotExist:
         return Decimal('0')
     
@@ -168,6 +173,11 @@ def calculate_expense_cashback(user_id: int, category_id: int, amount: Decimal, 
     """Рассчитать кешбэк для конкретной траты"""
     try:
         profile = Profile.objects.get(telegram_id=user_id)
+        
+        # Проверяем, включен ли кешбэк
+        if hasattr(profile, 'settings') and hasattr(profile.settings, 'cashback_enabled'):
+            if not profile.settings.cashback_enabled:
+                return Decimal('0')
     except Profile.DoesNotExist:
         return Decimal('0')
     
@@ -261,7 +271,7 @@ def format_cashback_note(cashbacks: List[Cashback], month: int, lang: str = 'ru'
                 if cb.description:
                     text += f" ({cb.description})"
             else:
-                text += f"• 🌐 {get_text('all_categories', lang)}"
+                text += f"• {get_text('all_categories', lang)}"
                 if cb.description:
                     text += f" ({cb.description})"
             

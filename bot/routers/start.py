@@ -9,7 +9,7 @@ import asyncio
 import logging
 
 from bot.utils import get_text
-from bot.services.profile import get_or_create_profile
+from bot.services.profile import get_or_create_profile, get_user_settings
 from bot.keyboards import main_menu_keyboard, back_close_keyboard
 from bot.services.category import create_default_categories
 from bot.utils.message_utils import send_message_with_cleanup, delete_message_with_effect
@@ -154,10 +154,18 @@ async def callback_menu(callback: types.CallbackQuery, state: FSMContext, lang: 
     """Показать главное меню по callback"""
     text = f"{get_text('main_menu', lang)}\n\n{get_text('choose_action', lang)}"
     
-    await send_message_with_cleanup(
+    # Получаем настройки кешбэка
+    user_settings = await get_user_settings(callback.from_user.id)
+    cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
+    
+    sent_message = await send_message_with_cleanup(
         callback, state, text,
-        reply_markup=main_menu_keyboard(lang)
+        reply_markup=main_menu_keyboard(lang, cashback_enabled)
     )
+    
+    # Сохраняем, что это главное меню
+    await state.update_data(main_menu_message_id=sent_message.message_id)
+    
     await callback.answer()
 
 

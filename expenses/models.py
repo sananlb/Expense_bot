@@ -105,6 +105,9 @@ class UserSettings(models.Model):
     # Уведомления
     budget_alerts_enabled = models.BooleanField(default=True)
     
+    # Кешбэк
+    cashback_enabled = models.BooleanField(default=True, verbose_name='Кешбэк включен')
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

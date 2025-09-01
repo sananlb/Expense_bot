@@ -6,18 +6,27 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from bot.utils import get_text
 
 
-def main_menu_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+def main_menu_keyboard(lang: str = 'ru', cashback_enabled: bool = True) -> InlineKeyboardMarkup:
     """Главное меню"""
     keyboard = InlineKeyboardBuilder()
     
     keyboard.button(text=get_text('expenses_today', lang), callback_data="expenses_today")
-    keyboard.button(text=get_text('cashback_menu', lang), callback_data="cashback_menu")
+    
+    # Показываем кнопку кешбэка только если он включен
+    if cashback_enabled:
+        keyboard.button(text=get_text('cashback_menu', lang), callback_data="cashback_menu")
+    
     keyboard.button(text=get_text('categories_menu', lang), callback_data="categories_menu")
     keyboard.button(text=get_text('recurring_menu', lang), callback_data="recurring_menu")
     keyboard.button(text=get_text('settings_menu', lang), callback_data="settings")
     keyboard.button(text=get_text('info', lang), callback_data="start")
     
-    keyboard.adjust(2, 2, 2)
+    # Адаптивная сетка в зависимости от количества кнопок
+    if cashback_enabled:
+        keyboard.adjust(2, 2, 2)  # 6 кнопок: 2-2-2
+    else:
+        keyboard.adjust(2, 2, 1)  # 5 кнопок: 2-2-1
+    
     return keyboard.as_markup()
 
 
@@ -31,7 +40,7 @@ def back_close_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     return keyboard.as_markup()
 
 
-def settings_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True) -> InlineKeyboardMarkup:
     """Меню настроек"""
     keyboard = InlineKeyboardBuilder()
     
@@ -39,10 +48,15 @@ def settings_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     keyboard.button(text=get_text('change_timezone', lang), callback_data="change_timezone")
     keyboard.button(text=get_text('change_currency', lang), callback_data="change_currency")
     
+    # Кнопка переключения кешбэка
+    status = get_text('disable_cashback' if cashback_enabled else 'enable_cashback', lang)
+    cashback_text = get_text('toggle_cashback', lang).format(status=status)
+    keyboard.button(text=cashback_text, callback_data="toggle_cashback")
+    
     # Кнопка навигации
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
-    keyboard.adjust(1, 1, 1, 1)
+    keyboard.adjust(1, 1, 1, 1, 1)
     return keyboard.as_markup()
 
 

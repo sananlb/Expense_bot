@@ -13,7 +13,8 @@ import logging
 
 from bot.keyboards import settings_keyboard, back_close_keyboard, get_language_keyboard, get_timezone_keyboard, get_currency_keyboard
 from bot.utils import get_text, set_user_language, get_user_language, format_amount
-from bot.services.profile import get_or_create_profile
+from bot.services.profile import get_or_create_profile, get_user_settings, toggle_cashback
+from bot.services.category import update_default_categories_language
 from bot.utils.commands import update_user_commands
 from bot.utils.message_utils import send_message_with_cleanup
 
@@ -67,11 +68,15 @@ async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
 {get_text('timezone', lang)}: {timezone_text}
 {get_text('currency', lang)}: {currency_text}"""
         
+        # Получаем настройки кешбэка
+        user_settings = await get_user_settings(message.from_user.id)
+        cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
+        
         await send_message_with_cleanup(
             message, 
             state, 
             text, 
-            reply_markup=settings_keyboard(lang)
+            reply_markup=settings_keyboard(lang, cashback_enabled)
         )
         
     except Exception as e:
@@ -118,9 +123,13 @@ async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: st
 {get_text('timezone', lang)}: {timezone_text}
 {get_text('currency', lang)}: {currency_text}"""
         
+        # Получаем настройки кешбэка
+        user_settings = await get_user_settings(callback.from_user.id)
+        cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
+        
         await callback.message.edit_text(
             text,
-            reply_markup=settings_keyboard(lang)
+            reply_markup=settings_keyboard(lang, cashback_enabled)
         )
         
     except Exception as e:
@@ -153,6 +162,9 @@ async def process_language_change(callback: CallbackQuery, state: FSMContext, la
         # Обновляем язык в middleware
         await set_user_language(callback.from_user.id, new_lang)
         
+        # Обновляем язык стандартных категорий
+        await update_default_categories_language(callback.from_user.id, new_lang)
+        
         # Обновляем команды бота для пользователя
         await update_user_commands(callback.bot, callback.from_user.id)
         
@@ -165,6 +177,30 @@ async def process_language_change(callback: CallbackQuery, state: FSMContext, la
     
     # Возвращаемся в меню настроек
     await callback_settings(callback, state, lang)
+
+
+@router.callback_query(F.data == "toggle_cashback")
+async def handle_toggle_cashback(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Переключить кешбэк"""
+    try:
+        # Переключаем состояние кешбэка
+        new_state = await toggle_cashback(callback.from_user.id)
+        
+        # Обновляем команды бота для пользователя (добавляем или убираем /cashback)
+        await update_user_commands(callback.bot, callback.from_user.id)
+        
+        # Отправляем уведомление
+        if new_state:
+            await callback.answer(get_text('cashback_enabled_message', lang))
+        else:
+            await callback.answer(get_text('cashback_disabled_message', lang))
+        
+        # Возвращаемся в меню настроек с обновленной кнопкой
+        await callback_settings(callback, state, lang)
+        
+    except Exception as e:
+        logger.error(f"Error toggling cashback: {e}")
+        await callback.answer(get_text('error_occurred', lang))
 
 
 @router.callback_query(F.data == "change_timezone")
