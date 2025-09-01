@@ -99,6 +99,9 @@ app.conf.update(
 # Auto-discover tasks from Django apps
 app.autodiscover_tasks()
 
+# Explicitly import tasks to ensure they are registered
+from . import celery_tasks  # noqa
+
 @app.task(bind=True)
 def debug_task(self):
     """Debug task for testing Celery"""
