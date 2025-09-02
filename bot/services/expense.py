@@ -100,7 +100,7 @@ def get_user_expenses(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     category_id: Optional[int] = None,
-    limit: int = 50
+    limit: int = 200
 ) -> List[Expense]:
     """
     Получить траты пользователя
@@ -376,7 +376,7 @@ def get_user_expenses(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
     category_id: Optional[int] = None,
-    limit: int = 50
+    limit: int = 200
 ) -> List[Expense]:
     """
     Получить траты пользователя с фильтрацией

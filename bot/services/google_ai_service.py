@@ -256,10 +256,18 @@ class GoogleAIService(AIBaseService):
                                 except:
                                     period_desc = f"с {start_date} по {end_date}"
                                 
+                                # Формируем подзаголовок с учетом лимита
+                                subtitle = f"Всего: {count} трат на сумму {total:,.0f} ₽"
+                                
+                                # Добавляем сообщение о лимите, если оно есть
+                                limit_message = result.get('limit_message', '')
+                                if limit_message:
+                                    subtitle += f"\n\n{limit_message}"
+                                
                                 return format_expenses_from_dict_list(
                                     expenses_data,
                                     title=f"📋 Траты {period_desc}",
-                                    subtitle=f"Всего: {count} трат на сумму {total:,.0f} ₽",
+                                    subtitle=subtitle,
                                     max_expenses=100
                                 )
                             
@@ -337,10 +345,18 @@ class GoogleAIService(AIBaseService):
                                 min_amt = result.get('min_amount', 0)
                                 max_amt = result.get('max_amount', 0)
                                 
+                                # Формируем подзаголовок
+                                subtitle = f"Найдено: {count} трат на сумму {total:,.0f} ₽"
+                                
+                                # Добавляем сообщение о лимите, если оно есть
+                                limit_message = result.get('limit_message', '')
+                                if limit_message:
+                                    subtitle += f"\n\n{limit_message}"
+                                
                                 return format_expenses_from_dict_list(
                                     expenses,
                                     title=f"💰 Траты от {min_amt:,.0f} до {max_amt:,.0f} ₽",
-                                    subtitle=f"Найдено: {count} трат на сумму {total:,.0f} ₽",
+                                    subtitle=subtitle,
                                     max_expenses=100
                                 )
                             

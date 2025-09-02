@@ -480,7 +480,7 @@ class ExpenseFunctions:
     
     @staticmethod
     @sync_to_async
-    def get_expenses_list(user_id: int, start_date: str = None, end_date: str = None, limit: int = 50) -> Dict[str, Any]:
+    def get_expenses_list(user_id: int, start_date: str = None, end_date: str = None, limit: int = 200) -> Dict[str, Any]:
         """
         Получить список трат за период
         """
@@ -501,6 +501,14 @@ class ExpenseFunctions:
             else:
                 end = date.today()
             
+            # Сначала получаем общее количество трат за период
+            total_count = Expense.objects.filter(
+                profile=profile,
+                expense_date__gte=start,
+                expense_date__lte=end
+            ).count()
+            
+            # Затем получаем траты с лимитом
             expenses = Expense.objects.filter(
                 profile=profile,
                 expense_date__gte=start,
@@ -520,7 +528,7 @@ class ExpenseFunctions:
                     'description': exp.description
                 })
             
-            return {
+            response = {
                 'success': True,
                 'start_date': start.isoformat(),
                 'end_date': end.isoformat(),
@@ -528,6 +536,14 @@ class ExpenseFunctions:
                 'total': float(total),
                 'expenses': results
             }
+            
+            # Добавляем информацию об ограничении, если оно сработало
+            if total_count > limit:
+                response['limit_reached'] = True
+                response['total_count'] = total_count
+                response['limit_message'] = f'💡 <i>Показаны последние {limit} трат из {total_count} за выбранный период</i>'
+            
+            return response
         except Exception as e:
             logger.error(f"Error in get_expenses_list: {e}")
             return {'success': False, 'message': str(e)}
@@ -700,7 +716,7 @@ class ExpenseFunctions:
     
     @staticmethod
     @sync_to_async
-    def get_expenses_by_amount_range(user_id: int, min_amount: float = None, max_amount: float = None, limit: int = 50) -> Dict[str, Any]:
+    def get_expenses_by_amount_range(user_id: int, min_amount: float = None, max_amount: float = None, limit: int = 200) -> Dict[str, Any]:
         """
         Получить траты в диапазоне сумм
         """
@@ -710,14 +726,18 @@ class ExpenseFunctions:
                 defaults={'language_code': 'ru'}
             )
             
-            expenses = Expense.objects.filter(profile=profile)
+            expenses_query = Expense.objects.filter(profile=profile)
             
             if min_amount is not None:
-                expenses = expenses.filter(amount__gte=min_amount)
+                expenses_query = expenses_query.filter(amount__gte=min_amount)
             if max_amount is not None:
-                expenses = expenses.filter(amount__lte=max_amount)
+                expenses_query = expenses_query.filter(amount__lte=max_amount)
             
-            expenses = expenses.select_related('category').order_by('-amount', '-expense_date')[:limit]
+            # Сначала получаем общее количество трат
+            total_count = expenses_query.count()
+            
+            # Затем получаем траты с лимитом
+            expenses = expenses_query.select_related('category').order_by('-amount', '-expense_date')[:limit]
             
             results = []
             for exp in expenses:
@@ -728,13 +748,21 @@ class ExpenseFunctions:
                     'description': exp.description
                 })
             
-            return {
+            response = {
                 'success': True,
                 'min_amount': min_amount,
                 'max_amount': max_amount,
                 'count': len(results),
                 'expenses': results
             }
+            
+            # Добавляем информацию об ограничении, если оно сработало
+            if total_count > limit:
+                response['limit_reached'] = True
+                response['total_count'] = total_count
+                response['limit_message'] = f'💡 <i>Показаны {limit} трат из {total_count} в заданном диапазоне сумм</i>'
+            
+            return response
         except Exception as e:
             logger.error(f"Error in get_expenses_by_amount_range: {e}")
             return {'success': False, 'message': str(e)}

@@ -21,6 +21,7 @@ from ..utils.expense_parser import parse_expense_message
 from ..utils.formatters import format_currency, format_expenses_summary, format_date
 from ..utils.validators import validate_amount, parse_description_amount
 from ..utils.expense_messages import format_expense_added_message
+from ..utils.language import translate_category_name
 from ..decorators import require_subscription, rate_limit
 from ..keyboards import expenses_summary_keyboard
 from expenses.models import Profile
@@ -118,7 +119,8 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
             other_amount = {}
             for i, cat in enumerate(summary['categories']):
                 if i < 8 and cat['amount'] > 0:
-                    text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])}"
+                    translated_name = translate_category_name(cat['name'], lang)
+                    text += f"\n{cat['icon']} {translated_name}: {format_currency(cat['amount'], cat['currency'])}"
                 elif i >= 8 and cat['amount'] > 0:
                     # Суммируем остальные категории по валютам
                     curr = cat['currency']
@@ -227,7 +229,8 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
             other_amount = {}
             for i, cat in enumerate(summary['categories']):
                 if i < 8 and cat['amount'] > 0:
-                    text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])}"
+                    translated_name = translate_category_name(cat['name'], lang)
+                    text += f"\n{cat['icon']} {translated_name}: {format_currency(cat['amount'], cat['currency'])}"
                 elif i >= 8 and cat['amount'] > 0:
                     # Суммируем остальные категории по валютам
                     curr = cat['currency']
@@ -364,7 +367,8 @@ async def show_next_month_expenses(callback: types.CallbackQuery, state: FSMCont
             other_amount = {}
             for i, cat in enumerate(summary['categories']):
                 if i < 8 and cat['amount'] > 0:
-                    text += f"\n{cat['icon']} {cat['name']}: {format_currency(cat['amount'], cat['currency'])}"
+                    translated_name = translate_category_name(cat['name'], lang)
+                    text += f"\n{cat['icon']} {translated_name}: {format_currency(cat['amount'], cat['currency'])}"
                 elif i >= 8 and cat['amount'] > 0:
                     # Суммируем остальные категории по валютам
                     curr = cat['currency']
@@ -1138,10 +1142,11 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: s
         has_cashback = cashback > 0
     
     # Показываем меню выбора поля для редактирования
+    translated_category = translate_category_name(expense.category.name, lang)
     buttons = [
         [InlineKeyboardButton(text=f"💰 {get_text('sum', lang)}: {expense.amount:.0f} ₽", callback_data="edit_field_amount")],
         [InlineKeyboardButton(text=f"📝 {get_text('description', lang)}: {expense.description}", callback_data="edit_field_description")],
-        [InlineKeyboardButton(text=f"📁 {get_text('category', lang)}: {expense.category.name}", callback_data="edit_field_category")],
+        [InlineKeyboardButton(text=f"📁 {get_text('category', lang)}: {translated_category}", callback_data="edit_field_category")],
     ]
     
     # Добавляем кнопку удаления кешбека только если он есть и не исключен
@@ -1297,13 +1302,15 @@ async def edit_field_category(callback: types.CallbackQuery, state: FSMContext, 
     keyboard_buttons = []
     # Группируем категории по 2 в строке
     for i in range(0, len(categories), 2):
+        translated_name = translate_category_name(categories[i].name, lang)
         row = [InlineKeyboardButton(
-            text=f"{categories[i].name}", 
+            text=f"{translated_name}", 
             callback_data=f"expense_cat_{categories[i].id}"
         )]
         if i + 1 < len(categories):
+            translated_name_2 = translate_category_name(categories[i + 1].name, lang)
             row.append(InlineKeyboardButton(
-                text=f"{categories[i + 1].name}", 
+                text=f"{translated_name_2}", 
                 callback_data=f"expense_cat_{categories[i + 1].id}"
             ))
         keyboard_buttons.append(row)
@@ -1329,7 +1336,8 @@ async def edit_cancel(callback: types.CallbackQuery, state: FSMContext):
     
     if expense_id:
         # Возвращаемся к меню редактирования траты
-        await show_edit_menu_callback(callback, state, expense_id)
+        lang = data.get('lang', 'ru')
+        await show_edit_menu_callback(callback, state, expense_id, lang)
     else:
         # Если это было управление категориями, просто удаляем сообщение
         await callback.message.delete()
@@ -1342,7 +1350,9 @@ async def edit_cancel(callback: types.CallbackQuery, state: FSMContext):
 async def edit_back_to_menu(callback: types.CallbackQuery, state: FSMContext):
     """Возврат к меню редактирования траты"""
     expense_id = int(callback.data.split("_")[-1])
-    await show_edit_menu_callback(callback, state, expense_id)
+    data = await state.get_data()
+    lang = data.get('lang', 'ru')
+    await show_edit_menu_callback(callback, state, expense_id, lang)
     await callback.answer()
 
 
@@ -1473,12 +1483,12 @@ async def edit_description_fallback(callback: types.CallbackQuery, state: FSMCon
         await callback.answer()
 
 @router.callback_query(lambda c: c.data == "edit_field_category")
-async def edit_category_fallback(callback: types.CallbackQuery, state: FSMContext):
+async def edit_category_fallback(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Редактирование категории когда состояние было сброшено"""
     data = await state.get_data()
     if data.get('editing_expense_id'):
         await state.set_state(EditExpenseForm.choosing_field)
-        await edit_category(callback, state)
+        await edit_field_category(callback, state, lang)
     else:
         # Просто не реагируем, если нет контекста редактирования
         await callback.answer()
@@ -1510,7 +1520,7 @@ async def finish_edit_fallback(callback: types.CallbackQuery, state: FSMContext)
 
 
 # Вспомогательная функция для показа меню редактирования
-async def show_edit_menu(message: types.Message, state: FSMContext, expense_id: int):
+async def show_edit_menu(message: types.Message, state: FSMContext, expense_id: int, lang: str = 'ru'):
     """Показать меню редактирования после изменения"""
     from expenses.models import Expense
     
@@ -1520,10 +1530,11 @@ async def show_edit_menu(message: types.Message, state: FSMContext, expense_id: 
             profile__telegram_id=message.from_user.id
         )
         
+        translated_category = translate_category_name(expense.category.name, lang)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=f"💰 Сумма: {expense.amount:.0f} ₽", callback_data="edit_field_amount")],
             [InlineKeyboardButton(text=f"📝 Описание: {expense.description}", callback_data="edit_field_description")],
-            [InlineKeyboardButton(text=f"📁 Категория: {expense.category.name}", callback_data="edit_field_category")],
+            [InlineKeyboardButton(text=f"📁 Категория: {translated_category}", callback_data="edit_field_category")],
             [InlineKeyboardButton(text="✅ Готово", callback_data="edit_done")]
         ])
         
@@ -1539,7 +1550,7 @@ async def show_edit_menu(message: types.Message, state: FSMContext, expense_id: 
         await message.answer("❌ Трата не найдена")
 
 
-async def show_edit_menu_callback(callback: types.CallbackQuery, state: FSMContext, expense_id: int):
+async def show_edit_menu_callback(callback: types.CallbackQuery, state: FSMContext, expense_id: int, lang: str = 'ru'):
     """Показать меню редактирования для callback"""
     from expenses.models import Expense
     
@@ -1549,10 +1560,11 @@ async def show_edit_menu_callback(callback: types.CallbackQuery, state: FSMConte
             profile__telegram_id=callback.from_user.id
         )
         
+        translated_category = translate_category_name(expense.category.name, lang)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=f"💰 Сумма: {expense.amount:.0f} ₽", callback_data="edit_field_amount")],
             [InlineKeyboardButton(text=f"📝 Описание: {expense.description}", callback_data="edit_field_description")],
-            [InlineKeyboardButton(text=f"📁 Категория: {expense.category.name}", callback_data="edit_field_category")],
+            [InlineKeyboardButton(text=f"📁 Категория: {translated_category}", callback_data="edit_field_category")],
             [InlineKeyboardButton(text="✅ Готово", callback_data="edit_done")]
         ])
         
