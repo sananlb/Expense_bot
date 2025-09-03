@@ -927,6 +927,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 from ..utils.message_utils import send_message_with_cleanup
                 await send_message_with_cleanup(
                     message=message,
+                    state=state,
                     text=text_msg,
                     reply_markup=keyboard,
                     parse_mode="HTML"
