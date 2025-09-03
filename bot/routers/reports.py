@@ -125,22 +125,29 @@ async def show_expenses_summary(
         if not has_expenses and not has_incomes:
             text += get_text('no_expenses_period', lang)
         else:
-            # НОВОЕ: Показываем строку баланса вместо "Всего"
-            # Расходы / Доходы / Баланс
+            # Показываем только те строки, где есть данные
             expense_amount = format_amount(summary['total'], summary['currency'], lang)
             income_amount = format_amount(summary.get('income_total', 0), summary['currency'], lang)
             balance = summary.get('balance', -summary['total'])  # Если нет доходов, баланс = -расходы
             
-            # Форматируем баланс с + или - в зависимости от знака
-            if balance >= 0:
-                balance_text = f"+{format_amount(balance, summary['currency'], lang)}"
-            else:
-                balance_text = format_amount(balance, summary['currency'], lang)
+            # Показываем расходы если они есть
+            if has_expenses:
+                text += f"💸 Расходы: {expense_amount}\n"
             
-            # Выводим в одну строку: Расходы / Доходы / Баланс
-            text += f"💸 Расходы: {expense_amount}\n"
-            text += f"💰 Доходы: {income_amount}\n"
-            text += f"⚖️ Баланс: {balance_text}\n\n"
+            # Показываем доходы если они есть  
+            if has_incomes:
+                text += f"💰 Доходы: {income_amount}\n"
+            
+            # Показываем баланс только если есть и доходы и расходы
+            if has_expenses and has_incomes:
+                # Форматируем баланс с + или - в зависимости от знака
+                if balance >= 0:
+                    balance_text = f"+{format_amount(balance, summary['currency'], lang)}"
+                else:
+                    balance_text = format_amount(balance, summary['currency'], lang)
+                text += f"⚖️ Баланс: {balance_text}\n"
+            
+            text += "\n"
             
             # По категориям расходов (если есть)
             if summary['by_category'] and has_expenses:

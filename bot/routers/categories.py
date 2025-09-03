@@ -51,11 +51,12 @@ async def cmd_categories(message: types.Message, state: FSMContext):
         except:
             pass
     
-    await show_categories_menu(message, state)
+    # По умолчанию показываем категории трат  
+    await show_expense_categories_menu(message, state)
 
 
 async def show_categories_menu(message: types.Message | types.CallbackQuery, state: FSMContext = None):
-    """Показать меню категорий"""
+    """Показать главное меню категорий с выбором типа"""
     import logging
     logger = logging.getLogger(__name__)
     
@@ -70,41 +71,17 @@ async def show_categories_menu(message: types.Message | types.CallbackQuery, sta
     # Получаем язык пользователя
     lang = await get_user_language(user_id)
     
-    # Проверяем подписку
-    from bot.services.subscription import check_subscription
-    has_subscription = await check_subscription(user_id)
-        
-    categories = await get_user_categories(user_id)
-    logger.info(f"Found {len(categories)} categories for user {user_id}")
+    # Новое меню выбора типа категорий
+    text = "📁 <b>Категории</b>\n\nВыберите тип категорий:"
     
-    text = get_text('manage_categories', lang)
+    # Кнопки выбора типа
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💸 Категории трат", callback_data="expense_categories_menu")],
+        [InlineKeyboardButton(text="💰 Категории доходов", callback_data="income_categories_menu")],
+        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
+    ])
     
-    # Показываем все категории пользователя
-    if categories:
-        text += "\n"
-        # Категории уже отсортированы в get_user_categories
-        for cat in categories:
-            # Переводим название категории если нужно
-            translated_name = translate_category_name(cat.name, lang)
-            text += f"\n\n• {translated_name}"
-    else:
-        text += "\n\n" + get_text('no_categories_yet', lang)
-    
-    # Формируем клавиатуру в зависимости от подписки
-    if has_subscription:
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=get_text('add_button', lang), callback_data="add_category")],
-            [InlineKeyboardButton(text=get_text('edit_button', lang), callback_data="edit_categories")],
-            [InlineKeyboardButton(text=get_text('delete_button', lang), callback_data="delete_categories")],
-            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
-        ])
-    else:
-        # Без подписки можно только просматривать
-        text += "\n\n" + get_text('categories_subscription_note', lang)
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=get_text('get_subscription', lang), callback_data="menu_subscription")],
-            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
-        ])
+    # Отправляем сообщение
     
     # Используем send_message_with_cleanup для правильной работы с меню
     if state:
@@ -126,9 +103,141 @@ async def show_categories_menu(message: types.Message | types.CallbackQuery, sta
         await state.update_data(last_menu_message_id=sent_msg.message_id)
 
 
+async def show_expense_categories_menu(message: types.Message | types.CallbackQuery, state: FSMContext = None):
+    """Показать меню категорий трат"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Определяем user_id в зависимости от типа сообщения
+    if isinstance(message, types.CallbackQuery):
+        user_id = message.from_user.id
+    else:
+        user_id = message.from_user.id
+    
+    logger.info(f"show_expense_categories_menu called for user_id: {user_id}")
+    
+    # Получаем язык пользователя
+    lang = await get_user_language(user_id)
+    
+    # Проверяем подписку
+    from bot.services.subscription import check_subscription
+    has_subscription = await check_subscription(user_id)
+        
+    categories = await get_user_categories(user_id)
+    logger.info(f"Found {len(categories)} expense categories for user {user_id}")
+    
+    text = "📁 <b>Категории трат</b>\n\n"
+    
+    # Показываем все категории пользователя
+    if categories:
+        text += "Ваши категории трат:\n"
+        # Категории уже отсортированы в get_user_categories
+        for cat in categories:
+            # Переводим название категории если нужно
+            translated_name = translate_category_name(cat.name, lang)
+            text += f"\n• {translated_name}"
+    else:
+        text += get_text('no_categories_yet', lang)
+    
+    # Формируем клавиатуру в зависимости от подписки
+    if has_subscription:
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=get_text('add_button', lang), callback_data="add_category")],
+            [InlineKeyboardButton(text=get_text('edit_button', lang), callback_data="edit_categories")],
+            [InlineKeyboardButton(text=get_text('delete_button', lang), callback_data="delete_categories")],
+            [InlineKeyboardButton(text="💰 Категории доходов", callback_data="income_categories_menu")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
+        ])
+    else:
+        # Без подписки можно только просматривать
+        text += "\n\n" + get_text('categories_subscription_note', lang)
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=get_text('get_subscription', lang), callback_data="menu_subscription")],
+            [InlineKeyboardButton(text="💰 Категории доходов", callback_data="income_categories_menu")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
+        ])
+    
+    # Отправляем сообщение
+    if state:
+        sent_msg = await send_message_with_cleanup(message, state, text, reply_markup=keyboard, parse_mode="HTML")
+    else:
+        # Если state не передан, отправляем обычным способом
+        if isinstance(message, types.CallbackQuery):
+            sent_msg = await message.bot.send_message(
+                chat_id=message.from_user.id,
+                text=text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+        else:
+            sent_msg = await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+    
+    # Сохраняем ID меню если передан state
+    if state:
+        await state.update_data(last_menu_message_id=sent_msg.message_id)
+
+
+async def show_income_categories_menu(message: types.Message | types.CallbackQuery, state: FSMContext = None):
+    """Показать меню категорий доходов"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Определяем user_id в зависимости от типа сообщения
+    if isinstance(message, types.CallbackQuery):
+        user_id = message.from_user.id
+    else:
+        user_id = message.from_user.id
+    
+    logger.info(f"show_income_categories_menu called for user_id: {user_id}")
+    
+    # Получаем язык пользователя
+    lang = await get_user_language(user_id)
+    
+    # Получаем категории доходов
+    from bot.services.income import get_user_income_categories
+    income_categories = await get_user_income_categories(user_id)
+    logger.info(f"Found {len(income_categories)} income categories for user {user_id}")
+    
+    text = "📁 <b>Категории доходов</b>\n\n"
+    
+    # Показываем все категории доходов
+    if income_categories:
+        text += "Ваши категории доходов:\n"
+        for cat in income_categories:
+            translated_name = translate_category_name(cat.name, lang)
+            text += f"\n• {translated_name}"
+    else:
+        text += "У вас пока нет категорий доходов."
+    
+    # Кнопки - пока только просмотр
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💸 Категории трат", callback_data="expense_categories_menu")],
+        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
+    ])
+    
+    # Отправляем сообщение
+    if state:
+        sent_msg = await send_message_with_cleanup(message, state, text, reply_markup=keyboard, parse_mode="HTML")
+    else:
+        # Если state не передан, отправляем обычным способом
+        if isinstance(message, types.CallbackQuery):
+            sent_msg = await message.bot.send_message(
+                chat_id=message.from_user.id,
+                text=text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+        else:
+            sent_msg = await message.answer(text, reply_markup=keyboard, parse_mode="HTML")
+    
+    # Сохраняем ID меню если передан state
+    if state:
+        await state.update_data(last_menu_message_id=sent_msg.message_id)
+
+
 @router.callback_query(lambda c: c.data == "categories_menu")
 async def callback_categories_menu(callback: types.CallbackQuery, state: FSMContext):
-    """Показать меню категорий через callback"""
+    """Показать главное меню категорий через callback"""
     # Проверяем, находимся ли мы в состоянии редактирования траты
     current_state = await state.get_state()
     
@@ -138,6 +247,22 @@ async def callback_categories_menu(callback: types.CallbackQuery, state: FSMCont
     
     await callback.message.delete()
     await show_categories_menu(callback, state)
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "expense_categories_menu")
+async def callback_expense_categories_menu(callback: types.CallbackQuery, state: FSMContext):
+    """Показать меню категорий трат"""
+    await callback.message.delete()
+    await show_expense_categories_menu(callback, state)
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "income_categories_menu")
+async def callback_income_categories_menu(callback: types.CallbackQuery, state: FSMContext):
+    """Показать меню категорий доходов"""
+    await callback.message.delete()
+    await show_income_categories_menu(callback, state)
     await callback.answer()
 
 
