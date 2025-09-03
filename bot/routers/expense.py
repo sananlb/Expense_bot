@@ -567,17 +567,23 @@ async def process_edit_amount(message: types.Message, state: FSMContext, lang: s
         return
     
     data = await state.get_data()
-    expense_id = data.get('editing_expense_id')
+    item_id = data.get('editing_expense_id')
+    is_income = data.get('editing_type') == 'income'
     
-    # Обновляем трату
-    from ..services.expense import update_expense
-    success = await update_expense(message.from_user.id, expense_id, amount=amount)
+    # Обновляем операцию
+    if is_income:
+        from ..services.income import update_income
+        success = await update_income(message.from_user.id, item_id, amount=amount)
+    else:
+        from ..services.expense import update_expense
+        success = await update_expense(message.from_user.id, item_id, amount=amount)
     
     if success:
-        # Показываем обновленную трату
-        await show_updated_expense(message, state, expense_id, lang)
+        # Показываем обновленную операцию
+        await show_updated_expense(message, state, item_id, lang)
     else:
-        await message.answer("❌ Не удалось обновить сумму")
+        error_msg = "❌ Не удалось обновить сумму дохода" if is_income else "❌ Не удалось обновить сумму"
+        await message.answer(error_msg)
 
 
 @router.message(EditExpenseForm.editing_description)
@@ -593,17 +599,23 @@ async def process_edit_description(message: types.Message, state: FSMContext, la
         description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
     
     data = await state.get_data()
-    expense_id = data.get('editing_expense_id')
+    item_id = data.get('editing_expense_id')
+    is_income = data.get('editing_type') == 'income'
     
-    # Обновляем трату
-    from ..services.expense import update_expense
-    success = await update_expense(message.from_user.id, expense_id, description=description)
+    # Обновляем операцию
+    if is_income:
+        from ..services.income import update_income
+        success = await update_income(message.from_user.id, item_id, description=description)
+    else:
+        from ..services.expense import update_expense
+        success = await update_expense(message.from_user.id, item_id, description=description)
     
     if success:
-        # Показываем обновленную трату
-        await show_updated_expense(message, state, expense_id, lang)
+        # Показываем обновленную операцию
+        await show_updated_expense(message, state, item_id, lang)
     else:
-        await message.answer("❌ Не удалось обновить описание")
+        error_msg = "❌ Не удалось обновить описание дохода" if is_income else "❌ Не удалось обновить описание"
+        await message.answer(error_msg)
 
 
 
@@ -1203,35 +1215,49 @@ async def handle_photo_expense(message: types.Message, state: FSMContext):
     await send_message_with_cleanup(message, state, "📸 Обработка чеков будет добавлена в следующей версии.")
 
 
-# Обработчик редактирования траты
-@router.callback_query(lambda c: c.data.startswith("edit_expense_"))
+# Обработчик редактирования траты или дохода
+@router.callback_query(lambda c: c.data.startswith(("edit_expense_", "edit_income_")))
 async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Редактирование траты"""
-    expense_id = int(callback.data.split("_")[-1])
+    """Редактирование траты или дохода"""
+    # Определяем тип операции
+    is_income = callback.data.startswith("edit_income_")
+    item_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
     
-    # Получаем информацию о трате
-    from ..services.expense import get_last_expense
-    from expenses.models import Expense
+    # Получаем информацию о трате или доходе
+    if is_income:
+        from expenses.models import Income
+        try:
+            expense = await Income.objects.select_related('category').aget(
+                id=item_id,
+                profile__telegram_id=user_id
+            )
+        except Income.DoesNotExist:
+            await callback.answer("Доход не найден", show_alert=True)
+            return
+    else:
+        from expenses.models import Expense
+        try:
+            expense = await Expense.objects.select_related('category').aget(
+                id=item_id,
+                profile__telegram_id=user_id
+            )
+        except Expense.DoesNotExist:
+            await callback.answer(get_text('expense_not_found', lang), show_alert=True)
+            return
     
-    try:
-        expense = await Expense.objects.select_related('category').aget(
-            id=expense_id,
-            profile__telegram_id=user_id
-        )
-    except Expense.DoesNotExist:
-        await callback.answer(get_text('expense_not_found', lang), show_alert=True)
-        return
+    # Сохраняем ID и тип в состоянии
+    await state.update_data(
+        editing_expense_id=item_id,
+        editing_type='income' if is_income else 'expense'
+    )
     
-    # Сохраняем ID траты в состоянии
-    await state.update_data(editing_expense_id=expense_id)
-    
-    # Проверяем, есть ли кешбек для этой траты
+    # Проверяем, есть ли кешбек (только для расходов)
     from bot.services.cashback import calculate_expense_cashback
     from datetime import datetime
     
     has_cashback = False
-    if not expense.cashback_excluded:  # Если кешбек не исключен
+    if not is_income and not expense.cashback_excluded:  # Только для расходов
         current_month = datetime.now().month
         cashback = await calculate_expense_cashback(
             user_id=user_id,
@@ -1242,26 +1268,36 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: s
         has_cashback = cashback > 0
     
     # Показываем меню выбора поля для редактирования
-    translated_category = translate_category_name(expense.category.name, lang)
+    translated_category = translate_category_name(expense.category.name, lang) if expense.category else ('Прочие доходы' if is_income else 'Без категории')
+    
+    # Получаем правильное поле для суммы и описания
+    amount = expense.amount
+    description = expense.description
+    currency = expense.currency if hasattr(expense, 'currency') else '₽'
+    
     buttons = [
-        [InlineKeyboardButton(text=f"💰 {get_text('sum', lang)}: {expense.amount:.0f} ₽", callback_data="edit_field_amount")],
-        [InlineKeyboardButton(text=f"📝 {get_text('description', lang)}: {expense.description}", callback_data="edit_field_description")],
+        [InlineKeyboardButton(text=f"💰 {get_text('sum', lang)}: {amount:.0f} {currency}", callback_data="edit_field_amount")],
+        [InlineKeyboardButton(text=f"📝 {get_text('description', lang)}: {description}", callback_data="edit_field_description")],
         [InlineKeyboardButton(text=f"📁 {get_text('category', lang)}: {translated_category}", callback_data="edit_field_category")],
     ]
     
-    # Добавляем кнопку удаления кешбека только если он есть и не исключен
-    if has_cashback and not expense.cashback_excluded:
-        buttons.append([InlineKeyboardButton(text="💸 Убрать кешбек", callback_data=f"remove_cashback_{expense_id}")])
+    # Добавляем кнопку удаления кешбека только для расходов
+    if not is_income and has_cashback and not expense.cashback_excluded:
+        buttons.append([InlineKeyboardButton(text="💸 Убрать кешбек", callback_data=f"remove_cashback_{item_id}")])
     
+    # Для удаления используем правильный префикс
+    delete_callback = f"delete_income_{item_id}" if is_income else f"delete_expense_{item_id}"
     buttons.extend([
-        [InlineKeyboardButton(text=f"🗑 Удалить", callback_data=f"delete_expense_{expense_id}")],
+        [InlineKeyboardButton(text=f"🗑 Удалить", callback_data=delete_callback)],
         [InlineKeyboardButton(text=f"✅ {get_text('edit_done', lang)}", callback_data="edit_done")]
     ])
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     
+    # Меняем заголовок в зависимости от типа
+    title = "Редактирование дохода" if is_income else get_text('editing_expense', lang)
     await callback.message.edit_text(
-        f"✏️ <b>{get_text('editing_expense', lang)}</b>\n\n"
+        f"✏️ <b>{title}</b>\n\n"
         f"{get_text('choose_field_to_edit', lang)}",
         reply_markup=keyboard,
         parse_mode="HTML"
@@ -1331,16 +1367,21 @@ async def remove_cashback(callback: types.CallbackQuery, state: FSMContext, lang
         await callback.answer("❌ Ошибка при удалении кешбека", show_alert=True)
 
 
-@router.callback_query(lambda c: c.data.startswith("delete_expense_"))
+@router.callback_query(lambda c: c.data.startswith(("delete_expense_", "delete_income_")))
 async def delete_expense(callback: types.CallbackQuery, state: FSMContext):
-    """Удаление траты"""
-    expense_id = int(callback.data.split("_")[-1])
-    from ..services.expense import delete_expense as delete_expense_service
-    
+    """Удаление траты или дохода"""
+    # Определяем тип операции
+    is_income = callback.data.startswith("delete_income_")
+    item_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
     
-    # Удаляем трату
-    success = await delete_expense_service(user_id, expense_id)
+    # Удаляем трату или доход
+    if is_income:
+        from ..services.income import delete_income
+        success = await delete_income(user_id, item_id)
+    else:
+        from ..services.expense import delete_expense as delete_expense_service
+        success = await delete_expense_service(user_id, item_id)
     
     if success:
         await callback.message.delete()
@@ -1348,7 +1389,8 @@ async def delete_expense(callback: types.CallbackQuery, state: FSMContext):
         # from ..routers.cashback import restore_cashback_menu_if_needed
         # await restore_cashback_menu_if_needed(state, callback.bot, callback.message.chat.id)
     else:
-        await callback.answer("❌ Не удалось удалить трату", show_alert=True)
+        error_msg = "❌ Не удалось удалить доход" if is_income else "❌ Не удалось удалить трату"
+        await callback.answer(error_msg, show_alert=True)
 
 
 # Обработчики выбора поля для редактирования
@@ -1392,12 +1434,21 @@ async def edit_field_description(callback: types.CallbackQuery, state: FSMContex
 async def edit_field_category(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Редактирование категории"""
     user_id = callback.from_user.id
-    from ..services.category import get_user_categories
+    data = await state.get_data()
+    is_income = data.get('editing_type') == 'income'
     
-    categories = await get_user_categories(user_id)
+    # Получаем соответствующие категории
+    if is_income:
+        from ..services.income import get_user_income_categories
+        categories = await get_user_income_categories(user_id)
+        no_categories_msg = "У вас нет категорий доходов."
+    else:
+        from ..services.category import get_user_categories
+        categories = await get_user_categories(user_id)
+        no_categories_msg = "У вас нет категорий. Создайте их через /categories"
     
     if not categories:
-        await callback.answer("У вас нет категорий. Создайте их через /categories", show_alert=True)
+        await callback.answer(no_categories_msg, show_alert=True)
         return
     
     keyboard_buttons = []
@@ -1461,51 +1512,77 @@ async def edit_back_to_menu(callback: types.CallbackQuery, state: FSMContext):
 async def edit_done(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Завершение редактирования"""
     data = await state.get_data()
-    expense_id = data.get('editing_expense_id')
+    item_id = data.get('editing_expense_id')
+    is_income = data.get('editing_type') == 'income'
     
-    # Получаем обновленную трату
-    from expenses.models import Expense
+    # Получаем обновленный объект
     try:
-        expense = await Expense.objects.select_related('category', 'profile').aget(
-            id=expense_id,
-            profile__telegram_id=callback.from_user.id
-        )
-        
-        # Рассчитываем кешбек если есть подписка и кешбек не исключен
-        cashback_text = ""
-        has_subscription = await check_subscription(callback.from_user.id)
-        if has_subscription and expense.category and not expense.cashback_excluded:
-            current_month = datetime.now().month
-            cashback = await calculate_expense_cashback(
-                user_id=callback.from_user.id,
-                category_id=expense.category.id,
-                amount=expense.amount,
-                month=current_month
+        if is_income:
+            from expenses.models import Income
+            expense = await Income.objects.select_related('category', 'profile').aget(
+                id=item_id,
+                profile__telegram_id=callback.from_user.id
             )
-            if cashback > 0:
-                cashback_text = f" (+{cashback:.0f} ₽)"
+        else:
+            from expenses.models import Expense
+            expense = await Expense.objects.select_related('category', 'profile').aget(
+                id=item_id,
+                profile__telegram_id=callback.from_user.id
+            )
         
-        # Используем единый формат сообщения
-        from ..utils.expense_messages import format_expense_added_message
-        message_text = await format_expense_added_message(
-            expense=expense,
-            category=expense.category,
-            cashback_text=cashback_text,
-            lang=lang
-        )
+        # Рассчитываем кешбек только для расходов
+        cashback_text = ""
+        if not is_income:
+            has_subscription = await check_subscription(callback.from_user.id)
+            if has_subscription and expense.category and not expense.cashback_excluded:
+                current_month = datetime.now().month
+                cashback = await calculate_expense_cashback(
+                    user_id=callback.from_user.id,
+                    category_id=expense.category.id,
+                    amount=expense.amount,
+                    month=current_month
+                )
+                if cashback > 0:
+                    cashback_text = f" (+{cashback:.0f} ₽)"
+        
+        # Формируем сообщение
+        if is_income:
+            # Для доходов используем упрощенный формат
+            from ..utils.expense_messages import format_amount
+            amount_text = await format_amount(expense.amount, expense.currency)
+            category_name = expense.category.name if expense.category else 'Прочие доходы'
+            translated_category = translate_category_name(category_name, lang)
+            
+            message_text = (
+                f"✅ <b>+{amount_text}</b> — {expense.description}\n"
+                f"📁 {translated_category}\n"
+                f"📅 {expense.income_date.strftime('%d.%m.%Y')}"
+            )
+            edit_callback = f"edit_income_{expense.id}"
+        else:
+            # Для расходов используем существующий формат
+            from ..utils.expense_messages import format_expense_added_message
+            message_text = await format_expense_added_message(
+                expense=expense,
+                category=expense.category,
+                cashback_text=cashback_text,
+                lang=lang
+            )
+            edit_callback = f"edit_expense_{expense.id}"
         
         # Редактируем сообщение с кнопками редактирования
         await callback.message.edit_text(
             message_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
+                    InlineKeyboardButton(text="✏️  Редактировать", callback_data=edit_callback)
                 ]
             ]),
             parse_mode="HTML"
         )
-    except Expense.DoesNotExist:
-        await callback.message.edit_text("❌ Ошибка при получении данных траты")
+    except (Expense.DoesNotExist, Income.DoesNotExist):
+        error_msg = "❌ Ошибка при получении данных дохода" if is_income else "❌ Ошибка при получении данных траты"
+        await callback.message.edit_text(error_msg)
     
     from bot.utils.state_utils import clear_state_keep_cashback
     await clear_state_keep_cashback(state)
@@ -1522,41 +1599,57 @@ async def process_edit_category(callback: types.CallbackQuery, state: FSMContext
     category_id = int(callback.data.split("_")[-1])
     
     data = await state.get_data()
-    expense_id = data.get('editing_expense_id')
+    item_id = data.get('editing_expense_id')
+    is_income = data.get('editing_type') == 'income'
     
-    # Получаем информацию о трате для обучения
-    from expenses.models import Expense
-    try:
-        expense = await Expense.objects.aget(id=expense_id)
-        old_category_id = expense.category_id
-        description = expense.description
-    except Expense.DoesNotExist:
-        await callback.answer("❌ Трата не найдена", show_alert=True)
-        return
+    # Получаем информацию об операции для обучения (только для расходов)
+    if is_income:
+        from expenses.models import Income
+        try:
+            expense = await Income.objects.aget(id=item_id)
+            old_category_id = expense.category_id
+            description = expense.description
+        except Income.DoesNotExist:
+            await callback.answer("❌ Доход не найден", show_alert=True)
+            return
+    else:
+        from expenses.models import Expense
+        try:
+            expense = await Expense.objects.aget(id=item_id)
+            old_category_id = expense.category_id
+            description = expense.description
+        except Expense.DoesNotExist:
+            await callback.answer("❌ Трата не найдена", show_alert=True)
+            return
     
-    # Обновляем трату
-    from ..services.expense import update_expense
-    success = await update_expense(callback.from_user.id, expense_id, category_id=category_id)
+    # Обновляем операцию
+    if is_income:
+        from ..services.income import update_income
+        success = await update_income(callback.from_user.id, item_id, category_id=category_id)
+    else:
+        from ..services.expense import update_expense
+        success = await update_expense(callback.from_user.id, item_id, category_id=category_id)
     
     if success:
-        # Если категория изменилась, запускаем обучение
-        if old_category_id != category_id:
+        # Если категория изменилась и это расход, запускаем обучение
+        if not is_income and old_category_id != category_id:
             from ..services.category import learn_from_category_change
             import asyncio
             # Запускаем в фоне, не ждём завершения
             asyncio.create_task(
                 learn_from_category_change(
                     callback.from_user.id, 
-                    expense_id, 
+                    item_id, 
                     category_id, 
                     description
                 )
             )
         
-        # Показываем обновленную трату
-        await show_updated_expense_callback(callback, state, expense_id, lang)
+        # Показываем обновленную операцию
+        await show_updated_expense_callback(callback, state, item_id, lang)
     else:
-        await callback.answer("❌ Не удалось обновить категорию", show_alert=True)
+        error_msg = "❌ Не удалось обновить категорию дохода" if is_income else "❌ Не удалось обновить категорию"
+        await callback.answer(error_msg, show_alert=True)
 
 
 # Альтернативные обработчики БЕЗ привязки к состоянию
@@ -1683,43 +1776,67 @@ async def show_edit_menu_callback(callback: types.CallbackQuery, state: FSMConte
         await callback.answer("❌ Трата не найдена", show_alert=True)
 
 
-async def show_updated_expense(message: types.Message, state: FSMContext, expense_id: int, lang: str = 'ru'):
-    """Показать обновленную трату"""
-    from expenses.models import Expense
+async def show_updated_expense(message: types.Message, state: FSMContext, item_id: int, lang: str = 'ru'):
+    """Показать обновленную операцию (доход или расход)"""
+    data = await state.get_data()
+    is_income = data.get('editing_type') == 'income'
     
     try:
-        expense = await Expense.objects.select_related('category', 'profile').aget(
-            id=expense_id,
-            profile__telegram_id=message.from_user.id
-        )
-        
-        # Рассчитываем кешбек если есть подписка
-        cashback_text = ""
-        has_subscription = await check_subscription(message.from_user.id)
-        if has_subscription and expense.category:
-            current_month = datetime.now().month
-            cashback = await calculate_expense_cashback(
-                user_id=message.from_user.id,
-                category_id=expense.category.id,
-                amount=expense.amount,
-                month=current_month
+        if is_income:
+            from expenses.models import Income
+            expense = await Income.objects.select_related('category', 'profile').aget(
+                id=item_id,
+                profile__telegram_id=message.from_user.id
             )
-            if cashback > 0:
-                cashback_text = f" (+{cashback:.0f} ₽)"
+        else:
+            from expenses.models import Expense
+            expense = await Expense.objects.select_related('category', 'profile').aget(
+                id=item_id,
+                profile__telegram_id=message.from_user.id
+            )
         
-        # Формируем сообщение с информацией о потраченном за день
-        message_text = await format_expense_added_message(
-            expense=expense,
-            category=expense.category,
-            cashback_text=cashback_text,
-            lang=lang
-        )
+        # Формируем сообщение
+        if is_income:
+            # Для доходов
+            from ..utils.expense_messages import format_amount
+            amount_text = await format_amount(expense.amount, expense.currency)
+            category_name = expense.category.name if expense.category else 'Прочие доходы'
+            translated_category = translate_category_name(category_name, lang)
+            
+            message_text = (
+                f"✅ <b>+{amount_text}</b> — {expense.description}\n"
+                f"📁 {translated_category}\n"
+                f"📅 {expense.income_date.strftime('%d.%m.%Y')}"
+            )
+            edit_callback = f"edit_income_{expense.id}"
+        else:
+            # Для расходов
+            cashback_text = ""
+            has_subscription = await check_subscription(message.from_user.id)
+            if has_subscription and expense.category:
+                current_month = datetime.now().month
+                cashback = await calculate_expense_cashback(
+                    user_id=message.from_user.id,
+                    category_id=expense.category.id,
+                    amount=expense.amount,
+                    month=current_month
+                )
+                if cashback > 0:
+                    cashback_text = f" (+{cashback:.0f} ₽)"
+            
+            message_text = await format_expense_added_message(
+                expense=expense,
+                category=expense.category,
+                cashback_text=cashback_text,
+                lang=lang
+            )
+            edit_callback = f"edit_expense_{expense.id}"
         
         await send_message_with_cleanup(message, state,
             message_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
+                    InlineKeyboardButton(text="✏️  Редактировать", callback_data=edit_callback)
                 ]
             ]),
             parse_mode="HTML"
@@ -1728,49 +1845,74 @@ async def show_updated_expense(message: types.Message, state: FSMContext, expens
         # Очищаем состояние
         from bot.utils.state_utils import clear_state_keep_cashback
         await clear_state_keep_cashback(state)
-    except Expense.DoesNotExist:
-        await message.answer("❌ Трата не найдена")
+    except (Expense.DoesNotExist, Income.DoesNotExist):
+        error_msg = "❌ Доход не найден" if is_income else "❌ Трата не найдена"
+        await message.answer(error_msg)
         from bot.utils.state_utils import clear_state_keep_cashback
         await clear_state_keep_cashback(state)
 
 
-async def show_updated_expense_callback(callback: types.CallbackQuery, state: FSMContext, expense_id: int, lang: str = 'ru'):
-    """Показать обновленную трату для callback"""
-    from expenses.models import Expense
+async def show_updated_expense_callback(callback: types.CallbackQuery, state: FSMContext, item_id: int, lang: str = 'ru'):
+    """Показать обновленную операцию для callback"""
+    data = await state.get_data()
+    is_income = data.get('editing_type') == 'income'
     
     try:
-        expense = await Expense.objects.select_related('category', 'profile').aget(
-            id=expense_id,
-            profile__telegram_id=callback.from_user.id
-        )
-        
-        # Рассчитываем кешбек если есть подписка и кешбек не исключен
-        cashback_text = ""
-        has_subscription = await check_subscription(callback.from_user.id)
-        if has_subscription and expense.category and not expense.cashback_excluded:
-            current_month = datetime.now().month
-            cashback = await calculate_expense_cashback(
-                user_id=callback.from_user.id,
-                category_id=expense.category.id,
-                amount=expense.amount,
-                month=current_month
+        if is_income:
+            from expenses.models import Income
+            expense = await Income.objects.select_related('category', 'profile').aget(
+                id=item_id,
+                profile__telegram_id=callback.from_user.id
             )
-            if cashback > 0:
-                cashback_text = f" (+{cashback:.0f} ₽)"
+        else:
+            from expenses.models import Expense
+            expense = await Expense.objects.select_related('category', 'profile').aget(
+                id=item_id,
+                profile__telegram_id=callback.from_user.id
+            )
         
-        # Формируем сообщение с информацией о потраченном за день
-        message_text = await format_expense_added_message(
-            expense=expense,
-            category=expense.category,
-            cashback_text=cashback_text,
-            lang=lang
-        )
+        # Формируем сообщение
+        if is_income:
+            # Для доходов
+            from ..utils.expense_messages import format_amount
+            amount_text = await format_amount(expense.amount, expense.currency)
+            category_name = expense.category.name if expense.category else 'Прочие доходы'
+            translated_category = translate_category_name(category_name, lang)
+            
+            message_text = (
+                f"✅ <b>+{amount_text}</b> — {expense.description}\n"
+                f"📁 {translated_category}\n"
+                f"📅 {expense.income_date.strftime('%d.%m.%Y')}"
+            )
+            edit_callback = f"edit_income_{expense.id}"
+        else:
+            # Для расходов
+            cashback_text = ""
+            has_subscription = await check_subscription(callback.from_user.id)
+            if has_subscription and expense.category and not expense.cashback_excluded:
+                current_month = datetime.now().month
+                cashback = await calculate_expense_cashback(
+                    user_id=callback.from_user.id,
+                    category_id=expense.category.id,
+                    amount=expense.amount,
+                    month=current_month
+                )
+                if cashback > 0:
+                    cashback_text = f" (+{cashback:.0f} ₽)"
+            
+            message_text = await format_expense_added_message(
+                expense=expense,
+                category=expense.category,
+                cashback_text=cashback_text,
+                lang=lang
+            )
+            edit_callback = f"edit_expense_{expense.id}"
         
         await callback.message.edit_text(
             message_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
+                    InlineKeyboardButton(text="✏️  Редактировать", callback_data=edit_callback)
                 ]
             ]),
             parse_mode="HTML"
@@ -1780,7 +1922,8 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
         from bot.utils.state_utils import clear_state_keep_cashback
         await clear_state_keep_cashback(state)
         await callback.answer()
-    except Expense.DoesNotExist:
-        await callback.answer("❌ Трата не найдена", show_alert=True)
+    except (Expense.DoesNotExist, Income.DoesNotExist):
+        error_msg = "❌ Доход не найден" if is_income else "❌ Трата не найдена"
+        await callback.answer(error_msg, show_alert=True)
         from bot.utils.state_utils import clear_state_keep_cashback
         await clear_state_keep_cashback(state)
