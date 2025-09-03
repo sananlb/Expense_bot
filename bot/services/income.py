@@ -825,3 +825,30 @@ def get_recurring_incomes(telegram_id: int) -> List[Income]:
     except Exception as e:
         logger.error(f"Error getting recurring incomes for user {telegram_id}: {e}")
         return []
+
+
+@sync_to_async
+def get_user_income_categories(telegram_id: int) -> List[IncomeCategory]:
+    """
+    Получить категории доходов пользователя
+    
+    Args:
+        telegram_id: ID пользователя в Telegram
+        
+    Returns:
+        Список категорий доходов
+    """
+    try:
+        profile = get_or_create_user_profile_sync(telegram_id)
+        
+        # Получаем все категории доходов пользователя
+        categories = IncomeCategory.objects.filter(
+            profile=profile,
+            is_active=True
+        ).order_by('name')
+        
+        return list(categories)
+        
+    except Exception as e:
+        logger.error(f"Error getting income categories for user {telegram_id}: {e}")
+        return []
