@@ -196,6 +196,42 @@ def get_expenses_summary(
                 'count': cat['count']
             })
             
+        # НОВОЕ: Получаем данные о доходах
+        from expenses.models import Income
+        incomes = Income.objects.filter(
+            profile=profile,
+            income_date__gte=start_date,
+            income_date__lte=end_date
+        )
+        
+        # Общая сумма и количество доходов
+        income_total = incomes.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+        income_count = incomes.count()
+        
+        # По категориям доходов
+        by_income_category = incomes.values(
+            'category__id',
+            'category__name',
+            'category__icon'
+        ).annotate(
+            total=Sum('amount'),
+            count=Count('id')
+        ).order_by('-total')
+        
+        # Преобразуем в список словарей
+        income_categories_list = []
+        for cat in by_income_category:
+            income_categories_list.append({
+                'id': cat['category__id'],
+                'name': cat['category__name'] or 'Прочие доходы',
+                'icon': cat['category__icon'] or '💰',
+                'total': cat['total'],
+                'count': cat['count']
+            })
+        
+        # Рассчитываем баланс
+        balance = income_total - total
+        
         # Рассчитываем потенциальный кешбэк
         potential_cashback = Decimal('0')
         current_month = start_date.month
@@ -235,7 +271,12 @@ def get_expenses_summary(
             'count': count,
             'by_category': categories_list,
             'currency': profile.currency or 'RUB',
-            'potential_cashback': potential_cashback
+            'potential_cashback': potential_cashback,
+            # НОВЫЕ ПОЛЯ для доходов и баланса
+            'income_total': income_total,
+            'income_count': income_count,
+            'by_income_category': income_categories_list,
+            'balance': balance
         }
         
     except Exception as e:
@@ -245,7 +286,12 @@ def get_expenses_summary(
             'count': 0,
             'by_category': [],
             'currency': 'RUB',
-            'potential_cashback': Decimal('0')
+            'potential_cashback': Decimal('0'),
+            # НОВЫЕ ПОЛЯ для доходов и баланса
+            'income_total': Decimal('0'),
+            'income_count': 0,
+            'by_income_category': [],
+            'balance': Decimal('0')
         }
 
 

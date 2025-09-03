@@ -118,22 +118,51 @@ async def show_expenses_summary(
         
         text = f"📊 {get_text('summary', lang)} {period_text}\n\n"
         
-        if summary['total'] == 0:
+        # Проверяем есть ли операции вообще
+        has_expenses = summary['total'] > 0
+        has_incomes = summary.get('income_total', 0) > 0
+        
+        if not has_expenses and not has_incomes:
             text += get_text('no_expenses_period', lang)
         else:
-            # Общая сумма
-            text += f"💰 {get_text('total', lang)}: {format_amount(summary['total'], summary['currency'], lang)}\n\n"
+            # НОВОЕ: Показываем строку баланса вместо "Всего"
+            # Расходы / Доходы / Баланс
+            expense_amount = format_amount(summary['total'], summary['currency'], lang)
+            income_amount = format_amount(summary.get('income_total', 0), summary['currency'], lang)
+            balance = summary.get('balance', -summary['total'])  # Если нет доходов, баланс = -расходы
             
-            # По категориям
-            if summary['by_category']:
-                text += f"📊 {get_text('by_categories', lang)}:\n"
-                for cat in summary['by_category'][:10]:  # Максимум 10 категорий
+            # Форматируем баланс с + или - в зависимости от знака
+            if balance >= 0:
+                balance_text = f"+{format_amount(balance, summary['currency'], lang)}"
+                balance_emoji = "✅"
+            else:
+                balance_text = format_amount(balance, summary['currency'], lang)
+                balance_emoji = "⚠️"
+            
+            # Выводим в одну строку: Расходы / Доходы / Баланс
+            text += f"💸 Расходы: {expense_amount}\n"
+            text += f"💰 Доходы: {income_amount}\n"
+            text += f"{balance_emoji} Баланс: {balance_text}\n\n"
+            
+            # По категориям расходов (если есть)
+            if summary['by_category'] and has_expenses:
+                text += f"📊 Расходы по категориям:\n"
+                for cat in summary['by_category'][:5]:  # Максимум 5 категорий расходов
                     icon_text = f"{cat['icon']} " if cat.get('icon') else ""
-                    text += f"{icon_text}{cat['name']}: {format_amount(cat['total'], summary['currency'], lang)}\n"
-                
+                    text += f"  {icon_text}{cat['name']}: {format_amount(cat['total'], summary['currency'], lang)}\n"
+                text += "\n"
+            
+            # По категориям доходов (если есть)
+            if summary.get('by_income_category') and has_incomes:
+                text += f"💵 Доходы по категориям:\n"
+                for cat in summary.get('by_income_category', [])[:5]:  # Максимум 5 категорий доходов
+                    icon_text = f"{cat['icon']} " if cat.get('icon') else ""
+                    text += f"  {icon_text}{cat['name']}: {format_amount(cat['total'], summary['currency'], lang)}\n"
+                text += "\n"
+            
             # Потенциальный кешбэк
             if summary['potential_cashback'] > 0:
-                text += f"\n💳 {get_text('potential_cashback', lang)}: {format_amount(summary['potential_cashback'], summary['currency'], lang)}"
+                text += f"💳 {get_text('potential_cashback', lang)}: {format_amount(summary['potential_cashback'], summary['currency'], lang)}\n"
         
         # Добавляем подсказку внизу курсивом
         text += "\n\n<i>Показать отчет за другой период?</i>"
@@ -236,44 +265,74 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
         end_date = now_user_tz.date()
         start_date = end_date - timedelta(days=3)  # Расширяем до 3 дней
         
-        # Получаем траты за последние 3 дня, но не более 30
+        # Получаем траты и доходы за последние 3 дня, но не более 30 операций в сумме
         @sync_to_async
-        def get_recent_expenses():
-            return list(Expense.objects.filter(
+        def get_recent_operations():
+            from expenses.models import Income
+            
+            # Получаем расходы
+            expenses = list(Expense.objects.filter(
                 profile__telegram_id=user_id,
                 expense_date__gte=start_date,
                 expense_date__lte=end_date
             ).select_related('category').order_by('-expense_date', '-expense_time')[:30])
-        
-        # Получаем общее количество трат за период для проверки
-        @sync_to_async
-        def get_total_count_for_period():
-            return Expense.objects.filter(
-                profile__telegram_id=user_id,
-                expense_date__gte=start_date,
-                expense_date__lte=end_date
-            ).count()
-        
-        expenses = await get_recent_expenses()
-        total_count = await get_total_count_for_period()
-        
-        if not expenses:
-            text = "📋 <b>Дневник трат</b>\n\n<i>Трат не найдено</i>"
-        else:
-            text = "📋 <b>Дневник трат</b>\n\n"
             
-            # Сортируем траты по дате (от старых к новым)
-            expenses = sorted(expenses, key=lambda x: (x.expense_date, x.expense_time or x.created_at))
+            # Получаем доходы
+            incomes = list(Income.objects.filter(
+                profile__telegram_id=user_id,
+                income_date__gte=start_date,
+                income_date__lte=end_date
+            ).select_related('category').order_by('-income_date', '-income_time')[:30])
+            
+            # Объединяем и сортируем по дате (от новых к старым)
+            operations = []
+            for exp in expenses:
+                operations.append({
+                    'type': 'expense',
+                    'date': exp.expense_date,
+                    'time': exp.expense_time or exp.created_at.time(),
+                    'amount': exp.amount,
+                    'currency': exp.currency,
+                    'category': exp.category.name if exp.category else 'Без категории',
+                    'description': exp.description,
+                    'object': exp
+                })
+            
+            for inc in incomes:
+                operations.append({
+                    'type': 'income',
+                    'date': inc.income_date,
+                    'time': inc.income_time or inc.created_at.time(),
+                    'amount': inc.amount,
+                    'currency': inc.currency,
+                    'category': inc.category.name if inc.category else 'Прочие доходы',
+                    'description': inc.description,
+                    'object': inc
+                })
+            
+            # Сортируем все операции вместе и берем первые 30
+            operations.sort(key=lambda x: (x['date'], x['time']), reverse=True)
+            return operations[:30]
+        
+        operations = await get_recent_operations()
+        
+        if not operations:
+            text = "📋 <b>Дневник</b>\n\n<i>Операций не найдено</i>"
+        else:
+            text = "📋 <b>Дневник</b>\n\n"
+            
+            # Сортируем операции по дате (от старых к новым) для группировки по дням
+            operations = sorted(operations, key=lambda x: (x['date'], x['time']))
             
             current_date = None
-            day_total = {}  # Для подсчета суммы по валютам за текущий день
-            day_expenses = []  # Список трат текущего дня
+            day_expenses = {}  # Для подсчета расходов по валютам за день
+            day_incomes = {}  # Для подсчета доходов по валютам за день
+            day_operations = []  # Список операций текущего дня
             all_days_data = []  # Список для хранения данных по всем дням
-            first_day_date = None  # Запоминаем дату первого дня
             
-            for expense in expenses:
+            for operation in operations:
                 # Если дата изменилась, сохраняем данные предыдущего дня
-                if expense.expense_date != current_date:
+                if operation['date'] != current_date:
                     if current_date is not None and day_expenses:
                         # Сохраняем данные предыдущего дня
                         all_days_data.append({
