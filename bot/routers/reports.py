@@ -341,32 +341,34 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                         })
                     
                     # Начинаем новый день
-                    current_date = expense.expense_date
+                    current_date = operation['date']
                     if first_day_date is None:
                         first_day_date = current_date
                     day_total = {}
                     day_expenses = []
                 
                 # Форматируем время, описание и сумму
-                if expense.expense_time:
-                    time_str = expense.expense_time.strftime('%H:%M')
-                else:
-                    time_str = expense.created_at.strftime('%H:%M')
+                time_str = operation['time'].strftime('%H:%M') if operation['time'] else '00:00'
                 
-                description = expense.description or "Без описания"
+                description = operation['description'] or "Без описания"
                 if len(description) > 30:
                     description = description[:27] + "..."
                 
-                currency = expense.currency or 'RUB'
-                amount = float(expense.amount)
+                currency = operation['currency'] or 'RUB'
+                amount = float(operation['amount'])
                 
                 # Добавляем к сумме дня
                 if currency not in day_total:
-                    day_total[currency] = 0
-                day_total[currency] += amount
+                    day_total[currency] = {'expenses': 0, 'incomes': 0}
                 
-                # Добавляем трату в список дня
+                if operation['type'] == 'income':
+                    day_total[currency]['incomes'] += amount
+                else:
+                    day_total[currency]['expenses'] += amount
+                
+                # Добавляем операцию в список дня
                 day_expenses.append({
+                    'type': operation['type'],
                     'time': time_str,
                     'description': description,
                     'amount': amount,
@@ -422,7 +424,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                 if not day_data['is_complete'] and i == 0:
                     text += "  ...\n  ...\n"
                 
-                # Выводим траты дня
+                # Выводим операции дня
                 for expense in day_data['expenses']:
                     amount_str = f"{expense['amount']:,.0f}".replace(',', ' ')
                     if expense['currency'] == 'RUB':
@@ -434,22 +436,37 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                     else:
                         amount_str += f" {expense['currency']}"
                     
-                    text += f"  {expense['time']} — {expense['description']} {amount_str}\n"
+                    # Добавляем "+" для доходов
+                    if expense.get('type') == 'income':
+                        text += f"  {expense['time']} — {expense['description']} <b>+{amount_str}</b>\n"
+                    else:
+                        text += f"  {expense['time']} — {expense['description']} {amount_str}\n"
                 
                 # Добавляем итог дня
                 if day_data['totals']:
-                    # Если день неполный, добавляем пометку
-                    if not day_data['is_complete']:
-                        text += "  💰 <b>Итого показано:</b> "
-                    else:
-                        text += "  💰 <b>Итого за день:</b> "
+                    # Подсчитываем итоги
+                    has_expenses = any(total.get('expenses', 0) > 0 for total in day_data['totals'].values())
+                    has_incomes = any(total.get('incomes', 0) > 0 for total in day_data['totals'].values())
                     
-                    totals_list = []
-                    for currency, total in day_data['totals'].items():
-                        total_str = f"{total:,.0f}".replace(',', ' ')
-                        currency_symbol = {'RUB': '₽', 'USD': '$', 'EUR': '€'}.get(currency, currency)
-                        totals_list.append(f"{total_str} {currency_symbol}")
-                    text += ", ".join(totals_list) + "\n"
+                    if has_expenses:
+                        text += "  💸 <b>Расходы:</b> "
+                        expenses_list = []
+                        for currency, total in day_data['totals'].items():
+                            if total.get('expenses', 0) > 0:
+                                exp_str = f"{total['expenses']:,.0f}".replace(',', ' ')
+                                currency_symbol = {'RUB': '₽', 'USD': '$', 'EUR': '€'}.get(currency, currency)
+                                expenses_list.append(f"{exp_str} {currency_symbol}")
+                        text += ", ".join(expenses_list) + "\n"
+                    
+                    if has_incomes:
+                        text += "  💰 <b>Доходы:</b> "
+                        incomes_list = []
+                        for currency, total in day_data['totals'].items():
+                            if total.get('incomes', 0) > 0:
+                                inc_str = f"{total['incomes']:,.0f}".replace(',', ' ')
+                                currency_symbol = {'RUB': '₽', 'USD': '$', 'EUR': '€'}.get(currency, currency)
+                                incomes_list.append(f"+{inc_str} {currency_symbol}")
+                        text += ", ".join(incomes_list) + "\n"
         
         # Добавляем вопрос в конце
         text += "\n<i>💡 Показать траты в другие дни?</i>"
