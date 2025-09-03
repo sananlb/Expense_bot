@@ -134,15 +134,13 @@ async def show_expenses_summary(
             # Форматируем баланс с + или - в зависимости от знака
             if balance >= 0:
                 balance_text = f"+{format_amount(balance, summary['currency'], lang)}"
-                balance_emoji = "✅"
             else:
                 balance_text = format_amount(balance, summary['currency'], lang)
-                balance_emoji = "⚠️"
             
             # Выводим в одну строку: Расходы / Доходы / Баланс
             text += f"💸 Расходы: {expense_amount}\n"
             text += f"💰 Доходы: {income_amount}\n"
-            text += f"{balance_emoji} Баланс: {balance_text}\n\n"
+            text += f"⚖️ Баланс: {balance_text}\n\n"
             
             # По категориям расходов (если есть)
             if summary['by_category'] and has_expenses:
