@@ -11,7 +11,7 @@ from django.db.models import Q, Sum, Count
 from django.utils import timezone
 
 from expenses.models import Income, IncomeCategory, Profile
-from bot.utils.profile import get_or_create_user_profile_sync
+from bot.utils.db_utils import get_or_create_user_profile_sync
 
 logger = logging.getLogger(__name__)
 
