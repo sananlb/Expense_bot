@@ -311,6 +311,63 @@
             </div>
         </div>
         
+        {% if has_incomes %}
+        <!-- Income Section -->
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e0e0e0;">
+            <!-- Income Summary Cards -->
+            <div class="summary-cards">
+                <div class="summary-card">
+                    <p class="summary-label">Всего доходов</p>
+                    <p class="summary-value" style="color: #10b981;">{{ income_total_amount }} ₽</p>
+                </div>
+                <div class="summary-card">
+                    <p class="summary-label">Количество доходов</p>
+                    <p class="summary-value">{{ income_total_count }}</p>
+                </div>
+                <div class="summary-card">
+                    <p class="summary-label">Баланс месяца</p>
+                    <p class="summary-value {% if net_balance|replace(',', '')|float >= 0 %}style="color: #10b981;"{% else %}style="color: #ef4444;"{% endif %}">{{ net_balance }} ₽</p>
+                </div>
+            </div>
+            
+            <!-- Income Charts -->
+            {% if income_categories %}
+            <div class="chart-section" style="display: flex; align-items: stretch; gap: 30px; margin-bottom: 15px; min-height: 200px;">
+                <div style="flex: 0 0 200px; display: flex; flex-direction: column;">
+                    <h2 class="chart-title" style="text-align: left; margin-bottom: 0; font-size: 14px; color: #10b981;">Доходы по категориям</h2>
+                    <div class="chart-container pie-chart" style="display: flex; align-items: center; justify-content: center; margin-top: auto; margin-bottom: auto; height: 180px;">
+                        <canvas id="incomePieChart"></canvas>
+                    </div>
+                </div>
+                
+                <div style="flex: 1; display: flex; align-items: center;">
+                    <div class="categories-list" style="width: 100%;">
+                        {% for cat in income_categories %}
+                        <div class="category-item">
+                            <div class="category-info">
+                                <div class="category-color" style="background: {{ cat.color }}"></div>
+                                <span class="category-name">{{ cat.icon }} {{ cat.name }}</span>
+                            </div>
+                            <div class="category-right">
+                                <div class="category-amount" style="color: #10b981;">{{ cat.amount_formatted }} ₽ ({{ "%.1f"|format(cat.percent) }}%)</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Combined Income/Expense Daily Chart -->
+            <div class="chart-section">
+                <h2 class="chart-title">Баланс по дням (Доходы vs Расходы)</h2>
+                <div class="chart-container" style="height: 250px;">
+                    <canvas id="combinedChart"></canvas>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
         <!-- Footer -->
         <div class="footer">
             <p>Сгенерировано ботом Coins • @showmecoinbot</p>
@@ -429,6 +486,102 @@
                 }
             }
         });
+        
+        // Income Charts (if there are incomes)
+        {% if has_incomes %}
+        const incomeCategories = {{ income_categories_json | safe }};
+        const dailyIncomes = {{ daily_incomes_json | safe }};
+        
+        // Income Pie Chart
+        {% if income_categories %}
+        if (incomeCategories && incomeCategories.length > 0) {
+            const incomePieCtx = document.getElementById('incomePieChart').getContext('2d');
+            new Chart(incomePieCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: incomeCategories.map(c => c.icon + ' ' + c.name),
+                    datasets: [{
+                        data: incomeCategories.map(c => c.amount),
+                        backgroundColor: incomeCategories.map(c => c.color),
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+        {% endif %}
+        
+        // Combined Income vs Expense Chart
+        const combinedCtx = document.getElementById('combinedChart').getContext('2d');
+        new Chart(combinedCtx, {
+            type: 'bar',
+            data: {
+                labels: dailyData.days,
+                datasets: [{
+                    label: 'Доходы',
+                    data: dailyIncomes,
+                    backgroundColor: '#10b981',
+                    borderWidth: 0,
+                    barPercentage: 0.8
+                }, {
+                    label: 'Расходы',
+                    data: dailyData.expenses.map(v => -v), // Negative for display below axis
+                    backgroundColor: '#ef4444',
+                    borderWidth: 0,
+                    barPercentage: 0.8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top',
+                        labels: {
+                            padding: 10,
+                            font: { size: 11 }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = Math.abs(context.parsed.y);
+                                return context.dataset.label + ': ' + value.toLocaleString('ru-RU') + ' ₽';
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: {
+                            maxRotation: 0,
+                            callback: function(value, index) {
+                                return (index + 1) % 5 === 0 ? index + 1 : '';
+                            }
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return Math.abs(value).toLocaleString('ru-RU') + ' ₽';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        {% endif %}
     </script>
 </body>
 </html>

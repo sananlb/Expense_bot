@@ -18,7 +18,7 @@ from django.conf import settings
 from django.db.models import Sum, Count, Q
 from dateutil.relativedelta import relativedelta
 
-from expenses.models import Expense, ExpenseCategory, Profile, Cashback
+from expenses.models import Expense, ExpenseCategory, Profile, Cashback, Income, IncomeCategory
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +229,47 @@ class PDFReportService:
                 change_percent = 0
                 change_direction = ""
             
+            # Получаем доходы за период
+            incomes = Income.objects.filter(
+                profile=profile,
+                income_date__gte=start_date,
+                income_date__lte=end_date
+            ).select_related('category')
+            
+            # Статистика по доходам
+            income_stats = await incomes.aaggregate(
+                total_amount=Sum('amount'),
+                total_count=Count('id')
+            )
+            
+            income_total_amount = float(income_stats['total_amount'] or 0)
+            income_total_count = income_stats['total_count'] or 0
+            
+            # Доходы по категориям
+            income_category_stats = incomes.values('category__id', 'category__name', 'category__icon').annotate(
+                amount=Sum('amount')
+            ).order_by('-amount')
+            
+            income_categories = []
+            async for cat_stat in income_category_stats:
+                income_categories.append({
+                    'name': cat_stat['category__name'] if cat_stat['category__name'] else 'Прочие доходы',
+                    'icon': cat_stat['category__icon'] or '💵',
+                    'amount': float(cat_stat['amount']),
+                    'color': category_colors[len(income_categories) % len(category_colors)]
+                })
+            
+            # Доходы по дням
+            daily_incomes = {}
+            async for income in incomes:
+                day = income.income_date.day
+                if day not in daily_incomes:
+                    daily_incomes[day] = 0
+                daily_incomes[day] += float(income.amount)
+            
+            # Баланс
+            net_balance = income_total_amount - total_amount
+            
             # Форматируем данные для шаблона
             months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
                       'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
@@ -248,7 +289,14 @@ class PDFReportService:
                 'daily_expenses': daily_expenses,
                 'daily_categories': daily_categories,
                 'days_in_month': end_date.day,
-                'logo_base64': await self._get_logo_base64()
+                'logo_base64': await self._get_logo_base64(),
+                # Новые поля для доходов
+                'income_total_amount': f"{income_total_amount:,.0f}",
+                'income_total_count': income_total_count,
+                'income_categories': income_categories,
+                'daily_incomes': daily_incomes,
+                'net_balance': f"{net_balance:,.0f}",
+                'has_incomes': income_total_count > 0
             }
             
             return report_data
@@ -329,6 +377,31 @@ class PDFReportService:
             'cashback': cashback_data
         }, ensure_ascii=False)
         
+        # Подготавливаем данные по доходам
+        income_total_raw = 0
+        for cat in report_data.get('income_categories', []):
+            income_total_raw += cat['amount']
+            
+        # Добавляем проценты и форматирование для категорий доходов
+        for cat in report_data.get('income_categories', []):
+            cat['percent'] = round((cat['amount'] / income_total_raw * 100) if income_total_raw > 0 else 0, 1)
+            cat['amount_formatted'] = f"{cat['amount']:,.0f}"
+        
+        # JSON для категорий доходов
+        income_categories_json = json.dumps([{
+            'name': cat['name'],
+            'amount': cat['amount'],
+            'color': cat['color'],
+            'icon': cat['icon']
+        } for cat in report_data.get('income_categories', [])], ensure_ascii=False)
+        
+        # Подготавливаем данные для ежедневного графика доходов
+        daily_incomes_list = []
+        for day in range(1, report_data['days_in_month'] + 1):
+            daily_incomes_list.append(report_data.get('daily_incomes', {}).get(day, 0))
+        
+        daily_incomes_json = json.dumps(daily_incomes_list, ensure_ascii=False)
+        
         # Рендерим шаблон с данными
         html = self.template.render(
             period=report_data['period'],
@@ -341,7 +414,15 @@ class PDFReportService:
             categories=report_data['categories'],
             logo_base64=report_data.get('logo_base64', ''),
             categories_json=categories_json,
-            daily_json=daily_json
+            daily_json=daily_json,
+            # Новые поля для доходов
+            income_total_amount=report_data.get('income_total_amount', '0'),
+            income_total_count=report_data.get('income_total_count', 0),
+            income_categories=report_data.get('income_categories', []),
+            income_categories_json=income_categories_json,
+            daily_incomes_json=daily_incomes_json,
+            net_balance=report_data.get('net_balance', '0'),
+            has_incomes=report_data.get('has_incomes', False)
         )
         
         return html
