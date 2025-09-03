@@ -330,9 +330,9 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
             operations = sorted(operations, key=lambda x: (x['date'], x['time']))
             
             current_date = None
-            day_expenses = {}  # Для подсчета расходов по валютам за день
-            day_incomes = {}  # Для подсчета доходов по валютам за день
-            day_operations = []  # Список операций текущего дня
+            first_day_date = None  # Инициализируем переменную
+            day_total = {}  # Для подсчета сумм по валютам за день
+            day_expenses = []  # Список операций текущего дня
             all_days_data = []  # Список для хранения данных по всем дням
             
             for operation in operations:
@@ -391,18 +391,24 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                     'is_complete': True
                 })
             
-            # Проверяем, все ли траты показаны
-            if len(expenses) == 30 and total_count > 30:
-                # Если показано ровно 30 записей и всего их больше, 
-                # значит первый день может быть неполным
+            # Проверяем, все ли операции показаны (максимум 30)
+            if len(operations) == 30 and first_day_date:
+                # Если показано ровно 30 записей, возможно есть еще
+                # Проверяем первый день
                 if all_days_data and all_days_data[0]['date'] == first_day_date:
-                    # Проверяем есть ли еще траты за первый день
+                    # Проверяем есть ли еще операции за первый день
                     @sync_to_async
                     def check_first_day_completeness():
-                        return Expense.objects.filter(
+                        from expenses.models import Income
+                        expense_count = Expense.objects.filter(
                             profile__telegram_id=user_id,
                             expense_date=first_day_date
                         ).count()
+                        income_count = Income.objects.filter(
+                            profile__telegram_id=user_id,
+                            income_date=first_day_date
+                        ).count()
+                        return expense_count + income_count
                     
                     first_day_total = await check_first_day_completeness()
                     first_day_shown = len(all_days_data[0]['expenses'])
