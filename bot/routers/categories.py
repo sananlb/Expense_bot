@@ -619,7 +619,7 @@ async def edit_category(callback: types.CallbackQuery, state: FSMContext):
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📝 Название", callback_data=f"edit_cat_name_{cat_id}")],
                 [InlineKeyboardButton(text="🎨 Иконку", callback_data=f"edit_cat_icon_{cat_id}")],
-                [InlineKeyboardButton(text="❌ Отмена", callback_data="edit_categories")]
+                [InlineKeyboardButton(text="⬅️ Назад", callback_data="edit_categories")]
             ])
         )
     else:
@@ -1115,7 +1115,7 @@ async def edit_income_category(callback: types.CallbackQuery, state: FSMContext)
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📝 Название", callback_data=f"edit_income_name_{category_id}")],
                 [InlineKeyboardButton(text="🎨 Иконку", callback_data=f"edit_income_icon_{category_id}")],
-                [InlineKeyboardButton(text="❌ Отмена", callback_data="edit_income_categories")]
+                [InlineKeyboardButton(text="⬅️ Назад", callback_data="edit_income_categories")]
             ])
         )
     else:
