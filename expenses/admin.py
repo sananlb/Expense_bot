@@ -9,7 +9,7 @@ from django.utils.safestring import mark_safe
 from .models import (
     Profile, UserSettings, ExpenseCategory, Expense, Budget, 
     Cashback, RecurringPayment, Subscription, PromoCode, 
-    PromoCodeUsage, ReferralBonus
+    PromoCodeUsage, ReferralBonus, Income, IncomeCategory
 )
 from dateutil.relativedelta import relativedelta
 
@@ -528,6 +528,83 @@ class ReferralBonusAdmin(admin.ModelAdmin):
         )
     
     referred_link.short_description = 'Приглашенный'
+
+
+@admin.register(IncomeCategory)
+class IncomeCategoryAdmin(admin.ModelAdmin):
+    list_display = ['display_category', 'profile', 'name', 'is_active', 'is_default', 'created_at']
+    list_filter = ['is_active', 'is_default', 'created_at']
+    search_fields = ['name', 'profile__telegram_id']
+    list_per_page = 50
+    
+    def display_category(self, obj):
+        return f"{obj.icon} {obj.name}"
+    display_category.short_description = 'Категория дохода'
+    
+    fieldsets = (
+        (None, {
+            'fields': ('profile', 'name', 'icon', 'is_active', 'is_default')
+        }),
+        ('Системные', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    readonly_fields = ['created_at', 'updated_at']
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('profile')
+
+
+@admin.register(Income)
+class IncomeAdmin(admin.ModelAdmin):
+    list_display = ['profile', 'display_amount', 'display_category', 'income_type', 
+                    'income_date', 'is_recurring', 'ai_categorized', 'created_at']
+    list_filter = ['income_date', 'income_type', 'is_recurring', 'ai_categorized', 
+                   'category', 'created_at']
+    search_fields = ['description', 'profile__telegram_id', 'category__name']
+    date_hierarchy = 'income_date'
+    list_per_page = 100
+    
+    def display_amount(self, obj):
+        return format_html('<span style="color: green; font-weight: bold;">+{} {}</span>', 
+                          obj.amount, obj.currency)
+    display_amount.short_description = 'Сумма'
+    display_amount.admin_order_field = 'amount'
+    
+    def display_category(self, obj):
+        if obj.category:
+            return f"{obj.category.icon} {obj.category.name}"
+        return "—"
+    display_category.short_description = 'Категория'
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('profile', 'amount', 'currency', 'category', 'description')
+        }),
+        ('Тип дохода', {
+            'fields': ('income_type',)
+        }),
+        ('Дата и время', {
+            'fields': ('income_date', 'income_time')
+        }),
+        ('Регулярность', {
+            'fields': ('is_recurring', 'recurrence_day'),
+            'description': 'Для регулярных доходов (например, зарплата каждый месяц)'
+        }),
+        ('AI обработка', {
+            'fields': ('ai_categorized', 'ai_confidence'),
+            'classes': ('collapse',)
+        }),
+        ('Системные', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    readonly_fields = ['created_at', 'updated_at']
+    
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('profile', 'category')
 
 
 # Настройка админки

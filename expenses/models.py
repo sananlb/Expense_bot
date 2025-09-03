@@ -588,6 +588,106 @@ class ReferralBonus(models.Model):
         return f"{self.referrer} -> {self.referred} ({self.bonus_days} дней)"
 
 
+class IncomeCategory(models.Model):
+    """Категории доходов"""
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='income_categories')
+    name = models.CharField(max_length=100)
+    icon = models.CharField(max_length=10, default='💵')
+    
+    # Активность категории
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(default=False)  # Является ли категорией по умолчанию
+    
+    # Временные метки
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'incomes_category'
+        verbose_name = 'Категория доходов'
+        verbose_name_plural = 'Категории доходов'
+        unique_together = ['profile', 'name']
+        indexes = [
+            models.Index(fields=['profile', 'name']),
+        ]
+        
+    def __str__(self):
+        return f"{self.icon} {self.name}"
+
+
+class Income(models.Model):
+    """Доходы пользователя"""
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='incomes')
+    category = models.ForeignKey(
+        IncomeCategory, 
+        on_delete=models.SET_NULL, 
+        null=True,
+        blank=True,
+        related_name='incomes'
+    )
+    
+    # Основная информация
+    amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0.01)])
+    currency = models.CharField(max_length=3, default='RUB')  # Валюта дохода
+    description = models.TextField(blank=True)
+    
+    # Дата и время
+    income_date = models.DateField(default=date.today)
+    income_time = models.TimeField(default=datetime.now)
+    
+    # Тип дохода
+    income_type = models.CharField(
+        max_length=20,
+        default='other',
+        choices=[
+            ('salary', 'Зарплата'),
+            ('bonus', 'Премия'),
+            ('freelance', 'Фриланс'),
+            ('investment', 'Инвестиции'),
+            ('gift', 'Подарок'),
+            ('refund', 'Возврат'),
+            ('cashback', 'Кешбэк'),
+            ('other', 'Прочее')
+        ]
+    )
+    
+    # Регулярность
+    is_recurring = models.BooleanField(default=False)  # Регулярный доход
+    recurrence_day = models.IntegerField(
+        null=True, 
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(31)],
+        help_text='День месяца для регулярных доходов'
+    )
+    
+    # AI категоризация
+    ai_categorized = models.BooleanField(default=False)  # Категория определена AI
+    ai_confidence = models.DecimalField(
+        max_digits=3, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        validators=[MinValueValidator(0), MaxValueValidator(1)]
+    )  # Уверенность AI в категории
+    
+    # Временные метки
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'incomes_income'
+        verbose_name = 'Доход'
+        verbose_name_plural = 'Доходы'
+        ordering = ['-income_date', '-income_time']
+        indexes = [
+            models.Index(fields=['profile', '-income_date']),
+            models.Index(fields=['profile', 'category', '-income_date']),
+        ]
+    
+    def __str__(self):
+        return f"+{self.amount} {self.currency} - {self.description[:30]}"
+
+
 DEFAULT_CATEGORIES = [
     ('Продукты', '🛒'),
     ('Кафе и рестораны', '🍽️'),
@@ -607,6 +707,19 @@ DEFAULT_CATEGORIES = [
     ('Родственники', '👪'),
     ('Коммунальные услуги и подписки', '📱'),
     ('Прочие расходы', '💰')
+]
+
+DEFAULT_INCOME_CATEGORIES = [
+    ('Зарплата', '💼'),
+    ('Премии и бонусы', '🎁'),
+    ('Фриланс', '💻'),
+    ('Инвестиции', '📈'),
+    ('Проценты по вкладам', '🏦'),
+    ('Аренда недвижимости', '🏠'),
+    ('Возвраты и компенсации', '💸'),
+    ('Кешбэк', '💳'),
+    ('Подарки', '🎉'),
+    ('Прочие доходы', '💰')
 ]
 
 CATEGORY_KEYWORDS = {

@@ -3,6 +3,7 @@ from datetime import datetime, date, timedelta
 import asyncio
 import logging
 import re
+import os
 from typing import List
 
 from django.conf import settings
@@ -20,8 +21,9 @@ def send_monthly_reports():
         from expenses.models import Profile, Expense
         from bot.services.notifications import NotificationService
         from calendar import monthrange
-        
-        bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
+        # Use main bot token for user-facing notifications
+        bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('MONITORING_BOT_TOKEN')
+        bot = Bot(token=bot_token)
         service = NotificationService(bot)
         
         # Check if today is the last day of month and time is 20:00
@@ -75,8 +77,9 @@ def check_budget_limits():
         from expenses.models import Profile, Budget, Expense
         from bot.services.notifications import NotificationService
         from decimal import Decimal
-        
-        bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
+        # Use main bot token for user-facing notifications
+        bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('MONITORING_BOT_TOKEN')
+        bot = Bot(token=bot_token)
         service = NotificationService(bot)
         
         # Get all active budgets
@@ -308,8 +311,9 @@ def process_recurring_payments():
         from bot.utils.expense_messages import format_expense_added_message
         from aiogram import Bot
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-        
-        bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
+        # Use main bot token for user-facing notifications
+        bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('MONITORING_BOT_TOKEN')
+        bot = Bot(token=bot_token)
         
         # Run async function in sync context
         loop = asyncio.new_event_loop()

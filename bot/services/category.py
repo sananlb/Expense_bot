@@ -453,6 +453,73 @@ def create_default_categories(user_id: int) -> bool:
 
 
 @sync_to_async
+def create_default_income_categories(user_id: int) -> bool:
+    """
+    Создать базовые категории доходов для нового пользователя
+    
+    Args:
+        user_id: ID пользователя в Telegram
+        
+    Returns:
+        True если категории созданы, False если уже существуют
+    """
+    from expenses.models import IncomeCategory, Profile, DEFAULT_INCOME_CATEGORIES
+    
+    try:
+        profile = Profile.objects.get(telegram_id=user_id)
+    except Profile.DoesNotExist:
+        # Создаем профиль если его нет
+        profile = Profile.objects.create(telegram_id=user_id)
+        logger.info(f"Created new profile for user {user_id}")
+    
+    try:
+        # Проверяем, есть ли уже категории доходов у пользователя
+        if IncomeCategory.objects.filter(profile=profile).exists():
+            return False
+            
+        # Определяем язык пользователя
+        lang = profile.language_code or 'ru'
+        
+        # Базовые категории доходов с переводами
+        if lang == 'en':
+            default_income_categories = [
+                ('💼 Salary', '💼'),
+                ('🎁 Bonuses', '🎁'),
+                ('💻 Freelance', '💻'),
+                ('📈 Investments', '📈'),
+                ('🏦 Bank Interest', '🏦'),
+                ('🏠 Rent Income', '🏠'),
+                ('💸 Refunds', '💸'),
+                ('💳 Cashback', '💳'),
+                ('🎉 Gifts', '🎉'),
+                ('💰 Other Income', '💰'),
+            ]
+        else:
+            # Используем категории по умолчанию из модели
+            default_income_categories = DEFAULT_INCOME_CATEGORIES
+        
+        # Создаем категории доходов
+        categories = []
+        for name, icon in default_income_categories:
+            category = IncomeCategory(
+                profile=profile,
+                name=name,  # Эмодзи уже включен в название
+                icon=icon,  
+                is_active=True,
+                is_default=False
+            )
+            categories.append(category)
+            
+        IncomeCategory.objects.bulk_create(categories)
+        logger.info(f"Created {len(categories)} default income categories for user {user_id}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error creating default income categories: {e}")
+        return False
+
+
+@sync_to_async
 def migrate_categories_with_emojis():
     """Мигрировать существующие категории - добавить эмодзи в поле name"""
     from expenses.models import ExpenseCategory

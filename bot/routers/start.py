@@ -11,7 +11,7 @@ import logging
 from bot.utils import get_text
 from bot.services.profile import get_or_create_profile, get_user_settings
 from bot.keyboards import main_menu_keyboard, back_close_keyboard
-from bot.services.category import create_default_categories
+from bot.services.category import create_default_categories, create_default_income_categories
 from bot.utils.message_utils import send_message_with_cleanup, delete_message_with_effect
 from bot.utils.commands import update_user_commands
 from expenses.models import Subscription, Profile, ReferralBonus
@@ -60,6 +60,8 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
     
     # Создаем базовые категории для нового пользователя
     categories_created = await create_default_categories(user_id)
+    # Создаем базовые категории доходов
+    income_categories_created = await create_default_income_categories(user_id)
     
     # Обработка реферальной ссылки для новых пользователей
     referral_message = ""

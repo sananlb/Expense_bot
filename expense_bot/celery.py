@@ -66,6 +66,11 @@ app.conf.task_routes = {
         'routing_key': 'report.admin_daily',
         'priority': 6,
     },
+    'expense_bot.celery_tasks.process_recurring_payments': {
+        'queue': 'recurring',
+        'routing_key': 'recurring.process',
+        'priority': 8,
+    },
     'expenses.tasks.process_recurring_expenses': {
         'queue': 'recurring',
         'routing_key': 'recurring.process',

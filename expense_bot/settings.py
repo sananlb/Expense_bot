@@ -163,7 +163,11 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
-CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
+
+# Allow switching between DB scheduler and in-code schedule via env
+USE_DB_BEAT = os.getenv('USE_DB_BEAT', 'false').lower() == 'true'
+if USE_DB_BEAT:
+    CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
 # Cache Configuration
 CACHES = {
@@ -317,7 +321,8 @@ try:
     'process-recurring-payments': {
         'task': 'expense_bot.celery_tasks.process_recurring_payments',
         'schedule': crontab(hour=12, minute=0),  # 12 PM daily
-        'options': {'queue': 'payments'}
+        # Route to existing queue name to avoid missing queue issues
+        'options': {'queue': 'recurring'}
     },
     'send-daily-admin-report': {
         'task': 'expense_bot.celery_tasks.send_daily_admin_report',
