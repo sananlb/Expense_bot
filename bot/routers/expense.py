@@ -837,7 +837,104 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         await process_chat_message(message, state, text)
         return
     
-    # Парсим сообщение с AI поддержкой
+    # НОВОЕ: Проверка на доход перед парсингом как расход
+    from ..utils.expense_parser import detect_income_intent, parse_income_message
+    if detect_income_intent(text):
+        logger.info(f"Detected income intent: '{text}'")
+        # Обрабатываем как доход
+        from expenses.models import Profile
+        try:
+            profile = await Profile.objects.aget(telegram_id=user_id)
+        except Profile.DoesNotExist:
+            profile = None
+        
+        # Парсим доход
+        parsed_income = await parse_income_message(text, user_id=user_id, profile=profile, use_ai=True)
+        
+        if parsed_income:
+            # Создаем доход
+            from ..services.income import create_income
+            from expenses.models import IncomeCategory
+            
+            # Получаем или создаем категорию дохода
+            category = None
+            if parsed_income.get('category'):
+                # Ищем существующую категорию
+                try:
+                    category = await IncomeCategory.objects.filter(
+                        profile=profile,
+                        name=parsed_income['category']
+                    ).afirst()
+                except:
+                    pass
+            
+            # Создаем доход
+            income = await create_income(
+                user_id=user_id,
+                amount=parsed_income['amount'],
+                category_id=category.id if category else None,
+                description=parsed_income.get('description', 'Доход'),
+                income_date=parsed_income.get('income_date'),
+                income_type=parsed_income.get('income_type', 'other'),
+                ai_categorized=parsed_income.get('ai_enhanced', False),
+                ai_confidence=parsed_income.get('confidence', 0.5),
+                currency=parsed_income.get('currency', 'RUB')
+            )
+            
+            if income:
+                cancel_typing()  # Отменяем индикатор печатания
+                
+                # Формируем подтверждение
+                amount_text = format_currency(income.amount, income.currency)
+                
+                # Получаем эмодзи для типа дохода
+                income_type_emoji = {
+                    'salary': '💼',
+                    'bonus': '🎁', 
+                    'freelance': '💻',
+                    'investment': '📈',
+                    'refund': '💸',
+                    'cashback': '💳',
+                    'gift': '🎉',
+                    'other': '💰'
+                }.get(income.income_type, '💰')
+                
+                # Форматируем сообщение для дохода с жирным шрифтом и +
+                text_msg = f"✅ <b>+{amount_text}</b> — {income.description}\n"
+                text_msg += f"{income_type_emoji} Категория: {category.name if category else 'Прочие доходы'}"
+                
+                # Добавляем кнопки редактирования
+                from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [
+                        InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_income_{income.id}")
+                    ]
+                ])
+                
+                # Отправляем подтверждение
+                from ..utils.message_utils import send_message_with_cleanup
+                await send_message_with_cleanup(
+                    message=message,
+                    text=text_msg,
+                    reply_markup=keyboard,
+                    parse_mode="HTML"
+                )
+                
+                logger.info(f"Income created: {income.id} for user {user_id}")
+                return
+            else:
+                # Если не удалось создать доход (например, лимит)
+                cancel_typing()
+                await message.answer(
+                    "❌ Не удалось добавить доход. Возможно, достигнут дневной лимит операций (100).",
+                    parse_mode="HTML"
+                )
+                return
+        else:
+            # Если не удалось распарсить как доход, продолжаем как расход
+            logger.warning(f"Failed to parse as income despite intent: '{text}'")
+    
+    # Парсим сообщение с AI поддержкой (как расход)
     from expenses.models import Profile
     try:
         profile = await Profile.objects.aget(telegram_id=user_id)
