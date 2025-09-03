@@ -31,6 +31,16 @@ class CategoryForm(StatesGroup):
     waiting_for_new_icon = State()
 
 
+class IncomeCategoryForm(StatesGroup):
+    waiting_for_name = State()
+    waiting_for_icon = State()
+    waiting_for_custom_icon = State()
+    waiting_for_edit_choice = State()
+    waiting_for_new_name = State()
+    waiting_for_new_icon = State()
+    waiting_for_delete_choice = State()
+
+
 class CategoryStates(StatesGroup):
     editing_name = State()
 
@@ -192,6 +202,10 @@ async def show_income_categories_menu(message: types.Message | types.CallbackQue
     # Получаем язык пользователя
     lang = await get_user_language(user_id)
     
+    # Проверяем подписку
+    from bot.services.subscription import check_subscription
+    has_subscription = await check_subscription(user_id)
+    
     # Получаем категории доходов
     from bot.services.income import get_user_income_categories
     income_categories = await get_user_income_categories(user_id)
@@ -205,13 +219,25 @@ async def show_income_categories_menu(message: types.Message | types.CallbackQue
             translated_name = translate_category_name(cat.name, lang)
             text += f"• {translated_name}\n"
     else:
-        text += "У вас пока нет категорий доходов."
+        text += get_text('no_income_categories_yet', lang) if lang == 'en' else "У вас пока нет категорий доходов."
     
-    # Кнопки - пока только просмотр
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💸 Категории трат", callback_data="expense_categories_menu")],
-        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
-    ])
+    # Формируем клавиатуру в зависимости от подписки
+    if has_subscription:
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=get_text('add_button', lang), callback_data="add_income_category")],
+            [InlineKeyboardButton(text=get_text('edit_button', lang), callback_data="edit_income_categories")],
+            [InlineKeyboardButton(text=get_text('delete_button', lang), callback_data="delete_income_categories")],
+            [InlineKeyboardButton(text="💸 Категории трат", callback_data="expense_categories_menu")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
+        ])
+    else:
+        # Без подписки можно только просматривать
+        text += "\n\n" + (get_text('income_categories_subscription_note', lang) if lang == 'en' else "💎 Для управления категориями доходов необходима подписка")
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=get_text('get_subscription', lang), callback_data="menu_subscription")],
+            [InlineKeyboardButton(text="💸 Категории трат", callback_data="expense_categories_menu")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
+        ])
     
     # Отправляем сообщение
     if state:
@@ -765,4 +791,348 @@ async def cancel_category_creation(callback: types.CallbackQuery, state: FSMCont
     await state.clear()
     await callback.message.delete()
     await show_categories_menu(callback, state)
+    await callback.answer()
+
+
+# ========== ОБРАБОТЧИКИ ДЛЯ КАТЕГОРИЙ ДОХОДОВ ==========
+
+@router.callback_query(lambda c: c.data == "add_income_category")
+async def add_income_category_start(callback: types.CallbackQuery, state: FSMContext):
+    """Начало добавления категории доходов"""
+    # Проверяем подписку
+    from bot.services.subscription import check_subscription
+    if not await check_subscription(callback.from_user.id):
+        lang = await get_user_language(callback.from_user.id)
+        await callback.answer(get_text('subscription_required', lang), show_alert=True)
+        return
+    
+    lang = await get_user_language(callback.from_user.id)
+    await callback.message.edit_text(
+        "📝 Введите название категории доходов:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="income_categories_menu")]
+        ])
+    )
+    await state.update_data(last_menu_message_id=callback.message.message_id)
+    await state.set_state(IncomeCategoryForm.waiting_for_name)
+    await callback.answer()
+
+
+@router.message(IncomeCategoryForm.waiting_for_name)
+async def process_income_category_name(message: types.Message, state: FSMContext):
+    """Обработка названия категории доходов"""
+    name = message.text.strip()
+    
+    if len(name) > 50:
+        await send_message_with_cleanup(message, state, "❌ Название слишком длинное. Максимум 50 символов.")
+        return
+    
+    # Проверяем, есть ли уже эмодзи в начале названия
+    import re
+    emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]'
+    has_emoji = bool(re.match(emoji_pattern, name))
+    
+    if has_emoji:
+        # Если эмодзи уже есть, сразу создаем категорию
+        user_id = message.from_user.id
+        try:
+            from bot.services.income import create_income_category
+            category = await create_income_category(user_id, name, '')
+            await state.clear()
+            await show_income_categories_menu(message, state)
+        except ValueError as e:
+            await send_message_with_cleanup(message, state, f"❌ {str(e)}")
+            await state.clear()
+    else:
+        # Если эмодзи нет, показываем выбор иконок
+        await state.update_data(income_category_name=name)
+        
+        # Иконки для категорий доходов
+        icons = [
+            ['💰', '💵', '💸', '💴', '💶'],
+            ['💷', '💳', '🏦', '💹', '📈'],
+            ['💼', '💻', '🏢', '🏭', '👔'],
+            ['🎯', '🎁', '🎉', '🏆', '💎'],
+            ['🚀', '✨', '⭐', '🌟', '💫'],
+            ['📱', '🎮', '🎬', '🎭', '🎨'],
+            ['🏠', '🚗', '✈️', '🛍️', '🍔'],
+            ['📚', '🎓', '🏥', '⚽', '🎸']
+        ]
+        
+        keyboard_buttons = []
+        for row in icons:
+            buttons_row = [InlineKeyboardButton(text=icon, callback_data=f"set_income_icon_{icon}") for icon in row]
+            keyboard_buttons.append(buttons_row)
+        
+        keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_income_icon")])
+        keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_income_icon")])
+        keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_income_category_creation")])
+        
+        await send_message_with_cleanup(
+            message, state,
+            f"🎨 Выберите иконку для категории доходов «{name}»:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        )
+        await state.set_state(IncomeCategoryForm.waiting_for_icon)
+
+
+@router.callback_query(lambda c: c.data.startswith("set_income_icon_"))
+async def set_income_category_icon(callback: types.CallbackQuery, state: FSMContext):
+    """Установка иконки категории доходов"""
+    icon = callback.data.replace("set_income_icon_", "")
+    data = await state.get_data()
+    name = data.get('income_category_name')
+    
+    if not name:
+        await callback.answer("❌ Ошибка: название категории не найдено", show_alert=True)
+        await state.clear()
+        return
+    
+    try:
+        from bot.services.income import create_income_category
+        category = await create_income_category(callback.from_user.id, name, icon)
+        await state.clear()
+        await callback.message.delete()
+        await show_income_categories_menu(callback, state)
+        await callback.answer("✅ Категория доходов добавлена")
+    except ValueError as e:
+        await callback.answer(f"❌ {str(e)}", show_alert=True)
+        await state.clear()
+
+
+@router.callback_query(lambda c: c.data == "no_income_icon")
+async def no_income_icon(callback: types.CallbackQuery, state: FSMContext):
+    """Создание категории доходов без иконки"""
+    data = await state.get_data()
+    name = data.get('income_category_name')
+    
+    if not name:
+        await callback.answer("❌ Ошибка: название категории не найдено", show_alert=True)
+        await state.clear()
+        return
+    
+    try:
+        from bot.services.income import create_income_category
+        category = await create_income_category(callback.from_user.id, name, '')
+        await state.clear()
+        await callback.message.delete()
+        await show_income_categories_menu(callback, state)
+        await callback.answer("✅ Категория доходов добавлена")
+    except ValueError as e:
+        await callback.answer(f"❌ {str(e)}", show_alert=True)
+        await state.clear()
+
+
+@router.callback_query(lambda c: c.data == "custom_income_icon")
+async def custom_income_icon_start(callback: types.CallbackQuery, state: FSMContext):
+    """Запрос пользовательского эмодзи для категории доходов"""
+    lang = await get_user_language(callback.from_user.id)
+    await callback.message.edit_text(
+        "✏️ Отправьте свой эмодзи для категории доходов:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена", callback_data="income_categories_menu")]
+        ])
+    )
+    await state.set_state(IncomeCategoryForm.waiting_for_custom_icon)
+    await callback.answer()
+
+
+@router.message(IncomeCategoryForm.waiting_for_custom_icon)
+async def process_custom_income_icon(message: types.Message, state: FSMContext):
+    """Обработка пользовательского эмодзи для категории доходов"""
+    import re
+    
+    custom_icon = message.text.strip()
+    
+    # Проверяем, что введен один эмодзи
+    emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+$'
+    if not re.match(emoji_pattern, custom_icon) or len(custom_icon) > 2:
+        await send_message_with_cleanup(message, state, "❌ Пожалуйста, отправьте только один эмодзи")
+        return
+    
+    data = await state.get_data()
+    name = data.get('income_category_name')
+    
+    if not name:
+        await send_message_with_cleanup(message, state, "❌ Ошибка: название категории не найдено")
+        await state.clear()
+        return
+    
+    try:
+        from bot.services.income import create_income_category
+        category = await create_income_category(message.from_user.id, name, custom_icon)
+        await state.clear()
+        await show_income_categories_menu(message, state)
+    except ValueError as e:
+        await send_message_with_cleanup(message, state, f"❌ {str(e)}")
+        await state.clear()
+
+
+@router.callback_query(lambda c: c.data == "delete_income_categories")
+async def delete_income_categories_start(callback: types.CallbackQuery, state: FSMContext):
+    """Начало удаления категорий доходов"""
+    # Проверяем подписку
+    from bot.services.subscription import check_subscription
+    if not await check_subscription(callback.from_user.id):
+        lang = await get_user_language(callback.from_user.id)
+        await callback.answer(get_text('subscription_required', lang), show_alert=True)
+        return
+    
+    user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
+    
+    # Получаем категории доходов
+    from bot.services.income import get_user_income_categories
+    categories = await get_user_income_categories(user_id)
+    
+    if not categories:
+        await callback.answer("У вас нет категорий доходов для удаления", show_alert=True)
+        return
+    
+    # Создаем клавиатуру с категориями
+    keyboard_buttons = []
+    for cat in categories:
+        keyboard_buttons.append([
+            InlineKeyboardButton(
+                text=f"❌ {cat.name}",
+                callback_data=f"del_income_cat_{cat.id}"
+            )
+        ])
+    
+    keyboard_buttons.append([
+        InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="income_categories_menu")
+    ])
+    
+    await callback.message.edit_text(
+        "🗑 Выберите категорию доходов для удаления:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+    )
+    await state.set_state(IncomeCategoryForm.waiting_for_delete_choice)
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data.startswith("del_income_cat_"))
+async def delete_income_category(callback: types.CallbackQuery, state: FSMContext):
+    """Удаление выбранной категории доходов"""
+    category_id = int(callback.data.replace("del_income_cat_", ""))
+    user_id = callback.from_user.id
+    
+    try:
+        from bot.services.income import delete_income_category
+        await delete_income_category(user_id, category_id)
+        await state.clear()
+        await callback.message.delete()
+        await show_income_categories_menu(callback, state)
+        await callback.answer("✅ Категория доходов удалена")
+    except ValueError as e:
+        await callback.answer(f"❌ {str(e)}", show_alert=True)
+
+
+@router.callback_query(lambda c: c.data == "edit_income_categories")
+async def edit_income_categories_start(callback: types.CallbackQuery, state: FSMContext):
+    """Начало редактирования категорий доходов"""
+    # Проверяем подписку
+    from bot.services.subscription import check_subscription
+    if not await check_subscription(callback.from_user.id):
+        lang = await get_user_language(callback.from_user.id)
+        await callback.answer(get_text('subscription_required', lang), show_alert=True)
+        return
+    
+    user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
+    
+    # Получаем категории доходов
+    from bot.services.income import get_user_income_categories
+    categories = await get_user_income_categories(user_id)
+    
+    if not categories:
+        await callback.answer("У вас нет категорий доходов для редактирования", show_alert=True)
+        return
+    
+    # Создаем клавиатуру с категориями
+    keyboard_buttons = []
+    for cat in categories:
+        keyboard_buttons.append([
+            InlineKeyboardButton(
+                text=f"✏️ {cat.name}",
+                callback_data=f"edit_income_cat_{cat.id}"
+            )
+        ])
+    
+    keyboard_buttons.append([
+        InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="income_categories_menu")
+    ])
+    
+    await callback.message.edit_text(
+        "✏️ Выберите категорию доходов для редактирования:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+    )
+    await state.set_state(IncomeCategoryForm.waiting_for_edit_choice)
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data.startswith("edit_income_cat_"))
+async def edit_income_category(callback: types.CallbackQuery, state: FSMContext):
+    """Редактирование выбранной категории доходов"""
+    category_id = int(callback.data.replace("edit_income_cat_", ""))
+    lang = await get_user_language(callback.from_user.id)
+    
+    await state.update_data(editing_income_category_id=category_id)
+    
+    await callback.message.edit_text(
+        "📝 Введите новое название категории доходов:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="income_categories_menu")]
+        ])
+    )
+    await state.set_state(IncomeCategoryForm.waiting_for_new_name)
+    await callback.answer()
+
+
+@router.message(IncomeCategoryForm.waiting_for_new_name)
+async def process_new_income_category_name(message: types.Message, state: FSMContext):
+    """Обработка нового названия категории доходов"""
+    new_name = message.text.strip()
+    
+    if len(new_name) > 50:
+        await send_message_with_cleanup(message, state, "❌ Название слишком длинное. Максимум 50 символов.")
+        return
+    
+    data = await state.get_data()
+    category_id = data.get('editing_income_category_id')
+    
+    if not category_id:
+        await send_message_with_cleanup(message, state, "❌ Ошибка: категория не найдена")
+        await state.clear()
+        return
+    
+    # Проверяем, есть ли эмодзи в начале
+    import re
+    emoji_pattern = r'^([\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+)\s*(.*)$'
+    match = re.match(emoji_pattern, new_name)
+    
+    try:
+        from bot.services.income import update_income_category
+        if match:
+            # Если есть эмодзи, разделяем на иконку и название
+            icon = match.group(1)
+            clean_name = match.group(2) if match.group(2) else new_name
+            await update_income_category(message.from_user.id, category_id, clean_name, icon)
+        else:
+            # Если нет эмодзи, обновляем только название
+            await update_income_category(message.from_user.id, category_id, new_name)
+        
+        await state.clear()
+        await show_income_categories_menu(message, state)
+    except ValueError as e:
+        await send_message_with_cleanup(message, state, f"❌ {str(e)}")
+        await state.clear()
+
+
+@router.callback_query(lambda c: c.data == "cancel_income_category_creation")
+async def cancel_income_category_creation(callback: types.CallbackQuery, state: FSMContext):
+    """Отмена создания категории доходов"""
+    await state.clear()
+    await callback.message.delete()
+    await show_income_categories_menu(callback, state)
     await callback.answer()

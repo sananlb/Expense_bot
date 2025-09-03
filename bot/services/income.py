@@ -852,3 +852,180 @@ def get_user_income_categories(telegram_id: int) -> List[IncomeCategory]:
     except Exception as e:
         logger.error(f"Error getting income categories for user {telegram_id}: {e}")
         return []
+
+
+@sync_to_async
+def create_income_category(
+    telegram_id: int, 
+    name: str, 
+    icon: Optional[str] = None
+) -> IncomeCategory:
+    """
+    Создать новую категорию доходов
+    
+    Args:
+        telegram_id: ID пользователя в Telegram
+        name: Название категории
+        icon: Иконка категории (эмодзи)
+        
+    Returns:
+        Созданная категория
+        
+    Raises:
+        ValueError: Если категория с таким названием уже существует
+    """
+    try:
+        profile = get_or_create_user_profile_sync(telegram_id)
+        
+        # Проверяем, нет ли уже такой категории
+        existing = IncomeCategory.objects.filter(
+            profile=profile,
+            name__iexact=name,
+            is_active=True
+        ).exists()
+        
+        if existing:
+            raise ValueError("Категория с таким названием уже существует")
+        
+        # Если есть иконка, добавляем её к названию
+        if icon and not name.startswith(icon):
+            full_name = f"{icon} {name}"
+        else:
+            full_name = name
+            
+        category = IncomeCategory.objects.create(
+            profile=profile,
+            name=full_name,
+            is_active=True
+        )
+        
+        logger.info(f"Created income category '{full_name}' for user {telegram_id}")
+        return category
+        
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating income category for user {telegram_id}: {e}")
+        raise ValueError("Ошибка при создании категории")
+
+
+@sync_to_async
+def update_income_category(
+    telegram_id: int,
+    category_id: int,
+    new_name: Optional[str] = None,
+    new_icon: Optional[str] = None
+) -> IncomeCategory:
+    """
+    Обновить категорию доходов
+    
+    Args:
+        telegram_id: ID пользователя в Telegram
+        category_id: ID категории
+        new_name: Новое название категории
+        new_icon: Новая иконка категории
+        
+    Returns:
+        Обновленная категория
+        
+    Raises:
+        ValueError: Если категория не найдена или название уже существует
+    """
+    try:
+        profile = get_or_create_user_profile_sync(telegram_id)
+        
+        category = IncomeCategory.objects.filter(
+            id=category_id,
+            profile=profile,
+            is_active=True
+        ).first()
+        
+        if not category:
+            raise ValueError("Категория не найдена")
+            
+        if new_name:
+            # Проверяем, нет ли уже категории с таким названием
+            existing = IncomeCategory.objects.filter(
+                profile=profile,
+                name__iexact=new_name,
+                is_active=True
+            ).exclude(id=category_id).exists()
+            
+            if existing:
+                raise ValueError("Категория с таким названием уже существует")
+                
+            # Обновляем название
+            if new_icon and not new_name.startswith(new_icon):
+                category.name = f"{new_icon} {new_name}"
+            else:
+                category.name = new_name
+                
+        elif new_icon:
+            # Только обновляем иконку
+            import re
+            # Удаляем старую иконку если есть
+            emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+\s*'
+            clean_name = re.sub(emoji_pattern, '', category.name)
+            category.name = f"{new_icon} {clean_name}"
+            
+        category.save()
+        
+        logger.info(f"Updated income category {category_id} for user {telegram_id}")
+        return category
+        
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating income category {category_id} for user {telegram_id}: {e}")
+        raise ValueError("Ошибка при обновлении категории")
+
+
+@sync_to_async
+def delete_income_category(telegram_id: int, category_id: int) -> bool:
+    """
+    Удалить категорию доходов (мягкое удаление)
+    
+    Args:
+        telegram_id: ID пользователя в Telegram
+        category_id: ID категории
+        
+    Returns:
+        True если успешно удалено
+        
+    Raises:
+        ValueError: Если категория не найдена
+    """
+    try:
+        profile = get_or_create_user_profile_sync(telegram_id)
+        
+        category = IncomeCategory.objects.filter(
+            id=category_id,
+            profile=profile,
+            is_active=True
+        ).first()
+        
+        if not category:
+            raise ValueError("Категория не найдена")
+            
+        # Проверяем, есть ли доходы с этой категорией
+        has_incomes = Income.objects.filter(category=category).exists()
+        
+        if has_incomes:
+            # Мягкое удаление - просто деактивируем
+            category.is_active = False
+            category.save()
+            
+            # Убираем категорию у всех связанных доходов
+            Income.objects.filter(category=category).update(category=None)
+        else:
+            # Если нет связанных доходов, удаляем полностью
+            category.delete()
+            
+        logger.info(f"Deleted income category {category_id} for user {telegram_id}")
+        return True
+        
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting income category {category_id} for user {telegram_id}: {e}")
+        raise ValueError("Ошибка при удалении категории")
