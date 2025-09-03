@@ -1,5 +1,5 @@
 """
-Парсер для извлечения информации о расходах из текстовых сообщений
+Парсер для извлечения информации о расходах и доходах из текстовых сообщений
 """
 import re
 import logging
@@ -51,6 +51,31 @@ CURRENCY_PATTERNS = {
     'MXN': [r'mxn', r'мексиканских?', r'мексиканское', r'мексиканский'],
     'BRL': [r'brl', r'реалов?', r'бразильских?', r'бразильское', r'бразильский'],
 }
+
+# Паттерны для определения дохода
+INCOME_PATTERNS = [
+    r'^\+',  # Начинается с +
+    r'^\+\d',  # Начинается с + и сразу цифра (+35000)
+    r'\bплюс\b',  # Слово "плюс"
+    r'\bдоход\b',  # Слово "доход"
+    r'\bзарплат[аы]\b',  # Слова "зарплата", "зарплаты"
+    r'\bзп\b',  # Аббревиатура "зп"
+    r'\bполучил[аи]?\b',  # Слова "получил", "получила", "получили"
+    r'\bзаработал[аи]?\b',  # Слова "заработал", "заработала", "заработали"
+    r'\bпремия\b',  # Слово "премия"
+    r'\bбонус\b',  # Слово "бонус"
+    r'\bгонорар\b',  # Слово "гонорар"
+    r'\bаванс\b',  # Слово "аванс"
+    r'\bфриланс\b',  # Слово "фриланс"
+    r'\bвозврат\b',  # Слово "возврат"
+    r'\bкешбек\b',  # Слово "кешбек"
+    r'\bкешбэк\b',  # Слово "кешбэк"
+    r'\bкэшбек\b',  # Слово "кэшбек"
+    r'\bкэшбэк\b',  # Слово "кэшбэк"
+    r'\bподарок\b',  # Слово "подарок"
+    r'\bдивиденд\b',  # Слово "дивиденд"
+    r'\bпроцент[ыа]?\b',  # Слова "процент", "проценты", "процента"
+]
 
 # Импортируем словарь ключевых слов из models
 from expenses.models import CATEGORY_KEYWORDS as MODEL_CATEGORY_KEYWORDS
@@ -257,6 +282,32 @@ OLD_CATEGORY_KEYWORDS = {
     ],
     'прочее': ['прочее', 'другое', 'разное']
 }
+
+
+def detect_income_intent(text: str) -> bool:
+    """
+    Определяет, является ли текст доходом
+    
+    Примеры:
+    - "+5000" -> True
+    - "+5000 зарплата" -> True
+    - "плюс 5000" -> True
+    - "зарплата 100000" -> True
+    - "получил 5000" -> True
+    - "заработал 3000" -> True
+    - "кофе 200" -> False
+    """
+    if not text:
+        return False
+    
+    text_lower = text.lower().strip()
+    
+    # Проверяем паттерны дохода
+    for pattern in INCOME_PATTERNS:
+        if re.search(pattern, text_lower):
+            return True
+    
+    return False
 
 
 def detect_currency(text: str, user_currency: str = 'RUB') -> str:
@@ -547,6 +598,159 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     if not result['category']:
         result['category'] = 'Прочие расходы'
         logger.info(f"Using default category 'Прочие расходы' for '{original_text}'")
+    
+    return result
+
+
+async def parse_income_message(text: str, user_id: Optional[int] = None, profile=None, use_ai: bool = True) -> Optional[Dict[str, Any]]:
+    """
+    Парсит текстовое сообщение и извлекает информацию о доходе
+    
+    Примеры:
+    - "+5000" -> {'amount': 5000, 'description': 'Доход', 'is_income': True}
+    - "зарплата 100000" -> {'amount': 100000, 'description': 'Зарплата', 'category': '💼 Зарплата'}
+    - "получил премию 50000" -> {'amount': 50000, 'description': 'Получил премию', 'category': '🎁 Премии и бонусы'}
+    """
+    if not text:
+        return None
+    
+    # Сохраняем оригинальный текст
+    original_text = text.strip()
+    
+    # Убираем символ + в начале для парсинга суммы
+    text_for_parsing = original_text
+    if text_for_parsing.startswith('+'):
+        text_for_parsing = text_for_parsing[1:].strip()
+    
+    # Сначала извлекаем дату, если она есть
+    expense_date, text_without_date = extract_date_from_text(text_for_parsing)
+    
+    # Используем текст без даты для дальнейшего парсинга
+    text_to_parse = text_without_date
+    text_lower = text_to_parse.lower()
+    
+    # Ищем сумму
+    amount = None
+    amount_str = None
+    text_without_amount = None
+    
+    for pattern in AMOUNT_PATTERNS:
+        match = re.search(pattern, text_lower, re.IGNORECASE)
+        if match:
+            amount_str = match.group(1).replace(',', '.')
+            try:
+                amount = Decimal(amount_str)
+                # Убираем найденную сумму из текста для получения описания
+                match_start = match.start()
+                match_end = match.end()
+                text_without_amount = (text_to_parse[:match_start] + ' ' + text_to_parse[match_end:]).strip()
+                break
+            except (ValueError, InvalidOperation) as e:
+                logger.debug(f"Ошибка при парсинге суммы дохода '{amount_str}': {e}")
+                continue
+    
+    # Если не нашли сумму, возвращаем None
+    if not amount or amount <= 0:
+        return None
+    
+    # Определяем категорию дохода
+    category = None
+    income_type = 'other'
+    
+    # Категории доходов по ключевым словам
+    income_categories = {
+        '💼 Зарплата': ['зарплата', 'зп', 'salary', 'оклад', 'заработная плата'],
+        '🎁 Премии и бонусы': ['премия', 'бонус', 'bonus', 'надбавка', 'премиальные'],
+        '💻 Фриланс': ['фриланс', 'freelance', 'заказ', 'проект', 'гонорар', 'подработка'],
+        '📈 Инвестиции': ['инвестиции', 'дивиденд', 'акции', 'облигации', 'прибыль', 'процент'],
+        '🏦 Проценты по вкладам': ['процент', 'вклад', 'депозит', 'накопления'],
+        '🏠 Аренда недвижимости': ['аренда', 'квартира', 'сдача', 'арендатор', 'найм'],
+        '💸 Возвраты и компенсации': ['возврат', 'компенсация', 'возмещение', 'refund'],
+        '💳 Кешбэк': ['кешбек', 'кешбэк', 'кэшбек', 'кэшбэк', 'cashback'],
+        '🎉 Подарки': ['подарок', 'подарили', 'дарение', 'gift'],
+        '💰 Прочие доходы': ['аванс', 'получил', 'заработал', 'доход', 'прочее']
+    }
+    
+    # Мапинг категорий на типы доходов
+    category_to_type = {
+        '💼 Зарплата': 'salary',
+        '🎁 Премии и бонусы': 'bonus',
+        '💻 Фриланс': 'freelance',
+        '📈 Инвестиции': 'investment',
+        '💸 Возвраты и компенсации': 'refund',
+        '💳 Кешбэк': 'cashback',
+        '🎉 Подарки': 'gift',
+    }
+    
+    # Проверяем ключевые слова
+    for cat_name, keywords in income_categories.items():
+        for keyword in keywords:
+            if keyword.lower() in text_lower:
+                category = cat_name
+                income_type = category_to_type.get(cat_name, 'other')
+                break
+        if category:
+            break
+    
+    # Если категорию не нашли, пытаемся определить через AI (если есть пользовательские категории)
+    if not category and profile:
+        from expenses.models import IncomeCategory
+        from asgiref.sync import sync_to_async
+        
+        # Получаем категории доходов пользователя
+        user_income_categories = await sync_to_async(list)(
+            IncomeCategory.objects.filter(profile=profile).values_list('name', flat=True)
+        )
+        
+        if user_income_categories:
+            # Проверяем прямое вхождение названия категории
+            for user_cat in user_income_categories:
+                if user_cat.lower() in text_lower or any(word in user_cat.lower() for word in text_lower.split()):
+                    category = user_cat
+                    break
+    
+    # Формируем описание
+    description = text_without_amount if text_without_amount else 'Доход'
+    
+    # Убираем лишние пробелы и капитализируем
+    description = ' '.join(description.split())
+    if description and len(description) > 0:
+        description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
+    
+    # Если описание пустое или слишком короткое, используем категорию или тип дохода
+    if not description or len(description) < 2:
+        if category:
+            # Убираем эмодзи из категории для описания
+            description = re.sub(r'[^\w\s]', '', category).strip()
+        elif income_type != 'other':
+            type_descriptions = {
+                'salary': 'Зарплата',
+                'bonus': 'Премия',
+                'freelance': 'Фриланс',
+                'investment': 'Инвестиции',
+                'refund': 'Возврат',
+                'cashback': 'Кешбэк',
+                'gift': 'Подарок'
+            }
+            description = type_descriptions.get(income_type, 'Доход')
+        else:
+            description = 'Доход'
+    
+    # Определяем валюту
+    user_currency = profile.currency if profile else 'RUB'
+    currency = detect_currency(original_text, user_currency)
+    
+    # Формируем результат
+    result = {
+        'amount': float(amount),
+        'description': description,
+        'category': category,
+        'income_type': income_type,
+        'currency': currency,
+        'confidence': 0.8 if category else 0.5,
+        'income_date': expense_date,
+        'is_income': True  # Флаг, что это доход
+    }
     
     return result
 
