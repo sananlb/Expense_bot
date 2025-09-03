@@ -496,6 +496,7 @@ async def edit_categories_list(callback: types.CallbackQuery, state: FSMContext)
     await state.clear()
     
     user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
     categories = await get_user_categories(user_id)
     
     # Фильтруем категории - исключаем "Прочие расходы"
@@ -508,18 +509,19 @@ async def edit_categories_list(callback: types.CallbackQuery, state: FSMContext)
     keyboard_buttons = []
     # Группируем категории по 2 в строке
     for i in range(0, len(editable_categories), 2):
+        # Переводим название категории
+        translated_name = translate_category_name(editable_categories[i].name, lang)
         row = [InlineKeyboardButton(
-            text=f"{editable_categories[i].name}", 
+            text=translated_name, 
             callback_data=f"edit_cat_{editable_categories[i].id}"
         )]
         if i + 1 < len(editable_categories):
+            translated_name_2 = translate_category_name(editable_categories[i + 1].name, lang)
             row.append(InlineKeyboardButton(
-                text=f"{editable_categories[i + 1].name}", 
+                text=translated_name_2, 
                 callback_data=f"edit_cat_{editable_categories[i + 1].id}"
             ))
         keyboard_buttons.append(row)
-    
-    lang = await get_user_language(user_id)
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="categories_menu")])
     
     await callback.message.edit_text(
@@ -535,6 +537,7 @@ async def edit_categories_list(callback: types.CallbackQuery, state: FSMContext)
 async def delete_categories_list(callback: types.CallbackQuery, state: FSMContext):
     """Показать список категорий для удаления"""
     user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
     categories = await get_user_categories(user_id)
     
     # Фильтруем категории - исключаем "Прочие расходы"
@@ -547,18 +550,19 @@ async def delete_categories_list(callback: types.CallbackQuery, state: FSMContex
     keyboard_buttons = []
     # Группируем категории по 2 в строке
     for i in range(0, len(deletable_categories), 2):
+        # Переводим название категории
+        translated_name = translate_category_name(deletable_categories[i].name, lang)
         row = [InlineKeyboardButton(
-            text=f"{deletable_categories[i].name}", 
+            text=translated_name, 
             callback_data=f"del_cat_{deletable_categories[i].id}"
         )]
         if i + 1 < len(deletable_categories):
+            translated_name_2 = translate_category_name(deletable_categories[i + 1].name, lang)
             row.append(InlineKeyboardButton(
-                text=f"{deletable_categories[i + 1].name}", 
+                text=translated_name_2, 
                 callback_data=f"del_cat_{deletable_categories[i + 1].id}"
             ))
         keyboard_buttons.append(row)
-    
-    lang = await get_user_language(user_id)
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="categories_menu")])
     
     await callback.message.edit_text(
