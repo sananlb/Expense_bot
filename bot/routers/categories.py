@@ -326,8 +326,8 @@ async def process_category_name(message: types.Message, state: FSMContext):
         try:
             category = await create_category(user_id, name, '')
             await state.clear()
-            # Сразу показываем меню категорий
-            await show_categories_menu(message, state)
+            # Сразу показываем меню категорий трат
+            await show_expense_categories_menu(message, state)
         except ValueError as e:
             await send_message_with_cleanup(message, state, f"❌ {str(e)}")
             await state.clear()
@@ -415,8 +415,8 @@ async def process_custom_icon(message: types.Message, state: FSMContext):
     # Очищаем состояние
     await state.clear()
     
-    # Показываем меню категорий
-    await show_categories_menu(message, state)
+    # Показываем меню категорий трат
+    await show_expense_categories_menu(message, state)
 
 
 @router.callback_query(lambda c: c.data == "no_icon")
@@ -446,8 +446,8 @@ async def no_icon_selected(callback: types.CallbackQuery, state: FSMContext):
     # Очищаем состояние
     await state.clear()
     
-    # Показываем меню категорий
-    await show_categories_menu(callback, state)
+    # Показываем меню категорий трат (не общее меню)
+    await show_expense_categories_menu(callback, state)
     
     await callback.answer()
 
@@ -483,8 +483,8 @@ async def set_category_icon(callback: types.CallbackQuery, state: FSMContext):
     # Очищаем состояние
     await state.clear()
     
-    # Показываем меню категорий
-    await show_categories_menu(callback, state)
+    # Показываем меню категорий трат (не общее меню)
+    await show_expense_categories_menu(callback, state)
     
     await callback.answer()
 
@@ -582,8 +582,8 @@ async def delete_category_direct(callback: types.CallbackQuery, state: FSMContex
         
         if success:
             await callback.answer()
-            # Сразу показываем меню категорий
-            await show_categories_menu(callback, state)
+            # Сразу показываем меню категорий трат
+            await show_expense_categories_menu(callback, state)
         else:
             await callback.answer("❌ Не удалось удалить категорию", show_alert=True)
     else:
@@ -613,9 +613,9 @@ async def skip_edit_name(callback: types.CallbackQuery, state: FSMContext):
     has_emoji = bool(re.match(emoji_pattern, category.name))
     
     if has_emoji:
-        # Если эмодзи уже есть, просто возвращаемся к меню категорий
+        # Если эмодзи уже есть, просто возвращаемся к меню категорий трат
         await state.clear()
-        await show_categories_menu(callback, state)
+        await show_expense_categories_menu(callback, state)
         await callback.answer("Название категории оставлено без изменений")
     else:
         # Если эмодзи нет, извлекаем чистое название без эмодзи
@@ -732,8 +732,8 @@ async def process_edit_category_name(message: types.Message, state: FSMContext):
             # Очищаем состояние
             await state.clear()
             
-            # Показываем меню категорий
-            await show_categories_menu(message, state)
+            # Показываем меню категорий трат (не общее меню)
+            await show_expense_categories_menu(message, state)
         else:
             await message.answer(
                 "❌ Не удалось обновить категорию.",
