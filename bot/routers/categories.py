@@ -591,40 +591,86 @@ async def delete_category_direct(callback: types.CallbackQuery, state: FSMContex
 
 
 
-@router.callback_query(lambda c: c.data.startswith("skip_edit_name_"))
-async def skip_edit_name(callback: types.CallbackQuery, state: FSMContext):
-    """Пропустить изменение названия и перейти к выбору иконки"""
+# Обработчик skip_edit_name удален - теперь используется новый процесс редактирования
+
+
+@router.callback_query(lambda c: c.data.startswith("edit_cat_"))
+async def edit_category(callback: types.CallbackQuery, state: FSMContext):
+    """Редактирование категории"""
     import logging
-    import re
     logger = logging.getLogger(__name__)
+    logger.info(f"edit_category called with data: {callback.data}")
     
     cat_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
     
     # Получаем информацию о категории
     category = await get_category_by_id(user_id, cat_id)
     
-    if not category:
-        await callback.answer("❌ Категория не найдена", show_alert=True)
-        return
-    
-    # Проверяем, есть ли уже эмодзи в начале названия
-    emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]'
-    has_emoji = bool(re.match(emoji_pattern, category.name))
-    
-    if has_emoji:
-        # Если эмодзи уже есть, просто возвращаемся к меню категорий трат
-        await state.clear()
-        await show_expense_categories_menu(callback, state)
-        await callback.answer("Название категории оставлено без изменений")
-    else:
-        # Если эмодзи нет, извлекаем чистое название без эмодзи
-        name_without_emoji = re.sub(emoji_pattern + r'\s*', '', category.name)
+    if category:
+        # Сохраняем ID категории в состоянии для последующего редактирования
+        await state.update_data(editing_category_id=cat_id, old_category_name=category.name)
         
-        # Сохраняем данные для выбора иконки
+        # Показываем меню выбора что редактировать
+        await callback.message.edit_text(
+            f"✏️ Редактирование категории «{category.name}»\n\n"
+            "Что вы хотите изменить?",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📝 Название", callback_data=f"edit_cat_name_{cat_id}")],
+                [InlineKeyboardButton(text="🎨 Иконку", callback_data=f"edit_cat_icon_{cat_id}")],
+                [InlineKeyboardButton(text="❌ Отмена", callback_data="edit_categories")]
+            ])
+        )
+    else:
+        await callback.answer("❌ Категория не найдена", show_alert=True)
+    
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data.startswith("edit_cat_name_"))
+async def edit_category_name_start(callback: types.CallbackQuery, state: FSMContext):
+    """Начало редактирования названия категории"""
+    cat_id = int(callback.data.split("_")[-1])
+    user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
+    
+    # Получаем информацию о категории
+    category = await get_category_by_id(user_id, cat_id)
+    
+    if category:
+        await state.update_data(editing_category_id=cat_id)
+        await state.set_state(CategoryStates.editing_name)
+        
+        await callback.message.edit_text(
+            f"📝 Введите новое название для категории «{category.name}»:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_cat_{cat_id}")]
+            ])
+        )
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data.startswith("edit_cat_icon_"))
+async def edit_category_icon_start(callback: types.CallbackQuery, state: FSMContext):
+    """Начало редактирования иконки категории"""
+    import re
+    
+    cat_id = int(callback.data.split("_")[-1])
+    user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
+    
+    # Получаем информацию о категории
+    category = await get_category_by_id(user_id, cat_id)
+    
+    if category:
+        # Извлекаем чистое название без эмодзи
+        emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+\s*'
+        name_without_emoji = re.sub(emoji_pattern, '', category.name)
+        
         await state.update_data(
             editing_category_id=cat_id,
-            name=name_without_emoji  # Сохраняем название без эмодзи
+            name=name_without_emoji
         )
         
         # Показываем выбор иконок
@@ -648,46 +694,13 @@ async def skip_edit_name(callback: types.CallbackQuery, state: FSMContext):
         
         keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_icon")])
         keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_icon")])
-        keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="edit_categories")])
+        keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_cat_{cat_id}")])
         
         await callback.message.edit_text(
             f"🎨 Выберите новую иконку для категории «{name_without_emoji}»:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         )
         await state.set_state(CategoryForm.waiting_for_icon)
-        await callback.answer()
-
-
-@router.callback_query(lambda c: c.data.startswith("edit_cat_"))
-async def edit_category(callback: types.CallbackQuery, state: FSMContext):
-    """Редактирование категории"""
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(f"edit_category called with data: {callback.data}")
-    
-    cat_id = int(callback.data.split("_")[-1])
-    user_id = callback.from_user.id
-    
-    # Получаем информацию о категории
-    category = await get_category_by_id(user_id, cat_id)
-    
-    if category:
-        # Сохраняем ID категории в состоянии для последующего редактирования
-        await state.update_data(editing_category_id=cat_id, old_category_name=category.name)
-        await state.set_state(CategoryStates.editing_name)
-        logger.info(f"State set to CategoryStates.editing_name for user {user_id}")
-        
-        await callback.message.edit_text(
-            f"✏️ Редактирование категории «{category.name}»\n\n"
-            "Введите новое название категории или нажмите «Пропустить», чтобы оставить текущее:",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⏭️ Пропустить", callback_data=f"skip_edit_name_{cat_id}")],
-                [InlineKeyboardButton(text="❌ Отмена", callback_data="edit_categories")]
-            ])
-        )
-    else:
-        await callback.answer("❌ Категория не найдена", show_alert=True)
-    
     await callback.answer()
 
 
@@ -882,6 +895,7 @@ async def set_income_category_icon(callback: types.CallbackQuery, state: FSMCont
     icon = callback.data.replace("set_income_icon_", "")
     data = await state.get_data()
     name = data.get('income_category_name')
+    editing_category_id = data.get('editing_income_category_id')
     
     if not name:
         await callback.answer("❌ Ошибка: название категории не найдено", show_alert=True)
@@ -889,12 +903,22 @@ async def set_income_category_icon(callback: types.CallbackQuery, state: FSMCont
         return
     
     try:
-        from bot.services.income import create_income_category
-        category = await create_income_category(callback.from_user.id, name, icon)
+        if editing_category_id:
+            # Обновляем существующую категорию
+            from bot.services.income import update_income_category
+            full_name = f"{icon} {name}" if icon else name
+            category = await update_income_category(callback.from_user.id, editing_category_id, new_name=full_name)
+            message = "✅ Категория доходов обновлена"
+        else:
+            # Создаем новую категорию
+            from bot.services.income import create_income_category
+            category = await create_income_category(callback.from_user.id, name, icon)
+            message = "✅ Категория доходов добавлена"
+        
         await state.clear()
         await callback.message.delete()
         await show_income_categories_menu(callback, state)
-        await callback.answer("✅ Категория доходов добавлена")
+        await callback.answer(message)
     except ValueError as e:
         await callback.answer(f"❌ {str(e)}", show_alert=True)
         await state.clear()
@@ -902,9 +926,10 @@ async def set_income_category_icon(callback: types.CallbackQuery, state: FSMCont
 
 @router.callback_query(lambda c: c.data == "no_income_icon")
 async def no_income_icon(callback: types.CallbackQuery, state: FSMContext):
-    """Создание категории доходов без иконки"""
+    """Создание категории доходов без иконки или обновление существующей"""
     data = await state.get_data()
     name = data.get('income_category_name')
+    editing_category_id = data.get('editing_income_category_id')
     
     if not name:
         await callback.answer("❌ Ошибка: название категории не найдено", show_alert=True)
@@ -912,12 +937,21 @@ async def no_income_icon(callback: types.CallbackQuery, state: FSMContext):
         return
     
     try:
-        from bot.services.income import create_income_category
-        category = await create_income_category(callback.from_user.id, name, '')
+        if editing_category_id:
+            # Обновляем существующую категорию
+            from bot.services.income import update_income_category
+            category = await update_income_category(callback.from_user.id, editing_category_id, new_name=name)
+            message = "✅ Категория доходов обновлена"
+        else:
+            # Создаем новую категорию
+            from bot.services.income import create_income_category
+            category = await create_income_category(callback.from_user.id, name, '')
+            message = "✅ Категория доходов добавлена"
+        
         await state.clear()
         await callback.message.delete()
         await show_income_categories_menu(callback, state)
-        await callback.answer("✅ Категория доходов добавлена")
+        await callback.answer(message)
     except ValueError as e:
         await callback.answer(f"❌ {str(e)}", show_alert=True)
         await state.clear()
@@ -1075,17 +1109,108 @@ async def edit_income_categories_start(callback: types.CallbackQuery, state: FSM
 async def edit_income_category(callback: types.CallbackQuery, state: FSMContext):
     """Редактирование выбранной категории доходов"""
     category_id = int(callback.data.replace("edit_income_cat_", ""))
-    lang = await get_user_language(callback.from_user.id)
+    user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
     
-    await state.update_data(editing_income_category_id=category_id)
+    # Получаем информацию о категории
+    from bot.services.income import get_user_income_categories
+    categories = await get_user_income_categories(user_id)
+    category = next((cat for cat in categories if cat.id == category_id), None)
     
-    await callback.message.edit_text(
-        "📝 Введите новое название категории доходов:",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="income_categories_menu")]
-        ])
-    )
-    await state.set_state(IncomeCategoryForm.waiting_for_new_name)
+    if category:
+        await state.update_data(editing_income_category_id=category_id, old_income_category_name=category.name)
+        
+        # Показываем меню выбора что редактировать
+        await callback.message.edit_text(
+            f"✏️ Редактирование категории доходов «{category.name}»\n\n"
+            "Что вы хотите изменить?",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="📝 Название", callback_data=f"edit_income_name_{category_id}")],
+                [InlineKeyboardButton(text="🎨 Иконку", callback_data=f"edit_income_icon_{category_id}")],
+                [InlineKeyboardButton(text="❌ Отмена", callback_data="edit_income_categories")]
+            ])
+        )
+    else:
+        await callback.answer("❌ Категория не найдена", show_alert=True)
+    
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data.startswith("edit_income_name_"))
+async def edit_income_category_name_start(callback: types.CallbackQuery, state: FSMContext):
+    """Начало редактирования названия категории доходов"""
+    category_id = int(callback.data.split("_")[-1])
+    user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
+    
+    # Получаем информацию о категории
+    from bot.services.income import get_user_income_categories
+    categories = await get_user_income_categories(user_id)
+    category = next((cat for cat in categories if cat.id == category_id), None)
+    
+    if category:
+        await state.update_data(editing_income_category_id=category_id)
+        await state.set_state(IncomeCategoryForm.waiting_for_new_name)
+        
+        await callback.message.edit_text(
+            f"📝 Введите новое название для категории доходов «{category.name}»:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_income_cat_{category_id}")]
+            ])
+        )
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data.startswith("edit_income_icon_"))
+async def edit_income_category_icon_start(callback: types.CallbackQuery, state: FSMContext):
+    """Начало редактирования иконки категории доходов"""
+    import re
+    
+    category_id = int(callback.data.split("_")[-1])
+    user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
+    
+    # Получаем информацию о категории
+    from bot.services.income import get_user_income_categories
+    categories = await get_user_income_categories(user_id)
+    category = next((cat for cat in categories if cat.id == category_id), None)
+    
+    if category:
+        # Извлекаем чистое название без эмодзи
+        emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+\s*'
+        name_without_emoji = re.sub(emoji_pattern, '', category.name)
+        
+        await state.update_data(
+            editing_income_category_id=category_id,
+            income_category_name=name_without_emoji
+        )
+        
+        # Показываем выбор иконок для доходов
+        icons = [
+            ['💰', '💵', '💸', '💴', '💶'],
+            ['💷', '💳', '🏦', '💹', '📈'],
+            ['💼', '💻', '🏢', '🏭', '👔'],
+            ['🎯', '🎁', '🎉', '🏆', '💎'],
+            ['🚀', '✨', '⭐', '🌟', '💫'],
+            ['📱', '🎮', '🎬', '🎭', '🎨'],
+            ['🏠', '🚗', '✈️', '🛍️', '🍔'],
+            ['📚', '🎓', '🏥', '⚽', '🎸']
+        ]
+        
+        keyboard_buttons = []
+        for row in icons:
+            buttons_row = [InlineKeyboardButton(text=icon, callback_data=f"set_income_icon_{icon}") for icon in row]
+            keyboard_buttons.append(buttons_row)
+        
+        keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_income_icon")])
+        keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_income_icon")])
+        keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_income_cat_{category_id}")])
+        
+        await callback.message.edit_text(
+            f"🎨 Выберите новую иконку для категории доходов «{name_without_emoji}»:",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        )
+        await state.set_state(IncomeCategoryForm.waiting_for_icon)
     await callback.answer()
 
 
