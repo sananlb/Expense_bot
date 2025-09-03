@@ -994,7 +994,7 @@ async def delete_income_categories_start(callback: types.CallbackQuery, state: F
     for cat in categories:
         keyboard_buttons.append([
             InlineKeyboardButton(
-                text=f"❌ {cat.name}",
+                text=cat.name,
                 callback_data=f"del_income_cat_{cat.id}"
             )
         ])
@@ -1054,7 +1054,7 @@ async def edit_income_categories_start(callback: types.CallbackQuery, state: FSM
     for cat in categories:
         keyboard_buttons.append([
             InlineKeyboardButton(
-                text=f"✏️ {cat.name}",
+                text=cat.name,
                 callback_data=f"edit_income_cat_{cat.id}"
             )
         ])
