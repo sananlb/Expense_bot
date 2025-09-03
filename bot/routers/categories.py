@@ -519,7 +519,8 @@ async def edit_categories_list(callback: types.CallbackQuery, state: FSMContext)
             ))
         keyboard_buttons.append(row)
     
-    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="categories_menu")])
+    lang = await get_user_language(user_id)
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="categories_menu")])
     
     await callback.message.edit_text(
         "✏️ Выберите категорию для редактирования:",
@@ -557,7 +558,8 @@ async def delete_categories_list(callback: types.CallbackQuery, state: FSMContex
             ))
         keyboard_buttons.append(row)
     
-    keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="categories_menu")])
+    lang = await get_user_language(user_id)
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="categories_menu")])
     
     await callback.message.edit_text(
         "🗑 Выберите категорию для удаления:",
