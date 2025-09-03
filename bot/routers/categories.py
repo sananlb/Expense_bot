@@ -645,7 +645,7 @@ async def edit_category_name_start(callback: types.CallbackQuery, state: FSMCont
         await callback.message.edit_text(
             f"📝 Введите новое название для категории «{category.name}»:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_cat_{cat_id}")]
+                [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"edit_cat_{cat_id}")]
             ])
         )
     await callback.answer()
@@ -694,7 +694,7 @@ async def edit_category_icon_start(callback: types.CallbackQuery, state: FSMCont
         
         keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_icon")])
         keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_icon")])
-        keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_cat_{cat_id}")])
+        keyboard_buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=f"edit_cat_{cat_id}")])
         
         await callback.message.edit_text(
             f"🎨 Выберите новую иконку для категории «{name_without_emoji}»:",
@@ -1155,7 +1155,7 @@ async def edit_income_category_name_start(callback: types.CallbackQuery, state: 
         await callback.message.edit_text(
             f"📝 Введите новое название для категории доходов «{category.name}»:",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_income_cat_{category_id}")]
+                [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"edit_income_cat_{category_id}")]
             ])
         )
     await callback.answer()
@@ -1204,7 +1204,7 @@ async def edit_income_category_icon_start(callback: types.CallbackQuery, state: 
         
         keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_income_icon")])
         keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_income_icon")])
-        keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_income_cat_{category_id}")])
+        keyboard_buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=f"edit_income_cat_{category_id}")])
         
         await callback.message.edit_text(
             f"🎨 Выберите новую иконку для категории доходов «{name_without_emoji}»:",
