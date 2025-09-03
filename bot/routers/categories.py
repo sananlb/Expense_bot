@@ -724,69 +724,57 @@ async def process_edit_category_name(message: types.Message, state: FSMContext):
         await state.clear()
         return
     
-    # Проверяем, есть ли уже эмодзи в начале названия
-    import re
-    emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]'
-    has_emoji = bool(re.match(emoji_pattern, new_name))
+    # Получаем текущую категорию для извлечения иконки
+    current_category = await get_category_by_id(user_id, cat_id)
+    if not current_category:
+        await message.answer("❌ Категория не найдена")
+        await state.clear()
+        return
     
-    if has_emoji:
-        # Если эмодзи уже есть, сразу обновляем категорию
-        new_category = await update_category(user_id, cat_id, name=new_name.strip())
-        
-        if new_category:
-            logger.info(f"Category {cat_id} updated successfully with name: {new_name.strip()}")
-            
-            # Удаляем сообщение пользователя
-            try:
-                await message.delete()
-            except:
-                pass
-            
-            # Очищаем состояние
-            await state.clear()
-            
-            # Показываем меню категорий трат (не общее меню)
-            await show_expense_categories_menu(message, state)
-        else:
-            await message.answer(
-                "❌ Не удалось обновить категорию.",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="❌ Отмена", callback_data="categories_menu")]
-                ])
-            )
+    # Проверяем, есть ли эмодзи в текущем названии категории
+    import re
+    emoji_pattern = r'^([\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+)\s*'
+    current_emoji_match = re.match(emoji_pattern, current_category.name)
+    current_emoji = current_emoji_match.group(1) if current_emoji_match else None
+    
+    # Проверяем, есть ли эмодзи в новом названии
+    new_emoji_match = re.match(emoji_pattern, new_name)
+    has_new_emoji = bool(new_emoji_match)
+    
+    if has_new_emoji:
+        # Если в новом названии есть эмодзи, используем его как есть
+        final_name = new_name.strip()
+    elif current_emoji:
+        # Если в новом названии нет эмодзи, но есть в старом - сохраняем старую иконку
+        final_name = f"{current_emoji} {new_name.strip()}"
     else:
-        # Если эмодзи нет, показываем выбор иконок
-        await state.update_data(name=new_name)
-        # editing_category_id уже сохранен в состоянии
+        # Если нет эмодзи ни в старом, ни в новом - оставляем без иконки
+        final_name = new_name.strip()
+    
+    # Всегда обновляем категорию с финальным названием
+    new_category = await update_category(user_id, cat_id, name=final_name)
+    
+    if new_category:
+        logger.info(f"Category {cat_id} updated successfully with name: {final_name}")
         
-        icons = [
-            ['💰', '💵', '💳', '💸', '🏦'],
-            ['🛒', '🍽️', '☕', '🍕', '👪'],
-            ['🚗', '🚕', '🚌', '✈️', '⛽'],
-            ['🏠', '💡', '🔧', '🛠️', '🏡'],
-            ['👕', '👟', '👜', '💄', '💍'],
-            ['💊', '🏥', '💉', '🩺', '🏋️'],
-            ['📱', '💻', '🎮', '📷', '🎧'],
-            ['🎭', '🎬', '🎪', '🎨', '🎯'],
-            ['📚', '✏️', '🎓', '📖', '🖊️'],
-            ['🎁', '🎉', '🎂', '💐', '🎈']
-        ]
+        # Удаляем сообщение пользователя
+        try:
+            await message.delete()
+        except:
+            pass
         
-        keyboard_buttons = []
-        for row in icons:
-            buttons_row = [InlineKeyboardButton(text=icon, callback_data=f"set_icon_{icon}") for icon in row]
-            keyboard_buttons.append(buttons_row)
+        # Очищаем состояние
+        await state.clear()
         
-        keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_icon")])
-        keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_icon")])
-        keyboard_buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="edit_categories")])
-        
-        await send_message_with_cleanup(
-            message, state,
-            f"🎨 Выберите иконку для категории «{new_name}»:",
-            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        # Показываем меню категорий трат (не общее меню)
+        await show_expense_categories_menu(message, state)
+    else:
+        await message.answer(
+            "❌ Не удалось обновить категорию.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Отмена", callback_data="categories_menu")]
+            ])
         )
-        await state.set_state(CategoryForm.waiting_for_icon)
 
 
 @router.callback_query(lambda c: c.data == "cancel_category")
@@ -1231,21 +1219,40 @@ async def process_new_income_category_name(message: types.Message, state: FSMCon
         await state.clear()
         return
     
-    # Проверяем, есть ли эмодзи в начале
+    # Получаем текущую категорию для извлечения иконки
+    from bot.services.income import get_user_income_categories
+    categories = await get_user_income_categories(message.from_user.id)
+    current_category = next((cat for cat in categories if cat.id == category_id), None)
+    
+    if not current_category:
+        await send_message_with_cleanup(message, state, "❌ Категория не найдена")
+        await state.clear()
+        return
+    
+    # Проверяем, есть ли эмодзи в текущем названии категории
     import re
-    emoji_pattern = r'^([\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+)\s*(.*)$'
-    match = re.match(emoji_pattern, new_name)
+    emoji_pattern = r'^([\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+)\s*'
+    current_emoji_match = re.match(emoji_pattern, current_category.name)
+    current_emoji = current_emoji_match.group(1) if current_emoji_match else None
+    
+    # Проверяем, есть ли эмодзи в новом названии
+    new_emoji_match = re.match(emoji_pattern, new_name)
+    has_new_emoji = bool(new_emoji_match)
+    
+    if has_new_emoji:
+        # Если в новом названии есть эмодзи, используем его как есть
+        final_name = new_name.strip()
+    elif current_emoji:
+        # Если в новом названии нет эмодзи, но есть в старом - сохраняем старую иконку
+        final_name = f"{current_emoji} {new_name.strip()}"
+    else:
+        # Если нет эмодзи ни в старом, ни в новом - оставляем без иконки
+        final_name = new_name.strip()
     
     try:
         from bot.services.income import update_income_category
-        if match:
-            # Если есть эмодзи, разделяем на иконку и название
-            icon = match.group(1)
-            clean_name = match.group(2) if match.group(2) else new_name
-            await update_income_category(message.from_user.id, category_id, clean_name, icon)
-        else:
-            # Если нет эмодзи, обновляем только название
-            await update_income_category(message.from_user.id, category_id, new_name)
+        # Обновляем категорию с финальным названием
+        await update_income_category(message.from_user.id, category_id, final_name)
         
         await state.clear()
         await show_income_categories_menu(message, state)
