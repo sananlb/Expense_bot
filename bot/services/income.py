@@ -312,7 +312,33 @@ def get_incomes_by_period(
             start_date = today.replace(day=1)
             end_date = today
             
-        return await get_incomes_summary(user_id, start_date, end_date)
+        # Вызываем синхронно, так как мы в синхронной функции
+        profile = Profile.objects.get(telegram_id=user_id)
+        incomes = Income.objects.filter(
+            profile=profile,
+            income_date__gte=start_date,
+            income_date__lte=end_date
+        )
+        
+        # Общая сумма и количество
+        total_amount = 0
+        for income in incomes:
+            total_amount += float(income.amount)
+            
+        # По категориям
+        by_category = {}
+        for income in incomes:
+            cat_name = income.category.name if income.category else 'Без категории'
+            if cat_name not in by_category:
+                by_category[cat_name] = 0
+            by_category[cat_name] += float(income.amount)
+            
+        return {
+            'total': total_amount,
+            'count': incomes.count(),
+            'by_category': [{'name': k, 'total': v} for k, v in by_category.items()],
+            'currency': profile.currency
+        }
         
     except Exception as e:
         logger.error(f"Error getting incomes by period for user {user_id}: {e}")

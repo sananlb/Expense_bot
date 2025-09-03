@@ -130,12 +130,11 @@ async def show_expense_categories_menu(message: types.Message | types.CallbackQu
     
     # Показываем все категории пользователя
     if categories:
-        text += "Ваши категории трат:\n"
         # Категории уже отсортированы в get_user_categories
         for cat in categories:
             # Переводим название категории если нужно
             translated_name = translate_category_name(cat.name, lang)
-            text += f"\n• {translated_name}"
+            text += f"• {translated_name}\n"
     else:
         text += get_text('no_categories_yet', lang)
     
@@ -202,10 +201,9 @@ async def show_income_categories_menu(message: types.Message | types.CallbackQue
     
     # Показываем все категории доходов
     if income_categories:
-        text += "Ваши категории доходов:\n"
         for cat in income_categories:
             translated_name = translate_category_name(cat.name, lang)
-            text += f"\n• {translated_name}"
+            text += f"• {translated_name}\n"
     else:
         text += "У вас пока нет категорий доходов."
     
