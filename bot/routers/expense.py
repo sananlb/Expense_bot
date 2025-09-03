@@ -558,7 +558,7 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
 
 # Обработчики ввода новых значений
 @router.message(EditExpenseForm.editing_amount)
-async def process_edit_amount(message: types.Message, state: FSMContext):
+async def process_edit_amount(message: types.Message, state: FSMContext, lang: str = 'ru'):
     """Обработка новой суммы"""
     try:
         amount = await validate_amount(message.text)
@@ -575,13 +575,13 @@ async def process_edit_amount(message: types.Message, state: FSMContext):
     
     if success:
         # Показываем обновленную трату
-        await show_updated_expense(message, state, expense_id)
+        await show_updated_expense(message, state, expense_id, lang)
     else:
         await message.answer("❌ Не удалось обновить сумму")
 
 
 @router.message(EditExpenseForm.editing_description)
-async def process_edit_description(message: types.Message, state: FSMContext):
+async def process_edit_description(message: types.Message, state: FSMContext, lang: str = 'ru'):
     """Обработка нового описания"""
     description = message.text.strip()
     if not description:
@@ -601,7 +601,7 @@ async def process_edit_description(message: types.Message, state: FSMContext):
     
     if success:
         # Показываем обновленную трату
-        await show_updated_expense(message, state, expense_id)
+        await show_updated_expense(message, state, expense_id, lang)
     else:
         await message.answer("❌ Не удалось обновить описание")
 
@@ -609,7 +609,7 @@ async def process_edit_description(message: types.Message, state: FSMContext):
 
 # Обработчик ввода суммы после уточнения - ДОЛЖЕН БЫТЬ ПЕРЕД основным обработчиком
 @router.message(ExpenseForm.waiting_for_amount_clarification)
-async def handle_amount_clarification(message: types.Message, state: FSMContext):
+async def handle_amount_clarification(message: types.Message, state: FSMContext, lang: str = 'ru'):
     """Обработка суммы после уточнения описания траты"""
     from ..utils.expense_parser import parse_expense_message
     from ..services.expense import add_expense
@@ -728,7 +728,8 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext)
     message_text = await format_expense_added_message(
         expense=expense,
         category=category,
-        cashback_text=cashback_text
+        cashback_text=cashback_text,
+        lang=lang
     )
     
     # Отправляем подтверждение (сообщение о трате не должно исчезать)
@@ -773,7 +774,7 @@ async def cancel_expense_input(callback: types.CallbackQuery, state: FSMContext)
 # Обработчик текстовых сообщений
 @router.message(F.text & ~F.text.startswith('/'))
 @rate_limit(max_calls=30, period=60)  # 30 сообщений в минуту
-async def handle_text_expense(message: types.Message, state: FSMContext, text: str = None):
+async def handle_text_expense(message: types.Message, state: FSMContext, text: str = None, lang: str = 'ru'):
     """Обработка текстовых сообщений с тратами"""
     # Импортируем необходимые функции в начале
     from ..services.category import get_or_create_category
@@ -933,7 +934,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     expense=expense,
                     category=category,
                     cashback_text=cashback_text,
-                    similar_expense=True
+                    similar_expense=True,
+                    lang=lang
                 )
                 
                 # Отправляем подтверждение (сообщение о трате не должно исчезать)
@@ -1029,7 +1031,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         category=category,
         cashback_text=cashback_text,
         confidence_text=confidence_text,
-        reused_from_last=reused_from_last
+        reused_from_last=reused_from_last,
+        lang=lang
     )
     
     cancel_typing()
@@ -1202,7 +1205,8 @@ async def remove_cashback(callback: types.CallbackQuery, state: FSMContext, lang
         message_text = await format_expense_added_message(
             expense=expense,
             category=expense.category,
-            cashback_text=""  # Пустой текст кешбека
+            cashback_text="",  # Пустой текст кешбека
+            lang=lang
         )
         
         # Показываем обновленную трату с кнопкой редактирования
@@ -1357,7 +1361,7 @@ async def edit_back_to_menu(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(lambda c: c.data == "edit_done", EditExpenseForm.choosing_field)
-async def edit_done(callback: types.CallbackQuery, state: FSMContext):
+async def edit_done(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Завершение редактирования"""
     data = await state.get_data()
     expense_id = data.get('editing_expense_id')
@@ -1389,7 +1393,8 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext):
         message_text = await format_expense_added_message(
             expense=expense,
             category=expense.category,
-            cashback_text=cashback_text
+            cashback_text=cashback_text,
+            lang=lang
         )
         
         # Редактируем сообщение с кнопками редактирования
@@ -1415,7 +1420,7 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.callback_query(lambda c: c.data.startswith("expense_cat_"), EditExpenseForm.editing_category)
-async def process_edit_category(callback: types.CallbackQuery, state: FSMContext):
+async def process_edit_category(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Обработка выбора новой категории"""
     category_id = int(callback.data.split("_")[-1])
     
@@ -1452,7 +1457,7 @@ async def process_edit_category(callback: types.CallbackQuery, state: FSMContext
             )
         
         # Показываем обновленную трату
-        await show_updated_expense_callback(callback, state, expense_id)
+        await show_updated_expense_callback(callback, state, expense_id, lang)
     else:
         await callback.answer("❌ Не удалось обновить категорию", show_alert=True)
 
@@ -1581,7 +1586,7 @@ async def show_edit_menu_callback(callback: types.CallbackQuery, state: FSMConte
         await callback.answer("❌ Трата не найдена", show_alert=True)
 
 
-async def show_updated_expense(message: types.Message, state: FSMContext, expense_id: int):
+async def show_updated_expense(message: types.Message, state: FSMContext, expense_id: int, lang: str = 'ru'):
     """Показать обновленную трату"""
     from expenses.models import Expense
     
@@ -1609,7 +1614,8 @@ async def show_updated_expense(message: types.Message, state: FSMContext, expens
         message_text = await format_expense_added_message(
             expense=expense,
             category=expense.category,
-            cashback_text=cashback_text
+            cashback_text=cashback_text,
+            lang=lang
         )
         
         await send_message_with_cleanup(message, state,
@@ -1631,7 +1637,7 @@ async def show_updated_expense(message: types.Message, state: FSMContext, expens
         await clear_state_keep_cashback(state)
 
 
-async def show_updated_expense_callback(callback: types.CallbackQuery, state: FSMContext, expense_id: int):
+async def show_updated_expense_callback(callback: types.CallbackQuery, state: FSMContext, expense_id: int, lang: str = 'ru'):
     """Показать обновленную трату для callback"""
     from expenses.models import Expense
     
@@ -1659,7 +1665,8 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
         message_text = await format_expense_added_message(
             expense=expense,
             category=expense.category,
-            cashback_text=cashback_text
+            cashback_text=cashback_text,
+            lang=lang
         )
         
         await callback.message.edit_text(

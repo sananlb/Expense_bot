@@ -8,14 +8,14 @@ import aiohttp
 
 from aiogram import types
 from aiogram.types import File
+from .key_rotation_mixin import GoogleKeyRotationMixin, OpenAIKeyRotationMixin
 
 logger = logging.getLogger(__name__)
 
 
-class VoiceProcessor:
+class VoiceProcessor(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
     def __init__(self):
-        self.openai_api_key = os.getenv('OPENAI_API_KEY')
-        self.google_api_key = os.getenv('GOOGLE_API_KEY')
+        # Не используем единичные ключи, будем использовать ротацию
         self.yandex_api_key = os.getenv('YANDEX_API_KEY')
         self.yandex_folder_id = os.getenv('YANDEX_FOLDER_ID')
         self.yandex_oauth_token = os.getenv('YANDEX_OAUTH_TOKEN')
@@ -44,13 +44,17 @@ class VoiceProcessor:
     
     async def transcribe_with_openai(self, audio_path: str) -> Optional[str]:
         """Transcribe audio using OpenAI Whisper API"""
-        if not self.openai_api_key:
-            logger.warning("OpenAI API key not configured")
+        # Получаем следующий ключ для ротации
+        key_result = OpenAIKeyRotationMixin.get_next_key()
+        if not key_result:
+            logger.warning("No OpenAI API keys available for rotation")
             return None
+        api_key, key_index = key_result
             
         try:
             import openai
-            openai.api_key = self.openai_api_key
+            openai.api_key = api_key
+            logger.debug(f"[VoiceProcessor] Using OpenAI key for transcription")
             
             # Read audio file
             async with aiofiles.open(audio_path, 'rb') as audio_file:
@@ -59,7 +63,7 @@ class VoiceProcessor:
             # Create form data
             url = "https://api.openai.com/v1/audio/transcriptions"
             headers = {
-                "Authorization": f"Bearer {self.openai_api_key}"
+                "Authorization": f"Bearer {api_key}"
             }
             
             # Prepare multipart form data
@@ -87,9 +91,12 @@ class VoiceProcessor:
     
     async def transcribe_with_google(self, audio_path: str) -> Optional[str]:
         """Fallback: Transcribe using Google Speech-to-Text"""
-        if not self.google_api_key:
-            logger.warning("Google API key not configured")
+        # Получаем следующий ключ для ротации
+        key_result = GoogleKeyRotationMixin.get_next_key()
+        if not key_result:
+            logger.warning("No Google API keys available for rotation")
             return None
+        api_key, key_index = key_result
             
         try:
             # For Google Cloud Speech, we would need to:
@@ -211,12 +218,12 @@ class VoiceProcessor:
             if user_language == 'ru' and self.yandex_folder_id:
                 text = await self.transcribe_with_yandex(audio_path)
             
-            # Fallback to OpenAI
-            if not text and self.openai_api_key:
+            # Fallback to OpenAI (проверяем доступность ключей через миксин)
+            if not text and OpenAIKeyRotationMixin.get_api_keys():
                 text = await self.transcribe_with_openai(audio_path)
             
-            # Fallback to Google
-            if not text and self.google_api_key:
+            # Fallback to Google (проверяем доступность ключей через миксин)
+            if not text and GoogleKeyRotationMixin.get_api_keys():
                 text = await self.transcribe_with_google(audio_path)
             
             return text

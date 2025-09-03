@@ -5,6 +5,7 @@ from datetime import date
 from typing import Dict, Any, Optional
 from ..services.expense import get_today_summary
 from ..utils.formatters import format_currency
+from ..utils.language import translate_category_name
 
 
 async def format_expense_added_message(
@@ -14,7 +15,8 @@ async def format_expense_added_message(
     confidence_text: str = "",
     similar_expense: bool = False,
     reused_from_last: bool = False,
-    is_recurring: bool = False
+    is_recurring: bool = False,
+    lang: str = 'ru'
 ) -> str:
     """
     Форматирует сообщение о добавленном расходе с информацией о потраченном за день
@@ -51,11 +53,13 @@ async def format_expense_added_message(
     
     message += f"✅ <b>{description}</b>{invisible_padding}\n\n"
     message += f"🧾 {amount_text}{cashback_text}\n"
+    # Переводим название категории на язык пользователя
+    translated_category = translate_category_name(category.name, lang)
     # Если есть иконка у категории, добавляем её с пробелом, иначе только название
     if category.icon:
-        message += f"{category.icon} {category.name}"
+        message += f"{category.icon} {translated_category}"
     else:
-        message += category.name
+        message += translated_category
     
     # Добавляем уточнения если есть
     if confidence_text:

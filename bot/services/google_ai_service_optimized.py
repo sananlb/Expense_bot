@@ -7,12 +7,23 @@ import json
 import asyncio
 import os
 import sys  # Используем sys.platform - в 8 раз быстрее
+import threading
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
+from django.conf import settings
+from .key_rotation_mixin import GoogleKeyRotationMixin
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+# Создаем пул ключей Google AI из настроек
+GOOGLE_API_KEYS = []
+if hasattr(settings, 'GOOGLE_API_KEYS') and settings.GOOGLE_API_KEYS:
+    GOOGLE_API_KEYS = settings.GOOGLE_API_KEYS
+    logger.info(f"[GoogleAI-Optimized] Initialized {len(GOOGLE_API_KEYS)} API keys for rotation")
+else:
+    logger.warning("[GoogleAI-Optimized] No GOOGLE_API_KEYS found in settings for rotation")
 
 # Самый быстрый способ определения Windows (0.035 мкс vs 0.282 мкс)
 IS_WINDOWS = sys.platform.startswith('win')
@@ -74,7 +85,7 @@ else:
         logger.info("[GoogleAI-Optimized] Configured with API key")
 
 
-class GoogleAIService:
+class GoogleAIService(GoogleKeyRotationMixin):
     """Оптимизированный адаптивный сервис Google AI"""
     
     # Кэшируем экземпляр для переиспользования (синглтон паттерн)
@@ -91,12 +102,11 @@ class GoogleAIService:
         if GoogleAIService._initialized:
             return
             
-        self.api_key = os.getenv('GOOGLE_API_KEY')
-        
-        if not self.api_key:
-            raise ValueError("GOOGLE_API_KEY not found")
+        api_keys = self.get_api_keys()
+        if not api_keys:
+            raise ValueError("GOOGLE_API_KEYS not found in settings")
             
-        logger.info(f"[GoogleAI-Optimized] Initializing ({'isolated' if IS_WINDOWS else 'async'} mode)")
+        logger.info(f"[GoogleAI-Optimized] Initializing ({'isolated' if IS_WINDOWS else 'async'} mode) with {len(api_keys)} keys")
         
         if IS_WINDOWS:
             # Для Windows создаем процессный пул с минимальными настройками
@@ -107,6 +117,8 @@ class GoogleAIService:
             self.genai = genai
             
         GoogleAIService._initialized = True
+    
+    # Метод get_next_key теперь наследуется от GoogleKeyRotationMixin
     
     async def categorize_expense(
         self, 
@@ -120,11 +132,17 @@ class GoogleAIService:
         try:
             if IS_WINDOWS:
                 # Windows: изолированный процесс
+                key_result = self.get_next_key()
+                if not key_result:
+                    logger.error("[GoogleAI-Optimized] No API keys available")
+                    return None
+                api_key, key_index = key_result
+                
                 loop = asyncio.get_event_loop()
                 result = await loop.run_in_executor(
                     self.executor,
                     _process_categorization,
-                    self.api_key,
+                    api_key,
                     text,
                     amount,
                     currency,
@@ -144,6 +162,16 @@ class GoogleAIService:
                 Return ONLY valid JSON:
                 {{"category": "selected_category", "confidence": 0.8, "reasoning": "brief explanation"}}
                 """
+                
+                # Получаем следующий ключ для ротации
+                key_result = self.get_next_key()
+                if not key_result:
+                    logger.error("[GoogleAI-Optimized] No API keys available")
+                    return None
+                api_key, key_index = key_result
+                
+                # Конфигурируем с новым ключом
+                self.genai.configure(api_key=api_key)
                 
                 model = self.genai.GenerativeModel('gemini-2.5-flash')
                 

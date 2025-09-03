@@ -121,16 +121,17 @@ def get_provider_settings(provider: str) -> Dict[str, Any]:
         logger.info("Importing Django settings...")
         from expense_bot import settings
         logger.info("Django settings imported")
-        api_key = None
+        
+        # ВАЖНО: НЕ используем конкретный ключ - сервисы сами управляют ротацией
+        # Возвращаем только базовые настройки, ключи будут получены через ротацию
+        api_keys_available = False
         if hasattr(settings, 'GOOGLE_API_KEYS') and settings.GOOGLE_API_KEYS:
-            api_key = settings.GOOGLE_API_KEYS[0]  # Берем первый ключ
-        elif hasattr(settings, 'GOOGLE_API_KEY'):
-            api_key = settings.GOOGLE_API_KEY
-        else:
-            api_key = os.getenv('GOOGLE_API_KEY')
+            api_keys_available = True
+        elif hasattr(settings, 'GOOGLE_API_KEY') or os.getenv('GOOGLE_API_KEY'):
+            api_keys_available = True
             
         return {
-            'api_key': api_key,
+            'api_keys_available': api_keys_available,
             'default_model': 'gemini-2.5-flash',
             'max_tokens': 1500,
             'temperature': 0.1
@@ -138,16 +139,16 @@ def get_provider_settings(provider: str) -> Dict[str, Any]:
     elif provider == 'openai':
         # Импортируем настройки чтобы получить ключи
         from expense_bot import settings
-        api_key = None
+        
+        # ВАЖНО: НЕ используем конкретный ключ - сервисы сами управляют ротацией
+        api_keys_available = False
         if hasattr(settings, 'OPENAI_API_KEYS') and settings.OPENAI_API_KEYS:
-            api_key = settings.OPENAI_API_KEYS[0]  # Берем первый ключ
-        elif hasattr(settings, 'OPENAI_API_KEY'):
-            api_key = settings.OPENAI_API_KEY
-        else:
-            api_key = os.getenv('OPENAI_API_KEY')
+            api_keys_available = True
+        elif hasattr(settings, 'OPENAI_API_KEY') or os.getenv('OPENAI_API_KEY'):
+            api_keys_available = True
             
         return {
-            'api_key': api_key,
+            'api_keys_available': api_keys_available,
             'default_model': 'gpt-4o-mini',
             'max_tokens': 1500,
             'temperature': 0.1

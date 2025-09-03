@@ -9,29 +9,29 @@ from typing import List, Dict, Any, Optional
 import google.generativeai as genai
 from .ai_base_service import AIBaseService
 from .ai_selector import get_model
+from .key_rotation_mixin import GoogleKeyRotationMixin
+from django.conf import settings
 
 # Настройка логирования
 logger = logging.getLogger(__name__)
 
-# Загружаем API ключ
-GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
-if GOOGLE_API_KEY:
-    genai.configure(api_key=GOOGLE_API_KEY)
-    logger.info("[GoogleAI] API key configured")
+# Проверяем наличие ключей при инициализации
+if hasattr(settings, 'GOOGLE_API_KEYS') and settings.GOOGLE_API_KEYS:
+    logger.info(f"[GoogleAI] Found {len(settings.GOOGLE_API_KEYS)} API keys for rotation")
 else:
-    logger.error("[GoogleAI] GOOGLE_API_KEY not found in environment")
+    logger.warning("[GoogleAI] No GOOGLE_API_KEYS found in settings")
 
 
-class GoogleAIService(AIBaseService):
+class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
     """Сервис для работы с Google AI (Gemini) - упрощенная стабильная версия"""
     
     def __init__(self):
         """Инициализация сервиса"""
-        if not GOOGLE_API_KEY:
-            raise ValueError("GOOGLE_API_KEY not found in environment")
+        api_keys = self.get_api_keys()
+        if not api_keys:
+            raise ValueError("GOOGLE_API_KEYS not found in settings")
         
-        self.api_key = GOOGLE_API_KEY
-        logger.info("[GoogleAI] Service initialized (fixed version)")
+        logger.info(f"[GoogleAI] Service initialized with {len(api_keys)} keys for rotation")
     
     async def categorize_expense(
         self,
@@ -58,6 +58,20 @@ class GoogleAIService(AIBaseService):
             prompt = self.get_expense_categorization_prompt(text, amount, currency, categories, user_context)
             
             model_name = 'gemini-2.5-flash'  # Используем фиксированную модель
+            
+            # Получаем следующий ключ для ротации
+            key_result = self.get_next_key()
+            if not key_result:
+                logger.error("[GoogleAI] No API keys available")
+                return None
+            
+            api_key, key_index = key_result
+            key_name = self.get_key_name(key_index)
+            
+            # Конфигурируем с новым ключом
+            genai.configure(api_key=api_key)
+            logger.debug(f"[GoogleAI] Using {key_name} for categorization")
+            
             model = genai.GenerativeModel(
                 model_name=model_name,
                 system_instruction="You are an expense categorization assistant. Always respond with a valid category name from the provided list."
@@ -108,15 +122,22 @@ class GoogleAIService(AIBaseService):
                         }
                 
                 # Если ничего не нашли, возвращаем первую категорию
-                return {
+                result = {
                     'category': categories[0] if categories else 'Прочее',
                     'confidence': 0.3
                 }
+                # Помечаем ключ как рабочий
+                self.mark_key_success(key_index)
+                return result
             
+            # Помечаем ключ как рабочий если дошли до сюда без исключений
+            self.mark_key_success(key_index)
             return None
             
         except Exception as e:
-            logger.error(f"[GoogleAI] Error: {type(e).__name__}: {str(e)[:200]}")
+            # Помечаем ключ как нерабочий и логируем с его именем
+            self.mark_key_failure(key_index, e)
+            logger.error(f"[GoogleAI] Error with {key_name}: {type(e).__name__}: {str(e)[:200]}")
             return None
     
     async def chat_with_functions(
@@ -390,10 +411,17 @@ class GoogleAIService(AIBaseService):
                         return f"Извините, не могу выполнить запрос. Функция {func_name} не найдена."
             
             # Если функция не нужна, возвращаем обычный ответ
+            # Помечаем ключ как рабочий перед возвратом успешного результата
+            self.mark_key_success(key_index)
             return response
             
         except Exception as e:
-            logger.error(f"[GoogleAI Chat] Error: {type(e).__name__}: {str(e)[:200]}")
+            # Помечаем ключ как нерабочий и логируем с его именем
+            if 'key_index' in locals():
+                self.mark_key_failure(key_index, e)
+                logger.error(f"[GoogleAI Chat] Error with {key_name}: {type(e).__name__}: {str(e)[:200]}")
+            else:
+                logger.error(f"[GoogleAI Chat] Error: {type(e).__name__}: {str(e)[:200]}")
             return "Извините, произошла ошибка при обработке вашего сообщения."
     
     async def _call_ai_with_functions(
@@ -440,6 +468,19 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
 
 Вопрос пользователя: {message}"""
 
+            # Получаем следующий ключ для ротации
+            key_result = self.get_next_key()
+            if not key_result:
+                logger.error("[GoogleAI] No API keys available")
+                return "Извините, сервис временно недоступен."
+            
+            api_key, key_index = key_result
+            key_name = self.get_key_name(key_index)
+            
+            # Конфигурируем с новым ключом
+            genai.configure(api_key=api_key)
+            logger.debug(f"[GoogleAI] Using {key_name} for chat with functions")
+            
             model = genai.GenerativeModel(
                 model_name='gemini-2.5-flash',
                 system_instruction="You are an expense tracking assistant. Analyze the user's question and determine if a function call is needed."
@@ -496,13 +537,20 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
                     logger.info(f"[GoogleAI] First part text preview: {str(response.parts[0])[:100]}")
             
             if response and response.parts:
+                # Помечаем ключ как рабочий перед возвратом успешного результата
+                self.mark_key_success(key_index)
                 return response.text.strip()
             else:
                 logger.warning(f"[GoogleAI] Empty response from API - response={response}, parts={response.parts if response else None}")
                 return "Извините, не удалось получить ответ от AI."
                 
         except Exception as e:
-            logger.error(f"[GoogleAI] Error in _call_ai_with_functions: {e}")
+            # Помечаем ключ как нерабочий и логируем с его именем
+            if 'key_index' in locals():
+                self.mark_key_failure(key_index, e)
+                logger.error(f"[GoogleAI] Error in _call_ai_with_functions with {key_name}: {e}")
+            else:
+                logger.error(f"[GoogleAI] Error in _call_ai_with_functions: {e}")
             return "Извините, произошла ошибка."
     
     async def _call_ai_simple(self, prompt: str) -> str:
@@ -510,6 +558,19 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
         Простой вызов AI для форматирования ответа
         """
         try:
+            # Получаем следующий ключ для ротации
+            key_result = self.get_next_key()
+            if not key_result:
+                logger.error("[GoogleAI] No API keys available")
+                return "Извините, сервис временно недоступен."
+            
+            api_key, key_index = key_result
+            key_name = self.get_key_name(key_index)
+            
+            # Конфигурируем с новым ключом
+            genai.configure(api_key=api_key)
+            logger.debug(f"[GoogleAI] Using {key_name} for chat with functions")
+            
             model = genai.GenerativeModel(
                 model_name='gemini-2.5-flash',
                 system_instruction="Answer in Russian with complete information. Always include dates, amounts, descriptions when available. Be natural but informative."
@@ -588,7 +649,12 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
                 return "Извините, не удалось получить ответ от AI."
                 
         except Exception as e:
-            logger.error(f"[GoogleAI] Error in _call_ai_simple: {e}")
+            # Помечаем ключ как нерабочий и логируем с его именем
+            if 'key_index' in locals():
+                self.mark_key_failure(key_index, e)
+                logger.error(f"[GoogleAI] Error in _call_ai_simple with {key_name}: {e}")
+            else:
+                logger.error(f"[GoogleAI] Error in _call_ai_simple: {e}")
             return "Извините, произошла ошибка."
     
     async def chat(
@@ -612,6 +678,19 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
             
             # Иначе обычный чат
             prompt = self.get_chat_prompt(message, context, user_context)
+            
+            # Получаем следующий ключ для ротации
+            key_result = self.get_next_key()
+            if not key_result:
+                logger.error("[GoogleAI] No API keys available")
+                return "Извините, сервис временно недоступен."
+            
+            api_key, key_index = key_result
+            key_name = self.get_key_name(key_index)
+            
+            # Конфигурируем с новым ключом
+            genai.configure(api_key=api_key)
+            logger.debug(f"[GoogleAI] Using {key_name} for chat with functions")
             
             model = genai.GenerativeModel(
                 model_name='gemini-2.5-flash',
@@ -648,11 +727,18 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
                     logger.info(f"[GoogleAI] First part text preview: {str(response.parts[0])[:100]}")
             
             if response and response.parts:
+                # Помечаем ключ как рабочий перед возвратом успешного результата
+                self.mark_key_success(key_index)
                 return response.text.strip()
             else:
                 logger.warning(f"[GoogleAI] Empty response from API - response={response}, parts={response.parts if response else None}")
                 return "Извините, не удалось получить ответ от AI."
                 
         except Exception as e:
-            logger.error(f"[GoogleAI Chat] Error: {type(e).__name__}: {str(e)[:200]}")
+            # Помечаем ключ как нерабочий и логируем с его именем
+            if 'key_index' in locals():
+                self.mark_key_failure(key_index, e)
+                logger.error(f"[GoogleAI Chat] Error with {key_name}: {type(e).__name__}: {str(e)[:200]}")
+            else:
+                logger.error(f"[GoogleAI Chat] Error: {type(e).__name__}: {str(e)[:200]}")
             return "Извините, произошла ошибка при обработке вашего сообщения."

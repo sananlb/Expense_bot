@@ -19,6 +19,9 @@ from .expense_parser_improved import (
 # Импортируем модели Django
 from database.models import Profile, ExpenseCategory, Expense
 
+# Импортируем ротацию ключей
+from bot.services.key_rotation_mixin import OpenAIKeyRotationMixin
+
 
 class ExpenseParserService:
     """Сервис для обработки расходов с интеграцией AI"""
@@ -28,10 +31,13 @@ class ExpenseParserService:
         self._init_ai_parser()
     
     def _init_ai_parser(self):
-        """Инициализация AI парсера если доступен API ключ"""
-        openai_key = os.getenv('OPENAI_API_KEY')
-        if openai_key:
-            self.ai_parser = ExpenseParserAI(api_key=openai_key)
+        """Инициализация AI парсера с ротацией ключей"""
+        # Проверяем доступность ключей через миксин
+        if OpenAIKeyRotationMixin.get_api_keys():
+            # Получаем следующий ключ для ротации
+            api_key = OpenAIKeyRotationMixin.get_next_key()
+            if api_key:
+                self.ai_parser = ExpenseParserAI(api_key=api_key)
     
     async def parse_text_message(
         self, 

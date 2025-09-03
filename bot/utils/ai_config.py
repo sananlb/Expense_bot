@@ -4,6 +4,7 @@
 import os
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
+from bot.services.key_rotation_mixin import OpenAIKeyRotationMixin, GoogleKeyRotationMixin
 
 
 @dataclass
@@ -31,14 +32,23 @@ class AIConfig:
     
     @classmethod
     def from_env(cls) -> 'AIConfig':
-        """Создание конфигурации из переменных окружения"""
+        """Создание конфигурации с ротацией ключей"""
+        # Получаем ключи через ротацию если доступны
+        openai_key = None
+        if OpenAIKeyRotationMixin.get_api_keys():
+            openai_key = OpenAIKeyRotationMixin.get_next_key()
+        
+        google_key = None
+        if GoogleKeyRotationMixin.get_api_keys():
+            google_key = GoogleKeyRotationMixin.get_next_key()
+        
         return cls(
-            openai_api_key=os.getenv('OPENAI_API_KEY'),
+            openai_api_key=openai_key,
             openai_model=os.getenv('OPENAI_MODEL', 'gpt-4o-mini'),
             openai_max_tokens=int(os.getenv('OPENAI_MAX_TOKENS', '200')),
             openai_temperature=float(os.getenv('OPENAI_TEMPERATURE', '0.1')),
             
-            google_api_key=os.getenv('GOOGLE_AI_API_KEY'),
+            google_api_key=google_key,
             google_model=os.getenv('GOOGLE_AI_MODEL', 'gemini-2.5-flash'),
             
             enable_ai_parsing=os.getenv('ENABLE_AI_PARSING', 'true').lower() == 'true',

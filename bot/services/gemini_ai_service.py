@@ -10,6 +10,7 @@ import asyncio
 import threading
 from functools import partial
 from django.conf import settings
+from .key_rotation_mixin import GoogleKeyRotationMixin
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +26,8 @@ else:
     GOOGLE_API_KEYS = []
 
 
-class GeminiAIService:
+class GeminiAIService(GoogleKeyRotationMixin):
     """Сервис для работы с Google Gemini AI"""
-    
-    _key_index = 0  # Для round-robin распределения
-    _key_lock = threading.Lock()  # Для thread-safe доступа
     
     def __init__(self):
         # Если нет пула ключей, используем единичный ключ
@@ -44,22 +42,15 @@ class GeminiAIService:
             self.api_key = None
             self.model_name = 'gemini-2.5-flash'
     
-    @classmethod
-    def get_next_key(cls) -> Optional[str]:
-        """Thread-safe получение следующего ключа с round-robin ротацией"""
-        if not GOOGLE_API_KEYS:
-            return None
-        
-        # Thread-safe round-robin распределение
-        with cls._key_lock:
-            current_index = cls._key_index
-            cls._key_index = (cls._key_index + 1) % len(GOOGLE_API_KEYS)
-            return GOOGLE_API_KEYS[current_index]
     
     def _configure_api(self) -> Optional[str]:
         """Настроить API с ротацией ключей"""
         # Получаем следующий ключ по round-robin
-        api_key = self.get_next_key()
+        key_result = self.get_next_key()
+        if key_result:
+            api_key, key_index = key_result
+        else:
+            api_key = None
         
         # Если нет пула, используем единичный ключ
         if not api_key and hasattr(self, 'api_key') and self.api_key:

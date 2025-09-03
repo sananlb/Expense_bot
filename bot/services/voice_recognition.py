@@ -12,6 +12,7 @@ import aiofiles
 import asyncio
 import aiohttp
 from io import BytesIO
+from .key_rotation_mixin import OpenAIKeyRotationMixin
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,7 @@ class YandexSpeechKit:
         return text
 
 
-class OpenAIWhisper:
+class OpenAIWhisper(OpenAIKeyRotationMixin):
     """Интеграция с OpenAI Whisper для транскрипции"""
     
     @classmethod
@@ -117,14 +118,15 @@ class OpenAIWhisper:
         try:
             import openai
             
-            # Проверяем наличие API ключа
-            api_key = os.getenv('OPENAI_API_KEY')
+            # Получаем следующий ключ для ротации
+            api_key = cls.get_next_key()
             if not api_key:
-                logger.warning("OpenAI API ключ не настроен")
+                logger.warning("No OpenAI API keys available for rotation")
                 return None
             
-            # Настраиваем клиента
+            # Настраиваем клиента с ключом из ротации
             client = openai.OpenAI(api_key=api_key)
+            logger.debug(f"[OpenAIWhisper] Using OpenAI key for transcription")
             
             # Создаем временный файл для аудио
             with tempfile.NamedTemporaryFile(delete=False, suffix='.ogg') as tmp_file:

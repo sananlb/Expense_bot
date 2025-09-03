@@ -2,10 +2,12 @@ import os
 import json
 import logging
 import hashlib
+import threading
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 import asyncio
 from decimal import Decimal
+from django.conf import settings
 
 import openai
 import google.generativeai as genai
@@ -13,19 +15,35 @@ from aiogram.types import User
 
 from expenses.models import ExpenseCategory, Expense
 from profiles.models import Profile
+from .key_rotation_mixin import GoogleKeyRotationMixin, OpenAIKeyRotationMixin
 
 logger = logging.getLogger(__name__)
 
+# Создаем пул ключей Google AI из настроек
+GOOGLE_API_KEYS = []
+if hasattr(settings, 'GOOGLE_API_KEYS') and settings.GOOGLE_API_KEYS:
+    GOOGLE_API_KEYS = settings.GOOGLE_API_KEYS
+    logger.info(f"[AICategorizationService] Initialized {len(GOOGLE_API_KEYS)} Google API keys for rotation")
+else:
+    logger.warning("[AICategorizationService] No GOOGLE_API_KEYS found in settings")
+
+# Создаем пул ключей OpenAI из настроек
+OPENAI_API_KEYS = []
+if hasattr(settings, 'OPENAI_API_KEYS') and settings.OPENAI_API_KEYS:
+    OPENAI_API_KEYS = settings.OPENAI_API_KEYS
+    logger.info(f"[AICategorizationService] Initialized {len(OPENAI_API_KEYS)} OpenAI API keys for rotation")
+else:
+    logger.warning("[AICategorizationService] No OPENAI_API_KEYS found in settings")
+
 
 class AIConfig:
-    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-    GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+    # Не используем единичные ключи, только пулы ключей
     
     OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
     GOOGLE_MODEL = os.getenv('GOOGLE_MODEL', 'gemini-2.5-flash')
     
-    USE_OPENAI = bool(OPENAI_API_KEY)
-    USE_GOOGLE = bool(GOOGLE_API_KEY)
+    USE_OPENAI = bool(OPENAI_API_KEYS)  # Проверяем пул ключей OpenAI
+    USE_GOOGLE = bool(GOOGLE_API_KEYS)  # Проверяем пул ключей Google
     
     AI_CONFIDENCE_THRESHOLD = float(os.getenv('AI_CONFIDENCE_THRESHOLD', '0.7'))
     MAX_AI_REQUESTS_PER_DAY = int(os.getenv('MAX_AI_REQUESTS_PER_DAY', '100'))
@@ -91,18 +109,13 @@ class AIResponseCache:
         self._cache[key] = (response, datetime.now())
 
 
-class ExpenseCategorizer:
+class ExpenseCategorizer(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
+    
     def __init__(self):
         self.usage_limiter = AIUsageLimiter()
         self.cache = AIResponseCache()
         
-        # Initialize AI clients
-        if AIConfig.USE_OPENAI:
-            openai.api_key = AIConfig.OPENAI_API_KEY
-        
-        if AIConfig.USE_GOOGLE:
-            genai.configure(api_key=AIConfig.GOOGLE_API_KEY)
-            self.google_model = genai.GenerativeModel(AIConfig.GOOGLE_MODEL)
+        # Не инициализируем ключи здесь, будем использовать ротацию при каждом вызове
     
     def get_system_prompt(self) -> str:
         return """Ты помощник для категоризации расходов. 
@@ -146,8 +159,16 @@ class ExpenseCategorizer:
         try:
             from openai import OpenAI
             
-            # Создаем клиент OpenAI с правильным API
-            client = OpenAI(api_key=AIConfig.OPENAI_API_KEY)
+            # Получаем следующий ключ для ротации
+            key_result = OpenAIKeyRotationMixin.get_next_key()
+            if not key_result:
+                logger.error("[AICategorizationService] No OpenAI API keys available")
+                return None
+            api_key, key_index = key_result
+            
+            # Создаем клиент OpenAI с ключом из ротации
+            client = OpenAI(api_key=api_key)
+            logger.debug(f"[ExpenseCategorizer] Using OpenAI key for categorization")
             
             prompt = self.get_categorization_prompt(text, categories, user_context)
             
@@ -173,11 +194,22 @@ class ExpenseCategorizer:
     async def categorize_with_google(self, text: str, categories: List[str],
                                    user_context: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         try:
+            # Получаем следующий ключ для ротации из GoogleKeyRotationMixin
+            key_result = GoogleKeyRotationMixin.get_next_key()
+            if not key_result:
+                logger.error("[AICategorizationService] No Google API keys available")
+                return None
+            api_key, key_index = key_result
+            
+            # Конфигурируем с новым ключом
+            genai.configure(api_key=api_key)
+            google_model = genai.GenerativeModel(AIConfig.GOOGLE_MODEL)
+            
             prompt = self.get_categorization_prompt(text, categories, user_context)
             full_prompt = f"{self.get_system_prompt()}\n\n{prompt}"
             
             response = await asyncio.to_thread(
-                self.google_model.generate_content,
+                google_model.generate_content,
                 full_prompt
             )
             

@@ -7,12 +7,23 @@ import json
 import asyncio
 import os
 import platform
+import threading
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
+from django.conf import settings
+from .key_rotation_mixin import GoogleKeyRotationMixin
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
+
+# Создаем пул ключей Google AI из настроек
+GOOGLE_API_KEYS = []
+if hasattr(settings, 'GOOGLE_API_KEYS') and settings.GOOGLE_API_KEYS:
+    GOOGLE_API_KEYS = settings.GOOGLE_API_KEYS
+    logger.info(f"[GoogleAI-Adaptive] Initialized {len(GOOGLE_API_KEYS)} API keys for rotation")
+else:
+    logger.warning("[GoogleAI-Adaptive] No GOOGLE_API_KEYS found in settings for rotation")
 
 # Определяем ОС
 IS_WINDOWS = platform.system() == 'Windows'
@@ -94,25 +105,17 @@ else:
     logger.info("[GoogleAI-Adaptive] Linux/Mac detected - using native async implementation")
     
     import google.generativeai as genai
-    
-    # Конфигурируем API при загрузке модуля (для Linux/Mac)
-    GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
-    if GOOGLE_API_KEY:
-        genai.configure(api_key=GOOGLE_API_KEY)
-        logger.info("[GoogleAI-Adaptive] Configured with API key (async mode)")
 
 
-class GoogleAIService:
+class GoogleAIService(GoogleKeyRotationMixin):
     """Адаптивный сервис Google AI"""
     
     def __init__(self):
         """Инициализация сервиса"""
-        self.api_key = os.getenv('GOOGLE_API_KEY')
-        
-        if not self.api_key:
-            raise ValueError("GOOGLE_API_KEY not found")
-            
-        logger.info(f"[GoogleAI-Adaptive] Initializing ({'isolated' if IS_WINDOWS else 'async'} mode)")
+        api_keys = self.get_api_keys()
+        if not api_keys:
+            raise ValueError("GOOGLE_API_KEYS not found in settings")
+        logger.info(f"[GoogleAI-Adaptive] Initializing ({'isolated' if IS_WINDOWS else 'async'} mode) with {len(api_keys)} keys")
         
         if IS_WINDOWS:
             # Для Windows создаем процессный пул
@@ -120,15 +123,8 @@ class GoogleAIService:
             self.executor = ProcessPoolExecutor(max_workers=1, mp_context=ctx)
             logger.info("[GoogleAI-Adaptive] Process pool created for Windows")
         else:
-            # Для Linux/Mac используем глобальный genai или импортируем его
-            try:
-                # Пробуем использовать глобальный genai
-                self.genai = genai
-            except NameError:
-                # Если не найден, импортируем
-                import google.generativeai as genai_local
-                genai_local.configure(api_key=self.api_key)
-                self.genai = genai_local
+            # Для Linux/Mac используем глобальный genai
+            self.genai = genai
             logger.info("[GoogleAI-Adaptive] Using native async for Linux/Mac")
     
     async def categorize_expense(
@@ -145,11 +141,18 @@ class GoogleAIService:
             
             if IS_WINDOWS:
                 # Windows: используем изолированный процесс
+                key_result = self.get_next_key()
+                if not key_result:
+                    logger.error("[GoogleAI-Adaptive] No API keys available")
+                    return None
+                api_key, key_index = key_result
+                key_name = self.get_key_name(key_index)
+                
                 loop = asyncio.get_event_loop()
                 result = await loop.run_in_executor(
                     self.executor,
                     _process_categorization,
-                    self.api_key,
+                    api_key,
                     text,
                     amount,
                     currency,
@@ -169,6 +172,17 @@ class GoogleAIService:
                 Return ONLY valid JSON:
                 {{"category": "selected_category", "confidence": 0.8, "reasoning": "brief explanation"}}
                 """
+                
+                # Получаем следующий ключ для ротации
+                key_result = self.get_next_key()
+                if not key_result:
+                    logger.error("[GoogleAI-Adaptive] No API keys available")
+                    return None
+                api_key, key_index = key_result
+                key_name = self.get_key_name(key_index)
+                
+                # Конфигурируем с новым ключом
+                self.genai.configure(api_key=api_key)
                 
                 model = self.genai.GenerativeModel('gemini-2.5-flash')
                 
@@ -216,11 +230,18 @@ class GoogleAIService:
                 if IS_WINDOWS:
                     category_log = ''.join(c for c in category_log if ord(c) < 128).strip() or 'category_with_emoji'
                 logger.info(f"[GoogleAI-Adaptive] Success: {category_log}")
+                # Помечаем ключ как рабочий
+                self.mark_key_success(key_index)
                 
             return result
                 
         except Exception as e:
-            logger.error(f"[GoogleAI-Adaptive] Error: {type(e).__name__}: {str(e)[:200]}")
+            # Помечаем ключ как нерабочий если он был получен
+            if 'key_index' in locals():
+                self.mark_key_failure(key_index, e)
+                logger.error(f"[GoogleAI-Adaptive] Error with {key_name}: {type(e).__name__}: {str(e)[:200]}")
+            else:
+                logger.error(f"[GoogleAI-Adaptive] Error: {type(e).__name__}: {str(e)[:200]}")
             return None
     
     async def chat(self, message: str, context: List[Dict[str, str]], user_context: Optional[Dict[str, Any]] = None) -> str:
@@ -228,9 +249,13 @@ class GoogleAIService:
         if IS_WINDOWS:
             # На Windows используем процессный пул
             try:
-                from .ai_selector import get_provider_settings
-                settings = get_provider_settings('google')
-                api_key = settings['api_key']
+                # Получаем следующий ключ для ротации
+                key_result = self.get_next_key()
+                if not key_result:
+                    logger.error("[GoogleAI-Adaptive] No API keys available")
+                    return "Извините, сервис временно недоступен."
+                api_key, key_index = key_result
+                key_name = self.get_key_name(key_index)
                 
                 # Подготавливаем контекст для промпта
                 context_str = ""
@@ -271,6 +296,16 @@ class GoogleAIService:
             try:
                 from .google_ai_service import GoogleAIService as FunctionService
                 logger.info("[GoogleAI-Adaptive] FunctionService imported successfully")
+                
+                # Перед созданием сервиса конфигурируем API с текущим ключом
+                key_result = self.get_next_key()
+                if not key_result:
+                    logger.error("[GoogleAI-Adaptive] No API keys available")
+                    return "Извините, сервис временно недоступен."
+                api_key, key_index = key_result
+                key_name = self.get_key_name(key_index)
+                
+                self.genai.configure(api_key=api_key)
                 
                 func_service = FunctionService()
                 logger.info("[GoogleAI-Adaptive] FunctionService instance created")

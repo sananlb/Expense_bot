@@ -327,6 +327,11 @@ def process_recurring_payments():
                 expense = payment_info['expense']
                 payment = payment_info['payment']
                 
+                # Получаем язык пользователя из профиля
+                from expenses.models import Profile
+                profile = Profile.objects.filter(telegram_id=user_id).first()
+                user_lang = profile.language_code if profile else 'ru'
+                
                 # Для ежемесячных платежей не считаем кешбэк
                 cashback_text = ""
                 
@@ -336,7 +341,8 @@ def process_recurring_payments():
                         expense=expense,
                         category=expense.category,
                         cashback_text=cashback_text,
-                        is_recurring=True  # Флаг для ежемесячного платежа
+                        is_recurring=True,  # Флаг для ежемесячного платежа
+                        lang=user_lang
                     )
                 )
                 

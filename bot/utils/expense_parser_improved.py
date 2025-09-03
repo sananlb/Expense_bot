@@ -11,8 +11,16 @@ from dataclasses import dataclass
 from datetime import datetime
 try:
     import openai
+    from openai import OpenAI
 except ImportError:
     openai = None
+    OpenAI = None
+
+# Импортируем ротацию ключей
+try:
+    from bot.services.key_rotation_mixin import OpenAIKeyRotationMixin
+except ImportError:
+    OpenAIKeyRotationMixin = None
 
 # Импортируем новый модуль категоризации
 from .expense_categorizer import categorize_expense, correct_typos
@@ -385,10 +393,15 @@ class ExpenseParserAI:
     """Класс для AI-обработки расходов с использованием OpenAI"""
     
     def __init__(self, api_key: str = None, model: str = "gpt-4o-mini"):
-        if api_key and openai:
-            openai.api_key = api_key
         self.model = model
-        self.available = bool(openai and api_key)
+        self.api_key = api_key
+        
+        # Если ключ не передан, пытаемся получить из ротации
+        if not api_key and OpenAIKeyRotationMixin:
+            if OpenAIKeyRotationMixin.get_api_keys():
+                self.api_key = OpenAIKeyRotationMixin.get_next_key()
+        
+        self.available = bool(OpenAI and self.api_key)
     
     async def parse_expense_with_ai(self, text: str, user_context: Optional[Dict] = None) -> Optional[ParsedExpense]:
         """
@@ -430,7 +443,11 @@ class ExpenseParserAI:
 }}
 """
             
-            response = await openai.ChatCompletion.acreate(
+            # Используем новый API OpenAI с клиентом
+            client = OpenAI(api_key=self.api_key)
+            
+            response = await asyncio.to_thread(
+                client.chat.completions.create,
                 model=self.model,
                 messages=[
                     {"role": "system", "content": "Ты эксперт по анализу финансовых трат. Отвечай только валидным JSON."},
