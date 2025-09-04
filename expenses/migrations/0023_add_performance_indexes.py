@@ -75,6 +75,6 @@ class Migration(migrations.Migration):
         # Индексы для Cashback
         migrations.AddIndex(
             model_name='cashback',
-            index=models.Index(fields=['profile', 'is_active'], name='idx_cashback_profile_active'),
+            index=models.Index(fields=['profile', 'month'], name='idx_cashback_profile_month'),
         ),
     ]
