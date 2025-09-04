@@ -13,8 +13,7 @@ import openai
 import google.generativeai as genai
 from aiogram.types import User
 
-from expenses.models import ExpenseCategory, Expense, IncomeCategory, Income
-from profiles.models import Profile
+from expenses.models import ExpenseCategory, Expense, IncomeCategory, Income, Profile
 from .key_rotation_mixin import GoogleKeyRotationMixin, OpenAIKeyRotationMixin
 
 logger = logging.getLogger(__name__)

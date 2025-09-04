@@ -32,10 +32,17 @@ async def test_income_ai_system():
     
     # 1. Создаем тестового пользователя
     test_user_id = 999999999  # Тестовый ID
-    profile, created = Profile.objects.get_or_create(
-        telegram_id=test_user_id,
-        defaults={'username': 'test_income_ai'}
-    )
+    from django.db import transaction
+    from asgiref.sync import sync_to_async
+    
+    @sync_to_async
+    def get_or_create_profile():
+        return Profile.objects.get_or_create(
+            telegram_id=test_user_id,
+            defaults={'language_code': 'ru', 'timezone': 'UTC'}
+        )
+    
+    profile, created = await get_or_create_profile()
     print(f"\n1. Профиль пользователя: {'создан' if created else 'найден'}")
     
     # 2. Создаем категории доходов с генерацией ключевых слов
@@ -47,12 +54,16 @@ async def test_income_ai_system():
         ('📈 Инвестиции', 'инвестиции'),
     ]
     
-    for full_name, name in test_categories:
-        category, created = IncomeCategory.objects.get_or_create(
-            profile=profile,
-            name=full_name,
+    @sync_to_async
+    def get_or_create_income_category(prof, fname):
+        return IncomeCategory.objects.get_or_create(
+            profile=prof,
+            name=fname,
             defaults={'is_active': True}
         )
+    
+    for full_name, name in test_categories:
+        category, created = await get_or_create_income_category(profile, full_name)
         
         if created:
             # Генерируем ключевые слова
@@ -62,9 +73,13 @@ async def test_income_ai_system():
                 print(f"     Примеры: {', '.join(keywords[:5])}")
         else:
             # Показываем существующие ключевые слова
-            existing_keywords = IncomeCategoryKeyword.objects.filter(
-                category=category
-            ).values_list('keyword', flat=True)[:5]
+            @sync_to_async
+            def get_existing_keywords(cat):
+                return list(IncomeCategoryKeyword.objects.filter(
+                    category=cat
+                ).values_list('keyword', flat=True)[:5])
+            
+            existing_keywords = await get_existing_keywords(category)
             print(f"   - {full_name}: уже существует ({len(existing_keywords)} ключевых слов)")
     
     # 3. Тестируем парсинг доходов с AI категоризацией
@@ -123,22 +138,32 @@ async def test_income_ai_system():
     print("\n5. Тестирование обучения системы:")
     
     # Создаем тестовый доход
-    test_income = Income.objects.create(
-        profile=profile,
-        amount=Decimal('20000'),
-        description="Консультация по проекту",
-        category=IncomeCategory.objects.filter(
+    @sync_to_async
+    def create_test_income():
+        cat = IncomeCategory.objects.filter(
             profile=profile,
             name__contains='Зарплата'
         ).first()
-    )
+        return Income.objects.create(
+            profile=profile,
+            amount=Decimal('20000'),
+            description="Консультация по проекту",
+            category=cat
+        )
+    
+    test_income = await create_test_income()
     
     # Меняем категорию на правильную
     old_category = test_income.category
-    new_category = IncomeCategory.objects.filter(
-        profile=profile,
-        name__contains='Фриланс'
-    ).first()
+    
+    @sync_to_async
+    def get_new_category():
+        return IncomeCategory.objects.filter(
+            profile=profile,
+            name__contains='Фриланс'
+        ).first()
+    
+    new_category = await get_new_category()
     
     if old_category and new_category:
         await learn_from_income_category_change(
@@ -150,10 +175,14 @@ async def test_income_ai_system():
         print(f"      {old_category.name} -> {new_category.name}")
         
         # Проверяем что ключевые слова созданы
-        new_keywords = IncomeCategoryKeyword.objects.filter(
-            category=new_category,
-            keyword__icontains='консультация'
-        ).exists()
+        @sync_to_async
+        def check_new_keywords(cat):
+            return IncomeCategoryKeyword.objects.filter(
+                category=cat,
+                keyword__icontains='консультация'
+            ).exists()
+        
+        new_keywords = await check_new_keywords(new_category)
         
         if new_keywords:
             print(f"      Новые ключевые слова добавлены")
@@ -176,9 +205,14 @@ async def test_income_ai_system():
     
     # Очистка тестовых данных
     print("\n7. Очистка тестовых данных...")
-    Income.objects.filter(profile=profile).delete()
-    IncomeCategoryKeyword.objects.filter(category__profile=profile).delete()
-    IncomeCategory.objects.filter(profile=profile).delete()
+    
+    @sync_to_async
+    def cleanup_test_data():
+        Income.objects.filter(profile=profile).delete()
+        IncomeCategoryKeyword.objects.filter(category__profile=profile).delete()
+        IncomeCategory.objects.filter(profile=profile).delete()
+    
+    await cleanup_test_data()
     
     print("\n✅ Все тесты завершены успешно!")
 

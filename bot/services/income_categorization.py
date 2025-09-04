@@ -5,8 +5,7 @@ import logging
 from typing import Optional, Dict, Any, List
 from decimal import Decimal
 
-from expenses.models import IncomeCategory, Income, IncomeCategoryKeyword
-from profiles.models import Profile
+from expenses.models import IncomeCategory, Income, IncomeCategoryKeyword, Profile
 from .ai_categorization import categorizer as base_categorizer
 
 logger = logging.getLogger(__name__)
