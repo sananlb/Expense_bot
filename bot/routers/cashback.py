@@ -578,7 +578,8 @@ async def process_percent_text(message: types.Message, state: FSMContext):
         await show_cashback_menu(message, state)
         
     except Exception as e:
-        await message.answer(f"❌ Ошибка при сохранении: {str(e)}")
+        logger.error(f"Error saving cashback for user {message.from_user.id}: {e}")
+        await message.answer("❌ Ошибка при сохранении кешбэка. Попробуйте позже.")
         await state.clear()
 
 
@@ -805,7 +806,8 @@ async def process_edit_percent(message: types.Message, state: FSMContext):
         await show_cashback_menu(message, state)
         
     except Exception as e:
-        await message.answer(f"❌ Ошибка при сохранении: {str(e)}")
+        logger.error(f"Error saving cashback for user {message.from_user.id}: {e}")
+        await message.answer("❌ Ошибка при сохранении кешбэка. Попробуйте позже.")
         await state.clear()
 
 

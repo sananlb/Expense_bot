@@ -25,33 +25,61 @@ def get_user_recurring_payments(user_id: int, active_only: bool = False) -> List
     if active_only:
         payments = payments.filter(is_active=True)
     
-    return list(payments.select_related('category').order_by('day_of_month'))
+    return list(payments.select_related('expense_category', 'income_category').order_by('day_of_month'))
 
 
 @sync_to_async
 def create_recurring_payment(user_id: int, category_id: int, amount: float, 
-                           description: Optional[str], day_of_month: int) -> RecurringPayment:
-    """Создать новый ежемесячный платеж"""
-    from expenses.models import ExpenseCategory
+                           description: Optional[str], day_of_month: int, 
+                           is_income: bool = False) -> RecurringPayment:
+    """Создать новую регулярную операцию (доход или расход)"""
+    from expenses.models import ExpenseCategory, IncomeCategory
     profile = Profile.objects.get(telegram_id=user_id)
     
-    # Проверяем лимит ежемесячных платежей (максимум 50)
+    # Проверяем лимит регулярных операций (максимум 50)
     recurring_count = RecurringPayment.objects.filter(profile=profile).count()
     if recurring_count >= 50:
-        raise ValueError("Достигнут лимит ежемесячных платежей (максимум 50)")
+        raise ValueError("Достигнут лимит регулярных операций (максимум 50)")
     
-    # Если описание не указано, используем название категории
-    if not description:
-        category = ExpenseCategory.objects.get(id=category_id)
-        description = category.name
+    # Определяем тип операции и категории
+    if is_income:
+        operation_type = RecurringPayment.OPERATION_TYPE_INCOME
+        # Получаем категорию дохода
+        income_category = IncomeCategory.objects.get(id=category_id, profile=profile)
+        expense_category = None
+        
+        # Если описание не указано, используем название категории
+        if not description:
+            description = income_category.name
+            # Капитализируем первую букву
+            if description:
+                description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
+    else:
+        operation_type = RecurringPayment.OPERATION_TYPE_EXPENSE
+        # Получаем категорию расхода
+        expense_category = ExpenseCategory.objects.get(id=category_id, profile=profile)
+        income_category = None
+        
+        # Если описание не указано, используем название категории
+        if not description:
+            description = expense_category.name
+            # Капитализируем первую букву
+            if description:
+                description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
     
-    # Проверяем длину описания (максимум 500 символов)
-    if description and len(description) > 500:
-        raise ValueError("Описание слишком длинное (максимум 500 символов)")
+    # Капитализируем первую букву описания (на случай если пришло без капитализации)
+    if description:
+        description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
+    
+    # Проверяем длину описания (максимум 200 символов по модели)
+    if description and len(description) > 200:
+        raise ValueError("Описание слишком длинное (максимум 200 символов)")
     
     payment = RecurringPayment.objects.create(
         profile=profile,
-        category_id=category_id,
+        operation_type=operation_type,
+        expense_category=expense_category,
+        income_category=income_category,
         amount=Decimal(str(amount)),
         description=description,
         day_of_month=day_of_month,
@@ -59,7 +87,7 @@ def create_recurring_payment(user_id: int, category_id: int, amount: float,
     )
     
     # Перезагружаем с select_related
-    return RecurringPayment.objects.select_related('category').get(id=payment.id)
+    return RecurringPayment.objects.select_related('expense_category', 'income_category').get(id=payment.id)
 
 
 @sync_to_async
@@ -99,7 +127,7 @@ def delete_recurring_payment(user_id: int, payment_id: int) -> bool:
 def get_recurring_payment_by_id(user_id: int, payment_id: int) -> Optional[RecurringPayment]:
     """Получить регулярный платеж по ID"""
     try:
-        return RecurringPayment.objects.select_related('category').get(
+        return RecurringPayment.objects.select_related('expense_category', 'income_category').get(
             id=payment_id,
             profile__telegram_id=user_id
         )
@@ -121,11 +149,11 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
     if current_day == 31:
         current_day = 30
     
-    # Получаем активные платежи на сегодня
+    # Получаем активные операции на сегодня
     payments = RecurringPayment.objects.filter(
         day_of_month=current_day,
         is_active=True
-    ).select_related('profile', 'category')
+    ).select_related('profile', 'expense_category', 'income_category')
     
     processed_count = 0
     processed_payments = []
@@ -137,16 +165,32 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
             continue
         
         try:
-            # Создаем расход
-            expense = Expense.objects.create(
-                profile=payment.profile,
-                category=payment.category,
-                amount=payment.amount,
-                currency=payment.currency,
-                description=f"[Ежемесячный] {payment.description}",
-                expense_date=today,
-                expense_time=datetime.now().time()
-            )
+            # Создаем операцию в зависимости от типа
+            if payment.operation_type == RecurringPayment.OPERATION_TYPE_INCOME:
+                # Создаем доход
+                from expenses.models import Income
+                operation = Income.objects.create(
+                    profile=payment.profile,
+                    category=payment.income_category,
+                    amount=payment.amount,
+                    currency=payment.currency,
+                    description=f"[Ежемесячный] {payment.description}",
+                    income_date=today,
+                    income_type='other'
+                )
+                operation_type = 'income'
+            else:
+                # Создаем расход
+                operation = Expense.objects.create(
+                    profile=payment.profile,
+                    category=payment.expense_category,
+                    amount=payment.amount,
+                    currency=payment.currency,
+                    description=f"[Ежемесячный] {payment.description}",
+                    expense_date=today,
+                    expense_time=datetime.now().time()
+                )
+                operation_type = 'expense'
             
             # Обновляем дату последней обработки
             payment.last_processed = today
@@ -155,10 +199,11 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
             processed_count += 1
             processed_payments.append({
                 'user_id': payment.profile.telegram_id,
-                'expense': expense,
+                'operation': operation,
+                'operation_type': operation_type,
                 'payment': payment
             })
-            logger.info(f"Processed recurring payment {payment.id}: {payment.description}")
+            logger.info(f"Processed recurring {operation_type} {payment.id}: {payment.description}")
             
         except Exception as e:
             logger.error(f"Error processing recurring payment {payment.id}: {e}")

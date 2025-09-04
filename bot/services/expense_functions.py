@@ -1,12 +1,12 @@
 """
-Функции для работы с тратами через function calling в AI
+Функции для работы с тратами и доходами через function calling в AI
 """
 
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from asgiref.sync import sync_to_async
-from expenses.models import Expense, Profile
+from expenses.models import Expense, Profile, Income, IncomeCategory
 from django.db.models import Sum, Avg, Max, Min, Count, Q
 from collections import defaultdict
 import logging
@@ -494,7 +494,12 @@ class ExpenseFunctions:
             if start_date:
                 start = datetime.fromisoformat(start_date).date()
             else:
-                start = date.today() - timedelta(days=7)
+                # Используем дату регистрации пользователя как начальную дату
+                if hasattr(profile, 'created_at') and profile.created_at:
+                    start = profile.created_at.date()
+                else:
+                    # Если нет даты регистрации, берем последние 7 дней
+                    start = date.today() - timedelta(days=7)
             
             if end_date:
                 end = datetime.fromisoformat(end_date).date()
@@ -726,7 +731,7 @@ class ExpenseFunctions:
                 defaults={'language_code': 'ru'}
             )
             
-            expenses_query = Expense.objects.filter(profile=profile)
+            expenses_query = Expense.objects.filter(profile=profile).select_related('category')
             
             if min_amount is not None:
                 expenses_query = expenses_query.filter(amount__gte=min_amount)
@@ -1117,6 +1122,1048 @@ class ExpenseFunctions:
         except Exception as e:
             logger.error(f"Error in get_recent_expenses: {e}")
             return {'success': False, 'message': str(e)}
+    
+    # ================================
+    # INCOME FUNCTIONS
+    # ================================
+    
+    @staticmethod
+    @sync_to_async
+    def get_income_total(user_id: int, period: str = 'month') -> Dict[str, Any]:
+        """
+        Получить общую сумму доходов за период
+        
+        Args:
+            user_id: ID пользователя
+            period: Период (today, week, month, year)
+        """
+        try:
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
+            today = date.today()
+            
+            # Определяем даты периода
+            if period == 'today':
+                start_date = end_date = today
+            elif period == 'week':
+                start_date = today - timedelta(days=today.weekday())
+                end_date = today
+            elif period == 'month':
+                start_date = today.replace(day=1)
+                end_date = today
+            elif period == 'year':
+                start_date = today.replace(month=1, day=1)
+                end_date = today
+            else:
+                from bot.utils import get_text
+                lang = profile.language_code or 'ru'
+                return {
+                    'success': False,
+                    'message': f"{get_text('unknown_period', lang)}: {period}"
+                }
+            
+            # Получаем доходы
+            incomes = Income.objects.filter(
+                profile=profile,
+                income_date__gte=start_date,
+                income_date__lte=end_date
+            )
+            
+            total = incomes.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            count = incomes.count()
+            
+            # Получаем язык пользователя
+            from bot.utils import get_text, translate_category_name
+            lang = profile.language_code or 'ru'
+            
+            # Группируем по категориям
+            by_category = incomes.values('category__name').annotate(
+                total=Sum('amount')
+            ).order_by('-total')
+            
+            categories = []
+            for cat in by_category:
+                category_name = cat['category__name'] or get_text('no_category', lang)
+                # Переводим название категории
+                if cat['category__name']:
+                    category_name = translate_category_name(category_name, lang)
+                    
+                categories.append({
+                    'name': category_name,
+                    'amount': float(cat['total'])
+                })
+            
+            return {
+                'success': True,
+                'period': period,
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat(),
+                'total': float(total),
+                'currency': 'RUB',
+                'count': count,
+                'categories': categories[:5]  # Топ-5 категорий
+            }
+            
+        except Profile.DoesNotExist:
+            from bot.utils import get_text
+            return {
+                'success': False,
+                'message': get_text('profile_not_found', 'ru')
+            }
+        except Exception as e:
+            logger.error(f"Error in get_income_total: {e}")
+            from bot.utils import get_text
+            lang = 'ru'
+            try:
+                profile = Profile.objects.get(telegram_id=user_id)
+                lang = profile.language_code or 'ru'
+            except:
+                pass
+            return {
+                'success': False,
+                'message': f"{get_text('error', lang)}: {str(e)}"
+            }
+    
+    @staticmethod
+    @sync_to_async
+    def get_income_by_category(user_id: int, period_days: int = 30) -> Dict[str, Any]:
+        """
+        Получить статистику доходов по категориям
+        
+        Args:
+            user_id: ID пользователя
+            period_days: Период в днях
+        """
+        try:
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
+            end_date = date.today()
+            start_date = end_date - timedelta(days=period_days)
+            
+            # Получаем доходы по категориям
+            stats = Income.objects.filter(
+                profile=profile,
+                income_date__gte=start_date,
+                income_date__lte=end_date
+            ).values('category__name').annotate(
+                total=Sum('amount'),
+                count=Count('id'),
+                avg=Avg('amount'),
+                max=Max('amount')
+            ).order_by('-total')
+            
+            categories = []
+            total_sum = Decimal('0')
+            
+            for stat in stats:
+                total_sum += stat['total']
+                categories.append({
+                    'name': stat['category__name'] or 'Без категории',
+                    'total': float(stat['total']),
+                    'count': stat['count'],
+                    'average': float(stat['avg']),
+                    'max': float(stat['max'])
+                })
+            
+            # Добавляем проценты
+            for cat in categories:
+                cat['percentage'] = round((cat['total'] / float(total_sum)) * 100, 1) if total_sum > 0 else 0
+            
+            return {
+                'success': True,
+                'period_days': period_days,
+                'total': float(total_sum),
+                'currency': 'RUB',
+                'categories': categories
+            }
+            
+        except Profile.DoesNotExist:
+            from bot.utils import get_text
+            return {
+                'success': False,
+                'message': get_text('profile_not_found', 'ru')
+            }
+        except Exception as e:
+            logger.error(f"Error in get_income_by_category: {e}")
+            return {
+                'success': False,
+                'message': f'Ошибка: {str(e)}'
+            }
+    
+    @staticmethod
+    @sync_to_async
+    def get_recent_incomes(user_id: int, limit: int = 10) -> Dict[str, Any]:
+        """
+        Получить последние доходы
+        """
+        try:
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
+            
+            incomes = Income.objects.filter(
+                profile=profile
+            ).select_related('category').order_by('-income_date', '-income_time', '-id')[:limit]
+            
+            results = []
+            for income in incomes:
+                results.append({
+                    'date': income.income_date.isoformat(),
+                    'time': income.income_time.strftime('%H:%M') if income.income_time else None,
+                    'amount': float(income.amount),
+                    'category': income.category.name if income.category else 'Без категории',
+                    'description': income.description,
+                    'currency': income.currency
+                })
+            
+            return {
+                'success': True,
+                'count': len(results),
+                'incomes': results
+            }
+        except Exception as e:
+            logger.error(f"Error in get_recent_incomes: {e}")
+            return {
+                'success': False,
+                'message': f'Ошибка: {str(e)}'
+            }
+    
+    @staticmethod
+    @sync_to_async
+    def get_max_income_day(user_id: int) -> Dict[str, Any]:
+        """
+        Найти день с максимальным доходом
+        """
+        try:
+            profile = Profile.objects.get(telegram_id=user_id)
+            
+            # Группируем доходы по дням
+            incomes = Income.objects.filter(profile=profile).values('income_date').annotate(
+                total=Sum('amount')
+            ).order_by('-total')
+            
+            if not incomes:
+                return {
+                    'success': True,
+                    'message': 'Нет данных о доходах',
+                    'date': None,
+                    'total': 0
+                }
+            
+            max_day = incomes[0]
+            date_obj = max_day['income_date']
+            
+            # Получаем детали этого дня
+            day_incomes = Income.objects.filter(
+                profile=profile,
+                income_date=date_obj
+            ).order_by('-amount')
+            
+            details = []
+            for inc in day_incomes[:10]:
+                details.append({
+                    'amount': float(inc.amount),
+                    'description': inc.description or inc.category.name if inc.category else 'Доход',
+                    'category': inc.category.name if inc.category else 'Без категории'
+                })
+            
+            return {
+                'success': True,
+                'date': date_obj.isoformat(),
+                'total': float(max_day['total']),
+                'count': day_incomes.count(),
+                'details': details
+            }
+        except Exception as e:
+            logger.error(f"Error in get_max_income_day: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def get_income_period_total(user_id: int, period: str = 'month') -> Dict[str, Any]:
+        """
+        Получить общую сумму доходов за период (аналог get_period_total для расходов)
+        """
+        # Используем существующую функцию get_income_total
+        return ExpenseFunctions.get_income_total(user_id, period)
+    
+    @staticmethod
+    @sync_to_async  
+    def get_max_single_income(user_id: int) -> Dict[str, Any]:
+        """
+        Найти самый большой единичный доход
+        """
+        try:
+            profile = Profile.objects.get(telegram_id=user_id)
+            
+            max_income = Income.objects.filter(profile=profile).order_by('-amount').first()
+            
+            if not max_income:
+                return {
+                    'success': True,
+                    'message': 'Нет данных о доходах',
+                    'income': None
+                }
+            
+            return {
+                'success': True,
+                'income': {
+                    'amount': float(max_income.amount),
+                    'description': max_income.description or 'Доход',
+                    'category': max_income.category.name if max_income.category else 'Без категории',
+                    'date': max_income.income_date.isoformat()
+                }
+            }
+        except Exception as e:
+            logger.error(f"Error in get_max_single_income: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def get_income_category_statistics(user_id: int) -> Dict[str, Any]:
+        """
+        Статистика доходов по категориям (аналог get_category_statistics)
+        """
+        try:
+            profile = Profile.objects.get(telegram_id=user_id)
+            today = date.today()
+            month_ago = today - timedelta(days=30)
+            
+            stats = Income.objects.filter(
+                profile=profile,
+                income_date__gte=month_ago
+            ).values('category__name').annotate(
+                total=Sum('amount'),
+                count=Count('id')
+            ).order_by('-total')
+            
+            categories = []
+            total_income = Decimal('0')
+            
+            for stat in stats:
+                category_name = stat['category__name'] or 'Без категории'
+                amount = float(stat['total'])
+                total_income += stat['total']
+                categories.append({
+                    'name': category_name,
+                    'amount': amount,
+                    'count': stat['count']
+                })
+            
+            # Добавляем проценты
+            for cat in categories:
+                cat['percentage'] = round(cat['amount'] / float(total_income) * 100, 1) if total_income > 0 else 0
+            
+            return {
+                'success': True,
+                'categories': categories,
+                'total': float(total_income),
+                'period_days': 30
+            }
+        except Exception as e:
+            logger.error(f"Error in get_income_category_statistics: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def get_average_incomes(user_id: int) -> Dict[str, Any]:
+        """
+        Средние доходы за разные периоды
+        """
+        try:
+            profile = Profile.objects.get(telegram_id=user_id)
+            today = date.today()
+            
+            # За последние 30 дней
+            month_ago = today - timedelta(days=30)
+            month_incomes = Income.objects.filter(
+                profile=profile,
+                income_date__gte=month_ago,
+                income_date__lte=today
+            )
+            
+            month_total = month_incomes.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            month_count = month_incomes.count()
+            
+            # За последние 7 дней
+            week_ago = today - timedelta(days=7)
+            week_incomes = Income.objects.filter(
+                profile=profile,
+                income_date__gte=week_ago,
+                income_date__lte=today
+            )
+            
+            week_total = week_incomes.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            week_count = week_incomes.count()
+            
+            return {
+                'success': True,
+                'daily_average': float(month_total / 30) if month_total else 0,
+                'weekly_average': float(week_total) if week_total else 0,
+                'monthly_average': float(month_total) if month_total else 0,
+                'average_per_income': float(month_total / month_count) if month_count > 0 else 0,
+                'incomes_per_month': month_count,
+                'incomes_per_week': week_count
+            }
+        except Exception as e:
+            logger.error(f"Error in get_average_incomes: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def search_incomes(user_id: int, query: str) -> Dict[str, Any]:
+        """
+        Поиск доходов по описанию
+        """
+        try:
+            profile = Profile.objects.get(telegram_id=user_id)
+            
+            incomes = Income.objects.filter(
+                profile=profile,
+                description__icontains=query
+            ).order_by('-income_date')[:20]
+            
+            results = []
+            for inc in incomes:
+                results.append({
+                    'date': inc.income_date.isoformat(),
+                    'amount': float(inc.amount),
+                    'description': inc.description or 'Доход',
+                    'category': inc.category.name if inc.category else 'Без категории'
+                })
+            
+            return {
+                'success': True,
+                'query': query,
+                'count': len(results),
+                'incomes': results
+            }
+        except Exception as e:
+            logger.error(f"Error in search_incomes: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def get_income_weekday_statistics(user_id: int) -> Dict[str, Any]:
+        """
+        Статистика доходов по дням недели
+        """
+        try:
+            profile = Profile.objects.get(telegram_id=user_id)
+            
+            incomes = Income.objects.filter(profile=profile)
+            
+            weekday_stats = {}
+            weekdays = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
+            
+            for i, day_name in enumerate(weekdays):
+                day_incomes = incomes.filter(income_date__week_day=(i + 2) % 7 or 7)  # Django week_day: 1=Sunday
+                total = day_incomes.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+                count = day_incomes.count()
+                
+                weekday_stats[day_name] = {
+                    'total': float(total),
+                    'count': count,
+                    'average': float(total / count) if count > 0 else 0
+                }
+            
+            return {
+                'success': True,
+                'weekday_statistics': weekday_stats
+            }
+        except Exception as e:
+            logger.error(f"Error in get_income_weekday_statistics: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def predict_month_income(user_id: int) -> Dict[str, Any]:
+        """
+        Прогноз доходов на текущий месяц
+        """
+        try:
+            profile = Profile.objects.get(telegram_id=user_id)
+            today = date.today()
+            
+            # Доходы с начала месяца
+            month_start = today.replace(day=1)
+            current_incomes = Income.objects.filter(
+                profile=profile,
+                income_date__gte=month_start,
+                income_date__lte=today
+            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            
+            days_passed = today.day
+            days_in_month = 30  # Упрощенно
+            
+            if days_passed > 0:
+                daily_rate = current_incomes / days_passed
+                predicted = daily_rate * days_in_month
+            else:
+                predicted = Decimal('0')
+            
+            return {
+                'success': True,
+                'current_total': float(current_incomes),
+                'predicted_total': float(predicted),
+                'days_passed': days_passed,
+                'days_remaining': days_in_month - days_passed,
+                'daily_rate': float(daily_rate) if days_passed > 0 else 0
+            }
+        except Exception as e:
+            logger.error(f"Error in predict_month_income: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def check_income_target(user_id: int, target_amount: float = 100000) -> Dict[str, Any]:
+        """
+        Проверка достижения целевого дохода (аналог check_budget_status)
+        """
+        try:
+            profile = Profile.objects.get(telegram_id=user_id)
+            today = date.today()
+            month_start = today.replace(day=1)
+            
+            current_income = Income.objects.filter(
+                profile=profile,
+                income_date__gte=month_start,
+                income_date__lte=today
+            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            
+            remaining = Decimal(str(target_amount)) - current_income
+            percentage = (current_income / Decimal(str(target_amount)) * 100) if target_amount > 0 else 0
+            
+            return {
+                'success': True,
+                'target': target_amount,
+                'current': float(current_income),
+                'remaining': float(remaining),
+                'percentage': float(percentage),
+                'on_track': current_income >= Decimal(str(target_amount)),
+                'message': f"Достигнуто {percentage:.1f}% от цели"
+            }
+        except Exception as e:
+            logger.error(f"Error in check_income_target: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def compare_income_periods(user_id: int) -> Dict[str, Any]:
+        """
+        Сравнение доходов за разные периоды
+        """
+        try:
+            profile = Profile.objects.get(telegram_id=user_id)
+            today = date.today()
+            
+            # Текущий месяц
+            current_month_start = today.replace(day=1)
+            current_month_income = Income.objects.filter(
+                profile=profile,
+                income_date__gte=current_month_start,
+                income_date__lte=today
+            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            
+            # Прошлый месяц
+            if today.month == 1:
+                prev_month_start = today.replace(year=today.year-1, month=12, day=1)
+                prev_month_end = today.replace(year=today.year-1, month=12, day=31)
+            else:
+                prev_month_start = today.replace(month=today.month-1, day=1)
+                prev_month_end = (current_month_start - timedelta(days=1))
+            
+            prev_month_income = Income.objects.filter(
+                profile=profile,
+                income_date__gte=prev_month_start,
+                income_date__lte=prev_month_end
+            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            
+            change = current_month_income - prev_month_income
+            change_percent = ((change / prev_month_income) * 100) if prev_month_income > 0 else 0
+            
+            return {
+                'success': True,
+                'current_month': float(current_month_income),
+                'previous_month': float(prev_month_income),
+                'change': float(change),
+                'change_percent': float(change_percent),
+                'trend': 'увеличение' if change > 0 else 'уменьшение' if change < 0 else 'без изменений'
+            }
+        except Exception as e:
+            logger.error(f"Error in compare_income_periods: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def get_income_trend(user_id: int, days: int = 30) -> Dict[str, Any]:
+        """
+        Тренд доходов за период
+        """
+        try:
+            profile = Profile.objects.get(telegram_id=user_id)
+            today = date.today()
+            start_date = today - timedelta(days=days)
+            
+            daily_incomes = {}
+            
+            # Получаем доходы за период
+            incomes = Income.objects.filter(
+                profile=profile,
+                income_date__gte=start_date,
+                income_date__lte=today
+            ).values('income_date').annotate(
+                total=Sum('amount')
+            ).order_by('income_date')
+            
+            # Заполняем все дни
+            current_date = start_date
+            trend_data = []
+            
+            while current_date <= today:
+                day_total = 0
+                for inc in incomes:
+                    if inc['income_date'] == current_date:
+                        day_total = float(inc['total'])
+                        break
+                
+                trend_data.append({
+                    'date': current_date.isoformat(),
+                    'amount': day_total
+                })
+                current_date += timedelta(days=1)
+            
+            # Вычисляем среднее
+            total = sum(d['amount'] for d in trend_data)
+            average = total / len(trend_data) if trend_data else 0
+            
+            return {
+                'success': True,
+                'period_days': days,
+                'trend': trend_data,
+                'total': total,
+                'average': average
+            }
+        except Exception as e:
+            logger.error(f"Error in get_income_trend: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def get_incomes_by_amount_range(user_id: int, min_amount: float = None, max_amount: float = None) -> Dict[str, Any]:
+        """
+        Получить доходы в диапазоне сумм
+        """
+        try:
+            profile = Profile.objects.get(telegram_id=user_id)
+            
+            queryset = Income.objects.filter(profile=profile)
+            
+            if min_amount is not None:
+                queryset = queryset.filter(amount__gte=Decimal(str(min_amount)))
+            
+            if max_amount is not None:
+                queryset = queryset.filter(amount__lte=Decimal(str(max_amount)))
+            
+            incomes = queryset.order_by('-income_date')[:50]
+            
+            results = []
+            for inc in incomes:
+                results.append({
+                    'date': inc.income_date.isoformat(),
+                    'amount': float(inc.amount),
+                    'description': inc.description or 'Доход',
+                    'category': inc.category.name if inc.category else 'Без категории'
+                })
+            
+            total = queryset.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            
+            return {
+                'success': True,
+                'min_amount': min_amount,
+                'max_amount': max_amount,
+                'count': len(results),
+                'total': float(total),
+                'incomes': results
+            }
+        except Exception as e:
+            logger.error(f"Error in get_incomes_by_amount_range: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def get_income_category_total(user_id: int, category: str, period: str = 'month') -> Dict[str, Any]:
+        """
+        Сумма доходов по конкретной категории за период
+        """
+        try:
+            profile = Profile.objects.get(telegram_id=user_id)
+            today = date.today()
+            
+            # Определяем период
+            if period == 'today':
+                start_date = end_date = today
+            elif period == 'week':
+                start_date = today - timedelta(days=7)
+                end_date = today
+            elif period == 'month':
+                start_date = today.replace(day=1)
+                end_date = today
+            elif period == 'year':
+                start_date = today.replace(month=1, day=1)
+                end_date = today
+            else:
+                start_date = today - timedelta(days=30)
+                end_date = today
+            
+            # Ищем категорию
+            from expenses.models import IncomeCategory
+            categories = IncomeCategory.objects.filter(
+                name__icontains=category,
+                profile=profile
+            )
+            
+            if not categories:
+                return {
+                    'success': False,
+                    'message': f'Категория "{category}" не найдена'
+                }
+            
+            incomes = Income.objects.filter(
+                profile=profile,
+                category__in=categories,
+                income_date__gte=start_date,
+                income_date__lte=end_date
+            )
+            
+            total = incomes.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            count = incomes.count()
+            
+            return {
+                'success': True,
+                'category': categories[0].name,
+                'period': period,
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat(),
+                'total': float(total),
+                'count': count,
+                'average': float(total / count) if count > 0 else 0
+            }
+        except Exception as e:
+            logger.error(f"Error in get_income_category_total: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def get_incomes_list(user_id: int, start_date: str = None, end_date: str = None, limit: int = 100) -> Dict[str, Any]:
+        """
+        Список доходов за период с датами
+        """
+        try:
+            profile = Profile.objects.get(telegram_id=user_id)
+            today = date.today()
+            
+            # Парсим даты
+            if start_date:
+                start = datetime.strptime(start_date, '%Y-%m-%d').date()
+            else:
+                # Используем дату регистрации пользователя как начальную дату
+                if hasattr(profile, 'created_at') and profile.created_at:
+                    start = profile.created_at.date()
+                else:
+                    # Если нет даты регистрации, берем последние 30 дней
+                    start = today - timedelta(days=30)
+            
+            if end_date:
+                end = datetime.strptime(end_date, '%Y-%m-%d').date()
+            else:
+                end = today
+            
+            incomes = Income.objects.filter(
+                profile=profile,
+                income_date__gte=start,
+                income_date__lte=end
+            ).order_by('-income_date', '-amount')[:limit]
+            
+            results = []
+            total = Decimal('0')
+            
+            for inc in incomes:
+                amount = float(inc.amount)
+                total += inc.amount
+                results.append({
+                    'date': inc.income_date.isoformat(),
+                    'amount': amount,
+                    'description': inc.description or 'Доход',
+                    'category': inc.category.name if inc.category else 'Без категории'
+                })
+            
+            return {
+                'success': True,
+                'start_date': start.isoformat(),
+                'end_date': end.isoformat(),
+                'count': len(results),
+                'total': float(total),
+                'incomes': results,
+                'limit_message': f"Показано {len(results)} из {limit} максимум" if len(results) == limit else None
+            }
+        except Exception as e:
+            logger.error(f"Error in get_incomes_list: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def get_daily_income_totals(user_id: int, days: int = 30) -> Dict[str, Any]:
+        """
+        Суммы доходов по дням за период
+        """
+        try:
+            profile = Profile.objects.get(telegram_id=user_id)
+            today = date.today()
+            start_date = today - timedelta(days=days)
+            
+            daily_totals = Income.objects.filter(
+                profile=profile,
+                income_date__gte=start_date,
+                income_date__lte=today
+            ).values('income_date').annotate(
+                total=Sum('amount'),
+                count=Count('id')
+            ).order_by('-income_date')
+            
+            results = []
+            grand_total = Decimal('0')
+            
+            for day in daily_totals:
+                amount = float(day['total'])
+                grand_total += day['total']
+                results.append({
+                    'date': day['income_date'].isoformat(),
+                    'total': amount,
+                    'count': day['count']
+                })
+            
+            return {
+                'success': True,
+                'period_days': days,
+                'daily_totals': results,
+                'grand_total': float(grand_total),
+                'days_with_income': len(results),
+                'average_per_day': float(grand_total / days) if days > 0 else 0
+            }
+        except Exception as e:
+            logger.error(f"Error in get_daily_income_totals: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def get_all_operations(user_id: int, start_date: str = None, end_date: str = None, limit: int = 200) -> Dict[str, Any]:
+        """
+        Получить все операции (доходы и расходы) за период
+        """
+        try:
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
+            
+            # Парсим даты
+            if start_date:
+                start = datetime.fromisoformat(start_date).date()
+            else:
+                start = date.today() - timedelta(days=30)
+            
+            if end_date:
+                end = datetime.fromisoformat(end_date).date()
+            else:
+                end = date.today()
+            
+            # Получаем расходы
+            expenses = Expense.objects.filter(
+                profile=profile,
+                expense_date__gte=start,
+                expense_date__lte=end
+            ).select_related('category')
+            
+            # Получаем доходы
+            incomes = Income.objects.filter(
+                profile=profile,
+                income_date__gte=start,
+                income_date__lte=end
+            ).select_related('category')
+            
+            operations = []
+            
+            # Добавляем расходы
+            for exp in expenses:
+                operations.append({
+                    'type': 'expense',
+                    'date': exp.expense_date.isoformat(),
+                    'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
+                    'amount': -float(exp.amount),  # Отрицательное значение для расходов
+                    'category': exp.category.name if exp.category else 'Без категории',
+                    'description': exp.description,
+                    'currency': exp.currency
+                })
+            
+            # Добавляем доходы
+            for income in incomes:
+                operations.append({
+                    'type': 'income',
+                    'date': income.income_date.isoformat(),
+                    'time': income.income_time.strftime('%H:%M') if income.income_time else None,
+                    'amount': float(income.amount),  # Положительное значение для доходов
+                    'category': income.category.name if income.category else 'Без категории',
+                    'description': income.description,
+                    'currency': income.currency
+                })
+            
+            # Сортируем по дате и времени (новые первыми)
+            operations.sort(key=lambda x: (x['date'], x['time'] or '00:00'), reverse=True)
+            
+            # Применяем лимит
+            limited_operations = operations[:limit]
+            
+            # Считаем общий баланс
+            total_income = sum(op['amount'] for op in operations if op['type'] == 'income')
+            total_expense = abs(sum(op['amount'] for op in operations if op['type'] == 'expense'))
+            net_balance = total_income - total_expense
+            
+            response = {
+                'success': True,
+                'start_date': start.isoformat(),
+                'end_date': end.isoformat(),
+                'count': len(limited_operations),
+                'total_operations': len(operations),
+                'operations': limited_operations,
+                'summary': {
+                    'total_income': total_income,
+                    'total_expense': total_expense,
+                    'net_balance': net_balance,
+                    'currency': 'RUB'
+                }
+            }
+            
+            # Добавляем информацию об ограничении, если оно сработало
+            if len(operations) > limit:
+                response['limit_reached'] = True
+                response['limit_message'] = f'💡 <i>Показаны последние {limit} операций из {len(operations)} за выбранный период</i>'
+            
+            return response
+            
+        except Exception as e:
+            logger.error(f"Error in get_all_operations: {e}")
+            return {'success': False, 'message': str(e)}
+    
+    @staticmethod
+    @sync_to_async
+    def get_financial_summary(user_id: int, period: str = 'month') -> Dict[str, Any]:
+        """
+        Получить финансовую сводку (доходы, расходы, баланс) за период
+        """
+        try:
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
+            today = date.today()
+            
+            # Определяем даты периода
+            if period == 'today':
+                start_date = end_date = today
+            elif period == 'week':
+                start_date = today - timedelta(days=today.weekday())
+                end_date = today
+            elif period == 'month':
+                start_date = today.replace(day=1)
+                end_date = today
+            elif period == 'year':
+                start_date = today.replace(month=1, day=1)
+                end_date = today
+            else:
+                return {
+                    'success': False,
+                    'message': f'Неизвестный период: {period}'
+                }
+            
+            # Получаем расходы
+            expenses = Expense.objects.filter(
+                profile=profile,
+                expense_date__gte=start_date,
+                expense_date__lte=end_date
+            )
+            
+            total_expenses = expenses.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            expense_count = expenses.count()
+            
+            # Получаем доходы
+            incomes = Income.objects.filter(
+                profile=profile,
+                income_date__gte=start_date,
+                income_date__lte=end_date
+            )
+            
+            total_income = incomes.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            income_count = incomes.count()
+            
+            # Считаем баланс
+            net_balance = total_income - total_expenses
+            
+            # Статистика по категориям расходов
+            expense_categories = expenses.values('category__name').annotate(
+                total=Sum('amount')
+            ).order_by('-total')[:5]
+            
+            # Статистика по категориям доходов
+            income_categories = incomes.values('category__name').annotate(
+                total=Sum('amount')
+            ).order_by('-total')[:5]
+            
+            return {
+                'success': True,
+                'period': period,
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat(),
+                'income': {
+                    'total': float(total_income),
+                    'count': income_count,
+                    'categories': [
+                        {
+                            'name': cat['category__name'] or 'Без категории',
+                            'amount': float(cat['total'])
+                        }
+                        for cat in income_categories
+                    ]
+                },
+                'expenses': {
+                    'total': float(total_expenses),
+                    'count': expense_count,
+                    'categories': [
+                        {
+                            'name': cat['category__name'] or 'Без категории',
+                            'amount': float(cat['total'])
+                        }
+                        for cat in expense_categories
+                    ]
+                },
+                'balance': {
+                    'net': float(net_balance),
+                    'status': 'profit' if net_balance > 0 else 'loss' if net_balance < 0 else 'break_even'
+                },
+                'currency': 'RUB'
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in get_financial_summary: {e}")
+            return {
+                'success': False,
+                'message': f'Ошибка: {str(e)}'
+            }
 
 
 # Экспортируемые функции для function calling
@@ -1232,6 +2279,107 @@ expense_functions = [
                 }
             },
             "required": ["user_id"]
+        }
+    },
+    # INCOME ANALYSIS FUNCTIONS
+    {
+        "name": "get_income_total",
+        "description": "Get total income for a period (today, week, month, year)",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "integer",
+                    "description": "Telegram user ID"
+                },
+                "period": {
+                    "type": "string",
+                    "enum": ["today", "week", "month", "year"],
+                    "description": "Period to analyze"
+                }
+            },
+            "required": ["user_id", "period"]
+        }
+    },
+    {
+        "name": "get_income_by_category",
+        "description": "Get income statistics by categories",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "integer",
+                    "description": "Telegram user ID"
+                },
+                "period_days": {
+                    "type": "integer",
+                    "description": "Number of days to analyze (default: 30)"
+                }
+            },
+            "required": ["user_id"]
+        }
+    },
+    {
+        "name": "get_recent_incomes",
+        "description": "Get recent income transactions",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "integer",
+                    "description": "Telegram user ID"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of results (default: 10)"
+                }
+            },
+            "required": ["user_id"]
+        }
+    },
+    {
+        "name": "get_all_operations",
+        "description": "Get all financial operations (both income and expenses) for a period",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "integer",
+                    "description": "Telegram user ID"
+                },
+                "start_date": {
+                    "type": "string",
+                    "description": "Start date in ISO format (YYYY-MM-DD), optional"
+                },
+                "end_date": {
+                    "type": "string",
+                    "description": "End date in ISO format (YYYY-MM-DD), optional"
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of operations (default: 200)"
+                }
+            },
+            "required": ["user_id"]
+        }
+    },
+    {
+        "name": "get_financial_summary",
+        "description": "Get comprehensive financial summary with income, expenses and balance",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "user_id": {
+                    "type": "integer",
+                    "description": "Telegram user ID"
+                },
+                "period": {
+                    "type": "string",
+                    "enum": ["today", "week", "month", "year"],
+                    "description": "Period to analyze"
+                }
+            },
+            "required": ["user_id", "period"]
         }
     }
 ]

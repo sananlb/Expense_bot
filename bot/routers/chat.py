@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 import logging
 from typing import Optional, Dict, Any
 
-from ..services.expense import get_today_summary, get_month_summary
+from ..services.expense import get_today_summary
 from ..utils.message_utils import send_message_with_cleanup
 from ..services.ai_selector import get_service
 from ..services.subscription import check_subscription, subscription_required_message, get_subscription_button
@@ -255,14 +255,28 @@ async def get_simple_response(text: str, user_id: int) -> str:
         
         elif 'месяц' in text_lower:
             # Показать траты за месяц
-            today = datetime.now().date()
-            summary = await get_month_summary(user_id, today.month, today.year)
-            if not summary or summary['total'] == 0:
+            from datetime import date
+            from ..services.expense import get_expenses_summary
+            today = date.today()
+            start_date = today.replace(day=1)
+            
+            summary = await get_expenses_summary(
+                user_id=user_id,
+                start_date=start_date,
+                end_date=today
+            )
+            
+            if not summary or summary.get('total', 0) == 0:
                 return "В этом месяце трат пока нет."
             else:
                 response = f"Траты за текущий месяц: {summary['total']:,.0f} ₽\n\n"
-                for cat in summary['categories'][:5]:
-                    response += f"{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽\n"
+                for cat in summary.get('by_category', [])[:5]:
+                    response += f"{cat.get('icon', '')} {cat['name']}: {cat['total']:,.0f} ₽\n"
+                
+                # Добавим информацию о доходах если есть
+                if summary.get('income_total', 0) > 0:
+                    response += f"\nДоходы: {summary['income_total']:,.0f} ₽"
+                    
                 return response
         else:
             return "Я могу показать траты за сегодня или за текущий месяц. Просто спросите!"

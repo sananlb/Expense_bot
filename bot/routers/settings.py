@@ -55,7 +55,8 @@ async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
                     timezone_text = f"UTC+{int(offset)}"
                 else:
                     timezone_text = f"UTC{int(offset)}"
-            except:
+            except (pytz.UnknownTimeZoneError, AttributeError, TypeError) as e:
+                logger.debug(f"Error processing timezone {profile.timezone}: {e}")
                 timezone_text = 'UTC+0'
         else:
             timezone_text = 'UTC+0'
@@ -110,7 +111,8 @@ async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: st
                     timezone_text = f"UTC+{int(offset)}"
                 else:
                     timezone_text = f"UTC{int(offset)}"
-            except:
+            except (pytz.UnknownTimeZoneError, AttributeError, TypeError) as e:
+                logger.debug(f"Error processing timezone {profile.timezone}: {e}")
                 timezone_text = 'UTC+0'
         else:
             timezone_text = 'UTC+0'

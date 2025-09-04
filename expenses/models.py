@@ -251,9 +251,45 @@ class Budget(models.Model):
 
 
 class RecurringPayment(models.Model):
-    """Ежемесячные платежи пользователя"""
+    """Регулярные операции пользователя (доходы и расходы)"""
+    
+    # Типы операций
+    OPERATION_TYPE_EXPENSE = 'expense'
+    OPERATION_TYPE_INCOME = 'income'
+    OPERATION_TYPE_CHOICES = [
+        (OPERATION_TYPE_EXPENSE, 'Расход'),
+        (OPERATION_TYPE_INCOME, 'Доход'),
+    ]
+    
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='recurring_payments')
-    category = models.ForeignKey(ExpenseCategory, on_delete=models.CASCADE)
+    
+    # Тип операции (доход или расход)
+    operation_type = models.CharField(
+        max_length=10, 
+        choices=OPERATION_TYPE_CHOICES,
+        default=OPERATION_TYPE_EXPENSE,
+        verbose_name='Тип операции',
+        db_index=True
+    )
+    
+    # Категории - теперь оба поля опциональные
+    expense_category = models.ForeignKey(
+        ExpenseCategory, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='recurring_expenses',
+        verbose_name='Категория расхода'
+    )
+    income_category = models.ForeignKey(
+        'IncomeCategory',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='recurring_incomes',
+        verbose_name='Категория дохода'
+    )
+    
     amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0.01)])
     currency = models.CharField(max_length=3, default='RUB')
     description = models.CharField(max_length=200, verbose_name='Описание')
@@ -268,15 +304,49 @@ class RecurringPayment(models.Model):
     
     class Meta:
         db_table = 'expenses_recurring_payment'
-        verbose_name = 'Ежемесячный платеж'
-        verbose_name_plural = 'Ежемесячные платежи'
+        verbose_name = 'Регулярная операция'
+        verbose_name_plural = 'Регулярные операции'
         indexes = [
             models.Index(fields=['profile', 'is_active']),
             models.Index(fields=['day_of_month', 'is_active']),
+            models.Index(fields=['operation_type', 'is_active']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(operation_type='expense', expense_category__isnull=False) |
+                    models.Q(operation_type='income', income_category__isnull=False)
+                ),
+                name='category_type_consistency'
+            )
         ]
     
     def __str__(self):
-        return f"{self.description} - {self.amount} {self.currency} ({self.day_of_month} числа)"
+        operation_sign = '+' if self.operation_type == self.OPERATION_TYPE_INCOME else '-'
+        return f"{self.description} {operation_sign}{self.amount} {self.currency} ({self.day_of_month} числа)"
+    
+    @property
+    def category(self):
+        """Получить категорию в зависимости от типа операции"""
+        if self.operation_type == self.OPERATION_TYPE_EXPENSE:
+            return self.expense_category
+        return self.income_category
+    
+    def clean(self):
+        """Валидация модели"""
+        from django.core.exceptions import ValidationError
+        
+        if self.operation_type == self.OPERATION_TYPE_EXPENSE and not self.expense_category:
+            raise ValidationError('Для расхода должна быть указана категория расхода')
+        
+        if self.operation_type == self.OPERATION_TYPE_INCOME and not self.income_category:
+            raise ValidationError('Для дохода должна быть указана категория дохода')
+        
+        # Очистка неиспользуемого поля
+        if self.operation_type == self.OPERATION_TYPE_EXPENSE:
+            self.income_category = None
+        else:
+            self.expense_category = None
 
 
 class Cashback(models.Model):

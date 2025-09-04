@@ -242,7 +242,15 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                             'get_category_statistics',
                             'get_daily_totals',
                             'search_expenses',
-                            'get_expenses_by_amount_range'
+                            'get_expenses_by_amount_range',
+                            # Функции для доходов
+                            'get_incomes_list',
+                            'get_recent_incomes',
+                            'get_max_income_day',
+                            'get_income_category_statistics',
+                            'get_daily_income_totals',
+                            'search_incomes',
+                            'get_incomes_by_amount_range'
                         }
                         
                         # Для функций с большим объемом данных форматируем локально
@@ -381,6 +389,185 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                                     max_expenses=100
                                 )
                             
+                            # Обработка функций доходов
+                            elif func_name == 'get_incomes_list':
+                                from bot.utils.income_formatter import format_incomes_from_dict_list
+                                incomes_data = result.get('incomes', [])
+                                total = result.get('total', 0)
+                                count = result.get('count', len(incomes_data))
+                                start_date = result.get('start_date', '')
+                                end_date = result.get('end_date', '')
+                                
+                                # Определяем описание периода
+                                try:
+                                    from datetime import datetime
+                                    start = datetime.fromisoformat(start_date)
+                                    end = datetime.fromisoformat(end_date)
+                                    
+                                    if start.month == end.month and start.year == end.year:
+                                        months_ru = {
+                                            1: 'январь', 2: 'февраль', 3: 'март', 4: 'апрель',
+                                            5: 'май', 6: 'июнь', 7: 'июль', 8: 'август',
+                                            9: 'сентябрь', 10: 'октябрь', 11: 'ноябрь', 12: 'декабрь'
+                                        }
+                                        period_desc = f"за {months_ru[start.month]} {start.year}"
+                                    else:
+                                        period_desc = f"с {start_date} по {end_date}"
+                                except:
+                                    period_desc = f"с {start_date} по {end_date}"
+                                
+                                subtitle = f"Всего: {count} доходов на сумму {total:,.0f} ₽"
+                                limit_message = result.get('limit_message', '')
+                                if limit_message:
+                                    subtitle += f"\n\n{limit_message}"
+                                
+                                return format_incomes_from_dict_list(
+                                    incomes_data,
+                                    title=f"💰 Доходы {period_desc}",
+                                    subtitle=subtitle,
+                                    max_incomes=100
+                                )
+                            
+                            elif func_name == 'get_recent_incomes':
+                                from bot.utils.income_formatter import format_incomes_from_dict_list
+                                incomes_data = result.get('incomes', [])
+                                count = result.get('count', 0)
+                                
+                                return format_incomes_from_dict_list(
+                                    incomes_data,
+                                    title="💰 Последние доходы",
+                                    subtitle=f"Показано последних доходов: {count}",
+                                    max_incomes=100
+                                )
+                            
+                            elif func_name == 'get_max_income_day':
+                                from bot.utils.income_formatter import format_incomes_from_dict_list
+                                date_str = result.get('date', '')
+                                total = result.get('total', 0)
+                                count = result.get('count', 0)
+                                details = result.get('details', [])
+                                
+                                # Преобразуем детали в формат для форматтера
+                                incomes_data = []
+                                for detail in details:
+                                    incomes_data.append({
+                                        'date': date_str,
+                                        'amount': detail.get('amount', 0),
+                                        'description': detail.get('description', 'Доход'),
+                                        'category': detail.get('category', 'Без категории')
+                                    })
+                                
+                                return format_incomes_from_dict_list(
+                                    incomes_data,
+                                    title=f"💰 День с максимальным доходом",
+                                    subtitle=f"Дата: {date_str}\nВсего доходов: {count}\nОбщая сумма: {total:,.0f} ₽",
+                                    max_incomes=100
+                                )
+                            
+                            elif func_name == 'get_daily_income_totals':
+                                from bot.utils.income_formatter import format_incomes_from_dict_list
+                                daily_totals = result.get('daily_totals', [])
+                                grand_total = result.get('grand_total', 0)
+                                period_days = result.get('period_days', 30)
+                                days_with_income = result.get('days_with_income', 0)
+                                
+                                # Преобразуем в формат для форматтера
+                                incomes_data = []
+                                for day in daily_totals:
+                                    incomes_data.append({
+                                        'date': day.get('date'),
+                                        'amount': day.get('total', 0),
+                                        'description': f"Доходы за день ({day.get('count', 0)} шт.)",
+                                        'category': 'Итог дня'
+                                    })
+                                
+                                return format_incomes_from_dict_list(
+                                    incomes_data,
+                                    title=f"💰 Доходы по дням за {period_days} дней",
+                                    subtitle=f"Всего: {grand_total:,.0f} ₽\nДней с доходами: {days_with_income}",
+                                    max_incomes=100
+                                )
+                            
+                            elif func_name == 'search_incomes':
+                                from bot.utils.income_formatter import format_incomes_from_dict_list
+                                incomes = result.get('incomes', [])
+                                query = result.get('query', '')
+                                count = result.get('count', 0)
+                                
+                                return format_incomes_from_dict_list(
+                                    incomes,
+                                    title=f"🔍 Поиск доходов: '{query}'",
+                                    subtitle=f"Найдено: {count} записей",
+                                    max_incomes=100
+                                )
+                            
+                            elif func_name == 'get_incomes_by_amount_range':
+                                from bot.utils.income_formatter import format_incomes_from_dict_list
+                                incomes = result.get('incomes', [])
+                                min_amount = result.get('min_amount')
+                                max_amount = result.get('max_amount')
+                                count = result.get('count', 0)
+                                
+                                # Формируем заголовок с диапазоном
+                                if min_amount and max_amount:
+                                    range_str = f"от {min_amount:,.0f} до {max_amount:,.0f} ₽"
+                                elif min_amount:
+                                    range_str = f"более {min_amount:,.0f} ₽"
+                                elif max_amount:
+                                    range_str = f"до {max_amount:,.0f} ₽"
+                                else:
+                                    range_str = "все суммы"
+                                
+                                return format_incomes_from_dict_list(
+                                    incomes,
+                                    title=f"💰 Доходы в диапазоне {range_str}",
+                                    subtitle=f"Найдено: {count} записей",
+                                    max_incomes=100
+                                )
+                            
+                            elif func_name == 'compare_income_periods':
+                                from bot.utils.income_formatter import format_incomes_from_dict_list
+                                period1 = result.get('period1', {})
+                                period2 = result.get('period2', {})
+                                difference = result.get('difference', 0)
+                                percent_change = result.get('percent_change', 0)
+                                trend = result.get('trend', '')
+                                
+                                # Формируем читаемый ответ
+                                response = f"📊 <b>Сравнение доходов</b>\n\n"
+                                response += f"<b>{period1.get('name', 'Период 1')}:</b>\n"
+                                response += f"  • Сумма: {period1.get('total', 0):,.0f} ₽\n"
+                                response += f"  • Период: {period1.get('start', '')} - {period1.get('end', '')}\n\n"
+                                response += f"<b>{period2.get('name', 'Период 2')}:</b>\n"
+                                response += f"  • Сумма: {period2.get('total', 0):,.0f} ₽\n"
+                                response += f"  • Период: {period2.get('start', '')} - {period2.get('end', '')}\n\n"
+                                
+                                if difference != 0:
+                                    emoji = '📈' if difference > 0 else '📉'
+                                    response += f"{emoji} <b>Изменение:</b> {difference:+,.0f} ₽ ({percent_change:+.1f}%)\n"
+                                    response += f"Тренд: {trend}"
+                                else:
+                                    response += "💎 Доходы не изменились"
+                                
+                                return response
+                            
+                            elif func_name == 'get_income_trend':
+                                trends = result.get('trends', [])
+                                group_by = result.get('group_by', 'month')
+                                
+                                response = f"📈 <b>Динамика доходов по {group_by}</b>\n\n"
+                                
+                                for trend in trends:
+                                    period = trend.get('period', '')
+                                    total = trend.get('total', 0)
+                                    count = trend.get('count', 0)
+                                    
+                                    response += f"<b>{period}:</b>\n"
+                                    response += f"  • Сумма: {total:,.0f} ₽\n"
+                                    response += f"  • Количество: {count}\n\n"
+                                
+                                return response
+                            
                             else:
                                 # Для других больших функций возвращаем JSON (fallback)
                                 return f"Результат:\n{json.dumps(result, ensure_ascii=False, indent=2)}"
@@ -440,10 +627,10 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
             from datetime import datetime
             today = datetime.now()
             
-            prompt = f"""Ты - помощник по учету расходов. У тебя есть доступ к функциям для анализа трат.
+            prompt = f"""Ты - помощник по учету расходов и доходов. У тебя есть доступ к функциям для анализа финансов.
 Сегодня: {today.strftime('%Y-%m-%d')} ({today.strftime('%B %Y')})
 
-ДОСТУПНЫЕ ФУНКЦИИ:
+ДОСТУПНЫЕ ФУНКЦИИ ДЛЯ РАСХОДОВ:
 1. get_max_expense_day() - для вопросов "В какой день я больше всего потратил?"
 2. get_period_total(period='today'|'yesterday'|'week'|'month'|'year') - для "Сколько я потратил сегодня/вчера/на этой неделе?"
 3. get_max_single_expense() - для "Какая моя самая большая трата?"
@@ -460,6 +647,28 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
 14. get_category_total(category='продукты', period='month') - для "Сколько я трачу на продукты?"
 15. get_expenses_list(start_date='2025-08-01', end_date='2025-08-31') - для "Покажи траты за период/с даты по дату"
 16. get_daily_totals(days=30) - для "Покажи траты по дням/суммы по дням за последний месяц"
+
+ДОСТУПНЫЕ ФУНКЦИИ ДЛЯ ДОХОДОВ:
+17. get_max_income_day() - для "В какой день я больше всего заработал?"
+18. get_income_period_total(period='today'|'yesterday'|'week'|'month'|'year') - для "Сколько я заработал сегодня/вчера/на этой неделе?"
+19. get_max_single_income() - для "Какой мой самый большой доход?"
+20. get_income_category_statistics() - для "Откуда больше всего доходов?"
+21. get_average_incomes() - для "Сколько я зарабатываю в среднем?"
+22. get_recent_incomes(limit=10) - для "Покажи последние доходы"
+23. search_incomes(query='текст') - для "Когда я получал..."
+24. get_income_weekday_statistics() - для "В какие дни недели больше доходов?"
+25. predict_month_income() - для "Сколько я заработаю в этом месяце?"
+26. check_income_target(target_amount=100000) - для "Достигну ли я цели по доходам?"
+27. compare_income_periods() - для "Я стал зарабатывать больше или меньше?"
+28. get_income_trend() - для "Покажи динамику доходов"
+29. get_incomes_by_amount_range(min_amount=10000) - для "Покажи доходы больше 10000"
+30. get_income_category_total(category='зарплата', period='month') - для "Сколько я получаю зарплаты?"
+31. get_incomes_list(start_date='2025-08-01', end_date='2025-08-31') - для "Покажи доходы за период"
+32. get_daily_income_totals(days=30) - для "Покажи доходы по дням"
+
+ФУНКЦИИ ДЛЯ КОМПЛЕКСНОГО АНАЛИЗА:
+33. get_all_operations(start_date='2025-08-01', end_date='2025-08-31', limit=200) - для "Все операции", "Покажи все транзакции"
+34. get_financial_summary(period='month') - для "Финансовая сводка", "Баланс", "Итоги месяца"
 
 ВАЖНО: Если вопрос требует анализа данных, ответь ТОЛЬКО в формате:
 FUNCTION_CALL: имя_функции(параметр1=значение1, параметр2=значение2)
@@ -483,7 +692,7 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
             
             model = genai.GenerativeModel(
                 model_name='gemini-2.5-flash',
-                system_instruction="You are an expense tracking assistant. Analyze the user's question and determine if a function call is needed."
+                system_instruction="You are a finance tracking assistant for both expenses and income. Analyze the user's question and determine if a function call is needed."
             )
             
             generation_config = genai.GenerationConfig(

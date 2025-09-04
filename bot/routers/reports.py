@@ -10,7 +10,7 @@ from calendar import monthrange
 import logging
 
 from bot.keyboards import expenses_summary_keyboard, month_selection_keyboard, back_close_keyboard
-from bot.utils import get_text, format_amount, get_month_name
+from bot.utils import get_text, format_amount, get_month_name, translate_category_name
 from bot.services.expense import get_expenses_summary, get_expenses_by_period, get_last_expenses
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
@@ -116,7 +116,7 @@ async def show_expenses_summary(
             else:
                 period_text = f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
         
-        text = f"📊 {get_text('summary', lang)} {period_text}\n\n"
+        text = f"📊 <b>{get_text('summary', lang)} {period_text}</b>\n\n"
         
         # Проверяем есть ли операции вообще
         has_expenses = summary['total'] > 0
@@ -151,18 +151,20 @@ async def show_expenses_summary(
             
             # По категориям расходов (если есть)
             if summary['by_category'] and has_expenses:
-                text += f"📊 Расходы по категориям:\n"
+                text += f"📊 <b>Расходы по категориям:</b>\n"
                 for cat in summary['by_category'][:5]:  # Максимум 5 категорий расходов
                     icon_text = f"{cat['icon']} " if cat.get('icon') else ""
-                    text += f"  {icon_text}{cat['name']}: {format_amount(cat['total'], summary['currency'], lang)}\n"
+                    translated_name = translate_category_name(cat['name'], lang)
+                    text += f"  {icon_text}{translated_name}: {format_amount(cat['total'], summary['currency'], lang)}\n"
                 text += "\n"
             
             # По категориям доходов (если есть)
             if summary.get('by_income_category') and has_incomes:
-                text += f"💵 Доходы по категориям:\n"
+                text += f"💵 <b>Доходы по категориям:</b>\n"
                 for cat in summary.get('by_income_category', [])[:5]:  # Максимум 5 категорий доходов
                     icon_text = f"{cat['icon']} " if cat.get('icon') else ""
-                    text += f"  {icon_text}{cat['name']}: {format_amount(cat['total'], summary['currency'], lang)}\n"
+                    translated_name = translate_category_name(cat['name'], lang)
+                    text += f"  {icon_text}{translated_name}: {format_amount(cat['total'], summary['currency'], lang)}\n"
                 text += "\n"
             
             # Потенциальный кешбэк
@@ -449,9 +451,9 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                     else:
                         amount_str += f" {expense['currency']}"
                     
-                    # Добавляем "+" для доходов
+                    # Добавляем "+" для доходов и делаем название жирным
                     if expense.get('type') == 'income':
-                        text += f"  {expense['time']} — {expense['description']} <b>+{amount_str}</b>\n"
+                        text += f"  {expense['time']} — <b>{expense['description']}</b> <b>+{amount_str}</b>\n"
                     else:
                         text += f"  {expense['time']} — {expense['description']} {amount_str}\n"
                 

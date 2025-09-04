@@ -7,6 +7,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramNotFound
 from datetime import datetime, timedelta
 from django.utils import timezone
 from decimal import Decimal
@@ -14,6 +15,7 @@ from dateutil.relativedelta import relativedelta
 import logging
 
 from expenses.models import Profile, Subscription, PromoCode, PromoCodeUsage, ReferralBonus
+from django.core.exceptions import ObjectDoesNotExist
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.utils import get_text
 
@@ -130,8 +132,8 @@ async def show_subscription_menu(callback: CallbackQuery, state: FSMContext, lan
                 chat_id=callback.from_user.id,
                 message_id=invoice_msg_id
             )
-        except:
-            pass
+        except (TelegramBadRequest, TelegramNotFound):
+            pass  # Сообщение уже удалено или не найдено
     
     # Удаляем сообщение с кнопкой "Назад"
     if subscription_back_msg_id:
@@ -140,8 +142,8 @@ async def show_subscription_menu(callback: CallbackQuery, state: FSMContext, lan
                 chat_id=callback.from_user.id,
                 message_id=subscription_back_msg_id
             )
-        except:
-            pass
+        except (TelegramBadRequest, TelegramNotFound):
+            pass  # Сообщение уже удалено или не найдено
     
     # Очищаем сохраненные ID
     await state.update_data(invoice_msg_id=None, subscription_back_msg_id=None)
@@ -186,8 +188,8 @@ async def process_subscription_purchase(callback: CallbackQuery, state: FSMConte
     # Удаляем старое сообщение
     try:
         await callback.message.delete()
-    except:
-        pass
+    except (TelegramBadRequest, TelegramNotFound):
+        pass  # Сообщение уже удалено или не найдено
     
     # Создаем инвойс для оплаты
     invoice_msg = await callback.bot.send_invoice(
@@ -253,8 +255,8 @@ async def ask_promocode(callback: CallbackQuery, state: FSMContext):
     # Удаляем старое сообщение
     try:
         await callback.message.delete()
-    except:
-        pass
+    except (TelegramBadRequest, TelegramNotFound):
+        pass  # Сообщение уже удалено или не найдено
     
     # Кнопка отмены
     builder = InlineKeyboardBuilder()
@@ -476,8 +478,8 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
     # Удаляем старое сообщение
     try:
         await callback.message.delete()
-    except:
-        pass
+    except (TelegramBadRequest, TelegramNotFound):
+        pass  # Сообщение уже удалено или не найдено
     
     # Создаем инвойс для оплаты со скидкой
     invoice_msg = await callback.bot.send_invoice(
@@ -565,8 +567,8 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
                 chat_id=message.from_user.id,
                 message_id=subscription_back_msg_id
             )
-        except:
-            pass
+        except (TelegramBadRequest, TelegramNotFound):
+            pass  # Сообщение уже удалено или не найдено
     
     # Очищаем состояние после оплаты
     await state.clear()
@@ -640,7 +642,8 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
             await promocode.asave()
             
             discount_text = f"\nИспользован промокод: {promocode.code} {promocode.get_discount_display()}"
-        except:
+        except (ObjectDoesNotExist, AttributeError) as e:
+            logger.warning(f"Error applying promocode {promocode_id}: {e}")
             discount_text = ""
     else:
         discount_text = ""

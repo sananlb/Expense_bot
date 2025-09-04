@@ -6,12 +6,12 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-# from aiogram.exceptions import CancelHandler  # Not available in aiogram 3.x
+from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramNotFound, TelegramForbiddenError
 from datetime import date, datetime
 import asyncio
 import logging
 
-from ..services.expense import add_expense, get_month_summary
+from ..services.expense import add_expense
 from ..services.cashback import calculate_potential_cashback, calculate_expense_cashback
 from ..services.category import get_or_create_category
 from ..services.subscription import check_subscription
@@ -25,6 +25,7 @@ from ..utils.language import translate_category_name
 from ..decorators import require_subscription, rate_limit
 from ..keyboards import expenses_summary_keyboard
 from expenses.models import Profile
+from django.db import DatabaseError
 
 router = Router(name="expense")
 logger = logging.getLogger(__name__)
@@ -74,95 +75,19 @@ async def show_month_expenses(callback: types.CallbackQuery, state: FSMContext, 
     today = date.today()
     start_date = today.replace(day=1)
     
+    # Используем show_expenses_summary из reports
+    from ..routers.reports import show_expenses_summary
+    await show_expenses_summary(
+        callback.message,
+        start_date,
+        today,
+        lang,
+        state=state,
+        edit=True,
+        original_message=callback.message,
+        callback=callback
+    )
     
-    # Получаем сводку за месяц
-    summary = await get_month_summary(user_id, today.month, today.year)
-    
-    month_names = {
-        1: get_text('january', lang).capitalize(),
-        2: get_text('february', lang).capitalize(),
-        3: get_text('march', lang).capitalize(),
-        4: get_text('april', lang).capitalize(),
-        5: get_text('may', lang).capitalize(),
-        6: get_text('june', lang).capitalize(),
-        7: get_text('july', lang).capitalize(),
-        8: get_text('august', lang).capitalize(),
-        9: get_text('september', lang).capitalize(),
-        10: get_text('october', lang).capitalize(),
-        11: get_text('november', lang).capitalize(),
-        12: get_text('december', lang).capitalize()
-    }
-    
-    if not summary or (not summary.get('currency_totals') or all(v == 0 for v in summary.get('currency_totals', {}).values())):
-        text = f"""📊 <b>{month_names[today.month]} {today.year}</b>
-
-💸 <b>Потрачено за месяц:</b>
-• 0 {get_text('rub', lang)}
-
-{get_text('no_expenses_this_month', lang)}"""
-    else:
-        # Форматируем текст согласно ТЗ
-        text = f"""📊 <b>{month_names[today.month]} {today.year}</b>
-
-💸 <b>Потрачено за месяц:</b>
-"""
-        # Показываем все валюты
-        currency_totals = summary.get('currency_totals', {})
-        for curr, amount in sorted(currency_totals.items()):
-            if amount > 0:
-                text += f"• {format_currency(amount, curr)}\n"
-
-        # Показываем категории для всех валют
-        if summary.get('categories'):
-            text += f"\n📁 <b>{get_text('by_categories', lang)}:</b>"
-            # Добавляем топ-8 категорий
-            other_amount = {}
-            for i, cat in enumerate(summary['categories']):
-                if i < 8 and cat['amount'] > 0:
-                    translated_name = translate_category_name(cat['name'], lang)
-                    text += f"\n{cat['icon']} {translated_name}: {format_currency(cat['amount'], cat['currency'])}"
-                elif i >= 8 and cat['amount'] > 0:
-                    # Суммируем остальные категории по валютам
-                    curr = cat['currency']
-                    if curr not in other_amount:
-                        other_amount[curr] = 0
-                    other_amount[curr] += cat['amount']
-            
-            # Добавляем "Остальные расходы" если есть
-            if other_amount:
-                for curr, amount in other_amount.items():
-                    text += f"\n📊 Остальные расходы: {format_currency(amount, curr)}"
-        
-        # Добавляем потенциальный кешбэк только если он больше 0
-        cashback = await calculate_potential_cashback(user_id, start_date, today)
-        if cashback > 0:
-            text += f"\n\n💳 <b>Потенциальный кешбэк:</b>\n• {format_currency(cashback, 'RUB')}"
-    
-    # Добавляем подсказку внизу курсивом
-    text += "\n\n<i>Показать отчет за другой период?</i>"
-    
-    # Сохраняем текущий период в состоянии
-    await state.update_data(current_month=today.month, current_year=today.year)
-    
-    # Определяем название предыдущего месяца для кнопки
-    if today.month == 1:
-        prev_button_month = 12
-        prev_button_year = today.year - 1
-    else:
-        prev_button_month = today.month - 1
-        prev_button_year = today.year
-    
-    # Кнопки навигации с PDF отчетом
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📄 Сформировать PDF отчет", callback_data="pdf_generate_current")],
-        [InlineKeyboardButton(
-            text=f"← {month_names[prev_button_month]}",
-            callback_data="expenses_prev_month"
-        )],
-        [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
-    ])
-    
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     await callback.answer()
 
 
@@ -173,8 +98,8 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
     
     # Получаем текущий период из состояния
     data = await state.get_data()
-    current_month = data.get('current_month', date.today().month)
-    current_year = data.get('current_year', date.today().year)
+    current_month = data.get('current_month') or date.today().month
+    current_year = data.get('current_year') or date.today().year
     
     # Вычисляем предыдущий месяц
     if current_month == 1:
@@ -184,9 +109,27 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
         prev_month = current_month - 1
         prev_year = current_year
     
+    # Определяем даты начала и конца месяца
+    from calendar import monthrange
+    start_date = date(prev_year, prev_month, 1)
+    _, last_day = monthrange(prev_year, prev_month)
+    end_date = date(prev_year, prev_month, last_day)
     
-    # Получаем сводку за месяц
-    summary = await get_month_summary(user_id, prev_month, prev_year)
+    # Используем show_expenses_summary из reports
+    from ..routers.reports import show_expenses_summary
+    await show_expenses_summary(
+        callback.message,
+        start_date,
+        end_date,
+        lang,
+        state=state,
+        edit=True,
+        original_message=callback.message,
+        callback=callback
+    )
+    
+    await callback.answer()
+    return
     
     month_names = {
         1: get_text('january', lang).capitalize(),
@@ -312,8 +255,8 @@ async def show_next_month_expenses(callback: types.CallbackQuery, state: FSMCont
     
     # Получаем текущий период из состояния
     data = await state.get_data()
-    current_month = data.get('current_month', date.today().month)
-    current_year = data.get('current_year', date.today().year)
+    current_month = data.get('current_month') or date.today().month
+    current_year = data.get('current_year') or date.today().year
     
     # Вычисляем следующий месяц
     if current_month == 12:
@@ -323,8 +266,27 @@ async def show_next_month_expenses(callback: types.CallbackQuery, state: FSMCont
         next_month = current_month + 1
         next_year = current_year
     
-    # Получаем сводку за месяц
-    summary = await get_month_summary(user_id, next_month, next_year)
+    # Определяем даты начала и конца месяца
+    from calendar import monthrange
+    start_date = date(next_year, next_month, 1)
+    _, last_day = monthrange(next_year, next_month)
+    end_date = date(next_year, next_month, last_day)
+    
+    # Используем show_expenses_summary из reports
+    from ..routers.reports import show_expenses_summary
+    await show_expenses_summary(
+        callback.message,
+        start_date,
+        end_date,
+        lang,
+        state=state,
+        edit=True,
+        original_message=callback.message,
+        callback=callback
+    )
+    
+    await callback.answer()
+    return
     
     month_names = {
         1: get_text('january', lang).capitalize(),
@@ -485,8 +447,8 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
             try:
                 await callback.bot.send_chat_action(callback.message.chat.id, "upload_document")
                 await asyncio.sleep(1)
-            except:
-                break
+            except (TelegramForbiddenError, TelegramBadRequest):
+                break  # Пользователь заблокировал бота или некорректный chat_id
     
     # Запускаем задачу отправки индикатора
     action_task = asyncio.create_task(keep_sending_action())
@@ -536,7 +498,7 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
         # Удаляем предыдущее сообщение со сводкой
         try:
             await callback.message.delete()
-        except:
+        except (TelegramBadRequest, TelegramNotFound):
             pass  # Игнорируем ошибки если сообщение уже удалено
         
         
@@ -796,10 +758,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     from ..routers.chat import process_chat_message
     import asyncio
     
-    # Проверяем, есть ли активное состояние (кроме нашего состояния ожидания суммы, 
-    # которое теперь обрабатывается отдельным обработчиком выше)
+    # Проверяем, есть ли активное состояние (кроме нашего состояния ожидания суммы)
     current_state = await state.get_state()
-    if current_state:
+    if current_state and current_state != "ExpenseForm:waiting_for_amount_clarification":
         # Пропускаем, если есть активное состояние
         logger.info(f"Skipping expense handler due to active state: {current_state}")
         return
@@ -822,8 +783,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             if not typing_cancelled:
                 try:
                     await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
-                except:
-                    break
+                except (TelegramForbiddenError, TelegramBadRequest):
+                    break  # Пользователь заблокировал бота или некорректный chat_id
     
     # Запускаем задачу
     typing_task = asyncio.create_task(delayed_typing())
@@ -877,7 +838,20 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                         profile=profile,
                         name=parsed_income['category']
                     ).afirst()
-                except:
+                except (DatabaseError, AttributeError) as e:
+                    logger.debug(f"Error finding income category: {e}")
+                    pass
+            
+            # Если категория не найдена, ищем категорию по умолчанию "💰 Прочие доходы"
+            if not category:
+                try:
+                    category = await IncomeCategory.objects.filter(
+                        profile=profile,
+                        name='💰 Прочие доходы',
+                        is_active=True
+                    ).afirst()
+                except (DatabaseError, AttributeError) as e:
+                    logger.debug(f"Error finding income category: {e}")
                     pass
             
             # Создаем доход
@@ -896,24 +870,14 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             if income:
                 cancel_typing()  # Отменяем индикатор печатания
                 
-                # Формируем подтверждение
-                amount_text = format_currency(income.amount, income.currency)
-                
-                # Получаем эмодзи для типа дохода
-                income_type_emoji = {
-                    'salary': '💼',
-                    'bonus': '🎁', 
-                    'freelance': '💻',
-                    'investment': '📈',
-                    'refund': '💸',
-                    'cashback': '💳',
-                    'gift': '🎉',
-                    'other': '💰'
-                }.get(income.income_type, '💰')
-                
-                # Форматируем сообщение для дохода с жирным шрифтом и +
-                text_msg = f"✅ <b>+{amount_text}</b> — {income.description}\n"
-                text_msg += f"{income_type_emoji} Категория: {category.name if category else 'Прочие доходы'}"
+                # Используем единую функцию форматирования
+                from ..utils.expense_messages import format_income_added_message
+                text_msg = await format_income_added_message(
+                    income=income,
+                    category=category,
+                    similar_income=parsed_income.get('similar_income', False),
+                    lang=lang
+                )
                 
                 # Добавляем кнопки редактирования
                 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -924,7 +888,6 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 ])
                 
                 # Отправляем подтверждение
-                from ..utils.message_utils import send_message_with_cleanup
                 await send_message_with_cleanup(
                     message=message,
                     state=state,
@@ -1002,22 +965,152 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             
             similar = await find_similar_expenses(user_id, text)
             
-            if similar:
-                # Если есть похожие траты, автоматически используем последнюю сумму
-                last_expense = similar[0]  # Берем самую частую/последнюю
-                amount = last_expense['amount']
-                currency = last_expense['currency']
-                category_name = last_expense['category']
+            # Также проверяем похожие доходы
+            from ..services.income import get_last_income_by_description, create_income
+            similar_income = await get_last_income_by_description(user_id, text)
+            
+            if similar or similar_income:
+                # Определяем, что использовать - расход или доход
+                if similar and not similar_income:
+                    # Только похожие расходы
+                    last_expense = similar[0]  # Берем самую частую/последнюю
+                    amount = last_expense['amount']
+                    currency = last_expense['currency']
+                    category_name = last_expense['category']
+                    
+                    # Создаем или получаем категорию
+                    category = await get_or_create_category(user_id, category_name)
+                elif similar_income and not similar:
+                    # Только похожий доход - создаем доход вместо расхода
+                    amount = similar_income.amount
+                    currency = similar_income.currency or 'RUB'
+                    category = similar_income.category
+                    
+                    # Делаем первую букву заглавной
+                    description_capitalized = text[0].upper() + text[1:] if text else text
+                    
+                    # Создаем доход
+                    income = await create_income(
+                        user_id=user_id,
+                        amount=amount,
+                        category_id=category.id if category else None,
+                        description=description_capitalized,
+                        currency=currency
+                    )
+                    
+                    if income:
+                        cancel_typing()
+                        
+                        # Используем единую функцию форматирования для дохода
+                        from ..utils.expense_messages import format_income_added_message
+                        text_msg = await format_income_added_message(
+                            income=income,
+                            category=category,
+                            similar_income=True,
+                            lang=lang
+                        )
+                        
+                        # Добавляем кнопки редактирования
+                        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+                        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                            [
+                                InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_income_{income.id}")
+                            ]
+                        ])
+                        
+                        # Отправляем подтверждение
+                        await send_message_with_cleanup(
+                            message=message,
+                            state=state,
+                            text=text_msg,
+                            reply_markup=keyboard,
+                            parse_mode="HTML",
+                            keep_message=True
+                        )
+                    return
+                else:
+                    # Есть и расходы и доходы - используем более свежую запись
+                    from datetime import datetime
+                    
+                    # Получаем дату последнего расхода
+                    expense_date = similar[0].get('date') if similar else None
+                    # Дата последнего дохода
+                    income_date = similar_income.income_date if similar_income else None
+                    
+                    # Сравниваем даты и выбираем более свежую
+                    use_income = False
+                    if expense_date and income_date:
+                        use_income = income_date > expense_date
+                    elif income_date and not expense_date:
+                        use_income = True
+                    
+                    if use_income:
+                        # Используем доход
+                        amount = similar_income.amount
+                        currency = similar_income.currency or 'RUB'
+                        category = similar_income.category
+                        
+                        # Делаем первую букву заглавной
+                        description_capitalized = text[0].upper() + text[1:] if text else text
+                        
+                        # Создаем доход
+                        income = await create_income(
+                            user_id=user_id,
+                            amount=amount,
+                            category_id=category.id if category else None,
+                            description=description_capitalized,
+                            currency=currency
+                        )
+                        
+                        if income:
+                            cancel_typing()
+                            
+                            # Используем единую функцию форматирования для дохода
+                            from ..utils.expense_messages import format_income_added_message
+                            text_msg = await format_income_added_message(
+                                income=income,
+                                category=category,
+                                similar_income=True,
+                                lang=lang
+                            )
+                            
+                            # Добавляем кнопки редактирования
+                            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+                            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                                [
+                                    InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_income_{income.id}")
+                                ]
+                            ])
+                            
+                            # Отправляем подтверждение
+                            await send_message_with_cleanup(
+                                message=message,
+                                state=state,
+                                text=text_msg,
+                                reply_markup=keyboard,
+                                parse_mode="HTML",
+                                keep_message=True
+                            )
+                        return
+                    else:
+                        # Используем расход
+                        last_expense = similar[0]
+                        amount = last_expense['amount']
+                        currency = last_expense['currency']
+                        category_name = last_expense['category']
+                        
+                        # Создаем или получаем категорию
+                        category = await get_or_create_category(user_id, category_name)
                 
-                # Создаем или получаем категорию
-                category = await get_or_create_category(user_id, category_name)
+                # Делаем первую букву заглавной
+                description_capitalized = text[0].upper() + text[1:] if text else text
                 
                 # Сохраняем трату
                 expense = await add_expense(
                     user_id=user_id,
                     category_id=category.id,
                     amount=amount,
-                    description=text,
+                    description=description_capitalized,
                     currency=currency,
                     expense_date=parsed.get('expense_date') if parsed else None  # Добавляем дату, если она была указана
                 )
@@ -1050,6 +1143,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 
                 # Отправляем подтверждение (сообщение о трате не должно исчезать)
                 cancel_typing()
+                from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
                 await send_message_with_cleanup(message, state,
                     message_text,
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -1076,8 +1170,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 ])
                 
                 sent_message = await message.answer(
-                    f"💰 Вы хотите внести трату \"{text}\"?\n\n"
-                    f"Укажите сумму траты:",
+                    f"💰 Вы хотите внести трату/доход \"{text}\"?\n\n"
+                    f"Укажите сумму:",
                     reply_markup=cancel_keyboard
                 )
                 
@@ -1148,9 +1242,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     cancel_typing()
     await send_message_with_cleanup(message, state,
         message_text,
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
+                types.InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
             ]
         ]),
         parse_mode="HTML",
@@ -1235,6 +1329,8 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: s
             )
         except Income.DoesNotExist:
             await callback.answer("Доход не найден", show_alert=True)
+            from bot.utils.state_utils import clear_state_keep_cashback
+            await clear_state_keep_cashback(state)
             return
     else:
         from expenses.models import Expense
@@ -1245,6 +1341,8 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: s
             )
         except Expense.DoesNotExist:
             await callback.answer(get_text('expense_not_found', lang), show_alert=True)
+            from bot.utils.state_utils import clear_state_keep_cashback
+            await clear_state_keep_cashback(state)
             return
     
     # Сохраняем ID и тип в состоянии
@@ -1386,6 +1484,9 @@ async def delete_expense(callback: types.CallbackQuery, state: FSMContext):
     
     if success:
         await callback.message.delete()
+        # Очищаем состояние после удаления
+        from bot.utils.state_utils import clear_state_keep_cashback
+        await clear_state_keep_cashback(state)
         # # Восстанавливаем меню кешбека если оно было активно
         # from ..routers.cashback import restore_cashback_menu_if_needed
         # await restore_cashback_menu_if_needed(state, callback.bot, callback.message.chat.id)
@@ -1548,16 +1649,12 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext, lang: str 
         
         # Формируем сообщение
         if is_income:
-            # Для доходов используем упрощенный формат
-            from ..utils.expense_messages import format_amount
-            amount_text = await format_amount(expense.amount, expense.currency)
-            category_name = expense.category.name if expense.category else 'Прочие доходы'
-            translated_category = translate_category_name(category_name, lang)
-            
-            message_text = (
-                f"✅ <b>+{amount_text}</b> — {expense.description}\n"
-                f"📁 {translated_category}\n"
-                f"📅 {expense.income_date.strftime('%d.%m.%Y')}"
+            # Для доходов используем единый формат
+            from ..utils.expense_messages import format_income_added_message
+            message_text = await format_income_added_message(
+                income=expense,
+                category=expense.category,
+                lang=lang
             )
             edit_callback = f"edit_income_{expense.id}"
         else:
@@ -1581,7 +1678,7 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext, lang: str 
             ]),
             parse_mode="HTML"
         )
-    except (Expense.DoesNotExist, Income.DoesNotExist):
+    except Exception:
         error_msg = "❌ Ошибка при получении данных дохода" if is_income else "❌ Ошибка при получении данных траты"
         await callback.message.edit_text(error_msg)
     
@@ -1612,6 +1709,8 @@ async def process_edit_category(callback: types.CallbackQuery, state: FSMContext
             description = expense.description
         except Income.DoesNotExist:
             await callback.answer("❌ Доход не найден", show_alert=True)
+            from bot.utils.state_utils import clear_state_keep_cashback
+            await clear_state_keep_cashback(state)
             return
     else:
         from expenses.models import Expense
@@ -1621,6 +1720,8 @@ async def process_edit_category(callback: types.CallbackQuery, state: FSMContext
             description = expense.description
         except Expense.DoesNotExist:
             await callback.answer("❌ Трата не найдена", show_alert=True)
+            from bot.utils.state_utils import clear_state_keep_cashback
+            await clear_state_keep_cashback(state)
             return
     
     # Обновляем операцию
@@ -1744,6 +1845,8 @@ async def show_edit_menu(message: types.Message, state: FSMContext, expense_id: 
         await state.set_state(EditExpenseForm.choosing_field)
     except Expense.DoesNotExist:
         await message.answer("❌ Трата не найдена")
+        from bot.utils.state_utils import clear_state_keep_cashback
+        await clear_state_keep_cashback(state)
 
 
 async def show_edit_menu_callback(callback: types.CallbackQuery, state: FSMContext, expense_id: int, lang: str = 'ru'):
@@ -1775,6 +1878,8 @@ async def show_edit_menu_callback(callback: types.CallbackQuery, state: FSMConte
         await callback.answer()
     except Expense.DoesNotExist:
         await callback.answer("❌ Трата не найдена", show_alert=True)
+        from bot.utils.state_utils import clear_state_keep_cashback
+        await clear_state_keep_cashback(state)
 
 
 async def show_updated_expense(message: types.Message, state: FSMContext, item_id: int, lang: str = 'ru'):
@@ -1798,16 +1903,12 @@ async def show_updated_expense(message: types.Message, state: FSMContext, item_i
         
         # Формируем сообщение
         if is_income:
-            # Для доходов
-            from ..utils.expense_messages import format_amount
-            amount_text = await format_amount(expense.amount, expense.currency)
-            category_name = expense.category.name if expense.category else 'Прочие доходы'
-            translated_category = translate_category_name(category_name, lang)
-            
-            message_text = (
-                f"✅ <b>+{amount_text}</b> — {expense.description}\n"
-                f"📁 {translated_category}\n"
-                f"📅 {expense.income_date.strftime('%d.%m.%Y')}"
+            # Для доходов используем единый формат
+            from ..utils.expense_messages import format_income_added_message
+            message_text = await format_income_added_message(
+                income=expense,
+                category=expense.category,
+                lang=lang
             )
             edit_callback = f"edit_income_{expense.id}"
         else:
@@ -1874,16 +1975,12 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
         
         # Формируем сообщение
         if is_income:
-            # Для доходов
-            from ..utils.expense_messages import format_amount
-            amount_text = await format_amount(expense.amount, expense.currency)
-            category_name = expense.category.name if expense.category else 'Прочие доходы'
-            translated_category = translate_category_name(category_name, lang)
-            
-            message_text = (
-                f"✅ <b>+{amount_text}</b> — {expense.description}\n"
-                f"📁 {translated_category}\n"
-                f"📅 {expense.income_date.strftime('%d.%m.%Y')}"
+            # Для доходов используем единый формат
+            from ..utils.expense_messages import format_income_added_message
+            message_text = await format_income_added_message(
+                income=expense,
+                category=expense.category,
+                lang=lang
             )
             edit_callback = f"edit_income_{expense.id}"
         else:

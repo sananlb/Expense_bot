@@ -34,7 +34,54 @@ def _process_chat_wrapper(api_key: str, message: str, context_str: str, user_inf
         import google.generativeai as genai
         genai.configure(api_key=api_key)
         
-        prompt = f"""Ты - помощник по учету расходов. Отвечай на русском языке.
+        # Проверяем, это вопрос о доходах или расходах
+        income_keywords = ['доход', 'заработ', 'получ', 'зарплат', 'прибыл']
+        expense_keywords = ['трат', 'потрат', 'расход', 'купил', 'покуп']
+        
+        is_income_query = any(keyword in message.lower() for keyword in income_keywords)
+        is_expense_query = any(keyword in message.lower() for keyword in expense_keywords)
+        
+        # Специальные слова для аналитических запросов
+        analysis_keywords = ['самый большой', 'максимальн', 'больше всего', 'меньше всего', 
+                           'средн', 'динамик', 'тренд', 'статистик', 'сколько']
+        is_analysis_query = any(keyword in message.lower() for keyword in analysis_keywords)
+        
+        if is_analysis_query and (is_income_query or is_expense_query):
+            # Это аналитический запрос - объясняем как получить данные
+            prompt = f"""Ты - помощник по учету расходов и доходов. Отвечай на русском языке.
+
+Пользователь задает аналитический вопрос о {'доходах' if is_income_query else 'расходах'}.
+
+Для получения такой аналитики используй специальные команды:
+
+{'ДЛЯ АНАЛИЗА ДОХОДОВ:' if is_income_query else 'ДЛЯ АНАЛИЗА РАСХОДОВ:'}
+{'''- "покажи доходы" - показать последние доходы
+- "доходы за месяц" - доходы за текущий месяц  
+- "доходы за неделю" - доходы за последнюю неделю
+- "финансовая сводка" - полная сводка доходов и расходов''' if is_income_query else 
+'''- "покажи траты" - показать последние траты
+- "траты за месяц" - траты за текущий месяц
+- "траты за неделю" - траты за последнюю неделю  
+- "финансовая сводка" - полная сводка доходов и расходов'''}
+
+К сожалению, я не могу напрямую выполнить аналитические запросы типа "самый большой доход" или "максимальная трата".
+Но ты можешь использовать команды выше, чтобы посмотреть свои операции и найти нужную информацию.
+
+Вопрос пользователя: {message}
+
+Дай дружелюбный ответ, объяснив какую команду использовать."""
+        else:
+            # Обычный запрос
+            prompt = f"""Ты - помощник по учету расходов и доходов. Отвечай на русском языке.
+
+ВАЖНО: НИКОГДА не говори "у меня есть только данные о расходах" - это НЕПРАВДА! 
+Ты работаешь с ДОХОДАМИ и РАСХОДАМИ.
+
+Если пользователь спрашивает аналитику (самый большой, максимальный, средний и т.д.), 
+объясни что нужно использовать специальные команды:
+- Для доходов: "покажи доходы", "доходы за месяц"
+- Для расходов: "покажи траты", "траты за месяц"
+- Для полной сводки: "финансовая сводка"
         
 {user_info}
 Контекст разговора:
@@ -246,6 +293,20 @@ class GoogleAIService(GoogleKeyRotationMixin):
     
     async def chat(self, message: str, context: List[Dict[str, str]], user_context: Optional[Dict[str, Any]] = None) -> str:
         """Чат с AI используя Google Gemini"""
+        # ВСЕГДА используем основной сервис с функциями если есть user_id
+        if user_context and 'user_id' in user_context:
+            try:
+                from .google_ai_service import GoogleAIService as FunctionService
+                func_service = FunctionService()
+                user_id = user_context.get('user_id')
+                
+                # Используем chat который сам определит нужны ли функции
+                result = await func_service.chat(message, context, user_context)
+                return result
+            except Exception as e:
+                logger.error(f"[GoogleAI-Adaptive] Error using function service: {e}")
+                # Fallback на простой чат
+                
         if IS_WINDOWS:
             # На Windows используем процессный пул
             try:

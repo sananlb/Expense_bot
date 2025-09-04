@@ -56,6 +56,8 @@ CURRENCY_PATTERNS = {
 INCOME_PATTERNS = [
     r'^\+',  # Начинается с +
     r'^\+\d',  # Начинается с + и сразу цифра (+35000)
+    r'\s\+\d',  # Пробел, затем + и цифры (долг +1200)
+    r'\+\s*\d',  # + и цифры с возможным пробелом
     r'\bплюс\b',  # Слово "плюс"
     r'\bдоход\b',  # Слово "доход"
     r'\bзарплат[аы]\b',  # Слова "зарплата", "зарплаты"
@@ -383,7 +385,8 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                 try:
                     if last_expense.category:
                         category_name = last_expense.category.name
-                except:
+                except (AttributeError, TypeError) as e:
+                    logger.debug(f"Error getting category name: {e}")
                     pass
                     
                 # Сохраняем оригинальное описание с капитализацией первой буквы
@@ -588,7 +591,8 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                                 if not cat_clean and result['category']:
                                     cat_clean = 'category with emoji'
                                 logger.info(f"AI enhanced result for user {user_id}: category='{cat_clean}', confidence={result['confidence']}, provider={result['ai_provider']}")
-                        except:
+                        except (AttributeError, KeyError, TypeError) as e:
+                            logger.debug(f"Error logging AI result: {e}")
                             pass
                     
             except Exception as e:
@@ -649,8 +653,39 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
                 logger.debug(f"Ошибка при парсинге суммы дохода '{amount_str}': {e}")
                 continue
     
-    # Если не нашли сумму, возвращаем None
+    # Если не нашли сумму, пытаемся найти последний доход с таким же названием
     if not amount or amount <= 0:
+        if user_id:
+            from bot.services.income import get_last_income_by_description
+            # Пытаемся найти последний доход с похожим описанием
+            last_income = await get_last_income_by_description(user_id, original_text)
+            if last_income:
+                amount = last_income.amount
+                category = last_income.category.name if last_income.category else None
+                # Используем оригинальный текст как описание
+                description = original_text
+                
+                # Убираем символ + из описания если он есть
+                if description and description.startswith('+'):
+                    description = description[1:].strip()
+                
+                result = {
+                    'amount': float(amount),
+                    'description': description,
+                    'income_date': expense_date or date.today(),
+                    'income_type': last_income.income_type if hasattr(last_income, 'income_type') else 'other',
+                    'currency': last_income.currency or 'RUB',
+                    'is_income': True,
+                    'similar_income': True,
+                    'ai_enhanced': False
+                }
+                if category:
+                    result['category'] = category
+                
+                logger.info(f"Found similar income for '{original_text}': amount={amount}, category={category}")
+                return result
+        
+        # Если не нашли похожий доход, возвращаем None
         return None
     
     # Определяем категорию дохода
@@ -711,6 +746,10 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     
     # Формируем описание
     description = text_without_amount if text_without_amount else 'Доход'
+    
+    # Убираем знак "+" из описания
+    if description:
+        description = description.replace('+', '').strip()
     
     # Убираем лишние пробелы и капитализируем
     description = ' '.join(description.split())

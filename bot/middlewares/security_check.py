@@ -180,6 +180,12 @@ class SecurityCheckMiddleware(BaseMiddleware):
                 if f' {pattern_lower} ' in f' {text_lower} ':
                     detected.append(pattern)
                     self.security_stats[f'pattern_{pattern}'] += 1
+            # Для паттернов типа 'script' проверяем как отдельное слово или в подозрительном контексте
+            elif pattern_lower == 'script':
+                # Разрешаем "description", "transcript", etc., но блокируем "<script>", "javascript:", etc.
+                if any(suspicious_context in text_lower for suspicious_context in ['<script', 'javascript:', 'src=', 'onload=', 'onerror=']):
+                    detected.append(pattern)
+                    self.security_stats[f'pattern_{pattern}'] += 1
             # Для остальных - обычная проверка
             elif pattern_lower in text_lower:
                 detected.append(pattern)
@@ -229,7 +235,8 @@ class SecurityCheckMiddleware(BaseMiddleware):
             )
             return True
         except Exception as e:
-            await message.answer(str(e))
+            logger.warning(f"Invalid photo upload from user {user_id}: {e}")
+            await message.answer("❌ Некорректное фото. Проверьте размер и формат файла.")
             log_security_event(
                 'invalid_photo_upload',
                 user_id,
@@ -248,7 +255,8 @@ class SecurityCheckMiddleware(BaseMiddleware):
             )
             return True
         except Exception as e:
-            await message.answer(str(e))
+            logger.warning(f"Invalid voice upload from user {user_id}: {e}")
+            await message.answer("❌ Некорректное голосовое сообщение. Проверьте длительность и размер.")
             log_security_event(
                 'invalid_voice_upload',
                 user_id,

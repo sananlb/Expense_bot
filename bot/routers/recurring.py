@@ -1,5 +1,5 @@
 """
-Обработчик ежемесячных платежей
+Обработчик регулярных операций (доходы и расходы)
 """
 from aiogram import Router, types, F
 from aiogram.filters import Command
@@ -9,6 +9,10 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from datetime import date
 from decimal import Decimal
 import asyncio
+import logging
+from expenses.models import RecurringPayment
+
+logger = logging.getLogger(__name__)
 
 from ..services.recurring import (
     get_user_recurring_payments, create_recurring_payment, 
@@ -16,8 +20,9 @@ from ..services.recurring import (
     get_recurring_payment_by_id
 )
 from ..services.category import get_user_categories
+from ..services.income import get_user_income_categories
 from ..utils.message_utils import send_message_with_cleanup
-from ..utils import get_text
+from ..utils import get_text, translate_category_name
 from ..utils.validators import validate_amount, parse_description_amount
 from ..utils.formatters import format_currency, format_date
 from ..decorators import rate_limit
@@ -32,6 +37,10 @@ class RecurringForm(StatesGroup):
     waiting_for_category = State()
     waiting_for_day = State()
     waiting_for_edit_data = State()  # Новое состояние для редактирования
+    # Состояния для редактирования отдельных полей
+    editing_amount = State()
+    editing_description = State()
+    editing_day = State()
 
 
 @router.message(Command("recurring"))
@@ -54,26 +63,65 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
     text = f"<b>{get_text('recurring_payments', lang)}</b>"
     
     if payments:
-        # Сортируем платежи: активные сначала, приостановленные в конце
-        active_payments = [p for p in payments if p.is_active]
-        paused_payments = [p for p in payments if not p.is_active]
-        sorted_payments = active_payments + paused_payments
+        # Разделяем платежи по типам
+        income_payments = [p for p in payments if p.operation_type == RecurringPayment.OPERATION_TYPE_INCOME]
+        expense_payments = [p for p in payments if p.operation_type == RecurringPayment.OPERATION_TYPE_EXPENSE]
         
-        for payment in sorted_payments:
-            status = "✅" if payment.is_active else "⏸"
-            text += f"\n\n{status} <b>{payment.description}</b>\n"
-            text += f"{get_text('recurring_amount', lang)}: <i>{format_currency(payment.amount, 'RUB')}</i>\n"
-            text += f"{get_text('recurring_date', lang)}: <i>{get_text('day_of_month', lang).format(day=payment.day_of_month)}</i>\n"
-            text += f"{get_text('recurring_category', lang)}: <i>{payment.category.name}</i>"
+        # Сортируем каждую группу: активные сначала, приостановленные в конце
+        def sort_by_status(payments_list):
+            active = [p for p in payments_list if p.is_active]
+            paused = [p for p in payments_list if not p.is_active]
+            return active + paused
+        
+        # Отображаем доходы
+        if income_payments:
+            text += f"\n\n{get_text('recurring_income_section', lang)}"
+            sorted_income = sort_by_status(income_payments)
+            
+            for payment in sorted_income:
+                status = "✅" if payment.is_active else "⏸"
+                text += f"\n\n{status} <b>{payment.description}</b>\n"
+                text += f"{get_text('recurring_amount', lang)}: <i>+{format_currency(payment.amount, payment.currency or 'RUB')}</i>\n"
+                text += f"{get_text('recurring_date', lang)}: <i>{get_text('day_of_month', lang).format(day=payment.day_of_month)}</i>\n"
+                if payment.category:
+                    category_name = translate_category_name(payment.category.name, lang)
+                    text += f"{get_text('recurring_category', lang)}: <i>{category_name}</i>"
+        
+        # Отображаем расходы
+        if expense_payments:
+            text += f"\n\n{get_text('recurring_expense_section', lang)}"
+            sorted_expense = sort_by_status(expense_payments)
+            
+            for payment in sorted_expense:
+                status = "✅" if payment.is_active else "⏸"
+                text += f"\n\n{status} <b>{payment.description}</b>\n"
+                text += f"{get_text('recurring_amount', lang)}: <i>{format_currency(payment.amount, payment.currency or 'RUB')}</i>\n"
+                text += f"{get_text('recurring_date', lang)}: <i>{get_text('day_of_month', lang).format(day=payment.day_of_month)}</i>\n"
+                if payment.category:
+                    category_name = translate_category_name(payment.category.name, lang)
+                    text += f"{get_text('recurring_category', lang)}: <i>{category_name}</i>"
     else:
         text += f"\n\n{get_text('no_recurring_payments', lang)}"
     
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=get_text('add_recurring', lang), callback_data="add_recurring")],
-        [InlineKeyboardButton(text=get_text('edit_recurring', lang), callback_data="edit_recurring")],
-        [InlineKeyboardButton(text=get_text('delete_recurring', lang), callback_data="delete_recurring")],
+    # Формируем кнопки в зависимости от наличия платежей
+    keyboard_buttons = [
+        [InlineKeyboardButton(text=get_text('add_recurring', lang), callback_data="add_recurring")]
+    ]
+    
+    # Показываем кнопки редактировать и удалить только если есть платежи
+    if payments:
+        keyboard_buttons.append(
+            [InlineKeyboardButton(text=get_text('edit_recurring', lang), callback_data="edit_recurring")]
+        )
+        keyboard_buttons.append(
+            [InlineKeyboardButton(text=get_text('delete_recurring', lang), callback_data="delete_recurring")]
+        )
+    
+    keyboard_buttons.append(
         [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
-    ])
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     
     await send_message_with_cleanup(message, state, text, reply_markup=keyboard, parse_mode="HTML")
 
@@ -112,11 +160,13 @@ async def process_description(message: types.Message, state: FSMContext):
         parsed = parse_description_amount(text, allow_only_amount=True)
         description = parsed['description']
         amount = parsed['amount']
+        is_income = parsed.get('is_income', False)
     except ValueError as e:
-        await send_message_with_cleanup(message, state, f"❌ {str(e)}")
+        logger.warning(f"Invalid recurring payment input from user {message.from_user.id}: {e}")
+        await send_message_with_cleanup(message, state, "❌ Некорректный формат ввода. Укажите описание и сумму.")
         return
     
-    await state.update_data(description=description, amount=amount)
+    await state.update_data(description=description, amount=amount, is_income=is_income)
     
     # Теперь сразу показываем выбор категории
     data = await state.get_data()
@@ -130,7 +180,18 @@ async def process_description(message: types.Message, state: FSMContext):
 async def show_category_selection(message: types.Message, state: FSMContext, lang: str = 'ru'):
     """Показать выбор категории"""
     user_id = message.chat.id if hasattr(message, 'chat') else message.from_user.id
-    categories = await get_user_categories(user_id)
+    
+    # Получаем данные из состояния чтобы понять, это доход или расход
+    data = await state.get_data()
+    is_income = data.get('is_income', False)
+    
+    if is_income:
+        # Для доходов используем категории доходов
+        from ..services.income import get_user_income_categories
+        categories = await get_user_income_categories(user_id)
+    else:
+        # Для расходов используем обычные категории
+        categories = await get_user_categories(user_id)
     
     if not categories:
         await send_message_with_cleanup(message, state,
@@ -145,13 +206,15 @@ async def show_category_selection(message: types.Message, state: FSMContext, lan
     keyboard_buttons = []
     # Группируем категории по 2 в строке
     for i in range(0, len(categories), 2):
+        translated_name_1 = translate_category_name(categories[i].name, lang)
         row = [InlineKeyboardButton(
-            text=f"{categories[i].name}", 
+            text=f"{translated_name_1}", 
             callback_data=f"recurring_cat_{categories[i].id}"
         )]
         if i + 1 < len(categories):
+            translated_name_2 = translate_category_name(categories[i + 1].name, lang)
             row.append(InlineKeyboardButton(
-                text=f"{categories[i + 1].name}", 
+                text=f"{translated_name_2}", 
                 callback_data=f"recurring_cat_{categories[i + 1].id}"
             ))
         keyboard_buttons.append(row)
@@ -194,7 +257,7 @@ async def process_category(callback: types.CallbackQuery, state: FSMContext, lan
                 ))
         keyboard_buttons.append(row)
     
-    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="back_to_category_selection")])
     
     await callback.message.edit_text(
         get_text('choose_payment_day', lang),
@@ -213,14 +276,18 @@ async def process_day_button(callback: types.CallbackQuery, state: FSMContext, l
     
     user_id = callback.from_user.id
     
-    # Создаем регулярный платеж
+    # Создаем регулярную операцию
     try:
+        is_income = data.get('is_income', False)
+        description = data['description']
+        
         payment = await create_recurring_payment(
             user_id=user_id,
             category_id=data['category_id'],
             amount=data['amount'],
-            description=data['description'],
-            day_of_month=day
+            description=description,
+            day_of_month=day,
+            is_income=is_income
         )
         
         await state.clear()
@@ -344,11 +411,26 @@ async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext, 
     await state.set_state(RecurringForm.waiting_for_edit_data)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text=get_text('edit_amount', lang), callback_data=f"edit_amount_{payment_id}"),
+            InlineKeyboardButton(text=get_text('edit_description', lang), callback_data=f"edit_description_{payment_id}")
+        ],
+        [
+            InlineKeyboardButton(text=get_text('edit_category', lang), callback_data=f"edit_category_{payment_id}"),
+            InlineKeyboardButton(text=get_text('edit_day', lang), callback_data=f"edit_day_{payment_id}")
+        ],
         [InlineKeyboardButton(text=toggle_text, callback_data=f"toggle_recurring_{payment_id}")],
-        [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="recurring_menu")]
+        [InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")]
     ])
     
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data == "back_to_category_selection")
+async def back_to_category_selection(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Назад к выбору категории при добавлении нового платежа"""
+    await show_category_selection(callback, state, lang)
     await callback.answer()
 
 
@@ -371,6 +453,231 @@ async def toggle_recurring(callback: types.CallbackQuery, state: FSMContext, lan
         await callback.answer(get_text('payment_not_found', lang), show_alert=True)
 
 
+# Обработчики редактирования отдельных полей
+@router.callback_query(lambda c: c.data.startswith("edit_amount_"))
+async def edit_amount_start(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Начать редактирование суммы"""
+    payment_id = int(callback.data.split("_")[-1])
+    user_id = callback.from_user.id
+    
+    payment = await get_recurring_payment_by_id(user_id, payment_id)
+    if not payment:
+        await callback.answer(get_text('payment_not_found', lang), show_alert=True)
+        return
+    
+    await state.update_data(editing_payment_id=payment_id)
+    await state.set_state(RecurringForm.editing_amount)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=get_text('cancel', lang), callback_data=f"edit_recurring_{payment_id}")]
+    ])
+    
+    current_amount = format_currency(payment.amount, payment.currency or 'RUB')
+    text = f"{get_text('enter_new_amount', lang)}\n\nТекущая сумма: <i>{current_amount}</i>"
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data.startswith("edit_description_"))
+async def edit_description_start(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Начать редактирование названия"""
+    payment_id = int(callback.data.split("_")[-1])
+    user_id = callback.from_user.id
+    
+    payment = await get_recurring_payment_by_id(user_id, payment_id)
+    if not payment:
+        await callback.answer(get_text('payment_not_found', lang), show_alert=True)
+        return
+    
+    await state.update_data(editing_payment_id=payment_id)
+    await state.set_state(RecurringForm.editing_description)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=get_text('cancel', lang), callback_data=f"edit_recurring_{payment_id}")]
+    ])
+    
+    text = f"{get_text('enter_new_description', lang)}\n\nТекущее название: <i>{payment.description}</i>"
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data.startswith("edit_day_"))
+async def edit_day_start(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Начать редактирование дня месяца"""
+    payment_id = int(callback.data.split("_")[-1])
+    user_id = callback.from_user.id
+    
+    payment = await get_recurring_payment_by_id(user_id, payment_id)
+    if not payment:
+        await callback.answer(get_text('payment_not_found', lang), show_alert=True)
+        return
+    
+    await state.update_data(editing_payment_id=payment_id)
+    await state.set_state(RecurringForm.editing_day)
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=get_text('cancel', lang), callback_data=f"edit_recurring_{payment_id}")]
+    ])
+    
+    text = f"{get_text('enter_new_day', lang)}\n\nТекущий день: <i>{payment.day_of_month} число месяца</i>"
+    
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data.startswith("edit_category_"))
+async def edit_category_start(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Начать редактирование категории"""
+    payment_id = int(callback.data.split("_")[-1])
+    user_id = callback.from_user.id
+    
+    payment = await get_recurring_payment_by_id(user_id, payment_id)
+    if not payment:
+        await callback.answer(get_text('payment_not_found', lang), show_alert=True)
+        return
+    
+    await state.update_data(editing_payment_id=payment_id, edit_field='category')
+    await state.set_state(RecurringForm.waiting_for_category)
+    
+    # Определяем тип операции и показываем соответствующие категории
+    if payment.operation_type == RecurringPayment.OPERATION_TYPE_INCOME:
+        categories = await get_user_income_categories(user_id)
+        text = f"{get_text('choose_new_category', lang)}\n\n💰 Доход: <i>{payment.category.name if payment.category else 'Без категории'}</i>"
+    else:
+        categories = await get_user_categories(user_id)
+        text = f"{get_text('choose_new_category', lang)}\n\n💸 Расход: <i>{payment.category.name if payment.category else 'Без категории'}</i>"
+    
+    # Формируем клавиатуру с категориями
+    keyboard_buttons = []
+    for i, category in enumerate(categories):
+        if i % 2 == 0:
+            keyboard_buttons.append([])
+        keyboard_buttons[-1].append(
+            InlineKeyboardButton(
+                text=f"{category.icon} {category.name}",
+                callback_data=f"set_category_{payment_id}_{category.id}"
+            )
+        )
+    
+    # Кнопка отмены
+    keyboard_buttons.append([
+        InlineKeyboardButton(text=get_text('cancel', lang), callback_data=f"edit_recurring_{payment_id}")
+    ])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data.startswith("set_category_"))
+async def set_category(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Установить новую категорию"""
+    parts = callback.data.split("_")
+    payment_id = int(parts[2])
+    category_id = int(parts[3])
+    user_id = callback.from_user.id
+    
+    payment = await get_recurring_payment_by_id(user_id, payment_id)
+    if not payment:
+        await callback.answer(get_text('payment_not_found', lang), show_alert=True)
+        return
+    
+    # Обновляем категорию в зависимости от типа операции
+    if payment.operation_type == RecurringPayment.OPERATION_TYPE_INCOME:
+        await update_recurring_payment(user_id, payment_id, income_category_id=category_id)
+    else:
+        await update_recurring_payment(user_id, payment_id, expense_category_id=category_id)
+    
+    await state.clear()
+    await callback.answer()
+    await show_recurring_menu(callback, state, lang)
+
+
+# Обработчики редактирования отдельных полей
+@router.message(RecurringForm.editing_amount)
+async def process_edit_amount(message: types.Message, state: FSMContext, lang: str = 'ru'):
+    """Обработка новой суммы для редактирования"""
+    text = message.text.strip()
+    user_id = message.from_user.id
+    data = await state.get_data()
+    payment_id = data.get('editing_payment_id')
+    
+    if not payment_id:
+        await send_message_with_cleanup(message, state, get_text('payment_not_found', lang))
+        return
+    
+    try:
+        amount = await validate_amount(text)
+    except ValueError:
+        await send_message_with_cleanup(message, state, "❌ Некорректная сумма. Введите положительное число.")
+        return
+    
+    # Обновляем сумму
+    await update_recurring_payment(user_id, payment_id, amount=amount)
+    await state.clear()
+    
+    # Возвращаемся к основному меню
+    await show_recurring_menu(message, state, lang)
+
+
+@router.message(RecurringForm.editing_description)
+async def process_edit_description(message: types.Message, state: FSMContext, lang: str = 'ru'):
+    """Обработка нового названия для редактирования"""
+    text = message.text.strip()
+    user_id = message.from_user.id
+    data = await state.get_data()
+    payment_id = data.get('editing_payment_id')
+    
+    if not payment_id:
+        await send_message_with_cleanup(message, state, get_text('payment_not_found', lang))
+        return
+    
+    if len(text) > 200:
+        await send_message_with_cleanup(message, state, "❌ Название слишком длинное (максимум 200 символов).")
+        return
+    
+    # Капитализируем первую букву
+    if text:
+        text = text[0].upper() + text[1:] if len(text) > 1 else text.upper()
+    
+    # Обновляем название
+    await update_recurring_payment(user_id, payment_id, description=text)
+    await state.clear()
+    
+    # Возвращаемся к основному меню
+    await show_recurring_menu(message, state, lang)
+
+
+@router.message(RecurringForm.editing_day)
+async def process_edit_day(message: types.Message, state: FSMContext, lang: str = 'ru'):
+    """Обработка нового дня месяца для редактирования"""
+    text = message.text.strip()
+    user_id = message.from_user.id
+    data = await state.get_data()
+    payment_id = data.get('editing_payment_id')
+    
+    if not payment_id:
+        await send_message_with_cleanup(message, state, get_text('payment_not_found', lang))
+        return
+    
+    try:
+        day = int(text)
+        if not (1 <= day <= 30):
+            raise ValueError("Day out of range")
+    except ValueError:
+        await send_message_with_cleanup(message, state, get_text('enter_day_1_30', lang))
+        return
+    
+    # Обновляем день
+    await update_recurring_payment(user_id, payment_id, day_of_month=day)
+    await state.clear()
+    
+    # Возвращаемся к основному меню
+    await show_recurring_menu(message, state, lang)
+
+
 @router.message(RecurringForm.waiting_for_edit_data)
 async def process_edit_data(message: types.Message, state: FSMContext):
     """Обработка данных для редактирования платежа"""
@@ -384,7 +691,8 @@ async def process_edit_data(message: types.Message, state: FSMContext):
         description = parsed['description']
         amount = parsed['amount']
     except ValueError as e:
-        await send_message_with_cleanup(message, state, f"❌ {str(e)}")
+        logger.warning(f"Invalid recurring payment input from user {message.from_user.id}: {e}")
+        await send_message_with_cleanup(message, state, "❌ Некорректный формат ввода. Укажите описание и сумму.")
         return
     
     # Удаляем старый платеж
@@ -405,7 +713,8 @@ async def process_edit_data(message: types.Message, state: FSMContext):
         # Сразу показываем меню без сообщения
         await show_recurring_menu(message, state)
     except Exception as e:
-        await send_message_with_cleanup(message, state, f"❌ Ошибка при обновлении: {str(e)}")
+        logger.error(f"Error updating recurring payment for user {message.from_user.id}: {e}")
+        await send_message_with_cleanup(message, state, "❌ Ошибка при обновлении. Попробуйте позже.")
         await state.clear()
 
 

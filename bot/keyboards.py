@@ -165,6 +165,12 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
     if period == 'today':
         keyboard.button(text=get_text('diary_button', lang), callback_data="show_diary")
         keyboard.button(text=get_text('month_start_button', lang), callback_data="show_month_start")
+        
+        # Добавляем кнопку предыдущего месяца для удобства навигации
+        from bot.utils import get_month_name
+        prev_month = today.month - 1 if today.month > 1 else 12
+        prev_month_name = get_month_name(prev_month, lang).capitalize()
+        keyboard.button(text=f"← {prev_month_name}", callback_data="expenses_prev_month")
     elif period == 'month' and show_pdf:
         # Для месячных отчетов показываем кнопку PDF
         keyboard.button(text=get_text('generate_pdf', lang), callback_data="pdf_generate_current")
@@ -194,8 +200,10 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
             prev_month_name = get_month_name(prev_month, lang).capitalize()
             keyboard.button(text=f"← {prev_month_name}", callback_data="expenses_prev_month")
             
-            # Кнопка "Сегодня" - всегда показываем для месячных отчетов
-            keyboard.button(text=get_text('today_arrow', lang), callback_data="expenses_today_view")
+            # Кнопка "Сегодня" - показываем только для текущего месяца
+            is_current_month = (current_month == today.month and current_year == today.year)
+            if is_current_month:
+                keyboard.button(text=get_text('today_arrow', lang), callback_data="expenses_today_view")
             
             # Кнопка следующего месяца (если не будущий)
             if not is_future:
@@ -208,18 +216,26 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
     if period == 'today':
-        keyboard.adjust(1, 1, 1)  # 3 кнопки по одной в ряд: дневник, с начала месяца, закрыть
+        keyboard.adjust(1, 1, 1, 1)  # 4 кнопки по одной в ряд: дневник, с начала месяца, предыдущий месяц, закрыть
     elif period == 'month' and show_pdf:
         if current_month and current_year:
             # Проверяем количество кнопок навигации
             is_future = (current_year > today.year) or (current_year == today.year and current_month >= today.month)
             
             # Подсчитываем количество кнопок навигации
-            nav_buttons = 2  # Всегда есть кнопка предыдущего месяца и кнопка "Сегодня"
+            nav_buttons = 1  # Всегда есть кнопка предыдущего месяца
+            
+            # Добавляем кнопку "Сегодня" только для текущего месяца
+            is_current_month_check = (current_month == today.month and current_year == today.year)
+            if is_current_month_check:
+                nav_buttons += 1
+                
             if not is_future:
                 nav_buttons += 1  # Добавляем кнопку следующего месяца
             
-            if nav_buttons == 2:
+            if nav_buttons == 1:
+                keyboard.adjust(1, 1, 1)  # PDF, одна кнопка навигации, закрыть
+            elif nav_buttons == 2:
                 keyboard.adjust(1, 2, 1)  # PDF, две кнопки навигации, закрыть
             else:
                 keyboard.adjust(1, 3, 1)  # PDF, три кнопки навигации, закрыть
@@ -231,11 +247,19 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
             is_future = (current_year > today.year) or (current_year == today.year and current_month >= today.month)
             
             # Подсчитываем количество кнопок навигации
-            nav_buttons = 2  # Всегда есть кнопка предыдущего месяца и кнопка "Сегодня"
+            nav_buttons = 1  # Всегда есть кнопка предыдущего месяца
+            
+            # Добавляем кнопку "Сегодня" только для текущего месяца
+            is_current_month_check = (current_month == today.month and current_year == today.year)
+            if is_current_month_check:
+                nav_buttons += 1
+                
             if not is_future:
                 nav_buttons += 1  # Добавляем кнопку следующего месяца
             
-            if nav_buttons == 2:
+            if nav_buttons == 1:
+                keyboard.adjust(1, 1)  # Одна кнопка навигации, закрыть
+            elif nav_buttons == 2:
                 keyboard.adjust(2, 1)  # Две кнопки навигации, закрыть
             else:
                 keyboard.adjust(3, 1)  # Три кнопки навигации, закрыть

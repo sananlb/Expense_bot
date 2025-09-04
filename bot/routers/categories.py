@@ -6,6 +6,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.exceptions import TelegramBadRequest, TelegramNotFound
 import asyncio
 from typing import List
 
@@ -14,7 +15,6 @@ from ..services.category import (
     delete_category, get_icon_for_category, get_category_by_id,
     add_category_keyword, remove_category_keyword, get_category_keywords
 )
-from ..services.expense import get_month_summary
 from ..utils.message_utils import send_message_with_cleanup
 from ..utils import get_text, get_user_language, translate_category_name
 from datetime import date
@@ -58,8 +58,8 @@ async def cmd_categories(message: types.Message, state: FSMContext):
         try:
             await message.bot.delete_message(chat_id=message.chat.id, message_id=old_menu_id)
             await state.update_data(last_menu_message_id=None)
-        except:
-            pass
+        except (TelegramBadRequest, TelegramNotFound):
+            pass  # Сообщение уже удалено
     
     # По умолчанию показываем категории трат  
     await show_expense_categories_menu(message, state)
@@ -141,10 +141,13 @@ async def show_expense_categories_menu(message: types.Message | types.CallbackQu
     # Показываем все категории пользователя
     if categories:
         # Категории уже отсортированы в get_user_categories
-        for cat in categories:
+        for i, cat in enumerate(categories):
             # Переводим название категории если нужно
             translated_name = translate_category_name(cat.name, lang)
             text += f"• {translated_name}\n"
+            # Добавляем отступ между категориями
+            if i < len(categories) - 1:
+                text += "\n"
     else:
         text += get_text('no_categories_yet', lang)
     
@@ -215,9 +218,12 @@ async def show_income_categories_menu(message: types.Message | types.CallbackQue
     
     # Показываем все категории доходов
     if income_categories:
-        for cat in income_categories:
+        for i, cat in enumerate(income_categories):
             translated_name = translate_category_name(cat.name, lang)
             text += f"• {translated_name}\n"
+            # Добавляем отступ между категориями
+            if i < len(income_categories) - 1:
+                text += "\n"
     else:
         text += get_text('no_income_categories_yet', lang) if lang == 'en' else "У вас пока нет категорий доходов."
     
@@ -409,8 +415,8 @@ async def process_custom_icon(message: types.Message, state: FSMContext):
     # Удаляем сообщение пользователя
     try:
         await message.delete()
-    except:
-        pass
+    except (TelegramBadRequest, TelegramNotFound):
+        pass  # Сообщение уже удалено
     
     # Очищаем состояние
     await state.clear()
@@ -522,7 +528,7 @@ async def edit_categories_list(callback: types.CallbackQuery, state: FSMContext)
                 callback_data=f"edit_cat_{editable_categories[i + 1].id}"
             ))
         keyboard_buttons.append(row)
-    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="categories_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="expense_categories_menu")])
     
     await callback.message.edit_text(
         "✏️ Выберите категорию для редактирования:",
@@ -563,7 +569,7 @@ async def delete_categories_list(callback: types.CallbackQuery, state: FSMContex
                 callback_data=f"del_cat_{deletable_categories[i + 1].id}"
             ))
         keyboard_buttons.append(row)
-    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="categories_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="expense_categories_menu")])
     
     await callback.message.edit_text(
         "🗑 Выберите категорию для удаления:",
@@ -766,8 +772,8 @@ async def process_edit_category_name(message: types.Message, state: FSMContext):
         # Удаляем сообщение пользователя
         try:
             await message.delete()
-        except:
-            pass
+        except (TelegramBadRequest, TelegramNotFound):
+            pass  # Сообщение уже удалено
         
         # Очищаем состояние
         await state.clear()

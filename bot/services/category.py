@@ -762,10 +762,9 @@ async def optimize_keywords_for_new_category(user_id: int, new_category_id: int)
             profile = Profile.objects.get(telegram_id=user_id)
             categories = []
             
-            for cat in ExpenseCategory.objects.filter(profile=profile):
-                keywords = list(CategoryKeyword.objects.filter(
-                    category=cat
-                ).values_list('keyword', flat=True))
+            # Используем prefetch_related для загрузки всех keywords одним запросом
+            for cat in ExpenseCategory.objects.filter(profile=profile).prefetch_related('categorykeyword_set'):
+                keywords = list(cat.categorykeyword_set.values_list('keyword', flat=True))
                 
                 categories.append({
                     'id': cat.id,

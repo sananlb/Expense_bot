@@ -58,6 +58,44 @@ def main():
     except Exception as e:
         logger.warning(f"Could not clear AI cache: {e}")
     
+    # Очищаем все FSM состояния при старте (для исправления зависших состояний)
+    try:
+        import asyncio
+        import redis
+        
+        async def clear_all_fsm_states():
+            """Очистка всех FSM состояний из Redis"""
+            try:
+                # Подключаемся к Redis используя переменные окружения
+                r = redis.Redis(
+                    host=os.getenv('REDIS_HOST', 'localhost'),
+                    port=int(os.getenv('REDIS_PORT', 6379)),
+                    db=int(os.getenv('REDIS_DB', 0)),
+                    decode_responses=True
+                )
+                
+                # Проверяем подключение
+                r.ping()
+                
+                # Ищем все ключи FSM состояний (обычно они имеют паттерн fsm:*)
+                fsm_keys = r.keys("fsm:*")
+                
+                if fsm_keys:
+                    # Удаляем все найденные ключи
+                    deleted = r.delete(*fsm_keys)
+                    logger.info(f"Cleared {deleted} FSM states from Redis")
+                else:
+                    logger.info("No FSM states found in Redis")
+                    
+            except Exception as e:
+                logger.warning(f"Could not connect to Redis to clear FSM states: {e}")
+        
+        # Запускаем асинхронную очистку
+        asyncio.run(clear_all_fsm_states())
+        
+    except Exception as e:
+        logger.warning(f"Could not clear FSM states: {e}")
+    
     logger.info("=== Запуск ExpenseBot (новая версия) ===")
     
     # Проверяем настройки
