@@ -283,7 +283,7 @@ async def callback_categories_menu(callback: types.CallbackQuery, state: FSMCont
 @router.callback_query(lambda c: c.data == "expense_categories_menu")
 async def callback_expense_categories_menu(callback: types.CallbackQuery, state: FSMContext):
     """Показать меню категорий трат"""
-    await callback.message.delete()
+    # Убираем удаление - send_message_with_cleanup сама отредактирует сообщение
     await show_expense_categories_menu(callback, state)
     await callback.answer()
 
@@ -291,7 +291,7 @@ async def callback_expense_categories_menu(callback: types.CallbackQuery, state:
 @router.callback_query(lambda c: c.data == "income_categories_menu")
 async def callback_income_categories_menu(callback: types.CallbackQuery, state: FSMContext):
     """Показать меню категорий доходов"""
-    await callback.message.delete()
+    # Убираем удаление - send_message_with_cleanup сама отредактирует сообщение
     await show_income_categories_menu(callback, state)
     await callback.answer()
 
