@@ -139,7 +139,7 @@ async def add_recurring_start(callback: types.CallbackQuery, state: FSMContext, 
     await callback.message.edit_text(
         f"<b>{get_text('add_recurring_payment', lang)}</b>\n\n{get_text('recurring_payment_hint', lang)}",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="recurring_menu")]
+            [InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")]
         ]),
         parse_mode="HTML"
     )
@@ -469,7 +469,7 @@ async def edit_amount_start(callback: types.CallbackQuery, state: FSMContext, la
     await state.set_state(RecurringForm.editing_amount)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=get_text('cancel', lang), callback_data=f"edit_recurring_{payment_id}")]
+        [InlineKeyboardButton(text=get_text('back', lang), callback_data=f"edit_recurring_{payment_id}")]
     ])
     
     current_amount = format_currency(payment.amount, payment.currency or 'RUB')
@@ -494,7 +494,7 @@ async def edit_description_start(callback: types.CallbackQuery, state: FSMContex
     await state.set_state(RecurringForm.editing_description)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=get_text('cancel', lang), callback_data=f"edit_recurring_{payment_id}")]
+        [InlineKeyboardButton(text=get_text('back', lang), callback_data=f"edit_recurring_{payment_id}")]
     ])
     
     text = f"{get_text('enter_new_description', lang)}\n\nТекущее название: <i>{payment.description}</i>"
@@ -518,7 +518,7 @@ async def edit_day_start(callback: types.CallbackQuery, state: FSMContext, lang:
     await state.set_state(RecurringForm.editing_day)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=get_text('cancel', lang), callback_data=f"edit_recurring_{payment_id}")]
+        [InlineKeyboardButton(text=get_text('back', lang), callback_data=f"edit_recurring_{payment_id}")]
     ])
     
     text = f"{get_text('enter_new_day', lang)}\n\nТекущий день: <i>{payment.day_of_month} число месяца</i>"
@@ -563,7 +563,7 @@ async def edit_category_start(callback: types.CallbackQuery, state: FSMContext, 
     
     # Кнопка отмены
     keyboard_buttons.append([
-        InlineKeyboardButton(text=get_text('cancel', lang), callback_data=f"edit_recurring_{payment_id}")
+        InlineKeyboardButton(text=get_text('back', lang), callback_data=f"edit_recurring_{payment_id}")
     ])
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
@@ -744,7 +744,7 @@ async def delete_recurring_list(callback: types.CallbackQuery, state: FSMContext
             )
         ])
     
-    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="recurring_menu")])
     
     await callback.message.edit_text(
         get_text('select_payment_to_delete', lang),

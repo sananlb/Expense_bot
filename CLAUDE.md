@@ -228,6 +228,11 @@ docker image prune -f
 - Путь к проекту: /root/expense_bot
 - Логи Django: /root/expense_bot/logs/django.log
 
+## Документация проекта
+
+**ВАЖНО:** Вся документация проекта хранится в папке `docs/`
+- `docs/CELERY_DOCUMENTATION.md` - полная документация по Celery (конфигурация, задачи, troubleshooting)
+
 ## Команды для отладки PDF отчетов
 ```bash
 # Проверка последних ошибок в логах Django

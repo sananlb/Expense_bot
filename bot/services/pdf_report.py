@@ -245,6 +245,22 @@ class PDFReportService:
             income_total_amount = float(income_stats['total_amount'] or 0)
             income_total_count = income_stats['total_count'] or 0
             
+            # Доходы за предыдущий месяц для сравнения
+            prev_income_stats = await Income.objects.filter(
+                profile=profile,
+                income_date__gte=prev_start,
+                income_date__lte=prev_end
+            ).aaggregate(total=Sum('amount'))
+            
+            prev_income_amount = float(prev_income_stats['total'] or 0)
+            
+            if prev_income_amount > 0:
+                income_change_percent = round((income_total_amount - prev_income_amount) / prev_income_amount * 100, 1)
+                income_change_direction = "↑" if income_change_percent > 0 else "↓"
+            else:
+                income_change_percent = 0
+                income_change_direction = ""
+            
             # Доходы по категориям
             income_category_stats = incomes.values('category__id', 'category__name', 'category__icon').annotate(
                 amount=Sum('amount')
@@ -269,6 +285,16 @@ class PDFReportService:
             
             # Баланс
             net_balance = income_total_amount - total_amount
+            
+            # Баланс за предыдущий месяц для сравнения
+            prev_net_balance = prev_income_amount - prev_amount
+            
+            if prev_net_balance != 0:
+                balance_change_percent = round((net_balance - prev_net_balance) / abs(prev_net_balance) * 100, 1)
+                balance_change_direction = "↑" if balance_change_percent > 0 else "↓"
+            else:
+                balance_change_percent = 0
+                balance_change_direction = ""
             
             # Форматируем данные для шаблона
             months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -296,7 +322,12 @@ class PDFReportService:
                 'income_categories': income_categories,
                 'daily_incomes': daily_incomes,
                 'net_balance': f"{net_balance:,.0f}",
-                'has_incomes': income_total_count > 0
+                'has_incomes': income_total_count > 0,
+                # Проценты к предыдущему месяцу
+                'income_change_percent': abs(income_change_percent),
+                'income_change_direction': income_change_direction,
+                'balance_change_percent': abs(balance_change_percent),
+                'balance_change_direction': balance_change_direction
             }
             
             return report_data

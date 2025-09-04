@@ -145,15 +145,25 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
     today = date.today()
     current_day = today.day
     
-    # Если сегодня 31 число, обрабатываем платежи с day_of_month = 30
-    if current_day == 31:
-        current_day = 30
+    # Получаем последний день текущего месяца
+    import calendar
+    last_day_of_month = calendar.monthrange(today.year, today.month)[1]
     
-    # Получаем активные операции на сегодня
-    payments = RecurringPayment.objects.filter(
-        day_of_month=current_day,
-        is_active=True
-    ).select_related('profile', 'expense_category', 'income_category')
+    # Если сегодня последний день месяца, обрабатываем все операции 
+    # запланированные на дни больше или равные текущему дню
+    if current_day == last_day_of_month:
+        # Обрабатываем операции на текущий день и все дни > last_day_of_month
+        # Это покрывает случаи февраля (29-30 число → 28/29 февраля)
+        payments = RecurringPayment.objects.filter(
+            day_of_month__gte=current_day,
+            is_active=True
+        ).select_related('profile', 'expense_category', 'income_category')
+    else:
+        # Обычная обработка для дней, которые не являются последним днем месяца
+        payments = RecurringPayment.objects.filter(
+            day_of_month=current_day,
+            is_active=True
+        ).select_related('profile', 'expense_category', 'income_category')
     
     processed_count = 0
     processed_payments = []
@@ -214,9 +224,19 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
 @sync_to_async
 def get_payments_for_day(day: int) -> List[RecurringPayment]:
     """Получить все активные платежи для определенного дня месяца"""
-    # Если запрашивают 31 число, возвращаем платежи на 30 число
-    if day == 31:
-        day = 30
+    from datetime import date
+    import calendar
+    
+    today = date.today()
+    last_day_of_month = calendar.monthrange(today.year, today.month)[1]
+    
+    # Если запрашивают день больше чем есть в текущем месяце,
+    # возвращаем платежи для последнего дня месяца и всех дней >= last_day_of_month
+    if day > last_day_of_month:
+        return list(RecurringPayment.objects.filter(
+            day_of_month__gte=last_day_of_month,
+            is_active=True
+        ).select_related('profile', 'category'))
     
     return list(RecurringPayment.objects.filter(
         day_of_month=day,

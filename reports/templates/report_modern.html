@@ -76,6 +76,28 @@
             margin-bottom: 15px;
         }
         
+        .horizontal-metrics {
+            display: flex;
+            justify-content: space-between;
+            background: white;
+            padding: 16px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+        }
+        
+        .metric-item {
+            flex: 1;
+            text-align: center;
+        }
+        
+        .metric-item:not(:last-child) {
+            border-right: 1px solid #e5e7eb;
+            padding-right: 16px;
+            margin-right: 16px;
+        }
+        
+        
         .summary-card {
             background: white;
             padding: 12px;
@@ -174,6 +196,18 @@
             margin-top: 10px;
         }
         
+        .flexible-chart-section {
+            min-height: 460px;
+            overflow: visible;
+        }
+        
+        .flexible-categories {
+            min-height: 280px;
+            max-height: 400px;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        
         .category-item {
             display: flex;
             justify-content: space-between;
@@ -257,14 +291,29 @@
             <p class="report-period">Отчет за период: {{ period }}</p>
         </div>
         
-        <!-- Summary Cards -->
+        <!-- Summary Cards - Simplified layout -->
+        {% if has_incomes %}
+        <!-- Layout with both expenses and incomes -->
+        <div class="horizontal-metrics">
+            <div class="metric-item">
+                <p class="summary-label">Всего потрачено</p>
+                <p class="summary-value">{{ total_amount }} ₽ <span style="color: #10b981; font-size: 12px;">(кешбек: {{ total_cashback }} ₽)</span></p>
+            </div>
+            <div class="metric-item">
+                <p class="summary-label">Всего доходов</p>
+                <p class="summary-value" style="color: #10b981;">{{ income_total_amount }} ₽</p>
+            </div>
+            <div class="metric-item">
+                <p class="summary-label">Баланс месяца</p>
+                <p class="summary-value {% if net_balance|replace(',', '')|float >= 0 %}style="color: #10b981;"{% else %}style="color: #ef4444;"{% endif %}">{{ net_balance }} ₽</p>
+            </div>
+        </div>
+        {% else %}
+        <!-- Layout for expenses only - old format -->
         <div class="summary-cards">
             <div class="summary-card">
                 <p class="summary-label">Всего потрачено</p>
                 <p class="summary-value">{{ total_amount }} ₽</p>
-                {% if change_direction %}
-                <p class="summary-trend {% if change_direction == '↑' %}trend-up{% else %}trend-down{% endif %}">{{ change_direction }} {{ change_percent }}% к {{ prev_month_name }}</p>
-                {% endif %}
             </div>
             <div class="summary-card">
                 <p class="summary-label">Количество трат</p>
@@ -275,9 +324,38 @@
                 <p class="summary-value cashback-value">{{ total_cashback }} ₽</p>
             </div>
         </div>
+        {% endif %}
         
-        <!-- Charts -->
-        <div class="chart-section" style="display: flex; align-items: stretch; gap: 30px; margin-bottom: 15px; min-height: 250px;">
+        {% if has_incomes %}
+        <!-- Charts with flexible height when incomes exist -->
+        <div class="chart-section flexible-chart-section" style="display: flex; align-items: stretch; gap: 30px; margin-bottom: 15px;">
+            <div style="flex: 0 0 200px; display: flex; flex-direction: column;">
+                <h2 class="chart-title" style="text-align: left; margin-bottom: 12px; font-size: 14px;">Расходы по категориям</h2>
+                <div class="chart-container pie-chart" style="display: flex; align-items: center; justify-content: center; margin-top: auto; margin-bottom: auto; height: 200px;">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+            
+            <div style="flex: 1; display: flex; align-items: center;">
+                <div class="categories-list flexible-categories" style="width: 100%;">
+                    {% for cat in categories %}
+                    <div class="category-item">
+                        <div class="category-info">
+                            <div class="category-color" style="background: {{ cat.color }}"></div>
+                            <span class="category-name">{{ cat.icon }} {{ cat.name }}</span>
+                        </div>
+                        <div class="category-right">
+                            <div class="category-amount">{{ cat.amount_formatted }} ₽ ({{ "%.1f"|format(cat.percent) }}%)</div>
+                            <div class="category-cashback">+{{ cat.cashback_formatted }} ₽ кешбек</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <!-- Charts with old format for expenses only -->
+        <div class="chart-section" style="display: flex; align-items: stretch; gap: 30px; margin-bottom: 15px; min-height: 460px;">
             <div style="flex: 0 0 200px; display: flex; flex-direction: column;">
                 <h2 class="chart-title" style="text-align: left; margin-bottom: 0; font-size: 14px; margin-left: 0; padding-left: 0; position: absolute;">Расходы по категориям</h2>
                 <div class="chart-container pie-chart" style="display: flex; align-items: center; justify-content: center; margin-top: auto; margin-bottom: auto; height: 200px;">
@@ -302,6 +380,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
         
         <!-- Daily Expenses Chart -->
         <div class="chart-section">
@@ -312,58 +391,39 @@
         </div>
         
         {% if has_incomes %}
-        <!-- Income Section -->
-        <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid #e0e0e0;">
-            <!-- Income Summary Cards -->
-            <div class="summary-cards">
-                <div class="summary-card">
-                    <p class="summary-label">Всего доходов</p>
-                    <p class="summary-value" style="color: #10b981;">{{ income_total_amount }} ₽</p>
-                </div>
-                <div class="summary-card">
-                    <p class="summary-label">Количество доходов</p>
-                    <p class="summary-value">{{ income_total_count }}</p>
-                </div>
-                <div class="summary-card">
-                    <p class="summary-label">Баланс месяца</p>
-                    <p class="summary-value {% if net_balance|replace(',', '')|float >= 0 %}style="color: #10b981;"{% else %}style="color: #ef4444;"{% endif %}">{{ net_balance }} ₽</p>
+        <!-- Income Charts when both expenses and incomes exist -->
+        {% if income_categories %}
+        <div class="chart-section flexible-chart-section" style="display: flex; align-items: stretch; gap: 30px; margin-bottom: 15px;">
+            <div style="flex: 0 0 200px; display: flex; flex-direction: column;">
+                <h2 class="chart-title" style="text-align: left; margin-bottom: 12px; font-size: 14px; color: #10b981;">Доходы по категориям</h2>
+                <div class="chart-container pie-chart" style="display: flex; align-items: center; justify-content: center; margin-top: auto; margin-bottom: auto; height: 200px;">
+                    <canvas id="incomePieChart"></canvas>
                 </div>
             </div>
             
-            <!-- Income Charts -->
-            {% if income_categories %}
-            <div class="chart-section" style="display: flex; align-items: stretch; gap: 30px; margin-bottom: 15px; min-height: 200px;">
-                <div style="flex: 0 0 200px; display: flex; flex-direction: column;">
-                    <h2 class="chart-title" style="text-align: left; margin-bottom: 0; font-size: 14px; color: #10b981;">Доходы по категориям</h2>
-                    <div class="chart-container pie-chart" style="display: flex; align-items: center; justify-content: center; margin-top: auto; margin-bottom: auto; height: 180px;">
-                        <canvas id="incomePieChart"></canvas>
-                    </div>
-                </div>
-                
-                <div style="flex: 1; display: flex; align-items: center;">
-                    <div class="categories-list" style="width: 100%;">
-                        {% for cat in income_categories %}
-                        <div class="category-item">
-                            <div class="category-info">
-                                <div class="category-color" style="background: {{ cat.color }}"></div>
-                                <span class="category-name">{{ cat.icon }} {{ cat.name }}</span>
-                            </div>
-                            <div class="category-right">
-                                <div class="category-amount" style="color: #10b981;">{{ cat.amount_formatted }} ₽ ({{ "%.1f"|format(cat.percent) }}%)</div>
-                            </div>
+            <div style="flex: 1; display: flex; align-items: center;">
+                <div class="categories-list flexible-categories" style="width: 100%;">
+                    {% for cat in income_categories %}
+                    <div class="category-item">
+                        <div class="category-info">
+                            <div class="category-color" style="background: {{ cat.color }}"></div>
+                            <span class="category-name">{{ cat.icon }} {{ cat.name }}</span>
                         </div>
-                        {% endfor %}
+                        <div class="category-right">
+                            <div class="category-amount" style="color: #10b981;">{{ cat.amount_formatted }} ₽ ({{ "%.1f"|format(cat.percent) }}%)</div>
+                        </div>
                     </div>
+                    {% endfor %}
                 </div>
             </div>
-            {% endif %}
-            
-            <!-- Combined Income/Expense Daily Chart -->
-            <div class="chart-section">
-                <h2 class="chart-title">Баланс по дням (Доходы vs Расходы)</h2>
-                <div class="chart-container" style="height: 250px;">
-                    <canvas id="combinedChart"></canvas>
-                </div>
+        </div>
+        {% endif %}
+        
+        <!-- Income Daily Chart -->
+        <div class="chart-section">
+            <h2 class="chart-title">Динамика доходов по дням</h2>
+            <div class="chart-container" style="height: 250px;">
+                <canvas id="incomeChart"></canvas>
             </div>
         </div>
         {% endif %}
@@ -519,9 +579,9 @@
         }
         {% endif %}
         
-        // Combined Income vs Expense Chart
-        const combinedCtx = document.getElementById('combinedChart').getContext('2d');
-        new Chart(combinedCtx, {
+        // Income Daily Chart
+        const incomeCtx = document.getElementById('incomeChart').getContext('2d');
+        new Chart(incomeCtx, {
             type: 'bar',
             data: {
                 labels: dailyData.days,
@@ -531,12 +591,6 @@
                     backgroundColor: '#10b981',
                     borderWidth: 0,
                     barPercentage: 0.8
-                }, {
-                    label: 'Расходы',
-                    data: dailyData.expenses.map(v => -v), // Negative for display below axis
-                    backgroundColor: '#ef4444',
-                    borderWidth: 0,
-                    barPercentage: 0.8
                 }]
             },
             options: {
@@ -544,18 +598,13 @@
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        display: true,
-                        position: 'top',
-                        labels: {
-                            padding: 10,
-                            font: { size: 11 }
-                        }
+                        display: false
                     },
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                const value = Math.abs(context.parsed.y);
-                                return context.dataset.label + ': ' + value.toLocaleString('ru-RU') + ' ₽';
+                                const value = context.parsed.y;
+                                return 'Доходы: ' + value.toLocaleString('ru-RU') + ' ₽';
                             }
                         }
                     }
@@ -574,7 +623,7 @@
                         beginAtZero: true,
                         ticks: {
                             callback: function(value) {
-                                return Math.abs(value).toLocaleString('ru-RU') + ' ₽';
+                                return value.toLocaleString('ru-RU') + ' ₽';
                             }
                         }
                     }
