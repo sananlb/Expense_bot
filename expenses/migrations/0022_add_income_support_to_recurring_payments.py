@@ -4,6 +4,28 @@ from django.db import migrations, models
 import django.db.models.deletion
 
 
+def migrate_category_data(apps, schema_editor):
+    """Переносит данные из старого поля category в новое expense_category"""
+    RecurringPayment = apps.get_model('expenses', 'RecurringPayment')
+    
+    for payment in RecurringPayment.objects.all():
+        # Сохраняем старую категорию в новое поле expense_category
+        if hasattr(payment, 'category') and payment.category:
+            payment.expense_category = payment.category
+            payment.operation_type = 'expense'
+            payment.save()
+
+
+def reverse_migrate_category_data(apps, schema_editor):
+    """Откат миграции данных"""
+    RecurringPayment = apps.get_model('expenses', 'RecurringPayment')
+    
+    for payment in RecurringPayment.objects.all():
+        if payment.expense_category:
+            payment.category = payment.expense_category
+            payment.save()
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -15,10 +37,8 @@ class Migration(migrations.Migration):
             name='recurringpayment',
             options={'verbose_name': 'Регулярная операция', 'verbose_name_plural': 'Регулярные операции'},
         ),
-        migrations.RemoveField(
-            model_name='recurringpayment',
-            name='category',
-        ),
+        
+        # Сначала добавляем новые поля
         migrations.AddField(
             model_name='recurringpayment',
             name='expense_category',
@@ -34,12 +54,21 @@ class Migration(migrations.Migration):
             name='operation_type',
             field=models.CharField(choices=[('expense', 'Расход'), ('income', 'Доход')], db_index=True, default='expense', max_length=10, verbose_name='Тип операции'),
         ),
+        
+        # Переносим данные
+        migrations.RunPython(migrate_category_data, reverse_migrate_category_data),
+        
+        # Теперь удаляем старое поле
+        migrations.RemoveField(
+            model_name='recurringpayment',
+            name='category',
+        ),
+        
+        # Добавляем индекс
         migrations.AddIndex(
             model_name='recurringpayment',
             index=models.Index(fields=['operation_type', 'is_active'], name='expenses_re_operati_91b2c2_idx'),
         ),
-        migrations.AddConstraint(
-            model_name='recurringpayment',
-            constraint=models.CheckConstraint(check=models.Q(models.Q(('expense_category__isnull', False), ('operation_type', 'expense')), models.Q(('income_category__isnull', False), ('operation_type', 'income')), _connector='OR'), name='category_type_consistency'),
-        ),
+        
+        # НЕ добавляем constraint сразу - сделаем это в отдельной миграции после проверки данных
     ]
