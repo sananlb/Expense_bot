@@ -824,7 +824,7 @@ async def add_income_category_start(callback: types.CallbackQuery, state: FSMCon
     await callback.message.edit_text(
         "📝 Введите название категории доходов:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="income_categories_menu")]
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="income_categories_menu")]
         ])
     )
     await state.update_data(last_menu_message_id=callback.message.message_id)
