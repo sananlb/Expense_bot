@@ -691,6 +691,8 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     # Определяем категорию дохода
     category = None
     income_type = 'other'
+    ai_categorized = False
+    ai_confidence = None
     
     # Категории доходов по ключевым словам
     income_categories = {
@@ -728,21 +730,65 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
             break
     
     # Если категорию не нашли, пытаемся определить через AI (если есть пользовательские категории)
+    if not category and profile and use_ai:
+        from bot.services.income_categorization import categorize_income
+        
+        # Пытаемся категоризировать через AI
+        ai_result = await categorize_income(original_text, user_id, profile)
+        
+        if ai_result:
+            category = ai_result.get('category')
+            # Если AI предложил лучшее описание, используем его
+            if ai_result.get('description') and len(ai_result.get('description', '')) > 0:
+                description = ai_result['description']
+            # Если AI уверен в сумме больше чем мы
+            if not amount and ai_result.get('amount'):
+                amount = Decimal(str(ai_result['amount']))
+            
+            # Сохраняем информацию об AI категоризации
+            ai_categorized = True
+            ai_confidence = ai_result.get('confidence', 0.5)
+    
+    # Если AI не сработал, пытаемся найти по ключевым словам пользователя
     if not category and profile:
-        from expenses.models import IncomeCategory
+        from expenses.models import IncomeCategory, IncomeCategoryKeyword
         from asgiref.sync import sync_to_async
         
-        # Получаем категории доходов пользователя
-        user_income_categories = await sync_to_async(list)(
-            IncomeCategory.objects.filter(profile=profile).values_list('name', flat=True)
-        )
+        # Сначала проверяем ключевые слова
+        try:
+            keywords = await sync_to_async(list)(
+                IncomeCategoryKeyword.objects.filter(
+                    category__profile=profile,
+                    category__is_active=True
+                ).select_related('category')
+            )
+            
+            best_match = None
+            best_weight = 0
+            
+            for keyword_obj in keywords:
+                if keyword_obj.keyword.lower() in text_lower:
+                    if keyword_obj.normalized_weight > best_weight:
+                        best_match = keyword_obj.category.name
+                        best_weight = keyword_obj.normalized_weight
+            
+            if best_match:
+                category = best_match
+        except Exception as e:
+            logger.warning(f"Error checking income keywords: {e}")
         
-        if user_income_categories:
-            # Проверяем прямое вхождение названия категории
-            for user_cat in user_income_categories:
-                if user_cat.lower() in text_lower or any(word in user_cat.lower() for word in text_lower.split()):
-                    category = user_cat
-                    break
+        # Если не нашли по ключевым словам, получаем категории доходов пользователя
+        if not category:
+            user_income_categories = await sync_to_async(list)(
+                IncomeCategory.objects.filter(profile=profile).values_list('name', flat=True)
+            )
+            
+            if user_income_categories:
+                # Проверяем прямое вхождение названия категории
+                for user_cat in user_income_categories:
+                    if user_cat.lower() in text_lower or any(word in user_cat.lower() for word in text_lower.split()):
+                        category = user_cat
+                        break
     
     # Формируем описание
     description = text_without_amount if text_without_amount else 'Доход'
@@ -786,9 +832,11 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
         'category': category,
         'income_type': income_type,
         'currency': currency,
-        'confidence': 0.8 if category else 0.5,
+        'confidence': ai_confidence if ai_confidence else (0.8 if category else 0.5),
         'income_date': expense_date,
-        'is_income': True  # Флаг, что это доход
+        'is_income': True,  # Флаг, что это доход
+        'ai_categorized': ai_categorized,
+        'ai_confidence': ai_confidence
     }
     
     return result

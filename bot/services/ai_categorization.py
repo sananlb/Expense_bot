@@ -13,7 +13,7 @@ import openai
 import google.generativeai as genai
 from aiogram.types import User
 
-from expenses.models import ExpenseCategory, Expense
+from expenses.models import ExpenseCategory, Expense, IncomeCategory, Income
 from profiles.models import Profile
 from .key_rotation_mixin import GoogleKeyRotationMixin, OpenAIKeyRotationMixin
 
@@ -117,13 +117,19 @@ class ExpenseCategorizer(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
         
         # Не инициализируем ключи здесь, будем использовать ротацию при каждом вызове
     
-    def get_system_prompt(self) -> str:
-        return """Ты помощник для категоризации расходов. 
+    def get_system_prompt(self, operation_type: str = 'expense') -> str:
+        if operation_type == 'income':
+            return """Ты помощник для категоризации доходов. 
+Твоя задача - анализировать текст и определять категорию дохода, сумму и описание.
+Отвечай только валидным JSON без дополнительного текста."""
+        else:
+            return """Ты помощник для категоризации расходов. 
 Твоя задача - анализировать текст и определять категорию расхода, сумму и описание.
 Отвечай только валидным JSON без дополнительного текста."""
     
     def get_categorization_prompt(self, text: str, categories: List[str], 
-                                  user_context: Optional[Dict[str, Any]] = None) -> str:
+                                  user_context: Optional[Dict[str, Any]] = None,
+                                  operation_type: str = 'expense') -> str:
         context_info = ""
         if user_context:
             if 'recent_categories' in user_context:
@@ -133,7 +139,17 @@ class ExpenseCategorizer(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
         
         categories_list = '\n'.join([f"- {cat}" for cat in categories])
         
-        return f"""Проанализируй текст о расходе и извлеки информацию.
+        if operation_type == 'income':
+            operation_text = "доходе"
+            examples = """- "Зарплата 50000" -> {"amount": 50000, "description": "Зарплата", "category": "Зарплата", "confidence": 0.95, "currency": "RUB"}
+- "Получил премию 10к" -> {"amount": 10000, "description": "Премия", "category": "Премии и бонусы", "confidence": 0.9, "currency": "RUB"}
+- "Фриланс заказ $500" -> {"amount": 500, "description": "Фриланс заказ", "category": "Фриланс", "confidence": 0.9, "currency": "USD"}"""
+        else:
+            operation_text = "расходе"
+            examples = """- "Кофе 300" -> {"amount": 300, "description": "Кофе", "category": "Кафе и рестораны", "confidence": 0.9, "currency": "RUB"}
+- "Такси домой 450р" -> {"amount": 450, "description": "Такси домой", "category": "Транспорт", "confidence": 0.95, "currency": "RUB"}"""
+        
+        return f"""Проанализируй текст о {operation_text} и извлеки информацию.
 
 Текст: "{text}"
 {context_info}
@@ -151,11 +167,11 @@ class ExpenseCategorizer(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
 }}
 
 Примеры:
-- "Кофе 300" -> {{"amount": 300, "description": "Кофе", "category": "Кафе и рестораны", "confidence": 0.9, "currency": "RUB"}}
-- "Такси домой 450р" -> {{"amount": 450, "description": "Такси домой", "category": "Транспорт", "confidence": 0.95, "currency": "RUB"}}"""
+{examples}"""
     
     async def categorize_with_openai(self, text: str, categories: List[str],
-                                    user_context: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+                                    user_context: Optional[Dict[str, Any]] = None,
+                                    operation_type: str = 'expense') -> Optional[Dict[str, Any]]:
         try:
             from openai import OpenAI
             

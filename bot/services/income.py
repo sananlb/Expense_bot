@@ -426,10 +426,31 @@ def update_income(
             profile=profile
         )
         
+        # Сохраняем старую категорию для обучения
+        old_category = income.category if hasattr(income, 'category') else None
+        
         # Обновляем поля
         for field, value in kwargs.items():
             if hasattr(income, field):
                 setattr(income, field, value)
+        
+        # Если изменилась категория, обучаем систему
+        if 'category' in kwargs and old_category != income.category:
+            try:
+                from bot.services.income_categorization import learn_from_income_category_change
+                import asyncio
+                
+                # Запускаем асинхронную функцию в синхронном контексте
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(
+                    learn_from_income_category_change(income, old_category, income.category)
+                )
+                loop.close()
+                
+                logger.info(f"Learned from income category change for income {income_id}")
+            except Exception as e:
+                logger.warning(f"Could not learn from income category change: {e}")
         
         # Сохраняем изменения
         income.save()
@@ -986,6 +1007,23 @@ def create_income_category(
             name=full_name,
             is_active=True
         )
+        
+        # Генерируем ключевые слова для новой категории
+        try:
+            from bot.services.income_categorization import generate_keywords_for_income_category
+            import asyncio
+            
+            # Запускаем асинхронную функцию в синхронном контексте
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            keywords = loop.run_until_complete(
+                generate_keywords_for_income_category(category, name)
+            )
+            loop.close()
+            
+            logger.info(f"Generated {len(keywords)} keywords for income category '{full_name}'")
+        except Exception as e:
+            logger.warning(f"Could not generate keywords for income category: {e}")
         
         logger.info(f"Created income category '{full_name}' for user {telegram_id}")
         return category

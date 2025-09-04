@@ -758,6 +758,34 @@ class Income(models.Model):
         return f"+{self.amount} {self.currency} - {self.description[:30]}"
 
 
+class IncomeCategoryKeyword(models.Model):
+    """Ключевые слова для автоматического определения категорий доходов"""
+    category = models.ForeignKey(IncomeCategory, on_delete=models.CASCADE, related_name='keywords')
+    keyword = models.CharField(max_length=100, db_index=True)
+    
+    # Счетчик использования (только ручные исправления)
+    usage_count = models.IntegerField(default=0, verbose_name='Количество использований')
+    
+    # Нормализованный вес для конфликтующих слов
+    normalized_weight = models.FloatField(default=1.0, verbose_name='Нормализованный вес')
+    
+    # Временная метка создания
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'expenses_income_category_keyword'
+        verbose_name = 'Ключевое слово категории дохода'
+        verbose_name_plural = 'Ключевые слова категорий доходов'
+        unique_together = ['category', 'keyword']
+        indexes = [
+            models.Index(fields=['keyword']),
+            models.Index(fields=['category', 'usage_count']),
+        ]
+    
+    def __str__(self):
+        return f"{self.keyword} -> {self.category.name}"
+
+
 DEFAULT_CATEGORIES = [
     ('Продукты', '🛒'),
     ('Кафе и рестораны', '🍽️'),
