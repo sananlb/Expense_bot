@@ -276,7 +276,8 @@ async def callback_categories_menu(callback: types.CallbackQuery, state: FSMCont
         await state.clear()
     
     await callback.message.delete()
-    await show_categories_menu(callback, state)
+    # Показываем сразу категории трат вместо меню выбора
+    await show_expense_categories_menu(callback, state)
     await callback.answer()
 
 
@@ -795,15 +796,15 @@ async def cancel_category(callback: types.CallbackQuery, state: FSMContext):
     await callback.answer()
     await callback.message.delete()
     # Передаем callback вместо callback.message после удаления
-    await show_categories_menu(callback, state)
+    await show_expense_categories_menu(callback, state)
 
 
 @router.callback_query(lambda c: c.data == "cancel_category_creation")
 async def cancel_category_creation(callback: types.CallbackQuery, state: FSMContext):
     """Отмена создания категории"""
     await state.clear()
-    await callback.message.delete()
-    await show_categories_menu(callback, state)
+    # Не удаляем сообщение - send_message_with_cleanup отредактирует его
+    await show_expense_categories_menu(callback, state)
     await callback.answer()
 
 
@@ -879,7 +880,7 @@ async def process_income_category_name(message: types.Message, state: FSMContext
         
         keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_income_icon")])
         keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_income_icon")])
-        keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_income_category_creation")])
+        keyboard_buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="cancel_income_category_creation")])
         
         await send_message_with_cleanup(
             message, state,
@@ -964,7 +965,7 @@ async def custom_income_icon_start(callback: types.CallbackQuery, state: FSMCont
     await callback.message.edit_text(
         "✏️ Отправьте свой эмодзи для категории доходов:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Отмена", callback_data="income_categories_menu")]
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="income_categories_menu")]
         ])
     )
     await state.set_state(IncomeCategoryForm.waiting_for_custom_icon)
