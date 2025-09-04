@@ -304,7 +304,7 @@ async def add_category_start(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         get_text('adding_category', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="categories_menu")]
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="expense_categories_menu")]
         ])
     )
     # Обновляем ID сообщения в состоянии
@@ -362,7 +362,7 @@ async def process_category_name(message: types.Message, state: FSMContext):
         
         keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_icon")])
         keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_icon")])
-        keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_category_creation")])
+        keyboard_buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="cancel_category_creation")])
         
         await send_message_with_cleanup(
             message, state,
@@ -380,7 +380,7 @@ async def custom_icon_start(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         "✏️ Отправьте свой эмодзи для категории:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Отмена", callback_data="categories_menu")]
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="expense_categories_menu")]
         ])
     )
     await state.set_state(CategoryForm.waiting_for_custom_icon)
@@ -785,7 +785,7 @@ async def process_edit_category_name(message: types.Message, state: FSMContext):
         await message.answer(
             "❌ Не удалось обновить категорию.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="❌ Отмена", callback_data="categories_menu")]
+                [InlineKeyboardButton(text="⬅️ Назад", callback_data="expense_categories_menu")]
             ])
         )
 
