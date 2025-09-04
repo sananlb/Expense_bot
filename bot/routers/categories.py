@@ -316,6 +316,11 @@ async def add_category_start(callback: types.CallbackQuery, state: FSMContext):
 @router.message(CategoryForm.waiting_for_name)
 async def process_category_name(message: types.Message, state: FSMContext):
     """Обработка названия категории"""
+    # Дополнительная проверка что мы все еще в правильном состоянии
+    current_state = await state.get_state()
+    if current_state != CategoryForm.waiting_for_name.state:
+        return
+    
     name = message.text.strip()
     
     if len(name) > 50:
@@ -390,6 +395,11 @@ async def custom_icon_start(callback: types.CallbackQuery, state: FSMContext):
 @router.message(CategoryForm.waiting_for_custom_icon)
 async def process_custom_icon(message: types.Message, state: FSMContext):
     """Обработка пользовательского эмодзи"""
+    # Дополнительная проверка что мы все еще в правильном состоянии
+    current_state = await state.get_state()
+    if current_state != CategoryForm.waiting_for_custom_icon.state:
+        return
+    
     import re
     
     custom_icon = message.text.strip()
@@ -835,6 +845,11 @@ async def add_income_category_start(callback: types.CallbackQuery, state: FSMCon
 @router.message(IncomeCategoryForm.waiting_for_name)
 async def process_income_category_name(message: types.Message, state: FSMContext):
     """Обработка названия категории доходов"""
+    # Дополнительная проверка что мы все еще в правильном состоянии
+    current_state = await state.get_state()
+    if current_state != IncomeCategoryForm.waiting_for_name.state:
+        return
+    
     name = message.text.strip()
     
     if len(name) > 50:
@@ -975,6 +990,11 @@ async def custom_income_icon_start(callback: types.CallbackQuery, state: FSMCont
 @router.message(IncomeCategoryForm.waiting_for_custom_icon)
 async def process_custom_income_icon(message: types.Message, state: FSMContext):
     """Обработка пользовательского эмодзи для категории доходов"""
+    # Дополнительная проверка что мы все еще в правильном состоянии
+    current_state = await state.get_state()
+    if current_state != IncomeCategoryForm.waiting_for_custom_icon.state:
+        return
+    
     import re
     
     custom_icon = message.text.strip()
