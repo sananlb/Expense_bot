@@ -316,6 +316,10 @@ async def add_category_start(callback: types.CallbackQuery, state: FSMContext):
 @router.message(CategoryForm.waiting_for_name)
 async def process_category_name(message: types.Message, state: FSMContext):
     """Обработка названия категории"""
+    # Игнорируем команды - они обработаются в middleware
+    if message.text.startswith('/'):
+        return
+    
     # Дополнительная проверка что мы все еще в правильном состоянии
     current_state = await state.get_state()
     if current_state != CategoryForm.waiting_for_name.state:
@@ -336,6 +340,10 @@ async def process_category_name(message: types.Message, state: FSMContext):
         # Если эмодзи уже есть, сразу создаем категорию
         user_id = message.from_user.id
         try:
+            # Капитализируем первую букву после эмодзи
+            parts = name.split(maxsplit=1)
+            if len(parts) == 2:
+                name = parts[0] + ' ' + parts[1].capitalize()
             category = await create_category(user_id, name, '')
             await state.clear()
             # Сразу показываем меню категорий трат
@@ -345,6 +353,8 @@ async def process_category_name(message: types.Message, state: FSMContext):
             await state.clear()
     else:
         # Если эмодзи нет, сразу показываем выбор иконок
+        # Капитализируем название
+        name = name.capitalize()
         await state.update_data(name=name)
         
         icons = [
@@ -395,6 +405,10 @@ async def custom_icon_start(callback: types.CallbackQuery, state: FSMContext):
 @router.message(CategoryForm.waiting_for_custom_icon)
 async def process_custom_icon(message: types.Message, state: FSMContext):
     """Обработка пользовательского эмодзи"""
+    # Игнорируем команды - они обработаются в middleware
+    if message.text.startswith('/'):
+        return
+    
     # Дополнительная проверка что мы все еще в правильном состоянии
     current_state = await state.get_state()
     if current_state != CategoryForm.waiting_for_custom_icon.state:
@@ -418,10 +432,10 @@ async def process_custom_icon(message: types.Message, state: FSMContext):
     editing_category_id = data.get('editing_category_id')
     if editing_category_id:
         # Обновляем существующую категорию
-        full_name = f"{custom_icon} {name}" if custom_icon else name
+        full_name = f"{custom_icon} {name.capitalize()}" if custom_icon else name.capitalize()
         category = await update_category(user_id, editing_category_id, name=full_name)
     else:
-        category = await create_category(user_id, name, custom_icon)
+        category = await create_category(user_id, name.capitalize(), custom_icon)
     
     # Удаляем сообщение пользователя
     try:
@@ -449,9 +463,9 @@ async def no_icon_selected(callback: types.CallbackQuery, state: FSMContext):
     if editing_category_id:
         # Обновляем существующую категорию вместо удаления
         # Для категории "без иконки" name уже содержит полное название
-        category = await update_category(user_id, editing_category_id, name=name)
+        category = await update_category(user_id, editing_category_id, name=name.capitalize())
     else:
-        category = await create_category(user_id, name, '')
+        category = await create_category(user_id, name.capitalize(), '')
     
     # Удаляем сообщение с выбором иконок
     try:
@@ -485,10 +499,10 @@ async def set_category_icon(callback: types.CallbackQuery, state: FSMContext):
     if editing_category_id:
         # Обновляем существующую категорию вместо удаления
         # Объединяем иконку и название
-        full_name = f"{icon} {name}" if icon else name
+        full_name = f"{icon} {name.capitalize()}" if icon else name.capitalize()
         category = await update_category(user_id, editing_category_id, name=full_name)
     else:
-        category = await create_category(user_id, name, icon)
+        category = await create_category(user_id, name.capitalize(), icon)
     
     # Удаляем сообщение с выбором иконок
     try:
@@ -730,6 +744,10 @@ async def edit_category_icon_start(callback: types.CallbackQuery, state: FSMCont
 @router.message(CategoryStates.editing_name)
 async def process_edit_category_name(message: types.Message, state: FSMContext):
     """Обработка нового названия категории"""
+    # Игнорируем команды - они обработаются в middleware
+    if message.text.startswith('/'):
+        return
+    
     import logging
     logger = logging.getLogger(__name__)
     logger.info(f"process_edit_category_name called for user {message.from_user.id}")
@@ -845,6 +863,10 @@ async def add_income_category_start(callback: types.CallbackQuery, state: FSMCon
 @router.message(IncomeCategoryForm.waiting_for_name)
 async def process_income_category_name(message: types.Message, state: FSMContext):
     """Обработка названия категории доходов"""
+    # Игнорируем команды - они обработаются в middleware
+    if message.text.startswith('/'):
+        return
+    
     # Дополнительная проверка что мы все еще в правильном состоянии
     current_state = await state.get_state()
     if current_state != IncomeCategoryForm.waiting_for_name.state:
@@ -866,6 +888,10 @@ async def process_income_category_name(message: types.Message, state: FSMContext
         user_id = message.from_user.id
         try:
             from bot.services.income import create_income_category
+            # Капитализируем первую букву после эмодзи
+            parts = name.split(maxsplit=1)
+            if len(parts) == 2:
+                name = parts[0] + ' ' + parts[1].capitalize()
             category = await create_income_category(user_id, name, '')
             await state.clear()
             await show_income_categories_menu(message, state)
@@ -874,6 +900,8 @@ async def process_income_category_name(message: types.Message, state: FSMContext
             await state.clear()
     else:
         # Если эмодзи нет, показываем выбор иконок
+        # Капитализируем название
+        name = name.capitalize()
         await state.update_data(income_category_name=name)
         
         # Иконки для категорий доходов
@@ -922,13 +950,13 @@ async def set_income_category_icon(callback: types.CallbackQuery, state: FSMCont
         if editing_category_id:
             # Обновляем существующую категорию
             from bot.services.income import update_income_category
-            full_name = f"{icon} {name}" if icon else name
+            full_name = f"{icon} {name.capitalize()}" if icon else name.capitalize()
             category = await update_income_category(callback.from_user.id, editing_category_id, new_name=full_name)
             message = "✅ Категория доходов обновлена"
         else:
             # Создаем новую категорию
             from bot.services.income import create_income_category
-            category = await create_income_category(callback.from_user.id, name, icon)
+            category = await create_income_category(callback.from_user.id, name.capitalize(), icon)
             message = "✅ Категория доходов добавлена"
         
         await state.clear()
@@ -956,12 +984,12 @@ async def no_income_icon(callback: types.CallbackQuery, state: FSMContext):
         if editing_category_id:
             # Обновляем существующую категорию
             from bot.services.income import update_income_category
-            category = await update_income_category(callback.from_user.id, editing_category_id, new_name=name)
+            category = await update_income_category(callback.from_user.id, editing_category_id, new_name=name.capitalize())
             message = "✅ Категория доходов обновлена"
         else:
             # Создаем новую категорию
             from bot.services.income import create_income_category
-            category = await create_income_category(callback.from_user.id, name, '')
+            category = await create_income_category(callback.from_user.id, name.capitalize(), '')
             message = "✅ Категория доходов добавлена"
         
         await state.clear()
@@ -990,6 +1018,10 @@ async def custom_income_icon_start(callback: types.CallbackQuery, state: FSMCont
 @router.message(IncomeCategoryForm.waiting_for_custom_icon)
 async def process_custom_income_icon(message: types.Message, state: FSMContext):
     """Обработка пользовательского эмодзи для категории доходов"""
+    # Игнорируем команды - они обработаются в middleware
+    if message.text.startswith('/'):
+        return
+    
     # Дополнительная проверка что мы все еще в правильном состоянии
     current_state = await state.get_state()
     if current_state != IncomeCategoryForm.waiting_for_custom_icon.state:
@@ -1015,7 +1047,7 @@ async def process_custom_income_icon(message: types.Message, state: FSMContext):
     
     try:
         from bot.services.income import create_income_category
-        category = await create_income_category(message.from_user.id, name, custom_icon)
+        category = await create_income_category(message.from_user.id, name.capitalize(), custom_icon)
         await state.clear()
         await show_income_categories_menu(message, state)
     except ValueError as e:
