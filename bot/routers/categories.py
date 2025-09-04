@@ -889,7 +889,7 @@ async def process_income_category_name(message: types.Message, state: FSMContext
         await state.set_state(IncomeCategoryForm.waiting_for_icon)
 
 
-@router.callback_query(lambda c: c.data.startswith("set_income_icon_"))
+@router.callback_query(lambda c: c.data.startswith("set_income_icon_"), IncomeCategoryForm.waiting_for_icon)
 async def set_income_category_icon(callback: types.CallbackQuery, state: FSMContext):
     """Установка иконки категории доходов"""
     icon = callback.data.replace("set_income_icon_", "")
@@ -924,7 +924,7 @@ async def set_income_category_icon(callback: types.CallbackQuery, state: FSMCont
         await state.clear()
 
 
-@router.callback_query(lambda c: c.data == "no_income_icon")
+@router.callback_query(lambda c: c.data == "no_income_icon", IncomeCategoryForm.waiting_for_icon)
 async def no_income_icon(callback: types.CallbackQuery, state: FSMContext):
     """Создание категории доходов без иконки или обновление существующей"""
     data = await state.get_data()
@@ -1274,10 +1274,35 @@ async def process_new_income_category_name(message: types.Message, state: FSMCon
         await state.clear()
 
 
-@router.callback_query(lambda c: c.data == "cancel_income_category_creation")
+@router.callback_query(lambda c: c.data == "cancel_income_category_creation", IncomeCategoryForm.waiting_for_icon)
 async def cancel_income_category_creation(callback: types.CallbackQuery, state: FSMContext):
-    """Отмена создания категории доходов"""
+    """Отмена создания категории доходов из состояния выбора иконки"""
     await state.clear()
     # Не удаляем сообщение - send_message_with_cleanup отредактирует его
     await show_income_categories_menu(callback, state)
+    await callback.answer()
+
+@router.callback_query(lambda c: c.data == "cancel_income_category_creation", IncomeCategoryForm.waiting_for_custom_icon)
+async def cancel_income_category_creation_custom(callback: types.CallbackQuery, state: FSMContext):
+    """Отмена создания категории доходов из состояния ввода кастомной иконки"""
+    await state.clear()
+    # Не удаляем сообщение - send_message_with_cleanup отредактирует его
+    await show_income_categories_menu(callback, state)
+    await callback.answer()
+
+# Fallback обработчики для случаев когда состояние уже сброшено
+@router.callback_query(lambda c: c.data == "cancel_income_category_creation")
+async def cancel_income_category_creation_fallback(callback: types.CallbackQuery, state: FSMContext):
+    """Fallback для отмены создания категории доходов когда состояние уже сброшено"""
+    # Просто отвечаем без действий, так как состояние уже сброшено
+    await callback.answer()
+
+@router.callback_query(lambda c: c.data.startswith("set_income_icon_"))
+async def set_income_icon_fallback(callback: types.CallbackQuery, state: FSMContext):
+    """Fallback для установки иконки когда состояние уже сброшено"""
+    await callback.answer()
+
+@router.callback_query(lambda c: c.data == "no_income_icon")
+async def no_income_icon_fallback(callback: types.CallbackQuery, state: FSMContext):
+    """Fallback для выбора без иконки когда состояние уже сброшено"""
     await callback.answer()
