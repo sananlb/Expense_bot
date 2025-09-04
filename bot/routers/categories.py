@@ -916,7 +916,7 @@ async def set_income_category_icon(callback: types.CallbackQuery, state: FSMCont
             message = "✅ Категория доходов добавлена"
         
         await state.clear()
-        await callback.message.delete()
+        # Не удаляем сообщение - send_message_with_cleanup отредактирует его
         await show_income_categories_menu(callback, state)
         await callback.answer(message)
     except ValueError as e:
@@ -949,7 +949,7 @@ async def no_income_icon(callback: types.CallbackQuery, state: FSMContext):
             message = "✅ Категория доходов добавлена"
         
         await state.clear()
-        await callback.message.delete()
+        # Не удаляем сообщение - send_message_with_cleanup отредактирует его
         await show_income_categories_menu(callback, state)
         await callback.answer(message)
     except ValueError as e:
@@ -1055,7 +1055,8 @@ async def delete_income_category(callback: types.CallbackQuery, state: FSMContex
         from bot.services.income import delete_income_category
         await delete_income_category(user_id, category_id)
         await state.clear()
-        await callback.message.delete()
+        # Не удаляем сообщение - просто показываем обновленное меню
+        # send_message_with_cleanup автоматически отредактирует текущее сообщение
         await show_income_categories_menu(callback, state)
         await callback.answer("✅ Категория доходов удалена")
     except ValueError as e:
@@ -1277,6 +1278,6 @@ async def process_new_income_category_name(message: types.Message, state: FSMCon
 async def cancel_income_category_creation(callback: types.CallbackQuery, state: FSMContext):
     """Отмена создания категории доходов"""
     await state.clear()
-    await callback.message.delete()
+    # Не удаляем сообщение - send_message_with_cleanup отредактирует его
     await show_income_categories_menu(callback, state)
     await callback.answer()

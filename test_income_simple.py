@@ -64,7 +64,7 @@ def test_income_categories():
     Profile.objects.filter(telegram_id=test_user_id).delete()
     print("6. Профиль удален")
     
-    print("\n✅ Тест завершен успешно!")
+    print("\n[OK] Тест завершен успешно!")
 
 
 if __name__ == '__main__':
