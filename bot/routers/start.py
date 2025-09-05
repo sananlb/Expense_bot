@@ -97,25 +97,37 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
         except Exception as e:
             logger.error(f"Error processing referral code: {e}")
     
-    # Проверяем, есть ли у пользователя подписка
-    has_subscription = await profile.subscriptions.filter(
-        is_active=True,
-        end_date__gt=timezone.now()
-    ).aexists()
-    
-    # Если нет подписки и это новый пользователь, создаем пробный период на 7 дней
-    if not has_subscription and is_new_user:
-        trial_end = timezone.now() + timedelta(days=7)
-        await Subscription.objects.acreate(
-            profile=profile,
-            type='trial',
-            payment_method='trial',
-            amount=0,
-            start_date=timezone.now(),
-            end_date=trial_end,
-            is_active=True
-        )
-        logger.info(f"Created trial subscription for new user {user_id}")
+    # Проверяем, есть ли у пользователя подписка (только если не beta_tester)
+    if not profile.is_beta_tester:
+        # Проверяем существующие подписки
+        existing_trial = await profile.subscriptions.filter(
+            type='trial'
+        ).aexists()
+        
+        has_active_subscription = await profile.subscriptions.filter(
+            is_active=True,
+            end_date__gt=timezone.now()
+        ).aexists()
+        
+        # Создаем пробную подписку только если:
+        # 1. Это новый пользователь
+        # 2. У него нет активной подписки
+        # 3. У него никогда не было пробной подписки
+        # 4. Он не beta_tester
+        if is_new_user and not has_active_subscription and not existing_trial:
+            trial_end = timezone.now() + timedelta(days=7)
+            await Subscription.objects.acreate(
+                profile=profile,
+                type='trial',
+                payment_method='trial',
+                amount=0,
+                start_date=timezone.now(),
+                end_date=trial_end,
+                is_active=True
+            )
+            logger.info(f"Created trial subscription for new user {user_id}")
+    else:
+        logger.info(f"User {user_id} is a beta tester, skipping trial subscription")
     
     # Обновляем команды бота для пользователя
     await update_user_commands(message.bot, user_id)

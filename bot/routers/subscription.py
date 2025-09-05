@@ -603,33 +603,43 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     # Создаем подписку
     sub_info = SUBSCRIPTION_PRICES[sub_type]
     
-    # Ищем последнюю подписку (активную или будущую)
-    # Это включает и пробный период
-    last_subscription = await profile.subscriptions.filter(
-        end_date__gt=timezone.now()  # Все подписки, которые еще не закончились
+    # Ищем активную подписку для продления
+    active_subscription = await profile.subscriptions.filter(
+        is_active=True,
+        end_date__gt=timezone.now()
     ).order_by('-end_date').afirst()
     
-    if last_subscription:
-        # Новая подписка начинается после окончания последней
-        start_date = last_subscription.end_date
+    if active_subscription:
+        # Продлеваем существующую подписку
+        active_subscription.end_date = active_subscription.end_date + relativedelta(months=sub_info['months'])
+        
+        # Обновляем информацию о последнем платеже
+        active_subscription.telegram_payment_charge_id = payment.telegram_payment_charge_id
+        active_subscription.amount = payment.total_amount
+        active_subscription.updated_at = timezone.now()
+        
+        await active_subscription.asave()
+        subscription = active_subscription
+        
+        logger.info(f"Extended existing subscription for user {user_id} until {active_subscription.end_date}")
     else:
-        # Если нет активных подписок, начинаем с текущего момента
+        # Если нет активной подписки, создаем новую
         start_date = timezone.now()
-    
-    # Продлеваем по месяцам
-    end_date = start_date + relativedelta(months=sub_info['months'])
-    
-    # Создаем новую подписку
-    subscription = await Subscription.objects.acreate(
-        profile=profile,
-        type=sub_type,
-        payment_method='stars',
-        amount=payment.total_amount,  # Фактически оплаченная сумма
-        telegram_payment_charge_id=payment.telegram_payment_charge_id,
-        start_date=start_date,
-        end_date=end_date,
-        is_active=True
-    )
+        end_date = start_date + relativedelta(months=sub_info['months'])
+        
+        # Создаем новую подписку
+        subscription = await Subscription.objects.acreate(
+            profile=profile,
+            type=sub_type,
+            payment_method='stars',
+            amount=payment.total_amount,  # Фактически оплаченная сумма
+            telegram_payment_charge_id=payment.telegram_payment_charge_id,
+            start_date=start_date,
+            end_date=end_date,
+            is_active=True
+        )
+        
+        logger.info(f"Created new subscription for user {user_id} until {end_date}")
     
     # Обработка реферальных комиссий Telegram Stars
     try:
