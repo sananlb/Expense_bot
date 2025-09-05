@@ -178,12 +178,16 @@ class SimplePDFReportService:
         """Получить расходы за месяц"""
         from asgiref.sync import sync_to_async
         
-        expenses = await sync_to_async(list)(
-            Expense.objects.filter(
-                profile=profile,
-                expense_date__year=year,
-                expense_date__month=month
-            ).select_related('category').order_by('-expense_date', '-created_at')
-        )
+        @sync_to_async
+        def get_expenses():
+            return list(
+                Expense.objects.filter(
+                    profile=profile,
+                    expense_date__year=year,
+                    expense_date__month=month
+                ).select_related('category').order_by('-expense_date', '-created_at')
+            )
+        
+        expenses = await get_expenses()
         
         return expenses

@@ -597,12 +597,16 @@ async def get_today_summary(user_id: int) -> Dict[str, Any]:
         profile = await Profile.objects.aget(telegram_id=user_id)
         today = date.today()
         
-        expenses = await sync_to_async(list)(
-            Expense.objects.filter(
-                profile=profile,
-                expense_date=today
-            ).select_related('category')
-        )
+        @sync_to_async
+        def get_today_expenses():
+            return list(
+                Expense.objects.filter(
+                    profile=profile,
+                    expense_date=today
+                ).select_related('category')
+            )
+        
+        expenses = await get_today_expenses()
         
         # Group by currency
         currency_totals = {}
