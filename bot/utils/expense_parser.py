@@ -8,8 +8,14 @@ from typing import Optional, Dict, Any, Tuple
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, date, time
 from dateutil import parser as date_parser
+from asgiref.sync import sync_to_async
 
 logger = logging.getLogger(__name__)
+
+# Вспомогательная функция для безопасного использования sync_to_async с Django ORM
+def make_sync_to_async(func):
+    """Создает обертку для синхронной функции для использования в асинхронном контексте"""
+    return sync_to_async(func)
 
 # Паттерны для извлечения даты
 DATE_PATTERNS = [
@@ -420,9 +426,11 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         from asgiref.sync import sync_to_async
         
         # Получаем категории пользователя с их ключевыми словами
-        user_categories = await sync_to_async(list)(
-            ExpenseCategory.objects.filter(profile=profile).prefetch_related('keywords')
-        )
+        @sync_to_async
+        def get_user_categories():
+            return list(ExpenseCategory.objects.filter(profile=profile).prefetch_related('keywords'))
+        
+        user_categories = await get_user_categories()
         
         # Проверяем каждую категорию пользователя
         for user_cat in user_categories:
@@ -435,7 +443,11 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                 break
             
             # Проверяем ключевые слова пользовательской категории
-            keywords = await sync_to_async(list)(user_cat.keywords.all())
+            @sync_to_async
+            def get_keywords():
+                return list(user_cat.keywords.all())
+            
+            keywords = await get_keywords()
             for kw in keywords:
                 if kw.keyword.lower() in text_lower:
                     category = user_cat.name
@@ -491,9 +503,11 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             # Проверяем, есть ли такая категория у пользователя
             from expenses.models import ExpenseCategory
             from asgiref.sync import sync_to_async
-            user_categories = await sync_to_async(list)(
-                ExpenseCategory.objects.filter(profile=profile).values_list('name', flat=True)
-            )
+            @sync_to_async
+            def get_user_category_names():
+                return list(ExpenseCategory.objects.filter(profile=profile).values_list('name', flat=True))
+            
+            user_categories = await get_user_category_names()
             
             # Проверяем точное и частичное совпадение
             category_exists = any(
@@ -510,17 +524,23 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                 from bot.services.ai_selector import get_service
                 
                 # Получаем категории пользователя
-                user_categories = await sync_to_async(list)(
-                    ExpenseCategory.objects.filter(profile=profile).values_list('name', flat=True)
-                )
+                @sync_to_async
+                def get_profile_categories():
+                    return list(ExpenseCategory.objects.filter(profile=profile).values_list('name', flat=True))
+                
+                user_categories = await get_profile_categories()
                 
                 if user_categories:
                     # Получаем контекст пользователя (недавние категории)
                     user_context = {}
-                    recent_expenses = await sync_to_async(list)(
-                        profile.expenses.select_related('category')
-                        .order_by('-created_at')[:10]
-                    )
+                    @sync_to_async
+                    def get_recent_expenses():
+                        return list(
+                            profile.expenses.select_related('category')
+                            .order_by('-created_at')[:10]
+                        )
+                    
+                    recent_expenses = await get_recent_expenses()
                     if recent_expenses:
                         recent_categories = list(set([
                             exp.category.name for exp in recent_expenses 
@@ -756,12 +776,16 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
         
         # Сначала проверяем ключевые слова
         try:
-            keywords = await sync_to_async(list)(
-                IncomeCategoryKeyword.objects.filter(
-                    category__profile=profile,
-                    category__is_active=True
-                ).select_related('category')
-            )
+            @sync_to_async
+            def get_income_keywords():
+                return list(
+                    IncomeCategoryKeyword.objects.filter(
+                        category__profile=profile,
+                        category__is_active=True
+                    ).select_related('category')
+                )
+            
+            keywords = await get_income_keywords()
             
             best_match = None
             best_weight = 0
@@ -779,9 +803,11 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
         
         # Если не нашли по ключевым словам, получаем категории доходов пользователя
         if not category:
-            user_income_categories = await sync_to_async(list)(
-                IncomeCategory.objects.filter(profile=profile).values_list('name', flat=True)
-            )
+            @sync_to_async
+            def get_income_category_names():
+                return list(IncomeCategory.objects.filter(profile=profile).values_list('name', flat=True))
+            
+            user_income_categories = await get_income_category_names()
             
             if user_income_categories:
                 # Проверяем прямое вхождение названия категории

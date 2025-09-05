@@ -160,12 +160,17 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
                 recent_expenses = []
                 try:
                     from asgiref.sync import sync_to_async
-                    expenses = await sync_to_async(list)(
-                        Expense.objects.filter(
-                            profile__telegram_id=user_id,
-                            expense_date__gte=today - timedelta(days=30)
-                        ).select_related('category').order_by('-expense_date', '-id')[:20]
-                    )
+                    
+                    @sync_to_async
+                    def get_recent_expenses_sync():
+                        return list(
+                            Expense.objects.filter(
+                                profile__telegram_id=user_id,
+                                expense_date__gte=today - timedelta(days=30)
+                            ).select_related('category').order_by('-expense_date', '-id')[:20]
+                        )
+                    
+                    expenses = await get_recent_expenses_sync()
                     
                     for exp in expenses:
                         recent_expenses.append({
