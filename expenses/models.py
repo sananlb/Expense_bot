@@ -918,3 +918,279 @@ CATEGORY_KEYWORDS = {
         'окко', 'амедиатека', 'xbox', 'playstation', 'steam', 'коммунальные'
     ]
 }
+
+
+# ============================================
+# МОДЕЛИ ДЛЯ РЕФЕРАЛЬНОЙ ПРОГРАММЫ TELEGRAM STARS
+# ============================================
+
+class AffiliateProgram(models.Model):
+    """Настройки реферальной программы Telegram Stars"""
+    commission_permille = models.IntegerField(
+        verbose_name='Комиссия в промилле',
+        help_text='100 = 10%, 200 = 20%, максимум определяется Telegram'
+    )
+    duration_months = models.IntegerField(
+        null=True, 
+        blank=True,
+        verbose_name='Срок действия (месяцы)',
+        help_text='Оставьте пустым для бессрочной программы'
+    )
+    start_date = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Дата запуска'
+    )
+    end_date = models.DateTimeField(
+        null=True, 
+        blank=True,
+        verbose_name='Дата окончания',
+        help_text='Автоматически рассчитывается из duration_months'
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name='Активна'
+    )
+    telegram_program_id = models.CharField(
+        max_length=255, 
+        unique=True, 
+        null=True, 
+        blank=True,
+        verbose_name='ID программы в Telegram'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'affiliate_program'
+        verbose_name = 'Реферальная программа'
+        verbose_name_plural = 'Реферальные программы'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Affiliate Program ({self.commission_permille/10}%)"
+    
+    def get_commission_percent(self):
+        """Получить комиссию в процентах"""
+        return self.commission_permille / 10
+    
+    def calculate_commission(self, amount):
+        """Рассчитать комиссию от суммы"""
+        return int(amount * self.commission_permille / 1000)
+
+
+class AffiliateLink(models.Model):
+    """Реферальные ссылки пользователей для Telegram Stars"""
+    profile = models.OneToOneField(
+        Profile, 
+        on_delete=models.CASCADE,
+        related_name='affiliate_link',
+        verbose_name='Профиль'
+    )
+    affiliate_code = models.CharField(
+        max_length=100, 
+        unique=True, 
+        db_index=True,
+        verbose_name='Реферальный код'
+    )
+    telegram_link = models.URLField(
+        verbose_name='Ссылка Telegram',
+        help_text='Полная реферальная ссылка t.me/bot?start=ref_CODE'
+    )
+    
+    # Статистика
+    clicks = models.IntegerField(
+        default=0,
+        verbose_name='Количество переходов'
+    )
+    conversions = models.IntegerField(
+        default=0,
+        verbose_name='Количество конверсий'
+    )
+    total_earned = models.IntegerField(
+        default=0,
+        verbose_name='Всего заработано звёзд'
+    )
+    
+    # Статус
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name='Активна'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'affiliate_links'
+        verbose_name = 'Реферальная ссылка'
+        verbose_name_plural = 'Реферальные ссылки'
+    
+    def __str__(self):
+        return f"{self.profile} - {self.affiliate_code}"
+    
+    def get_conversion_rate(self):
+        """Получить конверсию в процентах"""
+        if self.clicks == 0:
+            return 0
+        return round((self.conversions / self.clicks) * 100, 2)
+
+
+class AffiliateReferral(models.Model):
+    """Связь между рефереров и приглашённым пользователем"""
+    referrer = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name='referred_users',
+        verbose_name='Реферер'
+    )
+    referred = models.OneToOneField(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name='referred_by',
+        verbose_name='Приглашённый пользователь'
+    )
+    affiliate_link = models.ForeignKey(
+        AffiliateLink,
+        on_delete=models.CASCADE,
+        related_name='referrals',
+        verbose_name='Реферальная ссылка'
+    )
+    
+    # Дополнительная информация
+    joined_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Дата регистрации'
+    )
+    first_payment_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Дата первого платежа'
+    )
+    total_payments = models.IntegerField(
+        default=0,
+        verbose_name='Всего платежей'
+    )
+    total_spent = models.IntegerField(
+        default=0,
+        verbose_name='Всего потрачено звёзд'
+    )
+    
+    class Meta:
+        db_table = 'affiliate_referrals'
+        verbose_name = 'Реферальная связь'
+        verbose_name_plural = 'Реферальные связи'
+        unique_together = ['referred']  # Один пользователь может быть приглашён только одним рефеорером
+    
+    def __str__(self):
+        return f"{self.referrer} → {self.referred}"
+
+
+class AffiliateCommission(models.Model):
+    """История начислений комиссий по реферальной программе"""
+    COMMISSION_STATUS = [
+        ('pending', 'Ожидает'),
+        ('hold', 'На холде'),  # 21-дневный холд Telegram
+        ('paid', 'Выплачено'),
+        ('cancelled', 'Отменено'),
+        ('refunded', 'Возвращено')
+    ]
+    
+    referrer = models.ForeignKey(
+        Profile, 
+        on_delete=models.CASCADE, 
+        related_name='commissions_earned',
+        verbose_name='Реферер'
+    )
+    referred = models.ForeignKey(
+        Profile, 
+        on_delete=models.CASCADE, 
+        related_name='commissions_generated',
+        verbose_name='Приглашённый'
+    )
+    subscription = models.ForeignKey(
+        Subscription, 
+        on_delete=models.CASCADE,
+        related_name='affiliate_commissions',
+        verbose_name='Подписка'
+    )
+    referral = models.ForeignKey(
+        AffiliateReferral,
+        on_delete=models.CASCADE,
+        related_name='commissions',
+        verbose_name='Реферальная связь'
+    )
+    
+    # Финансовая информация
+    payment_amount = models.IntegerField(
+        verbose_name='Сумма платежа (звёзды)'
+    )
+    commission_amount = models.IntegerField(
+        verbose_name='Сумма комиссии (звёзды)'
+    )
+    commission_rate = models.IntegerField(
+        verbose_name='Ставка комиссии (промилле)'
+    )
+    
+    # Telegram данные
+    telegram_transaction_id = models.CharField(
+        max_length=255, 
+        unique=True, 
+        null=True,
+        blank=True,
+        verbose_name='ID транзакции Telegram'
+    )
+    telegram_payment_id = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name='ID платежа в Telegram'
+    )
+    
+    # Статус
+    status = models.CharField(
+        max_length=20, 
+        choices=COMMISSION_STATUS,
+        default='pending',
+        verbose_name='Статус'
+    )
+    
+    # Даты
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Дата создания'
+    )
+    hold_until = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Холд до',
+        help_text='21 день с момента платежа'
+    )
+    paid_at = models.DateTimeField(
+        null=True, 
+        blank=True,
+        verbose_name='Дата выплаты'
+    )
+    
+    # Дополнительная информация
+    notes = models.TextField(
+        blank=True,
+        verbose_name='Примечания'
+    )
+    
+    class Meta:
+        db_table = 'affiliate_commissions'
+        verbose_name = 'Комиссия реферера'
+        verbose_name_plural = 'Комиссии рефереров'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['referrer', 'status']),
+            models.Index(fields=['telegram_transaction_id']),
+            models.Index(fields=['created_at']),
+        ]
+    
+    def __str__(self):
+        return f"{self.referrer} - {self.commission_amount} stars ({self.get_status_display()})"
+    
+    def calculate_hold_date(self):
+        """Рассчитать дату окончания холда (21 день)"""
+        from datetime import timedelta
+        return self.created_at + timedelta(days=21)
