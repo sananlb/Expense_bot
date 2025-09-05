@@ -67,7 +67,7 @@ def get_subscription_keyboard(is_beta_tester: bool = False, lang: str = 'ru'):
         )
         # Добавляем кнопку партнёрской программы
         builder.button(
-            text="⭐ Партнёрская программа" if lang == 'ru' else "⭐ Affiliate Program",
+            text="💼 Партнёрская программа" if lang == 'ru' else "💼 Affiliate Program",
             callback_data="show_affiliate"
         )
     
