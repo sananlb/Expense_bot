@@ -169,7 +169,11 @@ def calculate_potential_cashback(user_id: int, start_date: date, end_date: date)
 
 
 def calculate_expense_cashback_sync(user_id: int, category_id: int, amount: Decimal, month: int) -> Decimal:
-    """Рассчитать кешбэк для конкретной траты (синхронная версия)"""
+    """Рассчитать кешбэк для конкретной траты (синхронная версия)
+    
+    ВАЖНО: Кешбэк рассчитывается только для трат в валюте пользователя.
+    Проверка валюты должна происходить на уровне вызывающего кода.
+    """
     try:
         profile = Profile.objects.get(telegram_id=user_id)
         

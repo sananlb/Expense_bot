@@ -672,7 +672,10 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
     # Проверяем подписку и рассчитываем кешбэк
     cashback_text = ""
     has_subscription = await check_subscription(user_id)
-    if has_subscription:
+    # Получаем валюту пользователя из профиля
+    user_currency = profile.currency if profile else 'RUB'
+    # Кешбэк начисляется только для трат в валюте пользователя
+    if has_subscription and currency == user_currency:
         current_month = datetime.now().month
         cashback = await calculate_expense_cashback(
             user_id=user_id,
@@ -1121,7 +1124,10 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 # Проверяем подписку и рассчитываем кешбэк
                 cashback_text = ""
                 has_subscription = await check_subscription(user_id)
-                if has_subscription:
+                # Получаем валюту пользователя из профиля
+                user_currency = profile.currency if profile else 'RUB'
+                # Кешбэк начисляется только для трат в валюте пользователя
+                if has_subscription and currency == user_currency:
                     current_month = datetime.now().month
                     cashback = await calculate_expense_cashback(
                         user_id=user_id,
@@ -1218,7 +1224,10 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     
     cashback_text = ""
     has_subscription = await check_subscription(user_id)
-    if has_subscription:
+    # Получаем валюту пользователя из профиля
+    user_currency = profile.currency if profile else 'RUB'
+    # Кешбэк начисляется только для трат в валюте пользователя
+    if has_subscription and currency == user_currency:
         current_month = datetime.now().month
         cashback = await calculate_expense_cashback(
             user_id=user_id,
