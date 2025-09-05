@@ -27,12 +27,12 @@ from expenses.models import (
 # ============================================
 
 @sync_to_async
-def get_or_create_affiliate_program(commission_percent: int = 10, duration_months: Optional[int] = None) -> AffiliateProgram:
+def get_or_create_affiliate_program(commission_percent: int = 50, duration_months: Optional[int] = None) -> AffiliateProgram:
     """
     Получить или создать реферальную программу
     
     Args:
-        commission_percent: Процент комиссии (10 = 10%)
+        commission_percent: Процент комиссии (50 = 50%)
         duration_months: Срок действия в месяцах (None = бессрочно)
     
     Returns:

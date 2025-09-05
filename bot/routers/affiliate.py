@@ -41,8 +41,8 @@ async def cmd_affiliate(message: Message, state: FSMContext, lang: str = 'ru'):
         await message.answer(error_text)
         return
     
-    # Убеждаемся, что реферальная программа активна
-    affiliate_program = await get_or_create_affiliate_program(commission_percent=10)
+    # Убеждаемся, что реферальная программа активна с 50% комиссией
+    affiliate_program = await get_or_create_affiliate_program(commission_percent=50)
     
     # Получаем или создаём реферальную ссылку
     bot_info = await message.bot.get_me()
@@ -54,14 +54,11 @@ async def cmd_affiliate(message: Message, state: FSMContext, lang: str = 'ru'):
     # Формируем сообщение
     if lang == 'en':
         message_text = (
-            "⭐ <b>Telegram Stars Affiliate Program</b>\n\n"
-            f"Your referral link:\n"
+            "Referral link:\n"
             f"<code>{affiliate_link.telegram_link}</code>\n\n"
             f"📊 <b>Your statistics:</b>\n"
             f"• Clicks: {stats['clicks']}\n"
-            f"• Registrations: {stats['referrals_count']}\n"
-            f"• Active referrals: {stats['active_referrals']}\n"
-            f"• Conversion: {stats['conversion_rate']}%\n\n"
+            f"• Registrations: {stats['referrals_count']}\n\n"
             f"💰 <b>Earnings:</b>\n"
             f"• Earned: {stats['total_earned']} ⭐\n"
             f"• Pending: {stats['pending_amount']} ⭐\n\n"
@@ -74,14 +71,11 @@ async def cmd_affiliate(message: Message, state: FSMContext, lang: str = 'ru'):
         )
     else:
         message_text = (
-            "⭐ <b>Партнёрская программа Telegram Stars</b>\n\n"
-            f"Ваша реферальная ссылка:\n"
+            "Ваша реферальная ссылка:\n"
             f"<code>{affiliate_link.telegram_link}</code>\n\n"
             f"📊 <b>Ваша статистика:</b>\n"
             f"• Переходов: {stats['clicks']}\n"
-            f"• Регистраций: {stats['referrals_count']}\n"
-            f"• Активных рефералов: {stats['active_referrals']}\n"
-            f"• Конверсия: {stats['conversion_rate']}%\n\n"
+            f"• Регистраций: {stats['referrals_count']}\n\n"
             f"💰 <b>Заработок:</b>\n"
             f"• Заработано: {stats['total_earned']} ⭐\n"
             f"• В ожидании: {stats['pending_amount']} ⭐\n\n"
@@ -93,7 +87,7 @@ async def cmd_affiliate(message: Message, state: FSMContext, lang: str = 'ru'):
             f"💡 <i>Делитесь ссылкой и зарабатывайте Telegram Stars!</i>"
         )
     
-    # Создаём клавиатуру с действиями
+    # Создаём клавиатуру с действиями (только необходимые кнопки)
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
@@ -103,13 +97,7 @@ async def cmd_affiliate(message: Message, state: FSMContext, lang: str = 'ru'):
         ],
         [
             InlineKeyboardButton(
-                text="👥 Мои рефералы" if lang == 'ru' else "👥 My referrals",
-                callback_data="affiliate_referrals"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="💸 История комиссий" if lang == 'ru' else "💸 Commission history",
+                text="💸 История выплат" if lang == 'ru' else "💸 Payment history",
                 callback_data="affiliate_commissions"
             )
         ],
@@ -148,44 +136,34 @@ async def show_affiliate_stats(callback: CallbackQuery, state: FSMContext, lang:
     # Формируем детальную статистику
     if lang == 'en':
         text = (
-            "📊 <b>Detailed Affiliate Statistics</b>\n\n"
-            f"<b>Referral link performance:</b>\n"
+            "📊 <b>Detailed Statistics</b>\n\n"
+            f"<b>Link performance:</b>\n"
             f"• Total clicks: {stats['clicks']}\n"
-            f"• Unique registrations: {stats['referrals_count']}\n"
-            f"• Paying referrals: {stats['active_referrals']}\n"
-            f"• Conversion rate: {stats['conversion_rate']}%\n\n"
-            f"<b>Earnings breakdown:</b>\n"
+            f"• Registrations: {stats['referrals_count']}\n"
+            f"• Paying users: {stats['active_referrals']}\n\n"
+            f"<b>Earnings:</b>\n"
             f"• Total earned: {stats['total_earned']} ⭐\n"
             f"• On hold (21 days): {stats['pending_amount']} ⭐\n"
-            f"• Available: {stats['total_earned'] - stats['pending_amount']} ⭐\n\n"
-            f"<b>Average metrics:</b>\n"
+            f"• Available: {stats['total_earned'] - stats['pending_amount']} ⭐"
         )
         if stats['referrals_count'] > 0:
             avg_earning = stats['total_earned'] / stats['referrals_count']
-            text += f"• Per referral: {avg_earning:.1f} ⭐\n"
-        if stats['active_referrals'] > 0:
-            avg_active = stats['total_earned'] / stats['active_referrals']
-            text += f"• Per active referral: {avg_active:.1f} ⭐\n"
+            text += f"\n• Average per user: {avg_earning:.1f} ⭐"
     else:
         text = (
-            "📊 <b>Детальная статистика партнёрской программы</b>\n\n"
+            "📊 <b>Детальная статистика</b>\n\n"
             f"<b>Эффективность ссылки:</b>\n"
             f"• Всего переходов: {stats['clicks']}\n"
-            f"• Уникальных регистраций: {stats['referrals_count']}\n"
-            f"• Платящих рефералов: {stats['active_referrals']}\n"
-            f"• Коэффициент конверсии: {stats['conversion_rate']}%\n\n"
-            f"<b>Разбивка заработка:</b>\n"
+            f"• Регистраций: {stats['referrals_count']}\n"
+            f"• Платящих пользователей: {stats['active_referrals']}\n\n"
+            f"<b>Заработок:</b>\n"
             f"• Всего заработано: {stats['total_earned']} ⭐\n"
             f"• На холде (21 день): {stats['pending_amount']} ⭐\n"
-            f"• Доступно: {stats['total_earned'] - stats['pending_amount']} ⭐\n\n"
-            f"<b>Средние показатели:</b>\n"
+            f"• Доступно: {stats['total_earned'] - stats['pending_amount']} ⭐"
         )
         if stats['referrals_count'] > 0:
             avg_earning = stats['total_earned'] / stats['referrals_count']
-            text += f"• На реферала: {avg_earning:.1f} ⭐\n"
-        if stats['active_referrals'] > 0:
-            avg_active = stats['total_earned'] / stats['active_referrals']
-            text += f"• На активного реферала: {avg_active:.1f} ⭐\n"
+            text += f"\n• В среднем с пользователя: {avg_earning:.1f} ⭐"
     
     # Клавиатура возврата
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -264,7 +242,7 @@ async def show_referrals(callback: CallbackQuery, state: FSMContext, lang: str =
 
 @router.callback_query(F.data == "affiliate_commissions")
 async def show_commissions(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Показать историю комиссий"""
+    """Показать историю выплат"""
     user_id = callback.from_user.id
     
     # Получаем историю комиссий
@@ -272,12 +250,12 @@ async def show_commissions(callback: CallbackQuery, state: FSMContext, lang: str
     
     if not commissions:
         if lang == 'en':
-            text = "💸 <b>Commission history</b>\n\nYou don't have any commissions yet.\nYour referrals need to make payments."
+            text = "💸 <b>Payment history</b>\n\nYou don't have any payments yet.\nYour referrals need to make purchases."
         else:
-            text = "💸 <b>История комиссий</b>\n\nУ вас пока нет комиссий.\nВаши рефералы должны совершить платежи."
+            text = "💸 <b>История выплат</b>\n\nУ вас пока нет выплат.\nВаши рефералы должны совершить покупки."
     else:
         if lang == 'en':
-            text = "💸 <b>Commission history (last 10)</b>\n\n"
+            text = "💸 <b>Payment history (last 10)</b>\n\n"
             for comm in commissions:
                 date = comm['created_at'].strftime('%d.%m.%Y %H:%M')
                 status_emoji = {
@@ -297,7 +275,7 @@ async def show_commissions(callback: CallbackQuery, state: FSMContext, lang: str
                     text += f"  Available after: {hold_date}\n"
                 text += "\n"
         else:
-            text = "💸 <b>История комиссий (последние 10)</b>\n\n"
+            text = "💸 <b>История выплат (последние 10)</b>\n\n"
             for comm in commissions:
                 date = comm['created_at'].strftime('%d.%m.%Y %H:%M')
                 status_emoji = {

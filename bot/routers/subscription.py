@@ -65,6 +65,11 @@ def get_subscription_keyboard(is_beta_tester: bool = False, lang: str = 'ru'):
             text=get_text('have_promocode', lang),
             callback_data="subscription_promo"
         )
+        # Добавляем кнопку партнёрской программы
+        builder.button(
+            text="⭐ Партнёрская программа" if lang == 'ru' else "⭐ Affiliate Program",
+            callback_data="show_affiliate"
+        )
     
     builder.button(
         text=get_text('close', lang),
@@ -629,7 +634,7 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     # Обработка реферальных комиссий Telegram Stars
     try:
         # Убеждаемся, что реферальная программа активна
-        affiliate_program = await get_or_create_affiliate_program(commission_percent=10)  # 10% комиссия по умолчанию
+        affiliate_program = await get_or_create_affiliate_program(commission_percent=50)  # 50% комиссия
         
         # Обрабатываем комиссию
         commission = await process_referral_commission(subscription)
@@ -760,3 +765,13 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
         f"<i>Спасибо за поддержку проекта!</i> 💙",
         parse_mode="HTML"
     )
+
+
+@router.callback_query(F.data == "show_affiliate")
+async def show_affiliate_from_subscription(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Показать информацию о партнёрской программе из меню подписки"""
+    from bot.routers.affiliate import cmd_affiliate
+    
+    # Вызываем команду affiliate, передавая message от callback
+    await cmd_affiliate(callback.message, state, lang)
+    await callback.answer()
