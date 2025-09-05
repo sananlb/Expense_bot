@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 import asyncio
 from decimal import Decimal
 from django.conf import settings
+from asgiref.sync import sync_to_async
 
 import openai
 import google.generativeai as genai
@@ -291,39 +292,74 @@ class ExpenseCategorizer(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
             return None
         
         # Get categories for user
-        if profile:
-            categories = list(ExpenseCategory.objects.filter(
-                profile=profile
-            ).values_list('name', flat=True))
-        else:
-            categories = [
-                "Продукты", "Транспорт", "Кафе и рестораны", 
-                "Развлечения", "Здоровье", "Одежда и обувь",
-                "Связь и интернет", "Дом и ЖКХ", "Подарки", "Прочие расходы"
-            ]
+        @sync_to_async
+        def get_user_categories():
+            if profile:
+                if self.operation_type == 'income':
+                    return list(IncomeCategory.objects.filter(
+                        profile=profile
+                    ).values_list('name', flat=True))
+                else:
+                    return list(ExpenseCategory.objects.filter(
+                        profile=profile
+                    ).values_list('name', flat=True))
+            else:
+                if self.operation_type == 'income':
+                    return [
+                        "Зарплата", "Премии и бонусы", "Фриланс",
+                        "Инвестиции", "Проценты по вкладам", "Прочие доходы"
+                    ]
+                else:
+                    return [
+                        "Продукты", "Транспорт", "Кафе и рестораны", 
+                        "Развлечения", "Здоровье", "Одежда и обувь",
+                        "Связь и интернет", "Дом и ЖКХ", "Подарки", "Прочие расходы"
+                    ]
+        
+        categories = await get_user_categories()
         
         # Get user context
-        user_context = {}
-        if profile:
-            # Get recent categories
-            recent_expenses = Expense.objects.filter(
-                profile=profile
-            ).order_by('-created_at')[:10]
+        @sync_to_async
+        def get_user_context():
+            context = {}
+            if profile:
+                # Get recent categories based on operation type
+                if self.operation_type == 'income':
+                    recent_items = Income.objects.filter(
+                        profile=profile
+                    ).order_by('-income_date', '-income_time')[:10]
+                    
+                    recent_categories = list(set([
+                        item.category.name for item in recent_items 
+                        if item.category
+                    ]))[:5]
+                else:
+                    recent_items = Expense.objects.filter(
+                        profile=profile
+                    ).order_by('-created_at')[:10]
+                    
+                    recent_categories = list(set([
+                        item.category.name for item in recent_items 
+                        if item.category
+                    ]))[:5]
             
-            recent_categories = list(set([
-                exp.category.name for exp in recent_expenses 
-                if exp.category
-            ]))[:5]
+                if recent_categories:
+                    context['recent_categories'] = recent_categories
+                
+                # Get preferred currency
+                if self.operation_type == 'income':
+                    currencies = list(recent_items.values_list('currency', flat=True))
+                else:
+                    currencies = list(recent_items.values_list('currency', flat=True))
+                    
+                if currencies:
+                    from collections import Counter
+                    currency_counts = Counter(currencies)
+                    context['preferred_currency'] = currency_counts.most_common(1)[0][0]
             
-            if recent_categories:
-                user_context['recent_categories'] = recent_categories
-            
-            # Get preferred currency
-            currencies = recent_expenses.values_list('currency', flat=True)
-            if currencies:
-                from collections import Counter
-                currency_counts = Counter(currencies)
-                user_context['preferred_currency'] = currency_counts.most_common(1)[0][0]
+            return context
+        
+        user_context = await get_user_context()
         
         result = None
         

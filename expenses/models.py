@@ -61,6 +61,12 @@ class Profile(models.Model):
         verbose_name='Реферальный код',
         help_text='Уникальный реферальный код пользователя'
     )
+    last_activity = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Последняя активность',
+        help_text='Время последней активности пользователя'
+    )
     
     class Meta:
         db_table = 'users_profile'

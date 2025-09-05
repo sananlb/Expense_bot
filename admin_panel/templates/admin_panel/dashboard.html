@@ -188,27 +188,6 @@
     </div>
 </div>
 
-<!-- Быстрые действия -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5><i class="bi bi-lightning"></i> Быстрые действия</h5>
-            </div>
-            <div class="card-body">
-                <a href="{% url 'panel:broadcast_create' %}" class="btn btn-primary">
-                    <i class="bi bi-megaphone"></i> Создать рассылку
-                </a>
-                <a href="{% url 'panel:users_list' %}" class="btn btn-secondary">
-                    <i class="bi bi-people"></i> Список пользователей
-                </a>
-                <a href="{% url 'admin:expenses_profile_changelist' %}" class="btn btn-info">
-                    <i class="bi bi-gear"></i> Управление профилями
-                </a>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}

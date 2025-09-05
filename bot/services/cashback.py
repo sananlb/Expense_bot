@@ -168,9 +168,8 @@ def calculate_potential_cashback(user_id: int, start_date: date, end_date: date)
     return total_cashback
 
 
-@sync_to_async
-def calculate_expense_cashback(user_id: int, category_id: int, amount: Decimal, month: int) -> Decimal:
-    """Рассчитать кешбэк для конкретной траты"""
+def calculate_expense_cashback_sync(user_id: int, category_id: int, amount: Decimal, month: int) -> Decimal:
+    """Рассчитать кешбэк для конкретной траты (синхронная версия)"""
     try:
         profile = Profile.objects.get(telegram_id=user_id)
         
@@ -224,6 +223,10 @@ def calculate_expense_cashback(user_id: int, category_id: int, amount: Decimal, 
         max_cashback_amount = max(max_cashback_amount, cashback_amount)
     
     return max_cashback_amount
+
+
+# Асинхронная версия функции
+calculate_expense_cashback = sync_to_async(calculate_expense_cashback_sync)
 
 
 def format_cashback_note(cashbacks: List[Cashback], month: int, lang: str = 'ru') -> str:

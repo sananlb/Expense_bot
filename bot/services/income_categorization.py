@@ -4,6 +4,7 @@ AI категоризация доходов - использует общую �
 import logging
 from typing import Optional, Dict, Any, List
 from decimal import Decimal
+from asgiref.sync import sync_to_async
 
 from expenses.models import IncomeCategory, Income, IncomeCategoryKeyword, Profile
 from .ai_categorization import categorizer as base_categorizer
@@ -70,7 +71,8 @@ async def categorize_income(text: str, user_id: int, profile: Optional[Profile] 
     return None
 
 
-async def find_category_by_keywords(text: str, profile: Profile) -> Optional[IncomeCategory]:
+@sync_to_async
+def find_category_by_keywords(text: str, profile: Profile) -> Optional[IncomeCategory]:
     """
     Поиск категории по ключевым словам
     """
@@ -94,7 +96,8 @@ async def find_category_by_keywords(text: str, profile: Profile) -> Optional[Inc
     return best_match
 
 
-async def get_user_income_categories(profile: Profile) -> List[str]:
+@sync_to_async
+def get_user_income_categories(profile: Profile) -> List[str]:
     """
     Получение списка категорий доходов пользователя
     """
@@ -106,7 +109,8 @@ async def get_user_income_categories(profile: Profile) -> List[str]:
     return list(categories)
 
 
-async def build_user_context(profile: Profile) -> Dict[str, Any]:
+@sync_to_async
+def build_user_context(profile: Profile) -> Dict[str, Any]:
     """
     Построение контекста пользователя для AI
     """
@@ -123,7 +127,7 @@ async def build_user_context(profile: Profile) -> Dict[str, Any]:
     
     return {
         'recent_categories': recent_categories,
-        'preferred_currency': profile.preferred_currency or 'RUB',
+        'currency': profile.currency or 'RUB',
         'operation_type': 'income'
     }
 
@@ -173,13 +177,14 @@ async def find_best_matching_category(suggested: str, available: List[str]) -> s
     return available[0] if available else 'Прочие доходы'
 
 
-async def learn_from_income_category_change(
+@sync_to_async
+def learn_from_income_category_change_sync(
     income: Income,
     old_category: Optional[IncomeCategory],
     new_category: IncomeCategory
 ) -> None:
     """
-    Обучение системы при изменении категории дохода пользователем
+    Обучение системы при изменении категории дохода пользователем (синхронная версия)
     """
     if not income.description:
         return
@@ -218,6 +223,51 @@ async def learn_from_income_category_change(
     logger.info(f"Learned from income category change: {old_category} -> {new_category} for '{income.description}'")
 
 
+async def learn_from_income_category_change(
+    income: Income,
+    old_category: Optional[IncomeCategory],
+    new_category: IncomeCategory
+) -> None:
+    """
+    Обучение системы при изменении категории дохода пользователем
+    """
+    await learn_from_income_category_change_sync(income, old_category, new_category)
+
+
+@sync_to_async
+def generate_keywords_for_income_category_sync(
+    category: IncomeCategory,
+    category_name: str
+) -> List[str]:
+    """
+    Сохранение ключевых слов для категории доходов (синхронная версия)
+    """
+    # Базовые ключевые слова по умолчанию
+    default_keywords = {
+        'Зарплата': ['зарплата', 'зп', 'оклад', 'получка', 'аванс'],
+        'Премии и бонусы': ['премия', 'бонус', 'поощрение', 'награда'],
+        'Фриланс': ['фриланс', 'заказ', 'проект', 'гонорар', 'работа'],
+        'Инвестиции': ['дивиденды', 'инвестиции', 'акции', 'облигации', 'прибыль'],
+        'Проценты по вкладам': ['проценты', 'вклад', 'депозит', 'накопления'],
+        'Аренда недвижимости': ['аренда', 'квартира', 'сдача', 'арендатор'],
+        'Возвраты и компенсации': ['возврат', 'компенсация', 'возмещение', 'налоговый вычет'],
+        'Кешбэк': ['кешбек', 'кэшбэк', 'cashback', 'возврат с покупок'],
+        'Подарки': ['подарок', 'подарили', 'презент', 'дарение'],
+        'Прочие доходы': ['доход', 'получил', 'заработал', 'прибыль']
+    }
+    
+    keywords = default_keywords.get(category_name, ['доход'])
+    
+    for keyword in keywords:
+        IncomeCategoryKeyword.objects.get_or_create(
+            category=category,
+            keyword=keyword.lower(),
+            defaults={'normalized_weight': 1.0}
+        )
+    
+    return keywords
+
+
 async def generate_keywords_for_income_category(
     category: IncomeCategory,
     category_name: str,
@@ -249,13 +299,8 @@ async def generate_keywords_for_income_category(
             keywords_text = response.get('result', '')
             keywords = [kw.strip() for kw in keywords_text.split(',') if kw.strip()]
             
-            # Сохраняем ключевые слова
-            for keyword in keywords[:15]:  # Ограничиваем количество
-                IncomeCategoryKeyword.objects.get_or_create(
-                    category=category,
-                    keyword=keyword.lower(),
-                    defaults={'normalized_weight': 1.0}
-                )
+            # Сохраняем ключевые слова через синхронную функцию
+            await save_income_category_keywords(category, keywords[:15])
             
             logger.info(f"Generated {len(keywords)} keywords for income category '{category_name}'")
             return keywords
@@ -263,27 +308,18 @@ async def generate_keywords_for_income_category(
     except Exception as e:
         logger.error(f"Error generating keywords for income category: {e}")
     
-    # Базовые ключевые слова по умолчанию
-    default_keywords = {
-        'Зарплата': ['зарплата', 'зп', 'оклад', 'получка', 'аванс'],
-        'Премии и бонусы': ['премия', 'бонус', 'поощрение', 'награда'],
-        'Фриланс': ['фриланс', 'заказ', 'проект', 'гонорар', 'работа'],
-        'Инвестиции': ['дивиденды', 'инвестиции', 'акции', 'облигации', 'прибыль'],
-        'Проценты по вкладам': ['проценты', 'вклад', 'депозит', 'накопления'],
-        'Аренда недвижимости': ['аренда', 'квартира', 'сдача', 'арендатор'],
-        'Возвраты и компенсации': ['возврат', 'компенсация', 'возмещение', 'налоговый вычет'],
-        'Кешбэк': ['кешбек', 'кэшбэк', 'cashback', 'возврат с покупок'],
-        'Подарки': ['подарок', 'подарили', 'презент', 'дарение'],
-        'Прочие доходы': ['доход', 'получил', 'заработал', 'прибыль']
-    }
-    
-    keywords = default_keywords.get(category_name, ['доход'])
-    
+    # Используем базовые ключевые слова
+    return await generate_keywords_for_income_category_sync(category, category_name)
+
+
+@sync_to_async
+def save_income_category_keywords(category: IncomeCategory, keywords: List[str]) -> None:
+    """
+    Сохранение ключевых слов для категории
+    """
     for keyword in keywords:
         IncomeCategoryKeyword.objects.get_or_create(
             category=category,
             keyword=keyword.lower(),
             defaults={'normalized_weight': 1.0}
         )
-    
-    return keywords

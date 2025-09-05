@@ -10,6 +10,7 @@ import logging
 from expenses.models import Expense, Profile, ExpenseCategory, Cashback
 from django.db.models import Sum, Count
 from django.db.models.functions import TruncDate
+from django.utils import timezone
 from bot.utils.db_utils import get_or_create_user_profile_sync
 
 logger = logging.getLogger(__name__)
@@ -373,6 +374,31 @@ def update_expense(
                 
         expense.save()
         logger.info(f"Updated expense {expense_id} for user {user_id}")
+        
+        # Если категория изменилась, пересчитываем кешбек
+        if category_changed:
+            # Проверяем есть ли активная подписка
+            from expenses.models import Subscription
+            has_subscription = Subscription.objects.filter(
+                profile=profile,
+                is_active=True,
+                end_date__gt=timezone.now()
+            ).exists()
+            
+            if has_subscription:
+                from .cashback import calculate_expense_cashback_sync
+                # Пересчитываем кешбек для новой категории
+                new_cashback = calculate_expense_cashback_sync(
+                    user_id=user_id,
+                    category_id=new_category_id,
+                    amount=expense.amount,
+                    month=expense.created_at.month
+                )
+                
+                # Обновляем поле cashback_amount в трате
+                expense.cashback_amount = new_cashback
+                expense.save()
+                logger.info(f"Updated cashback for expense {expense_id}: {new_cashback}")
         
         # Если категория изменилась, запускаем фоновую задачу для обновления весов
         if category_changed and old_category_id:
