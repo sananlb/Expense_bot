@@ -12,6 +12,7 @@ from .chat import router as chat_router
 from .subscription import router as subscription_router
 from .referral import router as referral_router
 from .budget import router as budget_router
+from .affiliate import router as affiliate_router
 # from .pdf_report import router as pdf_report_router  # Временно отключено из-за проблем с playwright
 
 __all__ = [
@@ -28,5 +29,6 @@ __all__ = [
     "subscription_router",
     "referral_router",
     "budget_router",
+    "affiliate_router",
     # "pdf_report_router"  # Временно отключено
 ]

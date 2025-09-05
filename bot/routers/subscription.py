@@ -18,6 +18,7 @@ from expenses.models import Profile, Subscription, PromoCode, PromoCodeUsage, Re
 from django.core.exceptions import ObjectDoesNotExist
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.utils import get_text
+from bot.services.affiliate import process_referral_commission, get_or_create_affiliate_program
 
 logger = logging.getLogger(__name__)
 
@@ -624,6 +625,37 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
         end_date=end_date,
         is_active=True
     )
+    
+    # Обработка реферальных комиссий Telegram Stars
+    try:
+        # Убеждаемся, что реферальная программа активна
+        affiliate_program = await get_or_create_affiliate_program(commission_percent=10)  # 10% комиссия по умолчанию
+        
+        # Обрабатываем комиссию
+        commission = await process_referral_commission(subscription)
+        
+        if commission:
+            logger.info(f"Affiliate commission created: {commission.commission_amount} stars for referrer {commission.referrer.telegram_id} from payment by {user_id}")
+            
+            # Можем отправить уведомление рефереру (опционально)
+            try:
+                referrer_message = (
+                    f"💰 <b>Начислена партнёрская комиссия!</b>\n\n"
+                    f"Ваш реферал оплатил подписку.\n"
+                    f"Сумма комиссии: <b>{commission.commission_amount} ⭐</b>\n"
+                    f"Статус: На холде (21 день)\n\n"
+                    f"<i>Комиссия будет доступна после проверочного периода.</i>"
+                )
+                await message.bot.send_message(
+                    chat_id=commission.referrer.telegram_id,
+                    text=referrer_message,
+                    parse_mode='HTML'
+                )
+            except Exception as e:
+                logger.warning(f"Could not notify referrer about commission: {e}")
+    except Exception as e:
+        logger.error(f"Error processing affiliate commission: {e}")
+        # Не прерываем основной процесс из-за ошибки в реферальной системе
     
     # Если был использован промокод, записываем это
     if promocode_id:

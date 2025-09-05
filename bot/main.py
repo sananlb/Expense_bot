@@ -30,6 +30,7 @@ from .routers import (
     subscription_router,
     referral_router,
     budget_router,
+    affiliate_router,
     # pdf_report_router  # Временно отключено
 )
 from .middlewares import (
@@ -169,6 +170,7 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(budget_router)       # Роутер бюджетов
     dp.include_router(subscription_router)  # Роутер подписок
     dp.include_router(referral_router)     # Роутер реферальной системы
+    dp.include_router(affiliate_router)    # Роутер партнёрской программы Telegram Stars
     dp.include_router(settings_router)
     dp.include_router(reports_router)
     # dp.include_router(pdf_report_router)   # PDF отчеты - временно отключено из-за проблем с playwright

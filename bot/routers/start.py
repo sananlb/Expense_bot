@@ -14,6 +14,7 @@ from bot.keyboards import main_menu_keyboard, back_close_keyboard
 from bot.services.category import create_default_categories, create_default_income_categories
 from bot.utils.message_utils import send_message_with_cleanup, delete_message_with_effect
 from bot.utils.commands import update_user_commands
+from bot.services.affiliate import process_referral_link  # Новая реферальная система Telegram Stars
 from expenses.models import Subscription, Profile, ReferralBonus
 from django.utils import timezone
 from datetime import timedelta
@@ -67,19 +68,32 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
     referral_message = ""
     if is_new_user and referral_code:
         try:
-            # Находим реферера по коду
-            referrer = await Profile.objects.filter(referral_code=referral_code).afirst()
-            if referrer and referrer.telegram_id != user_id:
-                # Привязываем реферера
-                profile.referrer = referrer
-                await profile.asave()
-                
+            # Сначала пробуем обработать как реферальную ссылку Telegram Stars
+            affiliate_referral = await process_referral_link(user_id, referral_code)
+            
+            if affiliate_referral:
+                # Успешно обработана ссылка Telegram Stars
                 if display_lang == 'en':
-                    referral_message = "\n\n🎁 You joined via a referral link! After paying for your first subscription, your friend will receive a bonus."
+                    referral_message = "\n\n⭐ You joined via an affiliate link! Your friend will receive commission from your purchases."
                 else:
-                    referral_message = "\n\n🎁 Вы перешли по реферальной ссылке! После оплаты первой подписки ваш друг получит бонус."
+                    referral_message = "\n\n⭐ Вы перешли по партнёрской ссылке! Ваш друг будет получать комиссию с ваших покупок."
                 
-                logger.info(f"New user {user_id} registered with referral code from {referrer.telegram_id}")
+                logger.info(f"New user {user_id} registered via Telegram Stars affiliate link from {affiliate_referral.referrer.telegram_id}")
+            else:
+                # Если не удалось обработать как Telegram Stars, пробуем старую систему
+                # Находим реферера по коду (старая система с бонусными днями)
+                referrer = await Profile.objects.filter(referral_code=referral_code).afirst()
+                if referrer and referrer.telegram_id != user_id:
+                    # Привязываем реферера (старая система)
+                    profile.referrer = referrer
+                    await profile.asave()
+                    
+                    if display_lang == 'en':
+                        referral_message = "\n\n🎁 You joined via a referral link! After paying for your first subscription, your friend will receive a bonus."
+                    else:
+                        referral_message = "\n\n🎁 Вы перешли по реферальной ссылке! После оплаты первой подписки ваш друг получит бонус."
+                    
+                    logger.info(f"New user {user_id} registered with referral code from {referrer.telegram_id}")
         except Exception as e:
             logger.error(f"Error processing referral code: {e}")
     
