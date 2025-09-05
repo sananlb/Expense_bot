@@ -480,6 +480,7 @@ def categorize_expense_with_weights(text: str, user_profile) -> Tuple[str, float
     """
     import math
     from expenses.models import CategoryKeyword, ExpenseCategory
+    from asgiref.sync import sync_to_async
     
     # Исправляем опечатки
     language = detect_language(text)

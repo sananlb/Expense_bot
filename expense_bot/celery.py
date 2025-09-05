@@ -81,6 +81,21 @@ app.conf.task_routes = {
         'routing_key': 'maintenance.cleanup',
         'priority': 3,
     },
+    'expenses.tasks.send_broadcast_message': {
+        'queue': 'notifications',
+        'routing_key': 'notification.broadcast',
+        'priority': 7,
+    },
+    'expenses.tasks.process_scheduled_broadcasts': {
+        'queue': 'notifications',
+        'routing_key': 'notification.scheduled',
+        'priority': 6,
+    },
+    'expenses.tasks.cleanup_old_broadcasts': {
+        'queue': 'maintenance',
+        'routing_key': 'maintenance.broadcasts',
+        'priority': 2,
+    },
 }
 
 # Queue configuration

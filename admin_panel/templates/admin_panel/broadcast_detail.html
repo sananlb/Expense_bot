@@ -1,0 +1,179 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block title %}{{ broadcast.title }} - ExpenseBot Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1>
+            <i class="bi bi-megaphone"></i> {{ broadcast.title }}
+            {% if broadcast.status == 'completed' %}
+                <span class="badge bg-success">{{ broadcast.get_status_display }}</span>
+            {% elif broadcast.status == 'sending' %}
+                <span class="badge bg-warning">{{ broadcast.get_status_display }}</span>
+            {% elif broadcast.status == 'failed' %}
+                <span class="badge bg-danger">{{ broadcast.get_status_display }}</span>
+            {% else %}
+                <span class="badge bg-secondary">{{ broadcast.get_status_display }}</span>
+            {% endif %}
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <!-- Сообщение -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>Текст сообщения</h5>
+            </div>
+            <div class="card-body">
+                <pre>{{ broadcast.message_text }}</pre>
+            </div>
+        </div>
+        
+        <!-- Статистика отправки -->
+        <div class="card">
+            <div class="card-header">
+                <h5>Статистика отправки</h5>
+            </div>
+            <div class="card-body">
+                <div class="progress mb-3" style="height: 30px;">
+                    {% if broadcast.total_recipients > 0 %}
+                        {% widthratio broadcast.sent_count broadcast.total_recipients 100 as sent_percent %}
+                        <div class="progress-bar bg-success" style="width: {{ sent_percent }}%">
+                            Отправлено: {{ broadcast.sent_count }}
+                        </div>
+                        {% if broadcast.failed_count > 0 %}
+                            {% widthratio broadcast.failed_count broadcast.total_recipients 100 as failed_percent %}
+                            <div class="progress-bar bg-danger" style="width: {{ failed_percent }}%">
+                                Ошибок: {{ broadcast.failed_count }}
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="progress-bar" style="width: 0%">0</div>
+                    {% endif %}
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Всего получателей:</strong> {{ recipients_stats.total }}</p>
+                        <p><strong>Отправлено:</strong> {{ recipients_stats.sent }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Ошибок:</strong> {{ recipients_stats.failed }}</p>
+                        <p><strong>В очереди:</strong> {{ recipients_stats.pending }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <!-- Информация -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>Информация</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Тип получателей:</strong> {{ broadcast.get_recipient_type_display }}</p>
+                <p><strong>Создана:</strong> {{ broadcast.created_at|date:"d.m.Y H:i" }}</p>
+                {% if broadcast.scheduled_at %}
+                    <p><strong>Запланирована:</strong> {{ broadcast.scheduled_at|date:"d.m.Y H:i" }}</p>
+                {% endif %}
+                {% if broadcast.started_at %}
+                    <p><strong>Начата:</strong> {{ broadcast.started_at|date:"d.m.Y H:i" }}</p>
+                {% endif %}
+                {% if broadcast.completed_at %}
+                    <p><strong>Завершена:</strong> {{ broadcast.completed_at|date:"d.m.Y H:i" }}</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Действия -->
+        <div class="card">
+            <div class="card-header">
+                <h5>Действия</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {% if can_start %}
+                        <button type="submit" name="action" value="start_now" class="btn btn-primary w-100 mb-2">
+                            <i class="bi bi-play-circle"></i> Запустить сейчас
+                        </button>
+                    {% endif %}
+                    {% if can_cancel %}
+                        <button type="submit" name="action" value="cancel" class="btn btn-warning w-100 mb-2">
+                            <i class="bi bi-x-circle"></i> Отменить
+                        </button>
+                    {% endif %}
+                    {% if can_restart %}
+                        <button type="submit" name="action" value="restart" class="btn btn-info w-100">
+                            <i class="bi bi-arrow-clockwise"></i> Перезапустить
+                        </button>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if broadcast.error_message %}
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="alert alert-danger">
+            <h5>Ошибка</h5>
+            <pre>{{ broadcast.error_message }}</pre>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if failed_recipients %}
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Последние ошибки</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Пользователь</th>
+                                <th>Ошибка</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for recipient in failed_recipients %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'panel:user_detail' recipient.profile.id %}">
+                                        {{ recipient.profile.telegram_id }}
+                                    </a>
+                                </td>
+                                <td>{{ recipient.error_message|truncatewords:10 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh status every 5 seconds if sending
+{% if broadcast.status == 'sending' %}
+setInterval(function() {
+    location.reload();
+}, 5000);
+{% endif %}
+</script>
+{% endblock %}

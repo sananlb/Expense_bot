@@ -1,0 +1,210 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block title %}{{ user.telegram_id }} - ExpenseBot Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1>
+            <i class="bi bi-person"></i> Пользователь {{ user.telegram_id }}
+            {% if user.is_beta_tester %}<span class="badge bg-info">Бета-тестер</span>{% endif %}
+        </h1>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Основная информация -->
+    <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>Информация</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>ID:</strong> {{ user.id }}</p>
+                <p><strong>Telegram ID:</strong> {{ user.telegram_id }}</p>
+                <p><strong>Регистрация:</strong> {{ user.created_at|date:"d.m.Y H:i" }}</p>
+                <p><strong>Активность:</strong> {{ user.last_activity|date:"d.m.Y H:i" }}</p>
+                <p><strong>Язык:</strong> {{ user.language_code|default:"ru" }}</p>
+                <p><strong>Валюта:</strong> {{ user.currency|default:"RUB" }}</p>
+            </div>
+        </div>
+        
+        <!-- Действия -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>Действия</h5>
+            </div>
+            <div class="card-body">
+                <button class="btn btn-primary btn-sm w-100 mb-2" data-bs-toggle="modal" data-bs-target="#extendModal">
+                    <i class="bi bi-calendar-plus"></i> Продлить подписку
+                </button>
+                <button class="btn btn-secondary btn-sm w-100" data-bs-toggle="modal" data-bs-target="#messageModal">
+                    <i class="bi bi-chat-dots"></i> Отправить сообщение
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Статистика -->
+    <div class="col-md-8">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>Статистика</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <p><strong>Всего трат:</strong> {{ total_expenses.count|default:0 }}</p>
+                        <p><strong>Сумма трат:</strong> {{ total_expenses.total|default:0|floatformat:0 }} ₽</p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Всего доходов:</strong> {{ total_incomes.count|default:0 }}</p>
+                        <p><strong>Сумма доходов:</strong> {{ total_incomes.total|default:0|floatformat:0 }} ₽</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Подписки -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>История подписок</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Тип</th>
+                                <th>Начало</th>
+                                <th>Окончание</th>
+                                <th>Статус</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sub in subscriptions %}
+                            <tr>
+                                <td>{{ sub.get_type_display }}</td>
+                                <td>{{ sub.start_date|date:"d.m.Y" }}</td>
+                                <td>{{ sub.end_date|date:"d.m.Y" }}</td>
+                                <td>
+                                    {% if sub.is_active %}
+                                        <span class="badge bg-success">Активна</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Истекла</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4">Нет подписок</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Последние траты -->
+        <div class="card">
+            <div class="card-header">
+                <h5>Последние траты</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Категория</th>
+                                <th>Сумма</th>
+                                <th>Описание</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for expense in recent_expenses %}
+                            <tr>
+                                <td>{{ expense.expense_date|date:"d.m" }}</td>
+                                <td>
+                                    {% if expense.category %}
+                                        {{ expense.category.icon }} {{ expense.category.name }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                <td>{{ expense.amount|floatformat:0 }}</td>
+                                <td>{{ expense.description|truncatewords:3 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4">Нет трат</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно продления подписки -->
+<div class="modal fade" id="extendModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'panel:extend_subscription' user.id %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Продление подписки</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Количество дней</label>
+                        <input type="number" name="days" class="form-control" value="30" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Тип подписки</label>
+                        <select name="type" class="form-select">
+                            <option value="month">Месяц</option>
+                            <option value="trial">Пробная</option>
+                            <option value="six_months">6 месяцев</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Продлить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно отправки сообщения -->
+<div class="modal fade" id="messageModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'panel:send_message' user.id %}">
+                {% csrf_token %}
+                <div class="modal-header">
+                    <h5 class="modal-title">Отправка сообщения</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Текст сообщения</label>
+                        <textarea name="message" class="form-control" rows="4" required></textarea>
+                        <small class="text-muted">Поддерживается Markdown форматирование</small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                    <button type="submit" class="btn btn-primary">Отправить</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,127 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block title %}Пользователи - ExpenseBot Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1><i class="bi bi-people"></i> Пользователи</h1>
+    </div>
+</div>
+
+<!-- Фильтры -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-3">
+                <input type="text" name="search" class="form-control" placeholder="Поиск по Telegram ID" value="{{ search_query }}">
+            </div>
+            <div class="col-md-2">
+                <select name="subscription" class="form-select">
+                    <option value="">Все подписки</option>
+                    <option value="has" {% if subscription_filter == 'has' %}selected{% endif %}>С подпиской</option>
+                    <option value="trial" {% if subscription_filter == 'trial' %}selected{% endif %}>Пробная</option>
+                    <option value="expired" {% if subscription_filter == 'expired' %}selected{% endif %}>Истекла</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="beta" class="form-select">
+                    <option value="">Все</option>
+                    <option value="yes" {% if beta_filter == 'yes' %}selected{% endif %}>Бета-тестеры</option>
+                    <option value="no" {% if beta_filter == 'no' %}selected{% endif %}>Обычные</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i> Поиск
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Таблица пользователей -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Telegram ID</th>
+                        <th>Подписка</th>
+                        <th>Бета</th>
+                        <th>Трат</th>
+                        <th>Сумма</th>
+                        <th>Активность</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in page_obj %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td>
+                            <a href="{% url 'panel:user_detail' user.id %}">
+                                {{ user.telegram_id }}
+                            </a>
+                        </td>
+                        <td>
+                            {% if user.subscriptions.exists %}
+                                <span class="badge bg-success">Да</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Нет</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.is_beta_tester %}
+                                <span class="badge bg-info">🧪</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.expense_count|default:0 }}</td>
+                        <td>{{ user.total_expenses|default:0|floatformat:0 }}</td>
+                        <td>{{ user.last_activity|date:"d.m.Y" }}</td>
+                        <td>
+                            <a href="{% url 'panel:user_detail' user.id %}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center">Нет пользователей</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Пагинация -->
+{% if page_obj.has_other_pages %}
+<nav class="mt-3">
+    <ul class="pagination justify-content-center">
+        {% if page_obj.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Предыдущая</a>
+            </li>
+        {% endif %}
+        
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% else %}
+                <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if page_obj.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_obj.next_page_number }}">Следующая</a>
+            </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

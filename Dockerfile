@@ -15,8 +15,9 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     gettext \
     curl \
+    wget \
     netcat-openbsd \
-    # Dependencies for Playwright - complete list
+    # Dependencies for Playwright and fonts
     libnss3 \
     libnspr4 \
     libatk1.0-0 \
@@ -39,6 +40,11 @@ RUN apt-get update && apt-get install -y \
     libx11-6 \
     libxcb1 \
     libxext6 \
+    # Fonts packages for Debian
+    fonts-liberation \
+    fonts-noto-color-emoji \
+    fonts-unifont \
+    fonts-ubuntu \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -48,7 +54,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Install Playwright browsers
 # First ensure playwright is available in PATH
 ENV PATH="/root/.local/bin:${PATH}"
-RUN python -m playwright install chromium --with-deps && \
+RUN python -m playwright install chromium && \
     echo "Playwright version:" && playwright --version && \
     echo "Chromium browser installed successfully"
 

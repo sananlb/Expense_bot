@@ -1,0 +1,45 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block title %}Создать рассылку - ExpenseBot Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1><i class="bi bi-megaphone"></i> Создать рассылку</h1>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    {{ form.as_p }}
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-send"></i> Создать рассылку
+                    </button>
+                    <a href="{% url 'panel:broadcast_list' %}" class="btn btn-secondary">
+                        Отмена
+                    </a>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5>Статистика</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Всего пользователей:</strong> {{ stats.total_users }}</p>
+                <p><strong>Активных:</strong> {{ stats.active_users }}</p>
+                <p><strong>Подписчиков:</strong> {{ stats.subscribers }}</p>
+                <p><strong>На пробном:</strong> {{ stats.trial_users }}</p>
+                <p><strong>Бета-тестеров:</strong> {{ stats.beta_testers }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

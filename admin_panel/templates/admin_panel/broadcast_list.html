@@ -1,0 +1,115 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block title %}Рассылки - ExpenseBot Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-8">
+        <h1><i class="bi bi-megaphone"></i> Рассылки</h1>
+    </div>
+    <div class="col-4 text-end">
+        <a href="{% url 'panel:broadcast_create' %}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Создать рассылку
+        </a>
+    </div>
+</div>
+
+<!-- Фильтры -->
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            {{ filter_form.as_p }}
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-search"></i> Применить фильтры
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Список рассылок -->
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Название</th>
+                        <th>Статус</th>
+                        <th>Получатели</th>
+                        <th>Отправлено</th>
+                        <th>Создана</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for broadcast in broadcasts %}
+                    <tr>
+                        <td>{{ broadcast.id }}</td>
+                        <td>
+                            <a href="{% url 'panel:broadcast_detail' broadcast.id %}">
+                                {{ broadcast.title }}
+                            </a>
+                        </td>
+                        <td>
+                            {% if broadcast.status == 'completed' %}
+                                <span class="badge bg-success">{{ broadcast.get_status_display }}</span>
+                            {% elif broadcast.status == 'sending' %}
+                                <span class="badge bg-warning">{{ broadcast.get_status_display }}</span>
+                            {% elif broadcast.status == 'failed' %}
+                                <span class="badge bg-danger">{{ broadcast.get_status_display }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ broadcast.get_status_display }}</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ broadcast.total_recipients }}</td>
+                        <td>
+                            {{ broadcast.sent_count }}/{{ broadcast.total_recipients }}
+                        </td>
+                        <td>{{ broadcast.created_at|date:"d.m.Y H:i" }}</td>
+                        <td>
+                            <a href="{% url 'panel:broadcast_detail' broadcast.id %}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="7" class="text-center">Нет рассылок</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Пагинация -->
+{% if broadcasts.has_other_pages %}
+<nav class="mt-3">
+    <ul class="pagination justify-content-center">
+        {% if broadcasts.has_previous %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ broadcasts.previous_page_number }}">Предыдущая</a>
+            </li>
+        {% endif %}
+        
+        {% for num in broadcasts.paginator.page_range %}
+            {% if broadcasts.number == num %}
+                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% else %}
+                <li class="page-item"><a class="page-link" href="?page={{ num }}">{{ num }}</a></li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if broadcasts.has_next %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ broadcasts.next_page_number }}">Следующая</a>
+            </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+{% endblock %}

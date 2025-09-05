@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_celery_beat',
     'expenses',
+    'admin_panel',
 ]
 
 MIDDLEWARE = [
@@ -146,6 +147,11 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Authentication URLs
+LOGIN_URL = '/admin/login/'
+LOGIN_REDIRECT_URL = '/panel/'
+LOGOUT_REDIRECT_URL = '/admin/'
 
 # Celery Configuration
 # Redis connection settings for Docker

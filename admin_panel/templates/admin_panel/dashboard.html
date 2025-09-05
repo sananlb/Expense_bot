@@ -1,0 +1,226 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block title %}Дашборд - ExpenseBot Admin{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1><i class="bi bi-speedometer2"></i> Панель управления</h1>
+    </div>
+</div>
+
+<!-- Основные метрики -->
+<div class="row">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <h3 class="text-primary">{{ total_users }}</h3>
+                <p>Всего пользователей</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <h3 class="text-success">{{ active_week }}</h3>
+                <p>Активных за неделю</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <h3 class="text-warning">{{ paid_subscriptions }}</h3>
+                <p>Платных подписок</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <h3 class="text-info">{{ beta_testers }}</h3>
+                <p>Бета-тестеров</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Активность -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-activity"></i> Активность пользователей</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <p class="mb-1">Сегодня: <strong>{{ active_today }}</strong></p>
+                        <p class="mb-1">Вчера: <strong>{{ active_yesterday }}</strong></p>
+                    </div>
+                    <div class="col-6">
+                        <p class="mb-1">Новых сегодня: <strong>{{ new_users_today }}</strong></p>
+                        <p class="mb-1">Новых за неделю: <strong>{{ new_users_week }}</strong></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-wallet2"></i> Траты</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <p class="mb-1">Сегодня: <strong>{{ expenses_today }}</strong></p>
+                        <p class="mb-1">Вчера: <strong>{{ expenses_yesterday }}</strong></p>
+                    </div>
+                    <div class="col-6">
+                        <p class="mb-1">За неделю: <strong>{{ expenses_week }}</strong></p>
+                        <p class="mb-1">Регулярных: <strong>{{ recurring_payments }}</strong></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Последние регистрации -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-person-plus"></i> Последние регистрации</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Telegram ID</th>
+                                <th>Дата</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in recent_registrations %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'panel:user_detail' user.id %}">
+                                        {{ user.id }}
+                                    </a>
+                                </td>
+                                <td>{{ user.telegram_id }}</td>
+                                <td>{{ user.created_at|date:"d.m H:i" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-star"></i> Топ активных за неделю</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Пользователь</th>
+                                <th>Трат</th>
+                                <th>Сумма</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in top_active_users %}
+                            <tr>
+                                <td>
+                                    <a href="{% url 'panel:user_detail' user.id %}">
+                                        {{ user.telegram_id }}
+                                    </a>
+                                </td>
+                                <td>{{ user.expense_count }}</td>
+                                <td>{{ user.total_expenses|floatformat:0 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Финансы и подписки -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-cash-stack"></i> Финансовые показатели</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-2">Траты сегодня: <strong>{{ total_expenses_today|floatformat:0 }} ₽</strong></p>
+                <p class="mb-2">Траты за месяц: <strong>{{ total_expenses_month|floatformat:0 }} ₽</strong></p>
+                <p class="mb-2">Доходы за месяц: <strong>{{ total_income_month|floatformat:0 }} ₽</strong></p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-credit-card"></i> Подписки</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-2">Активных подписок: <strong>{{ active_subscriptions }}</strong></p>
+                <p class="mb-2">Пробных: <strong>{{ trial_subscriptions }}</strong></p>
+                <p class="mb-2">Платных: <strong>{{ paid_subscriptions }}</strong></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Быстрые действия -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="bi bi-lightning"></i> Быстрые действия</h5>
+            </div>
+            <div class="card-body">
+                <a href="{% url 'panel:broadcast_create' %}" class="btn btn-primary">
+                    <i class="bi bi-megaphone"></i> Создать рассылку
+                </a>
+                <a href="{% url 'panel:users_list' %}" class="btn btn-secondary">
+                    <i class="bi bi-people"></i> Список пользователей
+                </a>
+                <a href="{% url 'admin:expenses_profile_changelist' %}" class="btn btn-info">
+                    <i class="bi bi-gear"></i> Управление профилями
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-refresh stats every 30 seconds
+setInterval(function() {
+    fetch("{% url 'panel:api_stats' %}")
+        .then(response => response.json())
+        .then(data => {
+            // Update stats if needed
+            console.log('Stats refreshed:', data);
+        });
+}, 30000);
+</script>
+{% endblock %}
