@@ -446,8 +446,8 @@ TEXTS = {
         'friend_got_subscription': '🎉 Поздравляем!\n\nВаш друг оформил подписку по вашей реферальной ссылке!\nВы получили 30 дней бесплатной подписки.\n\nСпасибо за то, что рекомендуете нас!',
         
         # Тексты меню подписки
-        'month_stars': '⭐ На месяц - 100 звёзд',
-        'six_months_stars': '⭐ На 6 месяцев - 500 звёзд',
+        'month_stars': '⭐ На месяц - 150 звёзд',
+        'six_months_stars': '⭐ На 6 месяцев - 600 звёзд',
         'have_promocode': '🎟️ У меня есть промокод',
         'subscription_month_title': 'Подписка на месяц',
         'subscription_month_desc': 'Полный доступ ко всем функциям на 1 месяц',
@@ -988,8 +988,8 @@ Thank you for participating in testing! Your feedback helps improve the bot.''',
         'friend_got_subscription': '🎉 Congratulations!\n\nYour friend got a subscription using your referral link!\nYou received 30 days of free subscription.\n\nThank you for recommending us!',
         
         # Subscription menu texts
-        'month_stars': '⭐ Monthly - 100 stars',
-        'six_months_stars': '⭐ 6 months - 500 stars',
+        'month_stars': '⭐ Monthly - 150 stars',
+        'six_months_stars': '⭐ 6 months - 600 stars',
         'have_promocode': '🎟️ I have a promo code',
         'subscription_month_title': 'Monthly subscription',
         'subscription_month_desc': 'Full access to all features for 1 month',

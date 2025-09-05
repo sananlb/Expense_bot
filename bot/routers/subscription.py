@@ -32,13 +32,13 @@ class PromoCodeStates(StatesGroup):
 # Цены подписок в Telegram Stars
 SUBSCRIPTION_PRICES = {
     'month': {
-        'stars': 100,
+        'stars': 150,
         'months': 1,
         'title': 'Подписка на месяц',
         'description': 'Полный доступ ко всем функциям на 1 месяц'
     },
     'six_months': {
-        'stars': 500,
+        'stars': 600,
         'months': 6,
         'title': 'Подписка на 6 месяцев',
         'description': 'Полный доступ ко всем функциям на 6 месяцев'
