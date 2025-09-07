@@ -198,9 +198,15 @@ class VoiceProcessor(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
         file_id = voice.file_id
         duration = voice.duration
         
-        # Check duration limit (max 60 seconds)
-        if duration > 60:
-            await message.answer("⚠️ Голосовое сообщение слишком длинное. Максимум 60 секунд.")
+        # Check duration limit from settings
+        try:
+            from django.conf import settings
+            max_seconds = getattr(settings, 'MAX_VOICE_DURATION_SECONDS', 60)
+        except Exception:
+            max_seconds = 60
+
+        if duration > max_seconds:
+            await message.answer(f"⚠️ Голосовое сообщение слишком длинное. Максимум {max_seconds} секунд.")
             return None
         
         # Show typing indicator

@@ -18,6 +18,7 @@ from expenses.models import Profile
 from dateutil import parser
 from calendar import monthrange
 import re
+from bot.utils.category_helpers import get_category_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -173,10 +174,20 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
                     expenses = await get_recent_expenses_sync()
                     
                     for exp in expenses:
+                        # Используем язык пользователя для отображения категории
+                        # Получаем профиль пользователя
+                        try:
+                            from expenses.models import Profile
+                            profile = await sync_to_async(Profile.objects.get)(telegram_id=user_id)
+                            lang = getattr(profile, 'language_code', 'ru') if profile else 'ru'
+                        except:
+                            lang = 'ru'
+                            
+                        category_name = get_category_display_name(exp.category, lang) if exp.category else 'Без категории'
                         recent_expenses.append({
                             'date': exp.expense_date.isoformat(),
                             'amount': float(exp.amount),
-                            'category': exp.category.name,
+                            'category': category_name,
                             'description': exp.description or ''
                         })
                 except Exception as e:

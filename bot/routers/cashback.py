@@ -18,7 +18,8 @@ from ..services.cashback import (
 from ..services.category import get_user_categories
 from expenses.models import Cashback
 from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect
-from ..utils import get_text, get_user_language, translate_category_name
+from ..utils import get_text, get_user_language
+from ..utils.category_helpers import get_category_display_name
 from ..utils.formatters import format_currency
 import logging
 
@@ -378,13 +379,13 @@ async def add_cashback_start(callback: types.CallbackQuery, state: FSMContext):
     
     # Группируем категории по 2 в строке
     for i in range(0, len(categories), 2):
-        category_name = translate_category_name(categories[i].name, lang)
+        category_name = get_category_display_name(categories[i], lang)
         row = [InlineKeyboardButton(
             text=f"{categories[i].icon} {category_name}", 
             callback_data=f"cashback_cat_{categories[i].id}"
         )]
         if i + 1 < len(categories):
-            category_name_2 = translate_category_name(categories[i + 1].name, lang)
+            category_name_2 = get_category_display_name(categories[i + 1], lang)
             row.append(InlineKeyboardButton(
                 text=f"{categories[i + 1].icon} {category_name_2}", 
                 callback_data=f"cashback_cat_{categories[i + 1].id}"
@@ -422,26 +423,34 @@ async def process_cashback_category(callback: types.CallbackQuery, state: FSMCon
         category_id = int(callback.data.split("_")[-1])
         await state.update_data(category_id=category_id)
     
-    # Показываем список банков для выбора
-    banks = [
-        "Т-Банк", "Альфа", "ВТБ", "Сбер", 
-        "Райффайзен", "Яндекс", "Озон"
-    ]
-    
-    keyboard_buttons = []
-    for i in range(0, len(banks), 2):
-        row = [InlineKeyboardButton(text=banks[i], callback_data=f"cashback_bank_{banks[i]}")]
-        if i + 1 < len(banks):
-            row.append(InlineKeyboardButton(text=banks[i + 1], callback_data=f"cashback_bank_{banks[i + 1]}"))
-        keyboard_buttons.append(row)
-    
-    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_button', lang), callback_data="cashback_add")])
-    keyboard_buttons.append([InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu")])
-    
-    await callback.message.edit_text(
-        get_text('choose_bank_or_enter', lang),
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
-    )
+    # Показываем варианты выбора банка только для RU; для других языков просим ввести вручную
+    if (lang or '').lower().startswith('ru'):
+        banks = [
+            "Т-Банк", "Альфа", "ВТБ", "Сбер",
+            "Райффайзен", "Яндекс", "Озон"
+        ]
+        keyboard_buttons = []
+        for i in range(0, len(banks), 2):
+            row = [InlineKeyboardButton(text=banks[i], callback_data=f"cashback_bank_{banks[i]}")]
+            if i + 1 < len(banks):
+                row.append(InlineKeyboardButton(text=banks[i + 1], callback_data=f"cashback_bank_{banks[i + 1]}"))
+            keyboard_buttons.append(row)
+        keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_button', lang), callback_data="cashback_add")])
+        keyboard_buttons.append([InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu")])
+        await callback.message.edit_text(
+            get_text('choose_bank_or_enter', lang),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        )
+    else:
+        # Только кнопки Назад/Отмена, просим ввести банк текстом
+        keyboard_buttons = [
+            [InlineKeyboardButton(text=get_text('back_button', lang), callback_data="cashback_add")],
+            [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu")]
+        ]
+        await callback.message.edit_text(
+            get_text('enter_bank_name', lang),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
+        )
     
     await state.set_state(CashbackForm.waiting_for_bank)
     await callback.answer()
@@ -600,7 +609,7 @@ async def edit_cashback_list(callback: types.CallbackQuery, state: FSMContext, l
     keyboard_buttons = []
     for cb in cashbacks:
         if cb.category:
-            category_name = translate_category_name(cb.category.name, lang)
+            category_name = get_category_display_name(cb.category, lang)
             text = f"{category_name} - {cb.bank_name} {cb.cashback_percent}%"
         else:
             text = f"{get_text('all_categories', lang)} - {cb.bank_name} {cb.cashback_percent}%"
@@ -1014,7 +1023,7 @@ async def remove_cashback_list(callback: types.CallbackQuery, state: FSMContext)
     keyboard_buttons = []
     for cb in cashbacks:
         if cb.category:
-            category_name = translate_category_name(cb.category.name, lang)
+            category_name = get_category_display_name(cb.category, lang)
             text = f"{category_name} - {cb.bank_name} {cb.cashback_percent}%"
         else:
             text = f"{get_text('all_categories', lang)} - {cb.bank_name} {cb.cashback_percent}%"
@@ -1253,7 +1262,7 @@ async def handle_cashback_remove(callback: types.CallbackQuery, state: FSMContex
     keyboard_buttons = []
     for cb in cashbacks:
         if cb.category:
-            category_name = translate_category_name(cb.category.name, lang)
+            category_name = get_category_display_name(cb.category, lang)
             text = f"{category_name} - {cb.bank_name} {cb.cashback_percent}%"
         else:
             text = f"{get_text('all_categories', lang)} - {cb.bank_name} {cb.cashback_percent}%"

@@ -9,6 +9,7 @@ import logging
 
 from expenses.models import Budget, Profile, ExpenseCategory, Expense
 from django.db.models import Sum
+from bot.utils.category_helpers import get_category_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ def create_budget(
         Budget instance или None при ошибке
     """
     try:
-        profile = Profile.objects.get(telegram_id=user_id)
+        profile = Profile.objects.get(telegram_id=telegram_id)
         category = ExpenseCategory.objects.get(id=category_id, profile=profile)
         
         if start_date is None:
@@ -91,7 +92,7 @@ def get_user_budgets(user_id: int, active_only: bool = True) -> List[Budget]:
         return list(queryset.select_related('category').order_by('category__name'))
         
     except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {telegram_id}")
+        logger.error(f"Profile not found for user {user_id}")
         return []
     except Exception as e:
         logger.error(f"Error getting budgets: {e}")
@@ -157,8 +158,8 @@ def check_budget_status(user_id: int, category_id: int) -> Dict:
         spent = Expense.objects.filter(
             profile=profile,
             category_id=category_id,
-            date__gte=start_date,
-            date__lte=end_date
+            expense_date__gte=start_date,
+            expense_date__lte=end_date
         ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
         
         remaining = budget.amount - spent
@@ -175,7 +176,7 @@ def check_budget_status(user_id: int, category_id: int) -> Dict:
         }
         
     except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {telegram_id}")
+        logger.error(f"Profile not found for user {user_id}")
         return {
             'has_budget': False,
             'budget_amount': Decimal('0'),
@@ -216,11 +217,11 @@ def delete_budget(user_id: int, budget_id: int) -> bool:
         budget.is_active = False
         budget.save()
         
-        logger.info(f"Deactivated budget {budget_id} for user {telegram_id}")
+        logger.info(f"Deactivated budget {budget_id} for user {user_id}")
         return True
         
     except (Profile.DoesNotExist, Budget.DoesNotExist):
-        logger.error(f"Budget {budget_id} not found for user {telegram_id}")
+        logger.error(f"Budget {budget_id} not found for user {user_id}")
         return False
     except Exception as e:
         logger.error(f"Error deleting budget: {e}")
@@ -247,8 +248,11 @@ def check_all_budgets(user_id: int) -> List[Dict]:
         
         results = []
         for budget in budgets:
-            status = check_budget_status(telegram_id, budget.category_id)
-            status['category_name'] = budget.category.name
+            status = check_budget_status(user_id, budget.category_id)
+            # Получаем язык пользователя
+            lang = getattr(profile, 'language_code', 'ru') if profile else 'ru'
+            # Используем мультиязычную систему для отображения категории
+            status['category_name'] = get_category_display_name(budget.category, lang)
             status['category_icon'] = budget.category.icon
             status['budget_id'] = budget.id
             results.append(status)
@@ -256,7 +260,7 @@ def check_all_budgets(user_id: int) -> List[Dict]:
         return results
         
     except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {telegram_id}")
+        logger.error(f"Profile not found for user {user_id}")
         return []
     except Exception as e:
         logger.error(f"Error checking all budgets: {e}")

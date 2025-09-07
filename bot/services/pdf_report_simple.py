@@ -64,8 +64,13 @@ class SimplePDFReportService:
                     
                     cat_id = expense.category.id
                     if cat_id not in categories_by_currency[currency]:
+                        # Получаем язык пользователя для правильного отображения
+                        from bot.utils.language import get_user_language
+                        from asgiref.sync import async_to_sync
+                        user_lang = async_to_sync(get_user_language)(telegram_id)
+                        
                         categories_by_currency[currency][cat_id] = {
-                            'name': expense.category.name,
+                            'name': expense.category.get_display_name(user_lang),
                             'icon': expense.category.icon,
                             'amount': Decimal('0')
                         }

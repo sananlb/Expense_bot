@@ -171,6 +171,9 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
         prev_month = today.month - 1 if today.month > 1 else 12
         prev_month_name = get_month_name(prev_month, lang).capitalize()
         keyboard.button(text=f"← {prev_month_name}", callback_data="expenses_prev_month")
+        
+        # Кнопка Топ-5
+        keyboard.button(text=get_text('top5_button', lang), callback_data="top5_menu")
     elif period == 'month' and show_pdf:
         # Для месячных отчетов показываем кнопку PDF
         keyboard.button(text=get_text('generate_pdf', lang), callback_data="pdf_generate_current")
@@ -216,7 +219,7 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
     if period == 'today':
-        keyboard.adjust(1, 1, 1, 1)  # 4 кнопки по одной в ряд: дневник, с начала месяца, предыдущий месяц, закрыть
+        keyboard.adjust(1, 1, 1, 1, 1)  # 5 кнопок: дневник, с начала месяца, предыдущий месяц, Топ-5, закрыть
     elif period == 'month' and show_pdf:
         if current_month and current_year:
             # Проверяем количество кнопок навигации

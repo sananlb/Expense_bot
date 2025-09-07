@@ -16,7 +16,8 @@ from ..services.category import (
     add_category_keyword, remove_category_keyword, get_category_keywords
 )
 from ..utils.message_utils import send_message_with_cleanup
-from ..utils import get_text, get_user_language, translate_category_name
+from ..utils import get_text, get_user_language
+from ..utils.category_helpers import get_category_display_name
 from datetime import date
 
 router = Router(name="categories")
@@ -143,7 +144,7 @@ async def show_expense_categories_menu(message: types.Message | types.CallbackQu
         # Категории уже отсортированы в get_user_categories
         for i, cat in enumerate(categories):
             # Переводим название категории если нужно
-            translated_name = translate_category_name(cat.name, lang)
+            translated_name = get_category_display_name(cat, lang)
             text += f"• {translated_name}\n"
             # Добавляем отступ между категориями
             if i < len(categories) - 1:
@@ -219,7 +220,7 @@ async def show_income_categories_menu(message: types.Message | types.CallbackQue
     # Показываем все категории доходов
     if income_categories:
         for i, cat in enumerate(income_categories):
-            translated_name = translate_category_name(cat.name, lang)
+            translated_name = get_category_display_name(cat, lang)
             text += f"• {translated_name}\n"
             # Добавляем отступ между категориями
             if i < len(income_categories) - 1:
@@ -531,7 +532,16 @@ async def edit_categories_list(callback: types.CallbackQuery, state: FSMContext)
     categories = await get_user_categories(user_id)
     
     # Фильтруем категории - исключаем "Прочие расходы"
-    editable_categories = [cat for cat in categories if 'прочие расходы' not in cat.name.lower()]
+    editable_categories = []
+    for cat in categories:
+        # Проверяем оба языковых поля
+        is_other = False
+        if cat.name_ru and 'прочие расходы' in cat.name_ru.lower():
+            is_other = True
+        if cat.name_en and 'other expenses' in cat.name_en.lower():
+            is_other = True
+        if not is_other:
+            editable_categories.append(cat)
     
     if not editable_categories:
         await callback.answer("У вас нет категорий для редактирования", show_alert=True)
@@ -541,13 +551,13 @@ async def edit_categories_list(callback: types.CallbackQuery, state: FSMContext)
     # Группируем категории по 2 в строке
     for i in range(0, len(editable_categories), 2):
         # Переводим название категории
-        translated_name = translate_category_name(editable_categories[i].name, lang)
+        translated_name = get_category_display_name(editable_categories[i], lang)
         row = [InlineKeyboardButton(
             text=translated_name, 
             callback_data=f"edit_cat_{editable_categories[i].id}"
         )]
         if i + 1 < len(editable_categories):
-            translated_name_2 = translate_category_name(editable_categories[i + 1].name, lang)
+            translated_name_2 = get_category_display_name(editable_categories[i + 1], lang)
             row.append(InlineKeyboardButton(
                 text=translated_name_2, 
                 callback_data=f"edit_cat_{editable_categories[i + 1].id}"
@@ -572,7 +582,16 @@ async def delete_categories_list(callback: types.CallbackQuery, state: FSMContex
     categories = await get_user_categories(user_id)
     
     # Фильтруем категории - исключаем "Прочие расходы"
-    deletable_categories = [cat for cat in categories if 'прочие расходы' not in cat.name.lower()]
+    deletable_categories = []
+    for cat in categories:
+        # Проверяем оба языковых поля
+        is_other = False
+        if cat.name_ru and 'прочие расходы' in cat.name_ru.lower():
+            is_other = True
+        if cat.name_en and 'other expenses' in cat.name_en.lower():
+            is_other = True
+        if not is_other:
+            deletable_categories.append(cat)
     
     if not deletable_categories:
         await callback.answer("У вас нет категорий для удаления", show_alert=True)
@@ -582,13 +601,13 @@ async def delete_categories_list(callback: types.CallbackQuery, state: FSMContex
     # Группируем категории по 2 в строке
     for i in range(0, len(deletable_categories), 2):
         # Переводим название категории
-        translated_name = translate_category_name(deletable_categories[i].name, lang)
+        translated_name = get_category_display_name(deletable_categories[i].name, lang)
         row = [InlineKeyboardButton(
             text=translated_name, 
             callback_data=f"del_cat_{deletable_categories[i].id}"
         )]
         if i + 1 < len(deletable_categories):
-            translated_name_2 = translate_category_name(deletable_categories[i + 1].name, lang)
+            translated_name_2 = get_category_display_name(deletable_categories[i + 1], lang)
             row.append(InlineKeyboardButton(
                 text=translated_name_2, 
                 callback_data=f"del_cat_{deletable_categories[i + 1].id}"
@@ -647,11 +666,13 @@ async def edit_category(callback: types.CallbackQuery, state: FSMContext):
     
     if category:
         # Сохраняем ID категории в состоянии для последующего редактирования
-        await state.update_data(editing_category_id=cat_id, old_category_name=category.name)
+        lang = await get_user_language(callback.from_user.id)
+        category_display = get_category_display_name(category, lang)
+        await state.update_data(editing_category_id=cat_id, old_category_name=category_display)
         
         # Показываем меню выбора что редактировать
         await callback.message.edit_text(
-            f"✏️ Редактирование категории «{category.name}»\n\n"
+            f"✏️ Редактирование категории «{category_display}»\n\n"
             "Что вы хотите изменить?",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📝 Название", callback_data=f"edit_cat_name_{cat_id}")],
@@ -1172,11 +1193,14 @@ async def edit_income_category(callback: types.CallbackQuery, state: FSMContext)
     category = next((cat for cat in categories if cat.id == category_id), None)
     
     if category:
-        await state.update_data(editing_income_category_id=category_id, old_income_category_name=category.name)
+        from bot.utils.category_helpers import get_category_display_name
+        lang = await get_user_language(user_id)
+        category_display_name = get_category_display_name(category, lang)
+        await state.update_data(editing_income_category_id=category_id, old_income_category_name=category_display_name)
         
         # Показываем меню выбора что редактировать
         await callback.message.edit_text(
-            f"✏️ Редактирование категории доходов «{category.name}»\n\n"
+            f"✏️ Редактирование категории доходов «{category_display_name}»\n\n"
             "Что вы хотите изменить?",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📝 Название", callback_data=f"edit_income_name_{category_id}")],

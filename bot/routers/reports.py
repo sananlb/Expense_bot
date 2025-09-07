@@ -10,7 +10,8 @@ from calendar import monthrange
 import logging
 
 from bot.keyboards import expenses_summary_keyboard, month_selection_keyboard, back_close_keyboard
-from bot.utils import get_text, format_amount, get_month_name, translate_category_name
+from bot.utils import get_text, format_amount, get_month_name
+from bot.utils.category_helpers import get_category_display_name
 from bot.services.expense import get_expenses_summary, get_expenses_by_period, get_last_expenses
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
@@ -152,24 +153,73 @@ async def show_expenses_summary(
             # По категориям расходов (если есть)
             if summary['by_category'] and has_expenses:
                 text += f"📊 <b>Расходы по категориям:</b>\n"
-                for cat in summary['by_category'][:5]:  # Максимум 5 категорий расходов
-                    icon_text = f"{cat['icon']} " if cat.get('icon') else ""
-                    translated_name = translate_category_name(cat['name'], lang)
-                    text += f"  {icon_text}{translated_name}: {format_amount(cat['total'], summary['currency'], lang)}\n"
+                total_categories = len(summary['by_category'])
+                
+                # Логика отображения: если 22 или меньше - показываем все, если 23+ показываем 20 + остальные
+                if total_categories <= 22:
+                    # Показываем все категории
+                    for cat in summary['by_category']:
+                        # Категория в словаре содержит только имя, поэтому создаем псевдо-объект
+                        from types import SimpleNamespace
+                        cat_obj = SimpleNamespace(icon=cat.get('icon'), name=cat['name'])
+                        category_display = get_category_display_name(cat_obj, lang)
+                        text += f"  {category_display}: {format_amount(cat['total'], summary['currency'], lang)}\n"
+                else:
+                    # Показываем первые 20 категорий
+                    for cat in summary['by_category'][:20]:
+                        # Категория в словаре содержит только имя, поэтому создаем псевдо-объект
+                        from types import SimpleNamespace
+                        cat_obj = SimpleNamespace(icon=cat.get('icon'), name=cat['name'])
+                        category_display = get_category_display_name(cat_obj, lang)
+                        text += f"  {category_display}: {format_amount(cat['total'], summary['currency'], lang)}\n"
+                    
+                    # Добавляем "остальные траты"
+                    remaining_count = total_categories - 20
+                    remaining_sum = sum(cat['total'] for cat in summary['by_category'][20:])
+                    if lang == 'ru':
+                        text += f"  📦 <i>Остальные траты ({remaining_count} {'категория' if remaining_count == 1 else 'категории' if remaining_count < 5 else 'категорий'}): {format_amount(remaining_sum, summary['currency'], lang)}</i>\n"
+                    else:
+                        text += f"  📦 <i>Other expenses ({remaining_count} {'category' if remaining_count == 1 else 'categories'}): {format_amount(remaining_sum, summary['currency'], lang)}</i>\n"
+                
                 text += "\n"
+            
+            # Потенциальный кешбэк между категориями расходов и доходов
+            if summary['potential_cashback'] > 0:
+                text += f"💳 {get_text('potential_cashback', lang)}: {format_amount(summary['potential_cashback'], summary['currency'], lang)}\n\n"
             
             # По категориям доходов (если есть)
             if summary.get('by_income_category') and has_incomes:
                 text += f"💵 <b>Доходы по категориям:</b>\n"
-                for cat in summary.get('by_income_category', [])[:5]:  # Максимум 5 категорий доходов
-                    icon_text = f"{cat['icon']} " if cat.get('icon') else ""
-                    translated_name = translate_category_name(cat['name'], lang)
-                    text += f"  {icon_text}{translated_name}: {format_amount(cat['total'], summary['currency'], lang)}\n"
+                income_categories = summary.get('by_income_category', [])
+                total_income_categories = len(income_categories)
+                
+                # Логика отображения: если 22 или меньше - показываем все, если 23+ показываем 20 + остальные
+                if total_income_categories <= 22:
+                    # Показываем все категории доходов
+                    for cat in income_categories:
+                        # Категория в словаре содержит только имя, поэтому создаем псевдо-объект
+                        from types import SimpleNamespace
+                        cat_obj = SimpleNamespace(icon=cat.get('icon'), name=cat['name'])
+                        category_display = get_category_display_name(cat_obj, lang)
+                        text += f"  {category_display}: {format_amount(cat['total'], summary['currency'], lang)}\n"
+                else:
+                    # Показываем первые 20 категорий доходов
+                    for cat in income_categories[:20]:
+                        # Категория в словаре содержит только имя, поэтому создаем псевдо-объект
+                        from types import SimpleNamespace
+                        cat_obj = SimpleNamespace(icon=cat.get('icon'), name=cat['name'])
+                        category_display = get_category_display_name(cat_obj, lang)
+                        text += f"  {category_display}: {format_amount(cat['total'], summary['currency'], lang)}\n"
+                    
+                    # Добавляем "остальные доходы"
+                    remaining_count = total_income_categories - 20
+                    remaining_sum = sum(cat['total'] for cat in income_categories[20:])
+                    if lang == 'ru':
+                        text += f"  💰 <i>Остальные доходы ({remaining_count} {'категория' if remaining_count == 1 else 'категории' if remaining_count < 5 else 'категорий'}): {format_amount(remaining_sum, summary['currency'], lang)}</i>\n"
+                    else:
+                        text += f"  💰 <i>Other income ({remaining_count} {'category' if remaining_count == 1 else 'categories'}): {format_amount(remaining_sum, summary['currency'], lang)}</i>\n"
+                
                 text += "\n"
-            
-            # Потенциальный кешбэк
-            if summary['potential_cashback'] > 0:
-                text += f"💳 {get_text('potential_cashback', lang)}: {format_amount(summary['potential_cashback'], summary['currency'], lang)}\n"
         
         # Добавляем подсказку внизу курсивом
         text += "\n\n<i>Показать отчет за другой период?</i>"
@@ -300,7 +350,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                     'time': exp.expense_time or exp.created_at.time(),
                     'amount': exp.amount,
                     'currency': exp.currency,
-                    'category': exp.category.name if exp.category else 'Без категории',
+                    'category': get_category_display_name(exp.category, lang) if exp.category else ('Без категории' if lang == 'ru' else 'No Category'),
                     'description': exp.description,
                     'object': exp
                 })
@@ -312,7 +362,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                     'time': inc.income_time or inc.created_at.time(),
                     'amount': inc.amount,
                     'currency': inc.currency,
-                    'category': inc.category.name if inc.category else 'Прочие доходы',
+                    'category': get_category_display_name(inc.category, lang) if inc.category else ('Прочие доходы' if lang == 'ru' else 'Other Income'),
                     'description': inc.description,
                     'object': inc
                 })

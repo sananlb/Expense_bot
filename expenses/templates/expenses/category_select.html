@@ -1,0 +1,8 @@
+<select name="category_{{ category_type }}" class="category-select">
+    <option value="">-- Выберите категорию --</option>
+    {% for cat in categories %}
+        <option value="{{ cat.id }}" {% if cat.selected %}selected{% endif %}>
+            {{ cat.display_name }}
+        </option>
+    {% endfor %}
+</select>

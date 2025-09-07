@@ -56,6 +56,11 @@ def get_or_create_affiliate_program(commission_percent: int = 50, duration_month
             end_date=end_date,
             is_active=True
         )
+    else:
+        # Обновляем процент комиссии если он отличается
+        if program.commission_permille != commission_permille:
+            program.commission_permille = commission_permille
+            program.save()
     
     return program
 
@@ -187,7 +192,7 @@ def process_referral_link(new_user_id: int, referral_code: str) -> Optional[Affi
 # ============================================
 
 @sync_to_async
-def process_referral_commission(subscription: Subscription) -> Optional[AffiliateCommission]:
+def process_referral_commission(subscription: Subscription, telegram_payment_charge_id: Optional[str] = None) -> Optional[AffiliateCommission]:
     """
     Обработать комиссию при оплате подписки
     
@@ -212,6 +217,12 @@ def process_referral_commission(subscription: Subscription) -> Optional[Affiliat
             'referrer', 'referred', 'affiliate_link'
         ).get(referred=subscription.profile)
         
+        # Проверяем идемпотентность по платежу (если передан идентификатор от Telegram)
+        if telegram_payment_charge_id and AffiliateCommission.objects.filter(
+            telegram_payment_id=telegram_payment_charge_id
+        ).exists():
+            return None
+
         # Рассчитываем комиссию
         commission_amount = program.calculate_commission(subscription.amount)
         
@@ -219,6 +230,9 @@ def process_referral_commission(subscription: Subscription) -> Optional[Affiliat
             return None
         
         with transaction.atomic():
+            # Запомним, является ли это первым платёжом до инкремента (для конверсии)
+            was_first_payment = (referral.total_payments == 0)
+
             # Создаём запись о комиссии
             commission = AffiliateCommission.objects.create(
                 referrer=referral.referrer,
@@ -229,7 +243,8 @@ def process_referral_commission(subscription: Subscription) -> Optional[Affiliat
                 commission_amount=commission_amount,
                 commission_rate=program.commission_permille,
                 status='hold',  # Сразу ставим на холд
-                hold_until=timezone.now() + timedelta(days=21)  # 21 день холда
+                hold_until=timezone.now() + timedelta(days=21),  # 21 день холда
+                telegram_payment_id=telegram_payment_charge_id
             )
             
             # Обновляем статистику реферала
@@ -241,7 +256,7 @@ def process_referral_commission(subscription: Subscription) -> Optional[Affiliat
             referral.save()
             
             # Обновляем статистику реферальной ссылки
-            if referral.total_payments == 1:  # Первый платёж = конверсия
+            if was_first_payment:  # Первый успешный платёж = конверсия
                 referral.affiliate_link.conversions = F('conversions') + 1
             
             referral.affiliate_link.total_earned = F('total_earned') + commission_amount
@@ -332,17 +347,24 @@ def get_referrer_stats(user_id: int) -> Dict[str, Any]:
             active=Count('id', filter=Q(total_payments__gt=0))
         )
         
+        # Рассчитываем конверсию в платящих
+        referrals_count = referrals['total'] or 0
+        active_referrals = referrals['active'] or 0
+        conversion_rate = 0
+        if referrals_count > 0:
+            conversion_rate = round((active_referrals / referrals_count) * 100, 1)
+        
         return {
             'has_link': True,
             'link': affiliate_link.telegram_link,
             'code': affiliate_link.affiliate_code,
             'clicks': affiliate_link.clicks,
             'conversions': affiliate_link.conversions,
-            'conversion_rate': affiliate_link.get_conversion_rate(),
+            'conversion_rate': conversion_rate,
             'total_earned': commissions_stats['total_earned'] or 0,
             'pending_amount': commissions_stats['pending_amount'] or 0,
-            'referrals_count': referrals['total'] or 0,
-            'active_referrals': referrals['active'] or 0
+            'referrals_count': referrals_count,
+            'active_referrals': active_referrals
         }
         
     except Profile.DoesNotExist:

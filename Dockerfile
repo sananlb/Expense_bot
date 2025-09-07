@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     wget \
     netcat-openbsd \
+    ffmpeg \
     # Dependencies for Playwright and fonts
     libnss3 \
     libnspr4 \

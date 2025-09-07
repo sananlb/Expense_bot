@@ -127,8 +127,9 @@
                             <tr>
                                 <td>{{ expense.expense_date|date:"d.m" }}</td>
                                 <td>
+                                    {% load category_filters %}
                                     {% if expense.category %}
-                                        {{ expense.category.icon }} {{ expense.category.name }}
+                                        {{ expense.category|category_display:'ru' }}
                                     {% else %}
                                         —
                                     {% endif %}

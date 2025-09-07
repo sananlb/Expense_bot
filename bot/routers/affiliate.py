@@ -57,8 +57,8 @@ async def cmd_affiliate(message: Message, state: FSMContext, lang: str = 'ru'):
             "Referral link:\n"
             f"<code>{affiliate_link.telegram_link}</code>\n\n"
             f"📊 <b>Your statistics:</b>\n"
-            f"• Clicks: {stats['clicks']}\n"
-            f"• Registrations: {stats['referrals_count']}\n\n"
+            f"• New users: {stats['referrals_count']}\n"
+            f"• Paying users: {stats['active_referrals']}\n\n"
             f"💰 <b>Earnings:</b>\n"
             f"• Earned: {stats['total_earned']} ⭐\n"
             f"• Pending: {stats['pending_amount']} ⭐\n\n"
@@ -74,8 +74,8 @@ async def cmd_affiliate(message: Message, state: FSMContext, lang: str = 'ru'):
             "Ваша реферальная ссылка:\n"
             f"<code>{affiliate_link.telegram_link}</code>\n\n"
             f"📊 <b>Ваша статистика:</b>\n"
-            f"• Переходов: {stats['clicks']}\n"
-            f"• Регистраций: {stats['referrals_count']}\n\n"
+            f"• Новых пользователей: {stats['referrals_count']}\n"
+            f"• Платящих: {stats['active_referrals']}\n\n"
             f"💰 <b>Заработок:</b>\n"
             f"• Заработано: {stats['total_earned']} ⭐\n"
             f"• В ожидании: {stats['pending_amount']} ⭐\n\n"
@@ -138,13 +138,12 @@ async def show_affiliate_stats(callback: CallbackQuery, state: FSMContext, lang:
         text = (
             "📊 <b>Detailed Statistics</b>\n\n"
             f"<b>Link performance:</b>\n"
-            f"• Total clicks: {stats['clicks']}\n"
-            f"• Registrations: {stats['referrals_count']}\n"
-            f"• Paying users: {stats['active_referrals']}\n\n"
+            f"• Users attracted: {stats['referrals_count']}\n"
+            f"• Paying users: {stats['active_referrals']}\n"
+            f"• Conversion rate: {stats['conversion_rate']}%\n\n"
             f"<b>Earnings:</b>\n"
             f"• Total earned: {stats['total_earned']} ⭐\n"
-            f"• On hold (21 days): {stats['pending_amount']} ⭐\n"
-            f"• Available: {stats['total_earned'] - stats['pending_amount']} ⭐"
+            f"• On hold (21 days): {stats['pending_amount']} ⭐"
         )
         if stats['referrals_count'] > 0:
             avg_earning = stats['total_earned'] / stats['referrals_count']
@@ -153,13 +152,12 @@ async def show_affiliate_stats(callback: CallbackQuery, state: FSMContext, lang:
         text = (
             "📊 <b>Детальная статистика</b>\n\n"
             f"<b>Эффективность ссылки:</b>\n"
-            f"• Всего переходов: {stats['clicks']}\n"
-            f"• Регистраций: {stats['referrals_count']}\n"
-            f"• Платящих пользователей: {stats['active_referrals']}\n\n"
+            f"• Привлечено пользователей: {stats['referrals_count']}\n"
+            f"• Из них платящих: {stats['active_referrals']}\n"
+            f"• Конверсия в платящих: {stats['conversion_rate']}%\n\n"
             f"<b>Заработок:</b>\n"
             f"• Всего заработано: {stats['total_earned']} ⭐\n"
-            f"• На холде (21 день): {stats['pending_amount']} ⭐\n"
-            f"• Доступно: {stats['total_earned'] - stats['pending_amount']} ⭐"
+            f"• На холде (21 день): {stats['pending_amount']} ⭐"
         )
         if stats['referrals_count'] > 0:
             avg_earning = stats['total_earned'] / stats['referrals_count']

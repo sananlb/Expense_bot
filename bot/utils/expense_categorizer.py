@@ -481,6 +481,7 @@ def categorize_expense_with_weights(text: str, user_profile) -> Tuple[str, float
     import math
     from expenses.models import CategoryKeyword, ExpenseCategory
     from asgiref.sync import sync_to_async
+    from bot.utils.category_helpers import get_category_display_name
     
     # Исправляем опечатки
     language = detect_language(text)
@@ -523,7 +524,10 @@ def categorize_expense_with_weights(text: str, user_profile) -> Tuple[str, float
                         score += keyword.normalized_weight * 1
         
         if score > 0:
-            category_scores[category.name] = score
+            # Используем язык пользователя для отображения категории
+            lang_code = user_profile.language_code if hasattr(user_profile, 'language_code') else 'ru'
+            category_display_name = get_category_display_name(category, lang_code)
+            category_scores[category_display_name] = score
     
     # Если нашли совпадения
     if category_scores:

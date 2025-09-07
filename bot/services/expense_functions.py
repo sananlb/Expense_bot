@@ -9,6 +9,8 @@ from asgiref.sync import sync_to_async
 from expenses.models import Expense, Profile, Income, IncomeCategory
 from django.db.models import Sum, Avg, Max, Min, Count, Q
 from collections import defaultdict
+from bot.utils.category_helpers import get_category_display_name
+from bot.utils.language import get_user_language, translate_category_name
 import logging
 
 logger = logging.getLogger(__name__)
@@ -77,10 +79,7 @@ class ExpenseFunctions:
             
             details = []
             for exp in day_expenses:
-                category_name = exp.category.name if exp.category else get_text('no_category', lang)
-                # Переводим название категории
-                if exp.category:
-                    category_name = translate_category_name(category_name, lang)
+                category_name = get_category_display_name(exp.category, lang) if exp.category else get_text('no_category', lang)
                     
                 details.append({
                     'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
@@ -391,13 +390,16 @@ class ExpenseFunctions:
                 Q(category__name__icontains=query)
             ).select_related('category').order_by('-expense_date', '-expense_time')[:limit]
             
+            # Получаем язык пользователя
+            lang = profile.language_code or 'ru'
+            
             results = []
             for exp in expenses:
                 results.append({
                     'date': exp.expense_date.isoformat(),
                     'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
                     'amount': float(exp.amount),
-                    'category': exp.category.name if exp.category else 'Без категории',
+                    'category': get_category_display_name(exp.category, lang) if exp.category else 'Без категории',
                     'description': exp.description,
                     'currency': exp.currency
                 })
@@ -589,7 +591,7 @@ class ExpenseFunctions:
                 'weekday': weekday,
                 'time': max_expense.expense_time.strftime('%H:%M') if max_expense.expense_time else None,
                 'amount': float(max_expense.amount),
-                'category': max_expense.category.name if max_expense.category else 'Без категории',
+                'category': get_category_display_name(max_expense.category, 'ru') if max_expense.category else 'Без категории',
                 'description': max_expense.description,
                 'currency': max_expense.currency
             }
@@ -749,7 +751,7 @@ class ExpenseFunctions:
                 results.append({
                     'date': exp.expense_date.isoformat(),
                     'amount': float(exp.amount),
-                    'category': exp.category.name if exp.category else 'Без категории',
+                    'category': get_category_display_name(exp.category, 'ru') if exp.category else 'Без категории',
                     'description': exp.description
                 })
             
@@ -1103,13 +1105,16 @@ class ExpenseFunctions:
                 profile=profile
             ).select_related('category').order_by('-expense_date', '-expense_time', '-id')[:limit]
             
+            # Получаем язык пользователя
+            lang = profile.language_code or 'ru'
+            
             results = []
             for exp in expenses:
                 results.append({
                     'date': exp.expense_date.isoformat(),
                     'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
                     'amount': float(exp.amount),
-                    'category': exp.category.name if exp.category else 'Без категории',
+                    'category': get_category_display_name(exp.category, lang) if exp.category else 'Без категории',
                     'description': exp.description,
                     'currency': exp.currency
                 })
@@ -1310,13 +1315,16 @@ class ExpenseFunctions:
                 profile=profile
             ).select_related('category').order_by('-income_date', '-income_time', '-id')[:limit]
             
+            # Получаем язык пользователя
+            lang = profile.language_code or 'ru'
+            
             results = []
             for income in incomes:
                 results.append({
                     'date': income.income_date.isoformat(),
                     'time': income.income_time.strftime('%H:%M') if income.income_time else None,
                     'amount': float(income.amount),
-                    'category': income.category.name if income.category else 'Без категории',
+                    'category': get_category_display_name(income.category, lang) if income.category else 'Без категории',
                     'description': income.description,
                     'currency': income.currency
                 })
@@ -1368,8 +1376,8 @@ class ExpenseFunctions:
             for inc in day_incomes[:10]:
                 details.append({
                     'amount': float(inc.amount),
-                    'description': inc.description or inc.category.name if inc.category else 'Доход',
-                    'category': inc.category.name if inc.category else 'Без категории'
+                    'description': inc.description or get_category_display_name(inc.category, 'ru') if inc.category else 'Доход',
+                    'category': get_category_display_name(inc.category, 'ru') if inc.category else 'Без категории'
                 })
             
             return {
@@ -1415,7 +1423,7 @@ class ExpenseFunctions:
                 'income': {
                     'amount': float(max_income.amount),
                     'description': max_income.description or 'Доход',
-                    'category': max_income.category.name if max_income.category else 'Без категории',
+                    'category': get_category_display_name(max_income.category, 'ru') if max_income.category else 'Без категории',
                     'date': max_income.income_date.isoformat()
                 }
             }
@@ -1534,7 +1542,7 @@ class ExpenseFunctions:
                     'date': inc.income_date.isoformat(),
                     'amount': float(inc.amount),
                     'description': inc.description or 'Доход',
-                    'category': inc.category.name if inc.category else 'Без категории'
+                    'category': get_category_display_name(inc.category, 'ru') if inc.category else 'Без категории'
                 })
             
             return {
@@ -1778,7 +1786,7 @@ class ExpenseFunctions:
                     'date': inc.income_date.isoformat(),
                     'amount': float(inc.amount),
                     'description': inc.description or 'Доход',
-                    'category': inc.category.name if inc.category else 'Без категории'
+                    'category': get_category_display_name(inc.category, 'ru') if inc.category else 'Без категории'
                 })
             
             total = queryset.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
@@ -1900,7 +1908,7 @@ class ExpenseFunctions:
                     'date': inc.income_date.isoformat(),
                     'amount': amount,
                     'description': inc.description or 'Доход',
-                    'category': inc.category.name if inc.category else 'Без категории'
+                    'category': get_category_display_name(inc.category, 'ru') if inc.category else 'Без категории'
                 })
             
             return {
@@ -1972,6 +1980,9 @@ class ExpenseFunctions:
                 defaults={'language_code': 'ru'}
             )
             
+            # Получаем язык пользователя
+            lang = profile.language_code or 'ru'
+            
             # Парсим даты
             if start_date:
                 start = datetime.fromisoformat(start_date).date()
@@ -2006,7 +2017,7 @@ class ExpenseFunctions:
                     'date': exp.expense_date.isoformat(),
                     'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
                     'amount': -float(exp.amount),  # Отрицательное значение для расходов
-                    'category': exp.category.name if exp.category else 'Без категории',
+                    'category': get_category_display_name(exp.category, lang) if exp.category else 'Без категории',
                     'description': exp.description,
                     'currency': exp.currency
                 })
@@ -2018,7 +2029,7 @@ class ExpenseFunctions:
                     'date': income.income_date.isoformat(),
                     'time': income.income_time.strftime('%H:%M') if income.income_time else None,
                     'amount': float(income.amount),  # Положительное значение для доходов
-                    'category': income.category.name if income.category else 'Без категории',
+                    'category': get_category_display_name(income.category, lang) if income.category else 'Без категории',
                     'description': income.description,
                     'currency': income.currency
                 })

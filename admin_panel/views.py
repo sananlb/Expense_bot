@@ -288,28 +288,30 @@ def extend_subscription(request, user_id):
         subscription_type = request.POST.get('type', 'month')
         
         # Находим последнюю активную подписку
-        last_sub = user.subscriptions.filter(
+        active_sub = user.subscriptions.filter(
             is_active=True,
             end_date__gt=timezone.now()
         ).order_by('-end_date').first()
         
-        if last_sub:
-            start_date = last_sub.end_date
+        if active_sub:
+            # Продлеваем существующую подписку
+            active_sub.end_date = active_sub.end_date + timedelta(days=days)
+            active_sub.save()
+            end_date = active_sub.end_date
         else:
+            # Создаем новую подписку только если нет активной
             start_date = timezone.now()
-        
-        end_date = start_date + timedelta(days=days)
-        
-        # Создаем новую подписку
-        Subscription.objects.create(
-            profile=user,
-            type=subscription_type,
-            payment_method='admin',
-            amount=0,  # Бесплатно через админку
-            start_date=start_date,
-            end_date=end_date,
-            is_active=True
-        )
+            end_date = start_date + timedelta(days=days)
+            
+            Subscription.objects.create(
+                profile=user,
+                type=subscription_type,
+                payment_method='admin',
+                amount=0,  # Бесплатно через админку
+                start_date=start_date,
+                end_date=end_date,
+                is_active=True
+            )
         
         # Отправка уведомления пользователю
         try:

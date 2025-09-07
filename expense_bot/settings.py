@@ -171,7 +171,7 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 
 # Allow switching between DB scheduler and in-code schedule via env
-USE_DB_BEAT = os.getenv('USE_DB_BEAT', 'false').lower() == 'true'
+USE_DB_BEAT = os.getenv('USE_DB_BEAT', 'true').lower() == 'true'
 if USE_DB_BEAT:
     CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
@@ -334,6 +334,11 @@ try:
         'task': 'expense_bot.celery_tasks.send_daily_admin_report',
         'schedule': crontab(hour=10, minute=0),  # 10 AM daily
         'options': {'queue': 'reports'}
+    },
+    'process-held-affiliate-commissions': {
+        'task': 'expense_bot.celery_tasks.process_held_affiliate_commissions',
+        'schedule': crontab(hour=2, minute=0),  # 2 AM daily
+        'options': {'queue': 'maintenance'}
     }
 }
 except ImportError:

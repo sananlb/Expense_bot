@@ -8,6 +8,7 @@ from expenses.models import RecurringPayment, Profile, Expense
 from asgiref.sync import sync_to_async
 from django.db import transaction
 import logging
+from bot.utils.category_helpers import get_category_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,9 @@ def create_recurring_payment(user_id: int, category_id: int, amount: float,
         
         # Если описание не указано, используем название категории
         if not description:
-            description = income_category.name
+            # Используем язык профиля для отображения категории
+            lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
+            description = get_category_display_name(income_category, lang_code)
             # Капитализируем первую букву
             if description:
                 description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
@@ -62,7 +65,9 @@ def create_recurring_payment(user_id: int, category_id: int, amount: float,
         
         # Если описание не указано, используем название категории
         if not description:
-            description = expense_category.name
+            # Используем язык профиля для отображения категории
+            lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
+            description = get_category_display_name(expense_category, lang_code)
             # Капитализируем первую букву
             if description:
                 description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()

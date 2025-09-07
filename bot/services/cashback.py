@@ -235,7 +235,8 @@ calculate_expense_cashback = sync_to_async(calculate_expense_cashback_sync)
 
 def format_cashback_note(cashbacks: List[Cashback], month: int, lang: str = 'ru') -> str:
     """Форматировать красивую заметку о кешбэках с группировкой по банкам"""
-    from bot.utils import get_text, translate_category_name
+    from bot.utils import get_text
+    from bot.utils.category_helpers import get_category_display_name
     
     # Названия месяцев
     month_names = {
@@ -272,8 +273,8 @@ def format_cashback_note(cashbacks: List[Cashback], month: int, lang: str = 'ru'
             
             # Формат: Категория (описание) - процент%
             if cb.category:
-                # Переводим название категории на язык пользователя
-                category_name = translate_category_name(cb.category.name, lang)
+                # Используем мультиязычную систему для отображения категории
+                category_name = get_category_display_name(cb.category, lang)
                 text += f"• {category_name}"
                 if cb.description:
                     text += f" ({cb.description})"
@@ -304,9 +305,12 @@ def get_cashbacks_for_month(user_id: int, month: int, lang: str = 'ru') -> List[
     
     result = []
     for cb in cashbacks:
+        # Используем мультиязычную систему для отображения категории
+        category_display = get_category_display_name(cb.category, lang) if cb.category else get_text('all_categories', lang)
+        
         result.append({
             'id': cb.id,
-            'category': cb.category.name if cb.category else get_text('all_categories', lang),
+            'category': category_display,
             'icon': cb.category.icon if cb.category else '🌐',
             'bank': cb.bank_name,
             'percent': cb.cashback_percent,

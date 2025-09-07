@@ -15,6 +15,7 @@ from bot.utils import get_text, format_amount
 from bot.services.budget import create_budget, get_user_budgets, check_budget_status, delete_budget, check_all_budgets
 from bot.services.category import get_user_categories
 from bot.utils.message_utils import send_message_with_cleanup
+from bot.utils.category_helpers import get_category_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -84,8 +85,10 @@ async def add_budget_start(callback: CallbackQuery, state: FSMContext, lang: str
     keyboard = InlineKeyboardBuilder()
     
     for category in categories:
+        # Используем язык пользователя для отображения категории
+        display_name = get_category_display_name(category, lang)
         keyboard.button(
-            text=f"{category.icon} {category.name}",
+            text=display_name,
             callback_data=f"budget_cat_{category.id}"
         )
     
@@ -169,7 +172,9 @@ async def delete_budget_start(callback: CallbackQuery, state: FSMContext, lang: 
     keyboard = InlineKeyboardBuilder()
     
     for budget in budgets:
-        text = f"{budget.category.icon} {budget.category.name}: {format_amount(budget.amount, lang=lang)}"
+        # Используем язык пользователя для отображения категории
+        category_display = get_category_display_name(budget.category, lang)
+        text = f"{category_display}: {format_amount(budget.amount, lang=lang)}"
         keyboard.button(
             text=text,
             callback_data=f"del_budget_{budget.id}"

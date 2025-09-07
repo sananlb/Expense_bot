@@ -119,11 +119,12 @@ class OpenAIWhisper(OpenAIKeyRotationMixin):
             import openai
             
             # Получаем следующий ключ для ротации
-            api_key = cls.get_next_key()
-            if not api_key:
+            key_result = cls.get_next_key()
+            if not key_result:
                 logger.warning("No OpenAI API keys available for rotation")
                 return None
-            
+            api_key, key_index = key_result
+
             # Настраиваем клиента с ключом из ротации
             client = openai.OpenAI(api_key=api_key)
             logger.debug(f"[OpenAIWhisper] Using OpenAI key for transcription")
@@ -146,6 +147,11 @@ class OpenAIWhisper(OpenAIKeyRotationMixin):
                 text = transcript.text
                 if text:
                     logger.info(f"OpenAI Whisper распознал: {text}")
+                    # Помечаем ключ как успешный
+                    try:
+                        cls.mark_key_success(key_index)
+                    except Exception:
+                        pass
                     return text
                     
             finally:
@@ -154,6 +160,12 @@ class OpenAIWhisper(OpenAIKeyRotationMixin):
                 
         except Exception as e:
             logger.error(f"Ошибка при распознавании через OpenAI Whisper: {e}")
+            # Помечаем ключ как упавший, если удалось получить индекс
+            try:
+                if 'key_index' in locals():
+                    cls.mark_key_failure(key_index, e)
+            except Exception:
+                pass
             return None
 
 
@@ -281,11 +293,17 @@ async def process_voice_for_expense(message, bot, user_language: str = 'ru') -> 
     Обработка голосового сообщения для расхода
     """
     # Проверяем длительность
-    if message.voice.duration > 60:
+    try:
+        from django.conf import settings
+        max_seconds = getattr(settings, 'MAX_VOICE_DURATION_SECONDS', 60)
+    except Exception:
+        max_seconds = 60
+
+    if message.voice.duration > max_seconds:
         if user_language == 'ru':
-            await message.answer("⚠️ Голосовое сообщение слишком длинное. Максимум 60 секунд.")
+            await message.answer(f"⚠️ Голосовое сообщение слишком длинное. Максимум {max_seconds} секунд.")
         else:
-            await message.answer("⚠️ Voice message is too long. Maximum 60 seconds.")
+            await message.answer(f"⚠️ Voice message is too long. Maximum {max_seconds} seconds.")
         return None
     
     # Распознаем с использованием оптимальной цепочки для языка

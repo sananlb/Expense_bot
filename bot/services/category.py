@@ -4,8 +4,9 @@
 from typing import List, Optional, Set
 from expenses.models import ExpenseCategory, Profile, CategoryKeyword
 from asgiref.sync import sync_to_async
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
 from bot.utils.db_utils import get_or_create_user_profile_sync
+from bot.utils.category_helpers import get_category_display_name
 import logging
 
 logger = logging.getLogger(__name__)
@@ -43,40 +44,52 @@ def get_or_create_category(user_id: int, category_name: str) -> ExpenseCategory:
     all_categories = ExpenseCategory.objects.filter(profile=profile)
     
     # Проверяем точное совпадение без учета эмодзи
+    import re
     for cat in all_categories:
-        # Убираем эмодзи из начала названия для сравнения
-        import re
-        name_without_emoji = re.sub(r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+\s*', '', cat.name)
-        if name_without_emoji.lower() == category_name.lower():
-            # Безопасное логирование для Windows
-            safe_name = cat.name.encode('ascii', 'ignore').decode('ascii').strip()
-            if not safe_name:
-                safe_name = "category with emoji"
-            logger.info(f"Found exact match (ignoring emoji): {safe_name}")
-            return cat
+        # Проверяем оба языковых поля
+        for field_name in ['name_ru', 'name_en']:
+            field_value = getattr(cat, field_name, None)
+            if not field_value:
+                continue
+            
+            # Убираем эмодзи из начала названия для сравнения
+            name_without_emoji = re.sub(r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+\s*', '', field_value)
+            if name_without_emoji.lower() == category_name.lower():
+                # Безопасное логирование для Windows
+                safe_name = field_value.encode('ascii', 'ignore').decode('ascii').strip()
+                if not safe_name:
+                    safe_name = f"category with emoji (id={cat.id})"
+                logger.info(f"Found exact match in {field_name}: {safe_name}")
+                return cat
     
     # Если не нашли точное, ищем частичное совпадение
     # Например, "кафе" найдет "Кафе и рестораны"
+    category_name_lower = category_name.lower()
     for cat in all_categories:
-        name_lower = cat.name.lower()
-        category_name_lower = category_name.lower()
-        
-        # Проверяем, содержит ли категория искомое название
-        if category_name_lower in name_lower:
-            safe_name = cat.name.encode('ascii', 'ignore').decode('ascii').strip()
-            if not safe_name:
-                safe_name = "category with emoji"
-            logger.info(f"Found partial match: {safe_name}")
-            return cat
-        
-        # Проверяем каждое слово из искомой категории
-        words = category_name_lower.split()
-        if any(word in name_lower for word in words if len(word) > 3):
-            safe_name = cat.name.encode('ascii', 'ignore').decode('ascii').strip()
-            if not safe_name:
-                safe_name = "category with emoji"
-            logger.info(f"Found word match: {safe_name}")
-            return cat
+        # Проверяем оба языковых поля
+        for field_name in ['name_ru', 'name_en']:
+            field_value = getattr(cat, field_name, None)
+            if not field_value:
+                continue
+                
+            name_lower = field_value.lower()
+            
+            # Проверяем, содержит ли категория искомое название
+            if category_name_lower in name_lower:
+                safe_name = field_value.encode('ascii', 'ignore').decode('ascii').strip()
+                if not safe_name:
+                    safe_name = f"category with emoji (id={cat.id})"
+                logger.info(f"Found partial match in {field_name}: {safe_name}")
+                return cat
+            
+            # Проверяем каждое слово из искомой категории
+            words = category_name_lower.split()
+            if any(word in name_lower for word in words if len(word) > 3):
+                safe_name = field_value.encode('ascii', 'ignore').decode('ascii').strip()
+                if not safe_name:
+                    safe_name = f"category with emoji (id={cat.id})"
+                logger.info(f"Found word match in {field_name}: {safe_name}")
+                return cat
     
     # Пробуем найти через словарь сопоставления
     category_name_lower = category_name.lower()
@@ -85,36 +98,35 @@ def get_or_create_category(user_id: int, category_name: str) -> ExpenseCategory:
             # Ищем категорию пользователя, содержащую ключевое слово группы
             for keyword in [cat_group] + keywords:
                 # Пробуем разные варианты поиска для лучшей совместимости с кириллицей
+                # Ищем в обоих языковых полях
                 category = ExpenseCategory.objects.filter(
-                    profile=profile,
-                    name__icontains=keyword
+                    profile=profile
+                ).filter(
+                    Q(name_ru__icontains=keyword) | 
+                    Q(name_en__icontains=keyword) |
+                    Q(name__icontains=keyword)  # Fallback на старое поле
                 ).first()
-                if category:
-                    safe_name = category.name.encode('ascii', 'ignore').decode('ascii').strip()
-                    if not safe_name:
-                        safe_name = "category with emoji"
-                    logger.info(f"Found category '{safe_name}' through mapping keyword '{keyword}'")
-                    return category
                 
-                # Также пробуем поиск в верхнем регистре для кириллицы
-                category = ExpenseCategory.objects.filter(
-                    profile=profile,
-                    name__icontains=keyword.upper()
-                ).first()
                 if category:
-                    safe_name = category.name.encode('ascii', 'ignore').decode('ascii').strip()
+                    display_name = get_category_display_name(category, 'ru')
+                    safe_name = display_name.encode('ascii', 'ignore').decode('ascii').strip()
                     if not safe_name:
-                        safe_name = "category with emoji"
-                    logger.info(f"Found category '{safe_name}' through mapping keyword (uppercase) '{keyword.upper()}'")
+                        safe_name = f"category with emoji (id={category.id})"
+                    logger.info(f"Found category '{safe_name}' through mapping keyword '{keyword}'")
                     return category
     
     # Дополнительная проверка: если category_name это "кафе", ищем любую категорию со словом "кафе"
-    if 'кафе' in category_name.lower():
+    if 'кафе' in category_name.lower() or 'cafe' in category_name.lower():
         for cat in all_categories:
-            if 'кафе' in cat.name.lower() or 'ресторан' in cat.name.lower():
-                safe_name = cat.name.encode('ascii', 'ignore').decode('ascii').strip()
+            # Проверяем оба языковых поля
+            name_ru = cat.name_ru or ''
+            name_en = cat.name_en or ''
+            if ('кафе' in name_ru.lower() or 'ресторан' in name_ru.lower() or
+                'cafe' in name_en.lower() or 'restaurant' in name_en.lower()):
+                display_name = get_category_display_name(cat, 'ru')
+                safe_name = display_name.encode('ascii', 'ignore').decode('ascii').strip()
                 if not safe_name:
-                    safe_name = "category with emoji"
+                    safe_name = f"category with emoji (id={cat.id})"
                 logger.info(f"Found category '{safe_name}' by cafe/restaurant keyword")
                 return cat
     
@@ -123,8 +135,11 @@ def get_or_create_category(user_id: int, category_name: str) -> ExpenseCategory:
     
     # Сначала пытаемся найти существующую категорию "Прочие расходы"
     other_category = ExpenseCategory.objects.filter(
-        profile=profile,
-        name__icontains='прочие'
+        profile=profile
+    ).filter(
+        Q(name_ru__icontains='прочие') | 
+        Q(name_en__icontains='other') |
+        Q(name__icontains='прочие')  # Fallback
     ).first()
     
     if not other_category:
@@ -132,7 +147,13 @@ def get_or_create_category(user_id: int, category_name: str) -> ExpenseCategory:
         other_category, created = ExpenseCategory.objects.get_or_create(
             name='💰 Прочие расходы',
             profile=profile,
-            defaults={'icon': ''}
+            defaults={
+                'icon': '💰',
+                'name_ru': 'Прочие расходы',
+                'name_en': 'Other Expenses',
+                'original_language': 'ru',
+                'is_translatable': True
+            }
         )
         if created:
             logger.info(f"Created default category 'Прочие расходы' for user {user_id}")
@@ -167,7 +188,12 @@ def get_user_categories(user_id: int) -> List[ExpenseCategory]:
     other_category = None
     
     for cat in categories_list:
-        if 'прочие расходы' in cat.name.lower():
+        # Проверяем оба языковых поля для определения "Прочих расходов"
+        name_ru = (cat.name_ru or '').lower()
+        name_en = (cat.name_en or '').lower()
+        name_old = cat.name.lower()
+        
+        if 'прочие расходы' in name_ru or 'other expenses' in name_en or 'прочие расходы' in name_old:
             other_category = cat
         else:
             regular_categories.append(cat)
@@ -197,26 +223,45 @@ async def create_category(user_id: int, name: str, icon: str = '💰') -> Expens
                 logger.warning(f"User {user_id} reached categories limit (50)")
                 raise ValueError("Достигнут лимит категорий (максимум 50)")
             
-            # Если иконка предоставлена, добавляем её к названию
-            if icon and icon.strip():
-                category_name = f"{icon} {name}"
-            else:
-                category_name = name
+            # Определяем язык категории
+            import re
+            from bot.utils.language import get_user_language
             
-            # Проверяем, нет ли уже такой категории
+            # Определяем, на каком языке название
+            has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', name))
+            has_latin = bool(re.search(r'[a-zA-Z]', name))
+            
+            # Получаем язык пользователя
+            user_lang = get_user_language(user_id)
+            
+            # Определяем оригинальный язык категории
+            if has_cyrillic and not has_latin:
+                original_language = 'ru'
+            elif has_latin and not has_cyrillic:
+                original_language = 'en'
+            else:
+                original_language = user_lang  # По умолчанию язык пользователя
+            
+            # Проверяем, нет ли уже такой категории (по мультиязычным полям)
+            from django.db.models import Q
             existing = ExpenseCategory.objects.filter(
-                profile=profile,
-                name=category_name
+                profile=profile
+            ).filter(
+                Q(name_ru=name) | Q(name_en=name)
             ).first()
             
             if existing:
-                logger.warning(f"Category '{category_name}' already exists for user {user_id}")
+                logger.warning(f"Category '{name}' already exists for user {user_id}")
                 return existing, False
             
+            # Создаем категорию с правильными мультиязычными полями
             category = ExpenseCategory.objects.create(
-                name=category_name,
-                icon='',  # Поле icon больше не используем
-                profile=profile
+                profile=profile,
+                icon=icon if icon and icon.strip() else '',
+                name_ru=name if original_language == 'ru' else None,
+                name_en=name if original_language == 'en' else None,
+                original_language=original_language,
+                is_translatable=(original_language == user_lang)
             )
             
             logger.info(f"Created category '{category_name}' (id: {category.id}) for user {user_id}")
@@ -255,8 +300,53 @@ def update_category(user_id: int, category_id: int, **kwargs) -> Optional[Expens
 
 async def update_category_name(user_id: int, category_id: int, new_name: str) -> bool:
     """Обновить название категории"""
-    # Просто сохраняем то, что ввел пользователь, без разделения на эмодзи и текст
-    result = await update_category(user_id, category_id, name=new_name.strip())
+    import re
+    from bot.utils.language import get_user_language
+    
+    # Извлекаем иконку и текст
+    emoji_pattern = r'^([\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+)\s*'
+    match = re.match(emoji_pattern, new_name)
+    
+    if match:
+        icon = match.group(1)
+        name_without_icon = new_name[len(match.group(0)):].strip()
+    else:
+        icon = ''
+        name_without_icon = new_name.strip()
+    
+    # Определяем язык нового названия
+    has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', name_without_icon))
+    has_latin = bool(re.search(r'[a-zA-Z]', name_without_icon))
+    
+    # Получаем текущую категорию для определения какие поля обновлять
+    try:
+        category = await sync_to_async(ExpenseCategory.objects.get)(
+            id=category_id,
+            profile__telegram_id=user_id
+        )
+    except ExpenseCategory.DoesNotExist:
+        return False
+    
+    # Определяем какое поле обновлять
+    if has_cyrillic and not has_latin:
+        result = await update_category(user_id, category_id, 
+                                      name_ru=name_without_icon,
+                                      icon=icon)
+    elif has_latin and not has_cyrillic:
+        result = await update_category(user_id, category_id, 
+                                      name_en=name_without_icon,
+                                      icon=icon)
+    else:
+        # Смешанный язык - обновляем поле исходного языка
+        if category.original_language == 'en':
+            result = await update_category(user_id, category_id, 
+                                         name_en=name_without_icon,
+                                         icon=icon)
+        else:
+            result = await update_category(user_id, category_id, 
+                                         name_ru=name_without_icon,
+                                         icon=icon)
+    
     return result is not None
 
 
@@ -355,12 +445,30 @@ def update_default_categories_language(user_id: int, new_lang: str) -> bool:
             
             if is_default:
                 # Переводим только стандартные категории
-                translated_name = translate_category_name(category.name, new_lang)
-                if translated_name != category.name:
-                    category.name = translated_name
-                    category.save()
-                    updated_count += 1
-                    logger.info(f"Updated category '{text}' to '{translated_name}' for user {user_id}")
+                if new_lang == 'ru':
+                    # Меняем на русский
+                    if category.name_ru:
+                        # У нас уже есть русское название, просто меняем язык по умолчанию
+                        category.original_language = 'ru'
+                    else:
+                        # Переводим из английского если нужно
+                        translated_name = translate_category_name(text, 'ru')
+                        category.name_ru = translated_name.replace(category.icon, '').strip() if category.icon else translated_name
+                        category.original_language = 'ru'
+                else:
+                    # Меняем на английский  
+                    if category.name_en:
+                        # У нас уже есть английское название
+                        category.original_language = 'en'
+                    else:
+                        # Переводим из русского если нужно
+                        translated_name = translate_category_name(text, 'en')
+                        category.name_en = translated_name.replace(category.icon, '').strip() if category.icon else translated_name
+                        category.original_language = 'en'
+                
+                category.save()
+                updated_count += 1
+                logger.info(f"Updated category language for '{text}' to '{new_lang}' for user {user_id}")
         
         logger.info(f"Updated {updated_count} default categories for user {user_id} to language '{new_lang}'")
         return True

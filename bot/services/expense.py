@@ -82,6 +82,9 @@ def create_expense(
             ai_confidence=ai_confidence
         )
         
+        # Обновляем объект с загруженным profile для корректной работы
+        expense.profile = profile
+        
         logger.info(f"Created expense {expense.id} for user {user_id}")
         return expense
     except ValueError:
@@ -169,33 +172,77 @@ def get_expenses_summary(
             profile=profile,
             expense_date__gte=start_date,
             expense_date__lte=end_date
-        )
+        ).select_related('category')
         logger.info(f"Query: profile={profile.id}, date>={start_date}, date<={end_date}, found={expenses.count()} expenses")
         
-        # Общая сумма и количество
-        total = expenses.aggregate(total=Sum('amount'))['total'] or Decimal('0')
-        count = expenses.count()
+        # Группируем по валютам
+        expenses_by_currency = {}
+        categories_by_currency = {}
         
-        # По категориям
-        by_category = expenses.values(
-            'category__id',
-            'category__name',
-            'category__icon'
-        ).annotate(
-            total=Sum('amount'),
-            count=Count('id')
-        ).order_by('-total')
+        # Получаем язык пользователя для мультиязычных категорий
+        from bot.utils.language import get_user_language
+        from asgiref.sync import async_to_sync
+        user_lang = async_to_sync(get_user_language)(user_id)
         
-        # Преобразуем в список словарей
-        categories_list = []
-        for cat in by_category:
-            categories_list.append({
-                'id': cat['category__id'],
-                'name': cat['category__name'] or 'Без категории',
-                'icon': cat['category__icon'] or '',
-                'total': cat['total'],
-                'count': cat['count']
-            })
+        for expense in expenses:
+            currency = expense.currency or 'RUB'
+            
+            if currency not in expenses_by_currency:
+                expenses_by_currency[currency] = {
+                    'total': Decimal('0'),
+                    'count': 0
+                }
+                categories_by_currency[currency] = {}
+            
+            expenses_by_currency[currency]['total'] += expense.amount
+            expenses_by_currency[currency]['count'] += 1
+            
+            # Получаем мультиязычное название категории
+            if expense.category:
+                cat_id = expense.category.id
+                # Используем мультиязычные поля если они есть
+                if user_lang == 'en' and hasattr(expense.category, 'name_en') and expense.category.name_en:
+                    cat_name = expense.category.name_en
+                elif user_lang == 'ru' and hasattr(expense.category, 'name_ru') and expense.category.name_ru:
+                    cat_name = expense.category.name_ru
+                else:
+                    cat_name = expense.category.name
+                
+                cat_icon = expense.category.icon or ''
+            else:
+                cat_id = 0
+                cat_name = 'Без категории' if user_lang == 'ru' else 'No category'
+                cat_icon = ''
+            
+            if cat_id not in categories_by_currency[currency]:
+                categories_by_currency[currency][cat_id] = {
+                    'id': cat_id,
+                    'name': cat_name,
+                    'icon': cat_icon,
+                    'total': Decimal('0'),
+                    'count': 0
+                }
+            
+            categories_by_currency[currency][cat_id]['total'] += expense.amount
+            categories_by_currency[currency][cat_id]['count'] += 1
+        
+        # Определяем основную валюту (с наибольшим количеством операций)
+        if expenses_by_currency:
+            main_currency = max(expenses_by_currency.items(), key=lambda x: x[1]['count'])[0]
+            total = expenses_by_currency[main_currency]['total']
+            count = expenses_by_currency[main_currency]['count']
+            
+            # Преобразуем категории основной валюты в список
+            categories_list = sorted(
+                categories_by_currency[main_currency].values(),
+                key=lambda x: x['total'],
+                reverse=True
+            )
+        else:
+            main_currency = 'RUB'
+            total = Decimal('0')
+            count = 0
+            categories_list = []
             
         # НОВОЕ: Получаем данные о доходах
         from expenses.models import Income
@@ -271,7 +318,7 @@ def get_expenses_summary(
             'total': total,
             'count': count,
             'by_category': categories_list,
-            'currency': profile.currency or 'RUB',
+            'currency': main_currency,  # Используем валюту с наибольшим количеством операций
             'potential_cashback': potential_cashback,
             # НОВЫЕ ПОЛЯ для доходов и баланса
             'income_total': income_total,
@@ -528,15 +575,21 @@ def find_similar_expenses(
                 if exp_desc == search_desc or search_desc in exp_desc or exp_desc in search_desc:
                     similar_expenses.append(expense)
         
+        # Получаем язык пользователя для правильного отображения
+        from bot.utils.language import get_user_language
+        from asgiref.sync import async_to_sync
+        user_lang = async_to_sync(get_user_language)(telegram_id)
+        
         # Группируем по уникальным суммам и категориям
         unique_amounts = {}
         for expense in similar_expenses:
-            key = (float(expense.amount), expense.currency, expense.category.name if expense.category else 'Прочие расходы')
+            category_display = expense.category.get_display_name(user_lang) if expense.category else ('Прочие расходы' if user_lang == 'ru' else 'Other Expenses')
+            key = (float(expense.amount), expense.currency, category_display)
             if key not in unique_amounts:
                 unique_amounts[key] = {
                     'amount': float(expense.amount),
                     'currency': expense.currency,
-                    'category': expense.category.name if expense.category else 'Прочие расходы',
+                    'category': category_display,
                     'count': 1,
                     'last_date': expense.expense_date
                 }
@@ -656,6 +709,10 @@ async def get_today_summary(user_id: int) -> Dict[str, Any]:
             total = float(currency_totals.get(user_currency, 0))
         
         # Group by category and currency
+        # Получаем язык пользователя для правильного отображения
+        from bot.utils.language import get_user_language
+        user_lang = await get_user_language(user_id)
+        
         categories_by_currency = {}
         for expense in expenses:
             if expense.category:
@@ -666,7 +723,7 @@ async def get_today_summary(user_id: int) -> Dict[str, Any]:
                 cat_key = expense.category.id
                 if cat_key not in categories_by_currency[currency]:
                     categories_by_currency[currency][cat_key] = {
-                        'name': expense.category.name,
+                        'name': expense.category.get_display_name(user_lang),
                         'icon': expense.category.icon,
                         'amount': Decimal('0'),
                         'currency': currency

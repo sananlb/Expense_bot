@@ -12,15 +12,17 @@ from .models import (
     PromoCodeUsage, ReferralBonus, Income, IncomeCategory
 )
 from dateutil.relativedelta import relativedelta
+from bot.utils.category_helpers import get_category_display_name
 
 
 class SubscriptionInline(admin.TabularInline):
     """Inline редактор подписок в профиле"""
     model = Subscription
-    extra = 1
-    fields = ['end_date', 'is_active', 'days_left']
-    readonly_fields = ['days_left']
+    extra = 0  # НЕ показывать пустые формы для новых подписок
+    fields = ['type', 'payment_method', 'start_date', 'end_date', 'is_active', 'days_left']
+    readonly_fields = ['days_left', 'type', 'payment_method', 'start_date']  # Делаем большинство полей readonly
     ordering = ['-end_date']
+    can_delete = False  # Запрещаем удаление подписок через inline
     
     def days_left(self, obj):
         """Осталось дней"""
@@ -176,32 +178,30 @@ class ProfileAdmin(admin.ModelAdmin):
         from django.utils import timezone
         count = 0
         for profile in queryset:
-            # Ищем последнюю подписку (включая будущие)
-            last_sub = profile.subscriptions.filter(
+            # Ищем активную подписку
+            active_sub = profile.subscriptions.filter(
+                is_active=True,
                 end_date__gt=timezone.now()
             ).order_by('-end_date').first()
             
-            if last_sub:
-                # Продлеваем от окончания последней
-                start_date = last_sub.end_date
+            if active_sub:
+                # Продлеваем существующую подписку
+                active_sub.end_date = active_sub.end_date + relativedelta(months=1)
+                active_sub.save()
             else:
-                # Новая подписка с текущего момента
-                start_date = timezone.now()
-            
-            end_date = start_date + relativedelta(months=1)
-            
-            Subscription.objects.create(
-                profile=profile,
-                type='month',
-                payment_method='stars',
-                amount=0,  # Бесплатно через админку
-                start_date=start_date,
-                end_date=end_date,
-                is_active=True
-            )
+                # Создаем новую подписку только если нет активной
+                Subscription.objects.create(
+                    profile=profile,
+                    type='month',
+                    payment_method='stars',
+                    amount=0,  # Бесплатно через админку
+                    start_date=timezone.now(),
+                    end_date=timezone.now() + relativedelta(months=1),
+                    is_active=True
+                )
             count += 1
         
-        self.message_user(request, f'Добавлено {count} месячных подписок.')
+        self.message_user(request, f'Продлено {count} месячных подписок.')
     
     add_month_subscription.short_description = 'Добавить месячную подписку'
     
@@ -210,32 +210,30 @@ class ProfileAdmin(admin.ModelAdmin):
         from django.utils import timezone
         count = 0
         for profile in queryset:
-            # Ищем последнюю подписку (включая будущие)
-            last_sub = profile.subscriptions.filter(
+            # Ищем активную подписку
+            active_sub = profile.subscriptions.filter(
+                is_active=True,
                 end_date__gt=timezone.now()
             ).order_by('-end_date').first()
             
-            if last_sub:
-                # Продлеваем от окончания последней
-                start_date = last_sub.end_date
+            if active_sub:
+                # Продлеваем существующую подписку
+                active_sub.end_date = active_sub.end_date + relativedelta(months=6)
+                active_sub.save()
             else:
-                # Новая подписка с текущего момента
-                start_date = timezone.now()
-            
-            end_date = start_date + relativedelta(months=6)
-            
-            Subscription.objects.create(
-                profile=profile,
-                type='six_months',
-                payment_method='stars',
-                amount=0,  # Бесплатно через админку
-                start_date=start_date,
-                end_date=end_date,
-                is_active=True
-            )
+                # Создаем новую подписку только если нет активной
+                Subscription.objects.create(
+                    profile=profile,
+                    type='six_months',
+                    payment_method='stars',
+                    amount=0,  # Бесплатно через админку
+                    start_date=timezone.now(),
+                    end_date=timezone.now() + relativedelta(months=6),
+                    is_active=True
+                )
             count += 1
         
-        self.message_user(request, f'Добавлено {count} полугодовых подписок.')
+        self.message_user(request, f'Продлено {count} полугодовых подписок.')
     
     add_six_months_subscription.short_description = 'Добавить полугодовую подписку'
 
@@ -269,7 +267,8 @@ class ExpenseCategoryAdmin(admin.ModelAdmin):
     list_per_page = 50
     
     def display_category(self, obj):
-        return f"{obj.icon} {obj.name}"
+        # Используем язык администратора для отображения
+        return get_category_display_name(obj, 'ru')  # Админка всегда на русском
     display_category.short_description = 'Категория'
     
     fieldsets = (
@@ -295,7 +294,8 @@ class ExpenseAdmin(admin.ModelAdmin):
     
     def display_category(self, obj):
         if obj.category:
-            return f"{obj.category.icon} {obj.category.name}"
+            # Используем язык администратора для отображения
+            return get_category_display_name(obj.category, 'ru')  # Админка всегда на русском
         return "—"
     display_category.short_description = 'Категория'
     
@@ -356,7 +356,8 @@ class CashbackAdmin(admin.ModelAdmin):
     list_per_page = 50
     
     def display_category(self, obj):
-        return f"{obj.category.icon} {obj.category.name}"
+        # Используем язык администратора для отображения
+        return get_category_display_name(obj.category, 'ru')  # Админка всегда на русском
     display_category.short_description = 'Категория'
     
     fieldsets = (
@@ -538,7 +539,8 @@ class IncomeCategoryAdmin(admin.ModelAdmin):
     list_per_page = 50
     
     def display_category(self, obj):
-        return f"{obj.icon} {obj.name}"
+        # Используем язык администратора для отображения
+        return get_category_display_name(obj, 'ru')  # Админка всегда на русском
     display_category.short_description = 'Категория дохода'
     
     fieldsets = (
@@ -574,7 +576,8 @@ class IncomeAdmin(admin.ModelAdmin):
     
     def display_category(self, obj):
         if obj.category:
-            return f"{obj.category.icon} {obj.category.name}"
+            # Используем язык администратора для отображения
+            return get_category_display_name(obj.category, 'ru')  # Админка всегда на русском
         return "—"
     display_category.short_description = 'Категория'
     

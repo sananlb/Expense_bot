@@ -647,7 +647,7 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
         affiliate_program = await get_or_create_affiliate_program(commission_percent=50)  # 50% комиссия
         
         # Обрабатываем комиссию
-        commission = await process_referral_commission(subscription)
+        commission = await process_referral_commission(subscription, telegram_payment_charge_id=payment.telegram_payment_charge_id)
         
         if commission:
             logger.info(f"Affiliate commission created: {commission.commission_amount} stars for referrer {commission.referrer.telegram_id} from payment by {user_id}")
@@ -717,30 +717,27 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
                 is_activated=False
             )
             
-            # Ищем последнюю подписку реферера (включая будущие)
-            referrer_last_sub = await referrer.subscriptions.filter(
+            # Ищем активную подписку реферера
+            referrer_active_sub = await referrer.subscriptions.filter(
+                is_active=True,
                 end_date__gt=timezone.now()
             ).order_by('-end_date').afirst()
             
-            if referrer_last_sub:
-                # Создаем новую бонусную подписку после окончания последней
-                bonus_start = referrer_last_sub.end_date
+            if referrer_active_sub:
+                # Продлеваем существующую подписку на 30 дней
+                referrer_active_sub.end_date = referrer_active_sub.end_date + timedelta(days=30)
+                await referrer_active_sub.asave()
             else:
-                # Если нет активных подписок, начинаем с текущего момента
-                bonus_start = timezone.now()
-            
-            bonus_end = bonus_start + timedelta(days=30)
-            
-            # Создаем новую бонусную подписку
-            await Subscription.objects.acreate(
-                profile=referrer,
-                type='month',
-                payment_method='referral',
-                amount=0,  # Бесплатно за реферала
-                start_date=bonus_start,
-                end_date=bonus_end,
-                is_active=True
-            )
+                # Создаем новую подписку только если нет активной
+                await Subscription.objects.acreate(
+                    profile=referrer,
+                    type='month',
+                    payment_method='referral',
+                    amount=0,  # Бесплатно за реферала
+                    start_date=timezone.now(),
+                    end_date=timezone.now() + timedelta(days=30),
+                    is_active=True
+                )
             
             # Активируем бонус
             bonus.is_activated = True

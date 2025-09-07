@@ -5,7 +5,7 @@ from datetime import date
 from typing import Dict, Any, Optional
 from ..services.expense import get_today_summary
 from ..utils.formatters import format_currency
-from ..utils.language import translate_category_name
+from ..utils.category_helpers import get_category_display_name
 
 
 async def format_expense_added_message(
@@ -53,16 +53,10 @@ async def format_expense_added_message(
     
     message += f"✅ <b>{description}</b>{invisible_padding}\n\n"
     message += f"🧾 {amount_text}{cashback_text}\n"
-    # Переводим название категории на язык пользователя
-    translated_category = translate_category_name(category.name, lang)
     
-    # Проверяем, не начинается ли название категории уже с эмодзи
-    # Если категория имеет иконку И название не начинается с той же иконки, добавляем иконку
-    if category.icon and not translated_category.startswith(category.icon):
-        message += f"{category.icon} {translated_category}"
-    else:
-        # Иначе используем название как есть (уже содержит эмодзи или нет иконки)
-        message += translated_category
+    # Получаем отображаемое имя категории на языке пользователя
+    category_display = get_category_display_name(category, lang)
+    message += category_display
     
     # Добавляем уточнения если есть
     if confidence_text:
@@ -143,16 +137,12 @@ async def format_income_added_message(
     message = f"✅ <b>{income.description}</b>{invisible_padding}\n\n"
     message += f"🧾 +{amount_text}\n"
     
-    # Переводим название категории на язык пользователя
-    translated_category = translate_category_name(category.name if category else 'Прочие доходы', lang)
-    
-    # Проверяем, не начинается ли название категории уже с эмодзи
-    # Если категория имеет иконку И название не начинается с той же иконки, добавляем иконку
-    if category and category.icon and not translated_category.startswith(category.icon):
-        message += f"{category.icon} {translated_category}"
+    # Получаем отображаемое имя категории на языке пользователя
+    if category:
+        category_display = get_category_display_name(category, lang)
     else:
-        # Иначе используем название как есть (уже содержит эмодзи или нет иконки)
-        message += translated_category
+        category_display = 'Прочие доходы' if lang == 'ru' else 'Other Income'
+    message += category_display
     
     # Добавляем уточнение если использованы данные из последней похожей записи
     if similar_income:

@@ -115,12 +115,18 @@ def build_user_context(profile: Profile) -> Dict[str, Any]:
     Построение контекста пользователя для AI
     """
     # Последние использованные категории
+    from bot.utils.category_helpers import get_category_display_name
+    from bot.utils.language import get_user_language
+    
     recent_incomes = Income.objects.filter(
         profile=profile
     ).order_by('-income_date', '-income_time')[:10]
     
+    # Получаем язык пользователя
+    lang = get_user_language(profile.telegram_id) if hasattr(profile, 'telegram_id') else 'ru'
+    
     recent_categories = list(set([
-        income.category.name 
+        get_category_display_name(income.category, lang)
         for income in recent_incomes 
         if income.category
     ]))[:5]

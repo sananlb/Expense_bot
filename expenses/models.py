@@ -125,8 +125,30 @@ class UserSettings(models.Model):
 
 class ExpenseCategory(models.Model):
     """Категории трат согласно ТЗ"""
+    LANGUAGE_CHOICES = [
+        ('ru', 'Russian'),
+        ('en', 'English'),
+        ('mixed', 'Mixed'),
+    ]
+    
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='categories')
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100)  # Оставляем для обратной совместимости
+    
+    # Мультиязычные названия
+    name_ru = models.CharField(max_length=100, blank=True, null=True, verbose_name='Название на русском')
+    name_en = models.CharField(max_length=100, blank=True, null=True, verbose_name='Название на английском')
+    
+    # Язык оригинала (для определения нужно ли переводить)
+    original_language = models.CharField(
+        max_length=10,
+        choices=LANGUAGE_CHOICES,
+        default='ru',
+        verbose_name='Язык оригинала'
+    )
+    
+    # Флаг: категория требует перевода
+    is_translatable = models.BooleanField(default=True, verbose_name='Требует перевода')
+    
     icon = models.CharField(max_length=10, default='💰')
     
     # Все категории привязаны к пользователю и могут быть удалены
@@ -141,16 +163,72 @@ class ExpenseCategory(models.Model):
         unique_together = ['profile', 'name']
         indexes = [
             models.Index(fields=['profile', 'name']),
+            models.Index(fields=['profile', 'name_ru']),
+            models.Index(fields=['profile', 'name_en']),
         ]
         
+    def save(self, *args, **kwargs):
+        """Переопределяем save для синхронизации старого поля name"""
+        # Синхронизируем старое поле name для обратной совместимости
+        if self.name_ru:
+            self.name = f"{self.icon} {self.name_ru}" if self.icon else self.name_ru
+        elif self.name_en:
+            self.name = f"{self.icon} {self.name_en}" if self.icon else self.name_en
+        # Если name не задан, используем что есть
+        elif not self.name:
+            self.name = "Без категории"
+            
+        super().save(*args, **kwargs)
+    
     def __str__(self):
-        return f"{self.icon} {self.name}"
+        # Используем get_display_name для консистентности
+        return self.get_display_name('ru')
+    
+    def get_display_name(self, language_code='ru'):
+        """Возвращает название категории на нужном языке"""
+        
+        if not self.is_translatable:
+            # Категория не переводится - показываем оригинал из правильного поля
+            if self.original_language == 'ru':
+                name = self.name_ru
+            elif self.original_language == 'en':
+                name = self.name_en
+            else:
+                # Fallback на старое поле name для обратной совместимости
+                name = self.name.replace(self.icon, '').strip()
+            
+            return f"{self.icon} {name}" if name else self.name
+        
+        # Категория переводимая - выбираем нужный язык с fallback
+        if language_code == 'ru':
+            name = self.name_ru or self.name_en
+        else:
+            name = self.name_en or self.name_ru
+        
+        # Последний fallback на старое поле name
+        if not name:
+            name = self.name.replace(self.icon, '').strip()
+        
+        return f"{self.icon} {name}" if name else self.name
 
 
 class CategoryKeyword(models.Model):
     """Ключевые слова для автоматического определения категорий"""
+    LANGUAGE_CHOICES = [
+        ('ru', 'Russian'),
+        ('en', 'English'),
+    ]
+    
     category = models.ForeignKey(ExpenseCategory, on_delete=models.CASCADE, related_name='keywords')
     keyword = models.CharField(max_length=100, db_index=True)
+    
+    # Язык ключевого слова
+    language = models.CharField(
+        max_length=10,
+        choices=LANGUAGE_CHOICES,
+        default='ru',
+        verbose_name='Язык ключевого слова'
+    )
     
     # Счетчик использования (только ручные исправления)
     usage_count = models.IntegerField(default=0, verbose_name='Количество использований')
@@ -165,14 +243,15 @@ class CategoryKeyword(models.Model):
         db_table = 'expenses_category_keyword'
         verbose_name = 'Ключевое слово категории'
         verbose_name_plural = 'Ключевые слова категорий'
-        unique_together = ['category', 'keyword']
+        unique_together = ['category', 'keyword', 'language']
         indexes = [
             models.Index(fields=['category', 'keyword']),
             models.Index(fields=['normalized_weight']),
+            models.Index(fields=['language']),
         ]
     
     def __str__(self):
-        return f"{self.keyword} -> {self.category.name} (вес: {self.normalized_weight:.2f})"
+        return f"{self.keyword} ({self.language}) -> {self.category.name} (вес: {self.normalized_weight:.2f})"
 
 
 class Expense(models.Model):
@@ -443,6 +522,7 @@ class Subscription(models.Model):
     def __str__(self):
         return f"{self.profile} - {self.get_type_display()} до {self.end_date.strftime('%d.%m.%Y')}"
     
+    
     @property
     def is_valid(self):
         """Проверка активности подписки"""
@@ -670,6 +750,17 @@ class IncomeCategory(models.Model):
     name = models.CharField(max_length=100)
     icon = models.CharField(max_length=10, default='💵')
     
+    # Мультиязычные поля
+    name_ru = models.CharField(max_length=100, blank=True, null=True, verbose_name='Название (RU)')
+    name_en = models.CharField(max_length=100, blank=True, null=True, verbose_name='Название (EN)')
+    original_language = models.CharField(
+        max_length=10, 
+        choices=[('ru', 'Русский'), ('en', 'English'), ('other', 'Other')],
+        default='ru',
+        verbose_name='Оригинальный язык'
+    )
+    is_translatable = models.BooleanField(default=True, verbose_name='Переводить автоматически')
+    
     # Активность категории
     is_active = models.BooleanField(default=True)
     is_default = models.BooleanField(default=False)  # Является ли категорией по умолчанию
@@ -685,10 +776,57 @@ class IncomeCategory(models.Model):
         unique_together = ['profile', 'name']
         indexes = [
             models.Index(fields=['profile', 'name']),
+            models.Index(fields=['profile', 'name_ru']),
+            models.Index(fields=['profile', 'name_en']),
         ]
+    
+    def save(self, *args, **kwargs):
+        """Переопределяем save для синхронизации старого поля name"""
+        # Синхронизируем старое поле name для обратной совместимости
+        if self.name_ru:
+            self.name = f"{self.icon} {self.name_ru}" if self.icon else self.name_ru
+        elif self.name_en:
+            self.name = f"{self.icon} {self.name_en}" if self.icon else self.name_en
+        # Если name не задан, используем что есть
+        elif not self.name:
+            self.name = "Прочие доходы"
+            
+        super().save(*args, **kwargs)
         
     def __str__(self):
-        return f"{self.icon} {self.name}"
+        return self.get_display_name('ru')
+    
+    def get_display_name(self, language_code='ru'):
+        """Возвращает название категории на нужном языке"""
+        
+        if not self.is_translatable:
+            # Категория не переводится - показываем оригинал из правильного поля
+            if self.original_language == 'ru':
+                name = self.name_ru
+            elif self.original_language == 'en':
+                name = self.name_en
+            else:
+                # Fallback на старое поле name для обратной совместимости
+                name = self.name.replace(self.icon, '').strip()
+        else:
+            # Для переводимых категорий выбираем нужный язык
+            if language_code == 'ru':
+                name = self.name_ru or self.name_en or self.name.replace(self.icon, '').strip()
+            elif language_code == 'en':
+                name = self.name_en or self.name_ru or self.name.replace(self.icon, '').strip()
+            else:
+                # Для других языков используем английский как fallback
+                name = self.name_en or self.name_ru or self.name.replace(self.icon, '').strip()
+        
+        # Убираем эмодзи если он уже есть в названии, чтобы не дублировать
+        if name and self.icon and name.startswith(self.icon):
+            return name
+        elif name and self.icon:
+            return f"{self.icon} {name}"
+        elif name:
+            return name
+        else:
+            return "Прочие доходы"
 
 
 class Income(models.Model):
@@ -812,6 +950,34 @@ DEFAULT_CATEGORIES = [
     ('Коммунальные услуги и подписки', '📱'),
     ('Прочие расходы', '💰')
 ]
+
+
+class Top5Snapshot(models.Model):
+    """Снепшот топ-5 операций для пользователя"""
+    profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name='top5_snapshot')
+    window_start = models.DateField()
+    window_end = models.DateField()
+    items = models.JSONField(default=list)  # список элементов топ-5
+    hash = models.CharField(max_length=64, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'top5_snapshots'
+        verbose_name = 'Снепшот Топ‑5'
+        verbose_name_plural = 'Снепшоты Топ‑5'
+
+
+class Top5Pin(models.Model):
+    """Данные о закрепленном сообщении Топ‑5 для пользователя"""
+    profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name='top5_pin')
+    chat_id = models.BigIntegerField()
+    message_id = models.BigIntegerField()
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'top5_pins'
+        verbose_name = 'Закреп Топ‑5'
+        verbose_name_plural = 'Закрепы Топ‑5'
 
 DEFAULT_INCOME_CATEGORIES = [
     ('Зарплата', '💼'),
@@ -1184,11 +1350,23 @@ class AffiliateCommission(models.Model):
         indexes = [
             models.Index(fields=['referrer', 'status']),
             models.Index(fields=['telegram_transaction_id']),
+            models.Index(fields=['telegram_payment_id']),  # Индекс для быстрого поиска по платежу
             models.Index(fields=['created_at']),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['telegram_payment_id'], 
+                name='unique_telegram_payment_id',
+                condition=models.Q(telegram_payment_id__isnull=False)
+            )
         ]
     
     def __str__(self):
         return f"{self.referrer} - {self.commission_amount} stars ({self.get_status_display()})"
+    
+    def get_commission_percent(self):
+        """Получить процент комиссии"""
+        return self.commission_rate / 10  # промилле в проценты
     
     def calculate_hold_date(self):
         """Рассчитать дату окончания холда (21 день)"""

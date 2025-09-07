@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from expenses.models import Income, IncomeCategory, Profile
 from bot.utils.db_utils import get_or_create_user_profile_sync
+from bot.utils.category_helpers import get_category_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +216,7 @@ def get_incomes_summary(
         
         for income in incomes:
             # По категориям
-            category_name = income.category.name if income.category else "❓ Без категории"
+            category_name = get_category_display_name(income.category, 'ru') if income.category else "❓ Без категории"
             if category_name not in category_stats:
                 category_stats[category_name] = {'amount': 0, 'count': 0}
             category_stats[category_name]['amount'] += float(income.amount)
@@ -377,7 +378,7 @@ def get_incomes_by_period(
         # По категориям
         by_category = {}
         for income in incomes:
-            cat_name = income.category.name if income.category else 'Без категории'
+            cat_name = get_category_display_name(income.category, 'ru') if income.category else 'Без категории'
             if cat_name not in by_category:
                 by_category[cat_name] = 0
             by_category[cat_name] += float(income.amount)
@@ -641,7 +642,7 @@ def get_today_incomes_summary(user_id: int) -> Dict:
             currency_totals[currency] += float(income.amount)
             
             # Суммируем по категориям
-            cat_name = income.category.name if income.category else "❓ Без категории"
+            cat_name = get_category_display_name(income.category, 'ru') if income.category else "❓ Без категории"
             if cat_name not in categories:
                 categories[cat_name] = 0
             categories[cat_name] += float(income.amount)
@@ -662,7 +663,7 @@ def get_today_incomes_summary(user_id: int) -> Dict:
                 'id': inc.id,
                 'amount': float(inc.amount),
                 'currency': inc.currency,
-                'category': inc.category.name if inc.category else "❓ Без категории",
+                'category': get_category_display_name(inc.category, 'ru') if inc.category else "❓ Без категории",
                 'description': inc.description,
                 'time': inc.income_time.strftime('%H:%M')
             }
@@ -752,7 +753,7 @@ def get_month_incomes_summary(
             currency_totals[currency] += float(income.amount)
             
             # Суммируем по категориям
-            cat_name = income.category.name if income.category else "❓ Без категории"
+            cat_name = get_category_display_name(income.category, 'ru') if income.category else "❓ Без категории"
             if cat_name not in categories:
                 categories[cat_name] = 0
             categories[cat_name] += float(income.amount)
@@ -885,7 +886,7 @@ def find_similar_incomes(
                 unique_amounts[amount_key] = {
                     'amount': float(income.amount),
                     'currency': income.currency,
-                    'category': income.category.name if income.category else None,
+                    'category': get_category_display_name(income.category, 'ru') if income.category else None,
                     'description': income.description,
                     'count': 1,
                     'last_date': income.income_date
@@ -1080,19 +1081,29 @@ def update_income_category(
             if existing:
                 raise ValueError("Категория с таким названием уже существует")
                 
-            # Обновляем название
-            if new_icon and not new_name.startswith(new_icon):
-                category.name = f"{new_icon} {new_name}"
+            # Обновляем название с учетом мультиязычности
+            # Определяем язык нового названия
+            from bot.utils.language import detect_language
+            lang = detect_language(new_name)
+            
+            if lang == 'ru':
+                category.name_ru = new_name
+                if not category.name_en:  # Если нет английского, копируем
+                    category.name_en = new_name
             else:
-                category.name = new_name
+                category.name_en = new_name
+                if not category.name_ru:  # Если нет русского, копируем
+                    category.name_ru = new_name
+            
+            category.original_language = lang
+            category.is_translatable = True  # Пользовательская категория
+            
+            if new_icon:
+                category.icon = new_icon
                 
         elif new_icon:
             # Только обновляем иконку
-            import re
-            # Удаляем старую иконку если есть
-            emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+\s*'
-            clean_name = re.sub(emoji_pattern, '', category.name)
-            category.name = f"{new_icon} {clean_name}"
+            category.icon = new_icon
             
         category.save()
         

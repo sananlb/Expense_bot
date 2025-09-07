@@ -7,8 +7,10 @@ import os
 from typing import List
 
 from django.conf import settings
-from django.db.models import Count, Sum
+from django.db.models import Count, Sum, Q
+from django.utils import timezone
 from aiogram import Bot
+from aiogram.types import InlineKeyboardMarkup
 
 logger = logging.getLogger(__name__)
 
@@ -193,25 +195,28 @@ def cleanup_old_expenses():
 
 @shared_task
 def send_daily_admin_report():
-    """Отправка ежедневного отчета администратору"""
+    """Отправка ежедневного отчета администратору (с экранированием MarkdownV2)"""
     try:
         from expenses.models import Profile, Expense, ExpenseCategory, Subscription
-        from bot.services.admin_notifier import send_admin_alert
+        from bot.services.admin_notifier import send_admin_alert, escape_markdown_v2
         from django.utils import timezone
-        
+
+        def esc(v) -> str:
+            return escape_markdown_v2(str(v))
+
         yesterday = timezone.now().date() - timedelta(days=1)
         today = timezone.now().date()
-        
+
         # Собираем статистику по пользователям
         total_users = Profile.objects.count()
         active_users = Expense.objects.filter(
             expense_date=yesterday
         ).values('profile').distinct().count()
-        
+
         new_users = Profile.objects.filter(
             created_at__date=yesterday
         ).count()
-        
+
         # Статистика по расходам
         expenses_stats = Expense.objects.filter(
             expense_date=yesterday
@@ -219,7 +224,7 @@ def send_daily_admin_report():
             total=Sum('amount'),
             count=Count('id')
         )
-        
+
         # Статистика по подпискам за вчера
         new_subscriptions = Subscription.objects.filter(
             created_at__date=yesterday,
@@ -227,7 +232,7 @@ def send_daily_admin_report():
         ).values('type').annotate(
             count=Count('id')
         ).order_by('type')
-        
+
         subscriptions_text = ""
         total_subs = 0
         for sub in new_subscriptions:
@@ -236,15 +241,15 @@ def send_daily_admin_report():
                 'month': 'Месячных', 
                 'six_months': 'Полугодовых'
             }.get(sub['type'], sub['type'])
-            subscriptions_text += f"  • {sub_type}: {sub['count']}\n"
+            subscriptions_text += f"  • {esc(sub_type)}: {esc(sub['count'])}\n"
             total_subs += sub['count']
-        
+
         # Активные подписки на сегодня
         active_subscriptions = Subscription.objects.filter(
             is_active=True,
             end_date__gt=timezone.now()
         ).count()
-        
+
         # Топ категорий
         top_categories = Expense.objects.filter(
             expense_date=yesterday
@@ -252,55 +257,63 @@ def send_daily_admin_report():
             total=Sum('amount'),
             count=Count('id')
         ).order_by('-total')[:5]
-        
-        categories_text = "\n".join([
-            f"  • {cat['category__name'] or 'Без категории'}: "
-            f"{cat['total']:,.0f} ₽ ({cat['count']} зап.)"
-            for cat in top_categories
-        ])
-        
-        # Формируем отчет
+
+        categories_lines = []
+        for cat in top_categories:
+            name = cat['category__name'] or 'Без категории'
+            total_val = cat['total'] or 0
+            count_val = cat['count'] or 0
+            categories_lines.append(
+                f"  • {esc(name)}: {esc(f'{total_val:,.0f}')} ₽ \\({esc(count_val)} зап.\\)"
+            )
+        categories_text = "\n".join(categories_lines)
+
+        # Предварительно форматируем числа для безопасной вставки и экранирования
+        count_formatted = f"{(expenses_stats['count'] or 0):,}"
+        total_formatted = f"{(expenses_stats['total'] or 0):,.0f}"
+
+        # Формируем отчет (экранируем только динамические части)
         report = (
             f"📊 *Ежедневный отчет ExpenseBot*\n"
-            f"📅 За {yesterday.strftime('%d.%m.%Y')}\n\n"
+            f"📅 За {esc(yesterday.strftime('%d.%m.%Y'))}\n\n"
             f"👥 *Пользователи:*\n"
-            f"  • Всего: {total_users:,}\n"
-            f"  • Активных вчера: {active_users}\n"
-            f"  • Новых регистраций: {new_users}\n\n"
+            f"  • Всего: {esc(f'{total_users:,}')}\n"
+            f"  • Активных вчера: {esc(active_users)}\n"
+            f"  • Новых регистраций: {esc(new_users)}\n\n"
             f"💰 *Расходы за вчера:*\n"
-            f"  • Записей: {expenses_stats['count'] or 0:,}\n"
-            f"  • Общая сумма: {expenses_stats['total'] or 0:,.0f} ₽\n"
+            f"  • Записей: {esc(count_formatted)}\n"
+            f"  • Общая сумма: {esc(total_formatted)} ₽\n"
         )
-        
+
         if expenses_stats['count'] and expenses_stats['count'] > 0:
-            avg_expense = expenses_stats['total'] / expenses_stats['count']
-            report += f"  • Средний чек: {avg_expense:,.0f} ₽\n"
-        
+            avg_expense = (expenses_stats['total'] or 0) / (expenses_stats['count'] or 1)
+            report += f"  • Средний чек: {esc(f'{avg_expense:,.0f}')} ₽\n"
+
         report += f"\n⭐ *Подписки:*\n"
-        report += f"  • Активных всего: {active_subscriptions}\n"
+        report += f"  • Активных всего: {esc(active_subscriptions)}\n"
         if total_subs > 0:
-            report += f"  • Куплено вчера: {total_subs}\n"
+            report += f"  • Куплено вчера: {esc(total_subs)}\n"
             report += subscriptions_text
         else:
             report += f"  • Куплено вчера: 0\n"
-        
+
         if categories_text:
             report += f"\n📂 *Топ-5 категорий вчера:*\n{categories_text}\n"
-        
-        report += f"\n⏰ Отчет сформирован: {datetime.now().strftime('%H:%M')}"
-        
+
+        report += f"\n⏰ Отчет сформирован: {esc(datetime.now().strftime('%H:%M'))}"
+
         # Отправляем отчет асинхронно
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         loop.run_until_complete(send_admin_alert(report, disable_notification=True))
-        
+
         loop.close()
-        
+
         logger.info(f"Ежедневный отчет за {yesterday} отправлен администратору")
-        
+
     except Exception as e:
-        logger.error(f"Ошибка отправки ежедневного отчета: {e}")
+        logger.error(f"Ошибка отправки ежедневного отчета: {e}", exc_info=True)
 
 
 @shared_task
@@ -522,3 +535,109 @@ def check_category_keywords_limit(category):
     
     except Exception as e:
         logger.error(f"Error checking category keywords limit: {e}")
+
+
+@shared_task
+def process_held_affiliate_commissions():
+    """
+    Обработка комиссий после окончания холда (21 день).
+    Запускается ежедневно для проверки и выплаты комиссий.
+    """
+    from expenses.models import AffiliateCommission
+    
+    try:
+        now = timezone.now()
+        
+        # Находим комиссии, у которых закончился холд
+        commissions_to_process = AffiliateCommission.objects.filter(
+            status='hold',
+            hold_until__lte=now
+        ).select_related('referrer', 'referred')
+        
+        processed_count = 0
+        total_amount = 0
+        
+        for commission in commissions_to_process:
+            try:
+                # Telegram автоматически выплачивает звёзды после 21 дня холда
+                # Мы только обновляем статус в нашей БД для учёта
+                
+                commission.status = 'paid'
+                commission.paid_at = now
+                commission.save()
+                
+                processed_count += 1
+                total_amount += commission.commission_amount
+                
+                logger.info(f"Processed affiliate commission {commission.id}: "
+                          f"{commission.commission_amount} stars to user {commission.referrer.telegram_id}")
+                
+                # TODO: Отправить уведомление рефереру о выплате через бота
+                # await send_commission_payment_notification(commission)
+                
+            except Exception as e:
+                logger.error(f"Error processing commission {commission.id}: {e}")
+                continue
+        
+        if processed_count > 0:
+            logger.info(f"Processed {processed_count} affiliate commissions, "
+                       f"total amount: {total_amount} stars")
+        
+        return {
+            'processed': processed_count,
+            'total_amount': total_amount,
+            'timestamp': now.isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in process_held_affiliate_commissions: {e}")
+        return {'error': str(e)}
+
+
+@shared_task
+def update_top5_keyboards():
+    """Ежедневно в 05:00 MSK: пересчитать Топ‑5 и обновить клавиатуры закреплённых сообщений."""
+    try:
+        from expenses.models import Profile, Top5Snapshot, Top5Pin
+        from bot.services.top5 import (
+            calculate_top5_sync, save_snapshot, build_top5_keyboard, get_profiles_with_activity
+        )
+        from datetime import date
+        from calendar import monthrange
+
+        # Бот для вызова editMessageReplyMarkup
+        bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('MONITORING_BOT_TOKEN')
+        bot = Bot(token=bot_token)
+
+        # Окно: последние 90 дней включительно (rolling)
+        today = date.today()
+        from datetime import timedelta
+        window_end = today
+        window_start = today - timedelta(days=89)
+
+        # Пользователи с активностью
+        profiles = asyncio.get_event_loop().run_until_complete(get_profiles_with_activity(window_start, window_end))
+
+        updated = 0
+        for profile in profiles:
+            try:
+                items, digest = asyncio.get_event_loop().run_until_complete(calculate_top5_sync(profile, window_start, window_end))
+                snap = Top5Snapshot.objects.filter(profile=profile).first()
+                if not snap or snap.hash != digest or snap.window_start != window_start or snap.window_end != window_end:
+                    asyncio.get_event_loop().run_until_complete(
+                        save_snapshot(profile, window_start, window_end, items, digest)
+                    )
+                # Обновляем закреплённое сообщение, если знаем ids
+                pin = Top5Pin.objects.filter(profile=profile).first()
+                if pin:
+                    kb: InlineKeyboardMarkup = build_top5_keyboard(items)
+                    asyncio.get_event_loop().run_until_complete(
+                        bot.edit_message_reply_markup(chat_id=pin.chat_id, message_id=pin.message_id, reply_markup=kb)
+                    )
+                    updated += 1
+            except Exception as user_err:
+                logger.error(f"Top-5 update error for user {profile.telegram_id}: {user_err}")
+                continue
+        logger.info(f"Top-5 updated for {updated} pinned messages (profiles processed: {len(profiles)})")
+    except Exception as e:
+        logger.error(f"Error in update_top5_keyboards: {e}")

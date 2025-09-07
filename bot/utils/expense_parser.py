@@ -87,6 +87,7 @@ INCOME_PATTERNS = [
 
 # Импортируем словарь ключевых слов из models
 from expenses.models import CATEGORY_KEYWORDS as MODEL_CATEGORY_KEYWORDS
+from bot.utils.category_helpers import get_category_display_name
 
 def extract_date_from_text(text: str) -> Tuple[Optional[date], str]:
     """
@@ -390,7 +391,9 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                 # Безопасно получаем имя категории (уже должно быть загружено через select_related)
                 try:
                     if last_expense.category:
-                        category_name = last_expense.category.name
+                        # Используем язык пользователя для отображения категории
+                        lang_code = profile.language_code if profile and hasattr(profile, 'language_code') else 'ru'
+                        category_name = get_category_display_name(last_expense.category, lang_code)
                 except (AttributeError, TypeError) as e:
                     logger.debug(f"Error getting category name: {e}")
                     pass
@@ -438,7 +441,9 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             
             # Проверяем прямое вхождение названия категории в текст
             if user_cat_lower in text_lower:
-                category = user_cat.name
+                # Используем язык пользователя для отображения категории
+                lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
+                category = get_category_display_name(user_cat, lang_code)
                 max_score = 100  # Максимальный приоритет для пользовательских категорий
                 break
             
@@ -450,7 +455,9 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             keywords = await get_keywords()
             for kw in keywords:
                 if kw.keyword.lower() in text_lower:
-                    category = user_cat.name
+                    # Используем язык пользователя для отображения категории
+                    lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
+                    category = get_category_display_name(user_cat, lang_code)
                     max_score = 100
                     break
             
@@ -540,10 +547,14 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                             .order_by('-created_at')[:10]
                         )
                     
+                    from bot.utils.category_helpers import get_category_display_name
+                    
                     recent_expenses = await get_recent_expenses()
                     if recent_expenses:
+                        # Используем язык пользователя для отображения категорий
+                        lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
                         recent_categories = list(set([
-                            exp.category.name for exp in recent_expenses 
+                            get_category_display_name(exp.category, lang_code) for exp in recent_expenses 
                             if exp.category
                         ]))[:3]
                         if recent_categories:
@@ -681,7 +692,12 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
             last_income = await get_last_income_by_description(user_id, original_text)
             if last_income:
                 amount = last_income.amount
-                category = last_income.category.name if last_income.category else None
+                # Используем язык пользователя для отображения категории дохода
+                if last_income.category:
+                    lang_code = profile.language_code if profile and hasattr(profile, 'language_code') else 'ru'
+                    category = get_category_display_name(last_income.category, lang_code)
+                else:
+                    category = None
                 # Используем оригинальный текст как описание
                 description = original_text
                 
@@ -793,11 +809,15 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
             for keyword_obj in keywords:
                 if keyword_obj.keyword.lower() in text_lower:
                     if keyword_obj.normalized_weight > best_weight:
-                        best_match = keyword_obj.category.name
+                        # Сохраняем объект категории, а не имя
+                        best_match = keyword_obj.category
                         best_weight = keyword_obj.normalized_weight
             
             if best_match:
-                category = best_match
+                # Используем язык пользователя для отображения категории
+                from bot.utils.category_helpers import get_category_display_name
+                lang_code = profile.language_code if profile and hasattr(profile, 'language_code') else 'ru'
+                category = get_category_display_name(best_match, lang_code)
         except Exception as e:
             logger.warning(f"Error checking income keywords: {e}")
         

@@ -185,7 +185,7 @@ def get_currency_symbol(currency: str) -> str:
     return symbols.get(currency.upper(), currency)
 
 
-def format_amount(amount: float, currency: str = 'RUB', lang: str = 'ru') -> str:
+def format_amount(amount: float, currency: str = 'RUB', lang: str = 'ru', force_int: bool = False) -> str:
     """
     Форматировать сумму с валютой
     
@@ -193,33 +193,39 @@ def format_amount(amount: float, currency: str = 'RUB', lang: str = 'ru') -> str
         amount: Сумма
         currency: Код валюты
         lang: Код языка
+        force_int: Принудительно округлить до целого (для PDF отчетов)
         
     Returns:
         Отформатированная строка
     """
     symbol = get_currency_symbol(currency)
     
-    # Для рублей и некоторых других валют округляем до целых
-    if currency in ['RUB', 'JPY', 'KRW', 'CLP', 'ISK', 'TWD', 'HUF', 'COP', 'IDR', 'VND']:
-        if lang == 'en':
-            # В английском символ валюты идет перед суммой
-            if currency in ['USD', 'EUR', 'GBP']:
-                return f"{symbol}{amount:,.0f}"
-            else:
-                return f"{amount:,.0f} {symbol}"
-        else:
-            # В русском символ валюты идет после суммы
-            return f"{amount:,.0f} {symbol}"
+    # Если force_int=True (для PDF), всегда округляем
+    if force_int:
+        amount = round(amount)
+        formatted = f"{amount:,.0f}"
     else:
-        if lang == 'en':
-            # В английском символ валюты идет перед суммой
-            if currency in ['USD', 'EUR', 'GBP']:
-                return f"{symbol}{amount:,.2f}"
-            else:
-                return f"{amount:,.2f} {symbol}"
+        # Проверяем, есть ли дробная часть
+        if amount == int(amount):
+            # Если число целое, показываем без дробной части
+            formatted = f"{amount:,.0f}"
         else:
-            # В русском символ валюты идет после суммы
-            return f"{amount:,.2f} {symbol}"
+            # Если есть дробная часть, показываем до 2 знаков
+            formatted = f"{amount:,.2f}"
+            # Убираем лишние нули после запятой
+            if '.' in formatted:
+                formatted = formatted.rstrip('0').rstrip('.')
+    
+    # Форматируем с символом валюты
+    if lang == 'en':
+        # В английском символ валюты идет перед суммой для основных валют
+        if currency in ['USD', 'EUR', 'GBP']:
+            return f"{symbol}{formatted}"
+        else:
+            return f"{formatted} {symbol}"
+    else:
+        # В русском символ валюты идет после суммы
+        return f"{formatted} {symbol}"
 
 
 def get_available_languages() -> list:
@@ -238,6 +244,9 @@ def get_available_languages() -> list:
 def translate_category_name(category_name: str, to_lang: str = 'en') -> str:
     """
     Перевести название категории
+    
+    DEPRECATED: Эта функция оставлена для обратной совместимости.
+    Используйте category.get_display_name(language_code) для новых категорий.
     
     Args:
         category_name: Название категории с эмодзи

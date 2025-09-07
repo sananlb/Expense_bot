@@ -99,23 +99,23 @@ class PDFReportService:
             if total_count == 0:
                 return None
             
-            # Статистика по категориям (разнообразная палитра, насыщенные цвета)
+            # Статистика по категориям (яркая и нежная палитра)
             category_colors = [
-                '#5B7FC6',  # насыщенный синий
-                '#CD853F',  # темно-песочный
-                '#6B8E4F',  # темно-зеленый
-                '#E67E22',  # тыквенный оранжевый
-                '#7B68A6',  # глубокий фиолетовый
-                '#D4A574',  # темно-персиковый
-                '#5A8A94',  # темно-бирюзовый
-                '#C85450',  # темно-коралловый
-                '#9B88B4',  # умеренно-лавандовый
-                '#D4A017',  # темное золото
-                '#7FA3A7',  # серо-морской
-                '#BC7C7C',  # приглушенный розовый
-                '#8B8B8B',  # темно-серый
-                '#6A95C1',  # умеренно-голубой
-                '#B08395'   # темная пыльная роза
+                '#87CEEB',  # небесно-голубой
+                '#FFB366',  # мягкий оранжевый
+                '#98D98E',  # светло-зеленый
+                '#DDA0DD',  # сливовый
+                '#F0E68C',  # хаки светлый
+                '#87C1FF',  # васильковый
+                '#FFD4B2',  # персиковый крем
+                '#B2D8B2',  # мятный
+                '#E6B3CC',  # розовая лаванда
+                '#FFE066',  # солнечный желтый
+                '#A8D8EA',  # светло-бирюзовый
+                '#FFDAB9',  # персиковая пудра
+                '#C3B1E1',  # лавандовый
+                '#B8E6B8',  # фисташковый
+                '#FFB3BA'   # светло-розовый
             ]
             
             # Получаем все кешбеки пользователя для этого месяца
@@ -353,17 +353,17 @@ class PDFReportService:
                     
                     # Не показываем нулевые значения
                     if expense_amount > 0:
-                        expenses_str += f"{expense_amount:,.0f}{symbol}"
+                        expenses_str += f"{round(expense_amount):,.0f}{symbol}"
                     else:
                         expenses_str += '-'
                         
                     if income_amount > 0:
-                        incomes_str += f"{income_amount:,.0f}{symbol}"
+                        incomes_str += f"{round(income_amount):,.0f}{symbol}"
                     else:
                         incomes_str += '-'
                     
                     if balance != 0:
-                        balance_str += f"{balance:+,.0f}{symbol}"
+                        balance_str += f"{round(balance):+,.0f}{symbol}"
                     else:
                         balance_str += '-'
                 
@@ -434,9 +434,9 @@ class PDFReportService:
             
             report_data = {
                 'period': f"1 - {end_date.day} {months[month-1]} {year}",
-                'total_amount': f"{total_amount:,.0f}",
+                'total_amount': f"{round(total_amount):,.0f}",
                 'total_count': total_count,
-                'total_cashback': f"{total_cashback:,.0f}",
+                'total_cashback': f"{round(total_cashback):,.0f}",
                 'change_percent': abs(change_percent),
                 'change_direction': change_direction,
                 'prev_month_name': prev_months[prev_month-1],
@@ -446,11 +446,11 @@ class PDFReportService:
                 'days_in_month': end_date.day,
                 'logo_base64': await self._get_logo_base64(),
                 # Новые поля для доходов
-                'income_total_amount': f"{income_total_amount:,.0f}",
+                'income_total_amount': f"{round(income_total_amount):,.0f}",
                 'income_total_count': income_total_count,
                 'income_categories': income_categories,
                 'daily_incomes': daily_incomes,
-                'net_balance': f"{net_balance:,.0f}",
+                'net_balance': f"{round(net_balance):,.0f}",
                 'has_incomes': income_total_count > 0,
                 'prev_summaries': prev_summaries
             }
@@ -483,8 +483,8 @@ class PDFReportService:
         # Подготавливаем данные для категорий с процентами
         for cat in report_data['categories']:
             cat['percent'] = round((cat['amount'] / total_raw * 100) if total_raw > 0 else 0, 1)
-            cat['amount_formatted'] = f"{cat['amount']:,.0f}"
-            cat['cashback_formatted'] = f"{cat['cashback']:,.0f}"
+            cat['amount_formatted'] = f"{round(cat['amount']):,.0f}"
+            cat['cashback_formatted'] = f"{round(cat['cashback']):,.0f}"
         
         # Подготавливаем данные для графиков
         categories_json = json.dumps([{
@@ -541,7 +541,7 @@ class PDFReportService:
         # Добавляем проценты и форматирование для категорий доходов
         for cat in report_data.get('income_categories', []):
             cat['percent'] = round((cat['amount'] / income_total_raw * 100) if income_total_raw > 0 else 0, 1)
-            cat['amount_formatted'] = f"{cat['amount']:,.0f}"
+            cat['amount_formatted'] = f"{round(cat['amount']):,.0f}"
         
         # JSON для категорий доходов
         income_categories_json = json.dumps([{

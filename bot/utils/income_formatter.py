@@ -5,6 +5,7 @@ from typing import List, Dict, Any
 from datetime import date, datetime
 from decimal import Decimal
 from . import get_text
+from .category_helpers import get_category_display_name
 
 
 def format_incomes_diary_style(
@@ -79,12 +80,13 @@ def format_incomes_diary_style(
         time_str = income.created_at.strftime('%H:%M') if income.created_at else '00:00'
         
         # Описание дохода
-        description = income.description or (income.category.name if income.category else "Доход")
+        default_desc = get_category_display_name(income.category, lang) if income.category else "Доход"
+        description = income.description or default_desc
         if len(description) > 30:
             description = description[:27] + "..."
         
-        # Категория
-        category_name = income.category.name if income.category else "Без категории"
+        # Категория  
+        category_name = get_category_display_name(income.category, lang) if income.category else "Без категории"
         
         currency = 'RUB'  # Доходы всегда в рублях
         amount = float(income.amount)

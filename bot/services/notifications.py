@@ -67,7 +67,15 @@ class NotificationService:
                 'monthly': 'месяц'
             }.get(budget.period, budget.period)
             
-            cat_text = f" в категории {budget.category.name}" if budget.category else ""
+            # Получаем язык пользователя для правильного отображения
+            from bot.utils.language import get_user_language
+            user_lang = await get_user_language(user_id)
+            
+            if budget.category:
+                category_display = budget.category.get_display_name(user_lang)
+                cat_text = f" в категории {category_display}"
+            else:
+                cat_text = ""
             
             text = f"""⚠️ <b>Предупреждение о бюджете</b>
             
