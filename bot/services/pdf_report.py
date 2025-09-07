@@ -99,23 +99,23 @@ class PDFReportService:
             if total_count == 0:
                 return None
             
-            # Статистика по категориям (яркая и нежная палитра)
+            # Статистика по категориям (нежная палитра с чуть более темными оттенками)
             category_colors = [
-                '#87CEEB',  # небесно-голубой
-                '#FFB366',  # мягкий оранжевый
-                '#98D98E',  # светло-зеленый
-                '#DDA0DD',  # сливовый
-                '#F0E68C',  # хаки светлый
-                '#87C1FF',  # васильковый
-                '#FFD4B2',  # персиковый крем
-                '#B2D8B2',  # мятный
-                '#E6B3CC',  # розовая лаванда
-                '#FFE066',  # солнечный желтый
-                '#A8D8EA',  # светло-бирюзовый
-                '#FFDAB9',  # персиковая пудра
-                '#C3B1E1',  # лавандовый
-                '#B8E6B8',  # фисташковый
-                '#FFB3BA'   # светло-розовый
+                '#4A90E2',  # мягкий синий (темнее)
+                '#FF6B35',  # кораллово-оранжевый (темнее)
+                '#7ED321',  # светло-зеленый (темнее)
+                '#8B5CF6',  # средний фиолетовый (темнее)
+                '#F5A623',  # золотой (темнее)
+                '#50C8E8',  # небесно-голубой (темнее)
+                '#BD5EFF',  # сливовый (темнее)
+                '#86D36B',  # бледно-зеленый (темнее)
+                '#E94B9A',  # светло-орхидный (темнее)
+                '#FF8C00',  # оранжевый (темнее)
+                '#5DADE2',  # светло-синий (темнее)
+                '#D4AC0D',  # пшеничный (темнее)
+                '#C39BD3',  # светло-фиолетовый (темнее)
+                '#17A2B8',  # светлый морской зеленый (темнее)
+                '#E91E63'   # ярко-розовый (темнее)
             ]
             
             # Получаем все кешбеки пользователя для этого месяца
@@ -335,6 +335,11 @@ class PDFReportService:
                     'AZN': '₼'
                 }
                 
+                # Сначала собираем все части для каждого типа данных
+                expenses_parts = []
+                incomes_parts = []
+                balance_parts = []
+                
                 for idx, (curr, data) in enumerate(sorted_currencies):
                     symbol = currency_symbols.get(curr, curr)
                     
@@ -346,26 +351,20 @@ class PDFReportService:
                     if expense_amount == 0 and income_amount == 0:
                         continue
                     
-                    if expenses_str:  # Если уже есть данные, добавляем разделитель
-                        expenses_str += ' / '
-                        incomes_str += ' / '
-                        balance_str += ' / '
-                    
-                    # Не показываем нулевые значения
+                    # Добавляем части только если они не нулевые
                     if expense_amount > 0:
-                        expenses_str += f"{round(expense_amount):,.0f}{symbol}"
-                    else:
-                        expenses_str += '-'
+                        expenses_parts.append(f"{round(expense_amount):,.0f}{symbol}")
                         
                     if income_amount > 0:
-                        incomes_str += f"{round(income_amount):,.0f}{symbol}"
-                    else:
-                        incomes_str += '-'
+                        incomes_parts.append(f"{round(income_amount):,.0f}{symbol}")
                     
                     if balance != 0:
-                        balance_str += f"{round(balance):+,.0f}{symbol}"
-                    else:
-                        balance_str += '-'
+                        balance_parts.append(f"{round(balance):+,.0f}{symbol}")
+                
+                # Формируем финальные строки только из непустых частей
+                expenses_str = ' / '.join(expenses_parts) if expenses_parts else ''
+                incomes_str = ' / '.join(incomes_parts) if incomes_parts else ''
+                balance_str = ' / '.join(balance_parts) if balance_parts else ''
                 
                 # Если совсем нет данных, показываем прочерки
                 if not expenses_str:
