@@ -99,23 +99,23 @@ class PDFReportService:
             if total_count == 0:
                 return None
             
-            # Статистика по категориям
+            # Статистика по категориям (разнообразная палитра, насыщенные цвета)
             category_colors = [
-                '#4A86C7',  # насыщенный голубой
-                '#FF8C42',  # коралловый
-                '#6FA86F',  # лесной зеленый
-                '#9B84C2',  # глубокий лавандовый
-                '#E8973F',  # темно-оранжевый
-                '#5BA3C7',  # морской голубой
+                '#5B7FC6',  # насыщенный синий
+                '#CD853F',  # темно-песочный
+                '#6B8E4F',  # темно-зеленый
+                '#E67E22',  # тыквенный оранжевый
+                '#7B68A6',  # глубокий фиолетовый
+                '#D4A574',  # темно-персиковый
+                '#5A8A94',  # темно-бирюзовый
+                '#C85450',  # темно-коралловый
+                '#9B88B4',  # умеренно-лавандовый
                 '#D4A017',  # темное золото
-                '#70B5B8',  # темный бирюзовый
-                '#D2916F',  # темный персиковый
-                '#8B79B1',  # насыщенный фиолетовый
-                '#5B9FBC',  # глубокий небесный
-                '#C47ABA',  # орхидея
-                '#B8A65C',  # оливковый
-                '#6BA99C',  # изумрудный
-                '#CC9B7A'   # терракотовый
+                '#7FA3A7',  # серо-морской
+                '#BC7C7C',  # приглушенный розовый
+                '#8B8B8B',  # темно-серый
+                '#6A95C1',  # умеренно-голубой
+                '#B08395'   # темная пыльная роза
             ]
             
             # Получаем все кешбеки пользователя для этого месяца
@@ -268,40 +268,119 @@ class PDFReportService:
                 change_percent = 0
                 change_direction = ""
             
-            # Статистика по месяцам (последние 6 месяцев, от старых к новым)
+            # Статистика по месяцам (последние 6 месяцев, от новых к старым)
             prev_summaries = []
-            for i in range(5, -1, -1):
+            for i in range(0, 6):
                 stats_date = date(year, month, 1) - relativedelta(months=i)
                 stats_start = date(stats_date.year, stats_date.month, 1)
                 stats_last_day = calendar.monthrange(stats_date.year, stats_date.month)[1]
                 stats_end = date(stats_date.year, stats_date.month, stats_last_day)
                 
-                # Расходы за месяц
-                month_expenses = await Expense.objects.filter(
+                # Расходы за месяц по валютам
+                month_expenses_by_currency = Expense.objects.filter(
                     profile=profile,
                     expense_date__gte=stats_start,
                     expense_date__lte=stats_end
-                ).aaggregate(total=Sum('amount'))
+                ).values('currency').annotate(
+                    total=Sum('amount'),
+                    count=Count('id')
+                ).order_by('-count')
                 
-                # Доходы за месяц
-                month_incomes = await Income.objects.filter(
+                # Доходы за месяц по валютам
+                month_incomes_by_currency = Income.objects.filter(
                     profile=profile,
                     income_date__gte=stats_start,
                     income_date__lte=stats_end
-                ).aaggregate(total=Sum('amount'))
+                ).values('currency').annotate(
+                    total=Sum('amount'),
+                    count=Count('id')
+                ).order_by('-count')
                 
-                month_expense_amount = float(month_expenses['total'] or 0)
-                month_income_amount = float(month_incomes['total'] or 0)
-                month_balance = month_income_amount - month_expense_amount
+                # Собираем топ-2 валюты по общему количеству операций
+                currency_operations = {}
+                async for expense in month_expenses_by_currency:
+                    curr = expense['currency'] or 'RUB'
+                    if curr not in currency_operations:
+                        currency_operations[curr] = {'expense': 0, 'income': 0, 'count': 0}
+                    currency_operations[curr]['expense'] = float(expense['total'])
+                    currency_operations[curr]['count'] += expense['count']
+                
+                async for income in month_incomes_by_currency:
+                    curr = income['currency'] or 'RUB'
+                    if curr not in currency_operations:
+                        currency_operations[curr] = {'expense': 0, 'income': 0, 'count': 0}
+                    currency_operations[curr]['income'] = float(income['total'])
+                    currency_operations[curr]['count'] += income['count']
+                
+                # Сортируем валюты по количеству операций и берем топ-2
+                sorted_currencies = sorted(currency_operations.items(), key=lambda x: x[1]['count'], reverse=True)[:2]
+                
+                # Форматируем данные для отображения
+                expenses_str = ''
+                incomes_str = ''
+                balance_str = ''
+                
+                currency_symbols = {
+                    'RUB': '₽',
+                    'USD': '$',
+                    'EUR': '€',
+                    'GBP': '£',
+                    'CNY': '¥',
+                    'TRY': '₺',
+                    'UAH': '₴',
+                    'KZT': '₸',
+                    'BYN': 'Br',
+                    'GEL': '₾',
+                    'AMD': '֏',
+                    'AZN': '₼'
+                }
+                
+                for idx, (curr, data) in enumerate(sorted_currencies):
+                    symbol = currency_symbols.get(curr, curr)
+                    
+                    expense_amount = data['expense']
+                    income_amount = data['income']
+                    balance = income_amount - expense_amount
+                    
+                    # Пропускаем валюты где все суммы нулевые
+                    if expense_amount == 0 and income_amount == 0:
+                        continue
+                    
+                    if expenses_str:  # Если уже есть данные, добавляем разделитель
+                        expenses_str += ' / '
+                        incomes_str += ' / '
+                        balance_str += ' / '
+                    
+                    # Не показываем нулевые значения
+                    if expense_amount > 0:
+                        expenses_str += f"{expense_amount:,.0f}{symbol}"
+                    else:
+                        expenses_str += '-'
+                        
+                    if income_amount > 0:
+                        incomes_str += f"{income_amount:,.0f}{symbol}"
+                    else:
+                        incomes_str += '-'
+                    
+                    if balance != 0:
+                        balance_str += f"{balance:+,.0f}{symbol}"
+                    else:
+                        balance_str += '-'
+                
+                # Если совсем нет данных, показываем прочерки
+                if not expenses_str:
+                    expenses_str = '-'
+                    incomes_str = '-'
+                    balance_str = '-'
                 
                 month_names = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
                                'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
                 
                 prev_summaries.append({
                     'label': f"{month_names[stats_date.month - 1]} {stats_date.year}",
-                    'expenses': f"{month_expense_amount:,.0f}",
-                    'incomes': f"{month_income_amount:,.0f}",
-                    'balance': f"{month_balance:,.0f}",
+                    'expenses': expenses_str,
+                    'incomes': incomes_str,
+                    'balance': balance_str,
                     'is_current': stats_date.month == month and stats_date.year == year
                 })
             
