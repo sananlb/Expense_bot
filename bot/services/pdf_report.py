@@ -101,14 +101,21 @@ class PDFReportService:
             
             # Статистика по категориям
             category_colors = [
-                '#8B4513',  # коричневый
-                '#4682B4',  # стальной синий
-                '#9370DB',  # средний фиолетовый
-                '#E67E22',  # оранжевый
-                '#F4A460',  # песочный
-                '#708090',  # серо-синий
-                '#DDA0DD',  # сливовый
-                '#B0C4DE'   # светло-стальной синий
+                '#4A86C7',  # насыщенный голубой
+                '#FF8C42',  # коралловый
+                '#6FA86F',  # лесной зеленый
+                '#9B84C2',  # глубокий лавандовый
+                '#E8973F',  # темно-оранжевый
+                '#5BA3C7',  # морской голубой
+                '#D4A017',  # темное золото
+                '#70B5B8',  # темный бирюзовый
+                '#D2916F',  # темный персиковый
+                '#8B79B1',  # насыщенный фиолетовый
+                '#5B9FBC',  # глубокий небесный
+                '#C47ABA',  # орхидея
+                '#B8A65C',  # оливковый
+                '#6BA99C',  # изумрудный
+                '#CC9B7A'   # терракотовый
             ]
             
             # Получаем все кешбеки пользователя для этого месяца
@@ -127,10 +134,32 @@ class PDFReportService:
                         cashback_by_category[cb.category_id] = []
                     cashback_by_category[cb.category_id].append(cb)
             
-            # Получаем топ-7 категорий
+            # Получаем все категории для определения мультиязычности
+            categories_with_multilang = {}
+            async for exp in expenses.select_related('category'):
+                if exp.category and exp.category.id not in categories_with_multilang:
+                    cat = exp.category
+                    # Определяем язык пользователя
+                    user_language = getattr(profile, 'language', 'ru')
+                    # Получаем правильное имя категории
+                    display_name = cat.name
+                    if user_language == 'en' and hasattr(cat, 'name_en') and cat.name_en:
+                        display_name = cat.name_en
+                    elif user_language == 'ru' and hasattr(cat, 'name_ru') and cat.name_ru:
+                        display_name = cat.name_ru
+                    categories_with_multilang[cat.id] = display_name
+            
+            # Получаем категории с учетом мультиязычности
             categories_stats = expenses.values('category__id', 'category__name', 'category__icon').annotate(
                 amount=Sum('amount')
             ).order_by('-amount')
+            
+            # Определяем количество категорий для логики отображения
+            total_categories_count = await categories_stats.acount()
+            
+            # Если категорий больше 10, показываем топ-9 + "Остальные покупки"
+            # Иначе показываем топ-7 + "Другое" (если есть)
+            max_display_categories = 9 if total_categories_count >= 11 else 7
             
             top_categories = []
             other_amount = 0
@@ -138,7 +167,7 @@ class PDFReportService:
             
             idx = 0
             async for cat_stat in categories_stats:
-                if idx < 7:
+                if idx < max_display_categories:
                     amount = float(cat_stat['amount'])
                     category_id = cat_stat['category__id']
                     
@@ -151,8 +180,11 @@ class PDFReportService:
                                 cb_amount = min(amount, float(cb.limit_amount))
                             category_cashback += cb_amount * (float(cb.cashback_percent) / 100)
                     
+                    # Используем мультиязычное имя если доступно
+                    cat_name = categories_with_multilang.get(category_id, cat_stat['category__name'])
+                    
                     top_categories.append({
-                        'name': cat_stat['category__name'],
+                        'name': cat_name,
                         'icon': cat_stat['category__icon'] or '',
                         'amount': amount,
                         'cashback': category_cashback,
@@ -173,11 +205,13 @@ class PDFReportService:
                 
                 idx += 1
             
-            # Добавляем "Другое" если есть
+            # Добавляем "Остальные покупки" или "Другое" в зависимости от количества категорий
             if other_amount > 0:
+                other_name = 'Остальные покупки' if total_categories_count >= 11 else 'Другое'
+                other_icon = '' if total_categories_count >= 11 else '🔍'
                 top_categories.append({
-                    'name': 'Другое',
-                    'icon': '🔍',
+                    'name': other_name,
+                    'icon': other_icon,
                     'amount': other_amount,
                     'cashback': other_cashback,
                     'color': '#95a5a6'
@@ -198,7 +232,12 @@ class PDFReportService:
                 
                 daily_expenses[day] += float(expense.amount)
                 
-                cat_name = expense.category.name if expense.category else 'Без категории'
+                # Используем мультиязычное имя категории
+                if expense.category:
+                    cat_name = categories_with_multilang.get(expense.category.id, expense.category.name)
+                else:
+                    cat_name = 'Без категории'
+                    
                 if cat_name not in daily_categories[day]:
                     daily_categories[day][cat_name] = 0
                 daily_categories[day][cat_name] += float(expense.amount)
@@ -229,6 +268,43 @@ class PDFReportService:
                 change_percent = 0
                 change_direction = ""
             
+            # Статистика по месяцам (последние 6 месяцев, от старых к новым)
+            prev_summaries = []
+            for i in range(5, -1, -1):
+                stats_date = date(year, month, 1) - relativedelta(months=i)
+                stats_start = date(stats_date.year, stats_date.month, 1)
+                stats_last_day = calendar.monthrange(stats_date.year, stats_date.month)[1]
+                stats_end = date(stats_date.year, stats_date.month, stats_last_day)
+                
+                # Расходы за месяц
+                month_expenses = await Expense.objects.filter(
+                    profile=profile,
+                    expense_date__gte=stats_start,
+                    expense_date__lte=stats_end
+                ).aaggregate(total=Sum('amount'))
+                
+                # Доходы за месяц
+                month_incomes = await Income.objects.filter(
+                    profile=profile,
+                    income_date__gte=stats_start,
+                    income_date__lte=stats_end
+                ).aaggregate(total=Sum('amount'))
+                
+                month_expense_amount = float(month_expenses['total'] or 0)
+                month_income_amount = float(month_incomes['total'] or 0)
+                month_balance = month_income_amount - month_expense_amount
+                
+                month_names = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
+                               'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
+                
+                prev_summaries.append({
+                    'label': f"{month_names[stats_date.month - 1]} {stats_date.year}",
+                    'expenses': f"{month_expense_amount:,.0f}",
+                    'incomes': f"{month_income_amount:,.0f}",
+                    'balance': f"{month_balance:,.0f}",
+                    'is_current': stats_date.month == month and stats_date.year == year
+                })
+            
             # Получаем доходы за период
             incomes = Income.objects.filter(
                 profile=profile,
@@ -244,22 +320,6 @@ class PDFReportService:
             
             income_total_amount = float(income_stats['total_amount'] or 0)
             income_total_count = income_stats['total_count'] or 0
-            
-            # Доходы за предыдущий месяц для сравнения
-            prev_income_stats = await Income.objects.filter(
-                profile=profile,
-                income_date__gte=prev_start,
-                income_date__lte=prev_end
-            ).aaggregate(total=Sum('amount'))
-            
-            prev_income_amount = float(prev_income_stats['total'] or 0)
-            
-            if prev_income_amount > 0:
-                income_change_percent = round((income_total_amount - prev_income_amount) / prev_income_amount * 100, 1)
-                income_change_direction = "↑" if income_change_percent > 0 else "↓"
-            else:
-                income_change_percent = 0
-                income_change_direction = ""
             
             # Доходы по категориям
             income_category_stats = incomes.values('category__id', 'category__name', 'category__icon').annotate(
@@ -285,16 +345,6 @@ class PDFReportService:
             
             # Баланс
             net_balance = income_total_amount - total_amount
-            
-            # Баланс за предыдущий месяц для сравнения
-            prev_net_balance = prev_income_amount - prev_amount
-            
-            if prev_net_balance != 0:
-                balance_change_percent = round((net_balance - prev_net_balance) / abs(prev_net_balance) * 100, 1)
-                balance_change_direction = "↑" if balance_change_percent > 0 else "↓"
-            else:
-                balance_change_percent = 0
-                balance_change_direction = ""
             
             # Форматируем данные для шаблона
             months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
@@ -323,11 +373,7 @@ class PDFReportService:
                 'daily_incomes': daily_incomes,
                 'net_balance': f"{net_balance:,.0f}",
                 'has_incomes': income_total_count > 0,
-                # Проценты к предыдущему месяцу
-                'income_change_percent': abs(income_change_percent),
-                'income_change_direction': income_change_direction,
-                'balance_change_percent': abs(balance_change_percent),
-                'balance_change_direction': balance_change_direction
+                'prev_summaries': prev_summaries
             }
             
             return report_data
@@ -453,7 +499,8 @@ class PDFReportService:
             income_categories_json=income_categories_json,
             daily_incomes_json=daily_incomes_json,
             net_balance=report_data.get('net_balance', '0'),
-            has_incomes=report_data.get('has_incomes', False)
+            has_incomes=report_data.get('has_incomes', False),
+            prev_summaries=report_data.get('prev_summaries', [])
         )
         
         return html

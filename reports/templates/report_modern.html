@@ -13,15 +13,15 @@
         }
         
         html {
-            background-color: #f8f8f8 !important;
+            background-color: #f0f0f0 !important;
         }
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background-color: #f8f8f8 !important;
+            background-color: #f0f0f0 !important;
             color: #1a1a1a;
             line-height: 1.6;
-            font-size: 13px;
+            font-size: 19px;
         }
         
         .container {
@@ -57,13 +57,13 @@
         }
         
         .brand-name {
-            font-size: 24px;
+            font-size: 34px;
             font-weight: 700;
             letter-spacing: -0.5px;
         }
         
         .report-period {
-            font-size: 14px;
+            font-size: 20px;
             opacity: 0.9;
             font-weight: 300;
         }
@@ -113,21 +113,21 @@
         }
         
         .summary-value {
-            font-size: 20px;
+            font-size: 29px;
             font-weight: 700;
             color: #667eea;
             margin: 4px 0;
         }
         
         .summary-label {
-            font-size: 11px;
+            font-size: 17px;
             color: #6b7280;
             text-transform: uppercase;
             letter-spacing: 0.3px;
         }
         
         .summary-trend {
-            font-size: 10px;
+            font-size: 14px;
             margin-top: 2px;
         }
         
@@ -159,7 +159,7 @@
         }
         
         .chart-title {
-            font-size: 15px;
+            font-size: 22px;
             font-weight: 600;
             margin-bottom: 12px;
             color: #1a1a1a;
@@ -198,13 +198,14 @@
         
         .flexible-chart-section {
             min-height: 460px;
+            max-height: none;
             overflow: visible;
         }
         
         .flexible-categories {
             min-height: 280px;
-            max-height: 400px;
-            overflow-y: auto;
+            max-height: none;
+            overflow-y: visible;
             overflow-x: hidden;
         }
         
@@ -214,7 +215,7 @@
             align-items: center;
             padding: 8px 0;
             border-bottom: 1px solid #f0f0f0;
-            font-size: 12px;
+            font-size: 18px;
         }
         
         .category-item:last-child {
@@ -228,28 +229,30 @@
         }
         
         .category-right {
-            text-align: right;
+            text-align: left;
+            padding-left: 10px;
         }
         
         .category-color {
-            width: 8px;
-            height: 8px;
-            border-radius: 2px;
+            width: 10px;
+            height: 28px;
+            border-radius: 3px;
+            flex-shrink: 0;
         }
         
         .category-name {
             font-weight: 400;
-            font-size: 12px;
+            font-size: 18px;
         }
         
         .category-amount {
             font-weight: 400;
             color: #667eea;
-            font-size: 13px;
+            font-size: 19px;
         }
         
         .category-cashback {
-            font-size: 10px;
+            font-size: 14px;
             color: #10b981;
             margin-top: 1px;
         }
@@ -261,20 +264,37 @@
             padding-top: 10px;
             border-top: 1px solid #e5e7eb;
             color: #6b7280;
-            font-size: 11px;
+            font-size: 15px;
         }
         
         @media print {
             body {
-                background-color: #f8f8f8 !important;
+                background-color: #f0f0f0 !important;
             }
             .header {
                 box-shadow: none;
+                page-break-inside: avoid;
+                break-inside: avoid;
             }
             .chart-section {
                 box-shadow: none;
+                page-break-inside: avoid;
                 break-inside: avoid;
             }
+            .summary-cards, .horizontal-metrics {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+            .flexible-chart-section {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
+        }
+        
+        /* Prevent page breaks for all sections */
+        .chart-section, .header, .summary-cards, .horizontal-metrics, .flexible-chart-section {
+            page-break-inside: avoid;
+            break-inside: avoid;
         }
     </style>
 </head>
@@ -297,7 +317,7 @@
         <div class="horizontal-metrics">
             <div class="metric-item">
                 <p class="summary-label">Всего потрачено</p>
-                <p class="summary-value">{{ total_amount }} ₽ <span style="color: #10b981; font-size: 12px;">(кешбек: {{ total_cashback }} ₽)</span></p>
+                <p class="summary-value">{{ total_amount }} ₽ <span style="color: #10b981; font-size: 13px;">({{ total_cashback }} ₽)</span></p>
             </div>
             <div class="metric-item">
                 <p class="summary-label">Всего доходов</p>
@@ -305,7 +325,7 @@
             </div>
             <div class="metric-item">
                 <p class="summary-label">Баланс месяца</p>
-                <p class="summary-value {% if net_balance|replace(',', '')|float >= 0 %}style="color: #10b981;"{% else %}style="color: #ef4444;"{% endif %}">{{ net_balance }} ₽</p>
+                <p class="summary-value" style="color: #4b5563;">{{ net_balance }} ₽</p>
             </div>
         </div>
         {% else %}
@@ -328,10 +348,10 @@
         
         {% if has_incomes %}
         <!-- Charts with flexible height when incomes exist -->
-        <div class="chart-section flexible-chart-section" style="display: flex; align-items: stretch; gap: 30px; margin-bottom: 15px;">
-            <div style="flex: 0 0 200px; display: flex; flex-direction: column;">
-                <h2 class="chart-title" style="text-align: left; margin-bottom: 12px; font-size: 14px;">Расходы по категориям</h2>
-                <div class="chart-container pie-chart" style="display: flex; align-items: center; justify-content: center; margin-top: auto; margin-bottom: auto; height: 200px;">
+        <div class="chart-section flexible-chart-section" style="display: flex; align-items: stretch; gap: 20px; margin-bottom: 15px;">
+            <div style="flex: 0 0 180px; display: flex; flex-direction: column; margin-left: -10px;">
+                <h2 class="chart-title" style="text-align: left; margin-bottom: 12px;">Расходы по категориям</h2>
+                <div class="chart-container pie-chart" style="display: flex; align-items: center; justify-content: center; margin-top: auto; margin-bottom: auto; height: 220px;">
                     <canvas id="pieChart"></canvas>
                 </div>
             </div>
@@ -345,8 +365,7 @@
                             <span class="category-name">{{ cat.icon }} {{ cat.name }}</span>
                         </div>
                         <div class="category-right">
-                            <div class="category-amount">{{ cat.amount_formatted }} ₽ ({{ "%.1f"|format(cat.percent) }}%)</div>
-                            <div class="category-cashback">+{{ cat.cashback_formatted }} ₽ кешбек</div>
+                            <div class="category-amount">{{ cat.amount_formatted }} ₽ <span class="category-cashback" style="margin-left:8px; color:#10b981;">+{{ cat.cashback_formatted }} ₽</span></div>
                         </div>
                     </div>
                     {% endfor %}
@@ -354,17 +373,17 @@
             </div>
         </div>
         {% else %}
-        <!-- Charts with old format for expenses only -->
-        <div class="chart-section" style="display: flex; align-items: stretch; gap: 30px; margin-bottom: 15px; min-height: 460px;">
-            <div style="flex: 0 0 200px; display: flex; flex-direction: column;">
-                <h2 class="chart-title" style="text-align: left; margin-bottom: 0; font-size: 14px; margin-left: 0; padding-left: 0; position: absolute;">Расходы по категориям</h2>
-                <div class="chart-container pie-chart" style="display: flex; align-items: center; justify-content: center; margin-top: auto; margin-bottom: auto; height: 200px;">
+        <!-- Charts with unified format for expenses only -->
+        <div class="chart-section flexible-chart-section" style="display: flex; align-items: stretch; gap: 20px; margin-bottom: 15px;">
+            <div style="flex: 0 0 180px; display: flex; flex-direction: column; margin-left: -10px;">
+                <h2 class="chart-title" style="text-align: left; margin-bottom: 12px;">Расходы по категориям</h2>
+                <div class="chart-container pie-chart" style="display: flex; align-items: center; justify-content: center; margin-top: auto; margin-bottom: auto; height: 220px;">
                     <canvas id="pieChart"></canvas>
                 </div>
             </div>
             
             <div style="flex: 1; display: flex; align-items: center;">
-                <div class="categories-list" style="width: 100%;">
+                <div class="categories-list flexible-categories" style="width: 100%;">
                     {% for cat in categories %}
                     <div class="category-item">
                         <div class="category-info">
@@ -372,8 +391,7 @@
                             <span class="category-name">{{ cat.icon }} {{ cat.name }}</span>
                         </div>
                         <div class="category-right">
-                            <div class="category-amount">{{ cat.amount_formatted }} ₽ ({{ "%.1f"|format(cat.percent) }}%)</div>
-                            <div class="category-cashback">+{{ cat.cashback_formatted }} ₽ кешбек</div>
+                            <div class="category-amount">{{ cat.amount_formatted }} ₽ <span class="category-cashback" style="margin-left:8px; color:#10b981;">+{{ cat.cashback_formatted }} ₽</span></div>
                         </div>
                     </div>
                     {% endfor %}
@@ -393,10 +411,10 @@
         {% if has_incomes %}
         <!-- Income Charts when both expenses and incomes exist -->
         {% if income_categories %}
-        <div class="chart-section flexible-chart-section" style="display: flex; align-items: stretch; gap: 30px; margin-bottom: 15px;">
-            <div style="flex: 0 0 200px; display: flex; flex-direction: column;">
-                <h2 class="chart-title" style="text-align: left; margin-bottom: 12px; font-size: 14px; color: #10b981;">Доходы по категориям</h2>
-                <div class="chart-container pie-chart" style="display: flex; align-items: center; justify-content: center; margin-top: auto; margin-bottom: auto; height: 200px;">
+        <div class="chart-section flexible-chart-section" style="display: flex; align-items: stretch; gap: 20px; margin-bottom: 15px;">
+            <div style="flex: 0 0 180px; display: flex; flex-direction: column; margin-left: -10px;">
+                <h2 class="chart-title" style="text-align: left; margin-bottom: 12px; color: #1a1a1a;">Доходы по категориям</h2>
+                <div class="chart-container pie-chart" style="display: flex; align-items: center; justify-content: center; margin-top: auto; margin-bottom: auto; height: 220px;">
                     <canvas id="incomePieChart"></canvas>
                 </div>
             </div>
@@ -410,7 +428,7 @@
                             <span class="category-name">{{ cat.icon }} {{ cat.name }}</span>
                         </div>
                         <div class="category-right">
-                            <div class="category-amount" style="color: #10b981;">{{ cat.amount_formatted }} ₽ ({{ "%.1f"|format(cat.percent) }}%)</div>
+                            <div class="category-amount" style="color: #10b981;">{{ cat.amount_formatted }} ₽</div>
                         </div>
                     </div>
                     {% endfor %}
@@ -427,7 +445,42 @@
             </div>
         </div>
         {% endif %}
-        
+
+        <!-- Bottom Summary: Previous Months -->
+        <div class="chart-section">
+            <h2 class="chart-title">Статистика по месяцам</h2>
+            {% if prev_summaries %}
+            <table style="width:100%; border-collapse: collapse; margin-top: 8px; font-size: 15px; table-layout: fixed;">
+                <thead>
+                    <tr>
+                        <th style="text-align:left; padding: 4px 4px 8px 4px; color:#6b7280; font-weight:600; width: 20%; border-bottom: 1px solid #f0f0f0;">Месяц</th>
+                        <th style="text-align:right; padding: 4px 4px 8px 4px; color:#6b7280; font-weight:600; width: 26.67%; border-bottom: 1px solid #f0f0f0;">Расходы</th>
+                        <th style="text-align:right; padding: 4px 4px 8px 4px; color:#6b7280; font-weight:600; width: 26.67%; border-bottom: 1px solid #f0f0f0;">Доходы</th>
+                        <th style="text-align:right; padding: 4px 4px 8px 4px; color:#6b7280; font-weight:600; width: 26.66%; border-bottom: 1px solid #f0f0f0;">Баланс</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in prev_summaries %}
+                    <tr>
+                        <td style="padding: 4px;">{{ m.label }}</td>
+                        <td style="padding: 4px; text-align:right;">
+                            {{ m.expenses }} ₽
+                        </td>
+                        <td style="padding: 4px; text-align:right;">
+                            {{ m.incomes }} ₽
+                        </td>
+                        <td style="padding: 4px; text-align:right;">
+                            {{ m.balance }} ₽
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p style="color: #6b7280; text-align: center; padding: 20px;">Данные статистики по месяцам не доступны</p>
+            {% endif %}
+        </div>
+
         <!-- Footer -->
         <div class="footer">
             <p>Сгенерировано ботом Coins • @showmecoinbot</p>
@@ -441,6 +494,11 @@
         
         // Pie Chart
         const pieCtx = document.getElementById('pieChart').getContext('2d');
+        
+        // Calculate percentages for data labels
+        const totalAmount = categoriesData.reduce((sum, c) => sum + c.amount, 0);
+        const percentages = categoriesData.map(c => ((c.amount / totalAmount) * 100).toFixed(0));
+        
         new Chart(pieCtx, {
             type: 'doughnut',
             data: {
@@ -457,9 +515,52 @@
                 plugins: {
                     legend: {
                         display: false  // Отключаем легенду под диаграммой
+                    },
+                    datalabels: {
+                        color: '#f3f4f6',  // Almost white color
+                        font: {
+                            size: 16,
+                            weight: 'bold'
+                        },
+                        formatter: function(value, context) {
+                            const percentage = percentages[context.dataIndex];
+                            // Only show percentage if it's > 4%
+                            return percentage > 4 ? percentage + '%' : '';
+                        },
+                        display: function(context) {
+                            const percentage = percentages[context.dataIndex];
+                            return percentage > 4;
+                        }
                     }
                 }
-            }
+            },
+            plugins: [{
+                id: 'datalabels',
+                afterDatasetsDraw: function(chart) {
+                    const ctx = chart.ctx;
+                    chart.data.datasets.forEach((dataset, i) => {
+                        const meta = chart.getDatasetMeta(i);
+                        meta.data.forEach((element, index) => {
+                            const percentage = percentages[index];
+                            if (percentage > 4) {
+                                // Get the position for the label - even further from outer edge
+                                const model = element;
+                                const midAngle = (model.startAngle + model.endAngle) / 2;
+                                const labelRadius = model.innerRadius + (model.outerRadius - model.innerRadius) * 0.6;
+                                const x = model.x + Math.cos(midAngle) * labelRadius;
+                                const y = model.y + Math.sin(midAngle) * labelRadius;
+                                
+                                // Draw the percentage
+                                ctx.fillStyle = '#f3f4f6';
+                                ctx.font = 'bold 16px sans-serif';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'middle';
+                                ctx.fillText(percentage + '%', x, y);
+                            }
+                        });
+                    });
+                }
+            }]
         });
         
         // Bar Chart - Stacked by categories
@@ -556,6 +657,11 @@
         {% if income_categories %}
         if (incomeCategories && incomeCategories.length > 0) {
             const incomePieCtx = document.getElementById('incomePieChart').getContext('2d');
+            
+            // Calculate percentages for income data labels
+            const incomeTotalAmount = incomeCategories.reduce((sum, c) => sum + c.amount, 0);
+            const incomePercentages = incomeCategories.map(c => ((c.amount / incomeTotalAmount) * 100).toFixed(0));
+            
             new Chart(incomePieCtx, {
                 type: 'doughnut',
                 data: {
@@ -574,7 +680,34 @@
                             display: false
                         }
                     }
-                }
+                },
+                plugins: [{
+                    id: 'incomeDatalabels',
+                    afterDatasetsDraw: function(chart) {
+                        const ctx = chart.ctx;
+                        chart.data.datasets.forEach((dataset, i) => {
+                            const meta = chart.getDatasetMeta(i);
+                            meta.data.forEach((element, index) => {
+                                const percentage = incomePercentages[index];
+                                if (percentage > 4) {
+                                    // Get the position for the label - even further from outer edge
+                                    const model = element;
+                                    const midAngle = (model.startAngle + model.endAngle) / 2;
+                                    const labelRadius = model.innerRadius + (model.outerRadius - model.innerRadius) * 0.6;
+                                    const x = model.x + Math.cos(midAngle) * labelRadius;
+                                    const y = model.y + Math.sin(midAngle) * labelRadius;
+                                    
+                                    // Draw the percentage
+                                    ctx.fillStyle = '#f3f4f6';
+                                    ctx.font = 'bold 16px sans-serif';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'middle';
+                                    ctx.fillText(percentage + '%', x, y);
+                                }
+                            });
+                        });
+                    }
+                }]
             });
         }
         {% endif %}
