@@ -301,6 +301,13 @@ async def callback_income_categories_menu(callback: types.CallbackQuery, state: 
 @router.callback_query(lambda c: c.data == "add_category")
 async def add_category_start(callback: types.CallbackQuery, state: FSMContext):
     """Начало добавления категории"""
+    # Проверяем подписку
+    from bot.services.subscription import check_subscription
+    if not await check_subscription(callback.from_user.id):
+        lang = await get_user_language(callback.from_user.id)
+        await callback.answer(get_text('subscription_required', lang), show_alert=True)
+        return
+    
     lang = await get_user_language(callback.from_user.id)
     await callback.message.edit_text(
         get_text('adding_category', lang),
@@ -577,6 +584,13 @@ async def edit_categories_list(callback: types.CallbackQuery, state: FSMContext)
 @router.callback_query(lambda c: c.data == "delete_categories")
 async def delete_categories_list(callback: types.CallbackQuery, state: FSMContext):
     """Показать список категорий для удаления"""
+    # Проверяем подписку
+    from bot.services.subscription import check_subscription
+    if not await check_subscription(callback.from_user.id):
+        lang = await get_user_language(callback.from_user.id)
+        await callback.answer(get_text('subscription_required', lang), show_alert=True)
+        return
+    
     user_id = callback.from_user.id
     lang = await get_user_language(user_id)
     categories = await get_user_categories(user_id)

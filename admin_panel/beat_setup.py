@@ -97,6 +97,22 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
             queue='reports',
         )
 
+        # Every 15 minutes — System health check
+        upsert(
+            name='system-health-check',
+            task='expense_bot.celery_tasks.system_health_check',
+            schedule=crontab(minute='*/15', hour='*'),
+            queue='monitoring',
+        )
+
+        # 02:00 daily — Collect previous day analytics
+        upsert(
+            name='collect-daily-analytics',
+            task='expense_bot.celery_tasks.collect_daily_analytics',
+            schedule=crontab(minute='0', hour='2'),
+            queue='analytics',
+        )
+
         logger.info("[Beat setup] Ensured PeriodicTasks: %s", ", ".join(created_or_updated))
     except Exception as e:
         logger.error("[Beat setup] Error ensuring PeriodicTasks: %s", e)

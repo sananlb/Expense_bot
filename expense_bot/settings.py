@@ -339,6 +339,16 @@ try:
         'task': 'expense_bot.celery_tasks.process_held_affiliate_commissions',
         'schedule': crontab(hour=2, minute=0),  # 2 AM daily
         'options': {'queue': 'maintenance'}
+    },
+    'system-health-check': {
+        'task': 'expense_bot.celery_tasks.system_health_check',
+        'schedule': crontab(minute='*/15'),  # Every 15 minutes
+        'options': {'queue': 'monitoring'}
+    },
+    'collect-daily-analytics': {
+        'task': 'expense_bot.celery_tasks.collect_daily_analytics',
+        'schedule': crontab(hour=2, minute=0),  # 2 AM daily
+        'options': {'queue': 'analytics'}
     }
 }
 except ImportError:
@@ -352,3 +362,90 @@ BOT_RATE_LIMIT_MESSAGES_PER_HOUR = int(os.getenv('BOT_RATE_LIMIT_MESSAGES_PER_HO
 # Content validation
 BOT_MAX_MESSAGE_LENGTH = int(os.getenv('BOT_MAX_MESSAGE_LENGTH', '4096'))
 SECURITY_MAX_FAILED_ATTEMPTS = int(os.getenv('SECURITY_MAX_FAILED_ATTEMPTS', '5'))
+
+# =============================================================================
+# Sentry Configuration (Error Tracking and Performance Monitoring)
+# =============================================================================
+if not DEBUG:
+    import sentry_sdk
+    from sentry_sdk.integrations.django import DjangoIntegration
+    from sentry_sdk.integrations.celery import CeleryIntegration
+    from sentry_sdk.integrations.redis import RedisIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+    
+    def filter_sensitive_data(event, hint):
+        """Filter out sensitive data before sending to Sentry"""
+        # Remove tokens and keys from extra data
+        if 'extra' in event:
+            for key in list(event.get('extra', {}).keys()):
+                if any(sensitive in key.lower() for sensitive in ['token', 'key', 'password', 'secret', 'api']):
+                    event['extra'][key] = '[FILTERED]'
+        
+        # Remove sensitive data from request
+        if 'request' in event:
+            if 'headers' in event['request']:
+                # Filter authorization headers
+                for header in ['Authorization', 'X-Api-Key', 'Cookie']:
+                    if header in event['request']['headers']:
+                        event['request']['headers'][header] = '[FILTERED]'
+            
+            # Filter sensitive query parameters
+            if 'query_string' in event['request']:
+                query_params = event['request'].get('query_string', '')
+                if 'token' in query_params.lower() or 'key' in query_params.lower():
+                    event['request']['query_string'] = '[FILTERED]'
+        
+        return event
+    
+    # Configure logging integration
+    sentry_logging = LoggingIntegration(
+        level=logging.INFO,        # Capture info and above as breadcrumbs
+        event_level=logging.ERROR   # Send errors as events
+    )
+    
+    # Get Sentry DSN from environment
+    sentry_dsn = os.getenv("SENTRY_DSN", "").strip()
+    
+    if sentry_dsn:
+        try:
+            sentry_sdk.init(
+                dsn=sentry_dsn,
+                integrations=[
+                    DjangoIntegration(
+                        transaction_style='url',
+                        middleware_spans=True,
+                    ),
+                    CeleryIntegration(
+                        monitor_beat_tasks=True,
+                        propagate_traces=True,
+                    ),
+                    RedisIntegration(),
+                    sentry_logging,
+                ],
+                # Performance monitoring
+                traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+                profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0.1")),
+                
+                # Environment and release tracking
+                environment=os.getenv("ENVIRONMENT", "production"),
+                
+                # Error filtering
+                before_send=filter_sensitive_data,
+                
+                # Additional options
+                attach_stacktrace=True,
+                send_default_pii=False,  # Don't send personally identifiable information
+                
+                # Ignore certain errors
+                ignore_errors=[
+                    'KeyboardInterrupt',
+                    'SystemExit',
+                    'GeneratorExit',
+                    'CancelledError',
+                ],
+            )
+            print(f"[SENTRY] ✅ Sentry initialized successfully for {os.getenv('ENVIRONMENT', 'production')} environment")
+        except Exception as e:
+            print(f"[SENTRY] ❌ Failed to initialize Sentry: {e}")
+    else:
+        print("[SENTRY] ⚠️ SENTRY_DSN not configured, Sentry error tracking disabled")

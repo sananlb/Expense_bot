@@ -1,5 +1,5 @@
 from celery import shared_task
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, time
 import asyncio
 import logging
 import re
@@ -195,19 +195,31 @@ def cleanup_old_expenses():
 
 @shared_task
 def send_daily_admin_report():
-    """Отправка ежедневного отчета администратору (с экранированием MarkdownV2)"""
+    """Расширенный ежедневный отчет администратору с метриками мониторинга"""
     try:
-        from expenses.models import Profile, Expense, ExpenseCategory, Subscription
+        from expenses.models import (
+            Profile, Expense, ExpenseCategory, Subscription, Income,
+            UserAnalytics, AIServiceMetrics, SystemHealthCheck, 
+            AffiliateCommission, RecurringPayment
+        )
         from bot.services.admin_notifier import send_admin_alert, escape_markdown_v2
         from django.utils import timezone
+        from django.db.models import Q, Avg, Max, Min
+        from datetime import timedelta
+        import json
 
         def esc(v) -> str:
             return escape_markdown_v2(str(v))
 
         yesterday = timezone.now().date() - timedelta(days=1)
         today = timezone.now().date()
+        week_ago = yesterday - timedelta(days=7)
+        yesterday_start = timezone.make_aware(datetime.combine(yesterday, datetime.min.time()))
+        yesterday_end = timezone.make_aware(datetime.combine(yesterday, datetime.max.time()))
 
-        # Собираем статистику по пользователям
+        # ===============================
+        # БАЗОВАЯ СТАТИСТИКА ПОЛЬЗОВАТЕЛЕЙ
+        # ===============================
         total_users = Profile.objects.count()
         active_users = Expense.objects.filter(
             expense_date=yesterday
@@ -217,15 +229,50 @@ def send_daily_admin_report():
             created_at__date=yesterday
         ).count()
 
-        # Статистика по расходам
+        # WAU (Weekly Active Users) - пользователи с активностью за неделю
+        weekly_active_users = Expense.objects.filter(
+            expense_date__gte=week_ago,
+            expense_date__lte=yesterday
+        ).values('profile').distinct().count()
+
+        # Retention: пользователи, зарегистрированные неделю назад и активные вчера
+        week_ago_users = Profile.objects.filter(created_at__date=week_ago).values_list('id', flat=True)
+        retained_users = Expense.objects.filter(
+            profile_id__in=week_ago_users,
+            expense_date=yesterday
+        ).values('profile').distinct().count()
+        retention_rate = (retained_users / len(week_ago_users) * 100) if week_ago_users else 0
+
+        # ===============================
+        # РАСШИРЕННАЯ СТАТИСТИКА РАСХОДОВ И ДОХОДОВ
+        # ===============================
         expenses_stats = Expense.objects.filter(
             expense_date=yesterday
         ).aggregate(
             total=Sum('amount'),
-            count=Count('id')
+            count=Count('id'),
+            avg=Avg('amount'),
+            max_expense=Max('amount'),
+            ai_categorized=Count('id', filter=Q(ai_categorized=True))
         )
 
-        # Статистика по подпискам за вчера
+        # Статистика по доходам
+        incomes_stats = Income.objects.filter(
+            income_date=yesterday
+        ).aggregate(
+            total=Sum('amount'),
+            count=Count('id'),
+            avg=Avg('amount')
+        )
+
+        # AI категоризация эффективность
+        ai_accuracy_rate = 0
+        if expenses_stats['count'] and expenses_stats['count'] > 0:
+            ai_accuracy_rate = (expenses_stats['ai_categorized'] / expenses_stats['count']) * 100
+
+        # ===============================
+        # ПОДПИСКИ И ФИНАНСЫ
+        # ===============================
         new_subscriptions = Subscription.objects.filter(
             created_at__date=yesterday,
             payment_method__in=['stars', 'referral', 'promo']
@@ -235,6 +282,8 @@ def send_daily_admin_report():
 
         subscriptions_text = ""
         total_subs = 0
+        subscription_revenue = 0
+        
         for sub in new_subscriptions:
             sub_type = {
                 'trial': 'Пробных',
@@ -243,14 +292,121 @@ def send_daily_admin_report():
             }.get(sub['type'], sub['type'])
             subscriptions_text += f"  • {esc(sub_type)}: {esc(sub['count'])}\n"
             total_subs += sub['count']
+            
+            # Подсчет дохода (примерные цены в звездах)
+            if sub['type'] == 'month':
+                subscription_revenue += sub['count'] * 150  # 150 звезд за месячную
+            elif sub['type'] == 'six_months':
+                subscription_revenue += sub['count'] * 750  # 750 звезд за полугодовую
 
-        # Активные подписки на сегодня
         active_subscriptions = Subscription.objects.filter(
             is_active=True,
             end_date__gt=timezone.now()
         ).count()
 
-        # Топ категорий
+        # Подписки истекающие в ближайшие 3 дня
+        expiring_soon = Subscription.objects.filter(
+            is_active=True,
+            end_date__lte=timezone.now() + timedelta(days=3),
+            end_date__gt=timezone.now()
+        ).count()
+
+        # ===============================
+        # РЕФЕРАЛЬНАЯ ПРОГРАММА
+        # ===============================
+        affiliate_stats = AffiliateCommission.objects.filter(
+            created_at__date=yesterday
+        ).aggregate(
+            new_commissions=Count('id'),
+            total_commission_amount=Sum('commission_amount'),
+            paid_commissions=Count('id', filter=Q(status='paid')),
+            hold_commissions=Count('id', filter=Q(status='hold'))
+        )
+
+        # ===============================
+        # AI СЕРВИСЫ МОНИТОРИНГ
+        # ===============================
+        ai_metrics = AIServiceMetrics.objects.filter(
+            timestamp__gte=yesterday_start,
+            timestamp__lte=yesterday_end
+        ).aggregate(
+            total_requests=Count('id'),
+            successful_requests=Count('id', filter=Q(success=True)),
+            avg_response_time=Avg('response_time'),
+            max_response_time=Max('response_time'),
+            total_tokens=Sum('tokens_used'),
+            total_cost=Sum('estimated_cost')
+        )
+
+        ai_success_rate = 0
+        if ai_metrics['total_requests']:
+            ai_success_rate = (ai_metrics['successful_requests'] / ai_metrics['total_requests']) * 100
+
+        # Статистика по сервисам
+        openai_stats = AIServiceMetrics.objects.filter(
+            timestamp__gte=yesterday_start,
+            timestamp__lte=yesterday_end,
+            service='openai'
+        ).aggregate(
+            requests=Count('id'),
+            avg_time=Avg('response_time'),
+            success_rate=Avg('success')
+        )
+
+        google_stats = AIServiceMetrics.objects.filter(
+            timestamp__gte=yesterday_start,
+            timestamp__lte=yesterday_end,
+            service='google'
+        ).aggregate(
+            requests=Count('id'),
+            avg_time=Avg('response_time'),
+            success_rate=Avg('success')
+        )
+
+        # ===============================
+        # СИСТЕМА И ПРОИЗВОДИТЕЛЬНОСТЬ
+        # ===============================
+        # Последняя проверка здоровья системы
+        latest_health_check = SystemHealthCheck.objects.filter(
+            timestamp__gte=yesterday_start
+        ).order_by('-timestamp').first()
+
+        system_status = "❓ Нет данных"
+        if latest_health_check:
+            status_emoji = {
+                'healthy': '✅',
+                'degraded': '⚠️',
+                'unhealthy': '🚨'
+            }
+            system_status = f"{status_emoji.get(latest_health_check.overall_status, '❓')} {latest_health_check.overall_status.title()}"
+
+        # ===============================
+        # ПОЛЬЗОВАТЕЛЬСКАЯ АНАЛИТИКА
+        # ===============================
+        user_analytics = UserAnalytics.objects.filter(
+            date=yesterday
+        ).aggregate(
+            total_messages=Sum('messages_sent'),
+            total_voice_messages=Sum('voice_messages'),
+            total_photos=Sum('photos_sent'),
+            total_expenses_added=Sum('expenses_added'),
+            total_incomes_added=Sum('incomes_added'),
+            total_errors=Sum('errors_encountered'),
+            total_pdf_reports=Sum('pdf_reports_generated'),
+            total_cashback_calculated=Sum('cashback_calculated'),
+            active_users_analytics=Count('profile', distinct=True)
+        )
+
+        # ===============================
+        # РЕГУЛЯРНЫЕ ПЛАТЕЖИ
+        # ===============================
+        recurring_payments_processed = RecurringPayment.objects.filter(
+            last_processed=yesterday
+        ).count()
+
+        # ===============================
+        # ТОП КАТЕГОРИИ
+        # ===============================
         top_categories = Expense.objects.filter(
             expense_date=yesterday
         ).values('category__name').annotate(
@@ -264,41 +420,125 @@ def send_daily_admin_report():
             total_val = cat['total'] or 0
             count_val = cat['count'] or 0
             categories_lines.append(
-                f"  • {esc(name)}: {esc(f'{total_val:,.0f}')} ₽ \\({esc(count_val)} зап.\\)"
+                f"  • {esc(name)}: {esc(f'{total_val:,.0f}')} ₽ ({esc(count_val)} зап.)"
             )
         categories_text = "\n".join(categories_lines)
 
-        # Предварительно форматируем числа для безопасной вставки и экранирования
+        # ===============================
+        # ФОРМИРОВАНИЕ ОТЧЕТА
+        # ===============================
         count_formatted = f"{(expenses_stats['count'] or 0):,}"
         total_formatted = f"{(expenses_stats['total'] or 0):,.0f}"
-
-        # Формируем отчет (экранируем только динамические части)
+        
+        # Форматируем дату с экранированием точек
+        date_formatted = yesterday.strftime('%d.%m.%Y').replace('.', '\\.')
+        
+        # Формируем отчет
         report = (
-            f"📊 *Ежедневный отчет ExpenseBot*\n"
-            f"📅 За {esc(yesterday.strftime('%d.%m.%Y'))}\n\n"
+            f"📊 *Расширенный отчет ExpenseBot*\n"
+            f"📅 За {date_formatted}\n\n"
+            
             f"👥 *Пользователи:*\n"
             f"  • Всего: {esc(f'{total_users:,}')}\n"
             f"  • Активных вчера: {esc(active_users)}\n"
-            f"  • Новых регистраций: {esc(new_users)}\n\n"
-            f"💰 *Расходы за вчера:*\n"
-            f"  • Записей: {esc(count_formatted)}\n"
-            f"  • Общая сумма: {esc(total_formatted)} ₽\n"
+            f"  • Активных за неделю: {esc(weekly_active_users)}\n"
+            f"  • Новых регистраций: {esc(new_users)}\n"
+            f"  • Retention (7d): {esc(f'{retention_rate:.1f}%')}\n\n"
+            
+            f"💰 *Финансы за вчера:*\n"
+            f"  • Расходы: {esc(count_formatted)} зап., {esc(total_formatted)} ₽\n"
         )
 
         if expenses_stats['count'] and expenses_stats['count'] > 0:
-            avg_expense = (expenses_stats['total'] or 0) / (expenses_stats['count'] or 1)
+            avg_expense = expenses_stats['avg'] or 0
+            max_expense = expenses_stats['max_expense'] or 0
             report += f"  • Средний чек: {esc(f'{avg_expense:,.0f}')} ₽\n"
+            report += f"  • Максимальная трата: {esc(f'{max_expense:,.0f}')} ₽\n"
 
-        report += f"\n⭐ *Подписки:*\n"
-        report += f"  • Активных всего: {esc(active_subscriptions)}\n"
+        if incomes_stats['count'] and incomes_stats['count'] > 0:
+            income_total = incomes_stats['total'] or 0
+            report += f"  • Доходы: {esc(incomes_stats['count'])} зап., {esc(f'{income_total:,.0f}')} ₽\n"
+
+        if subscription_revenue > 0:
+            report += f"  • Доход с подписок: {esc(subscription_revenue)} ⭐\n"
+
+        report += (
+            f"\n⭐ *Подписки:*\n"
+            f"  • Активных всего: {esc(active_subscriptions)}\n"
+            f"  • Истекают в 3 дня: {esc(expiring_soon)}\n"
+        )
+        
         if total_subs > 0:
             report += f"  • Куплено вчера: {esc(total_subs)}\n"
             report += subscriptions_text
         else:
             report += f"  • Куплено вчера: 0\n"
 
+        # Реферальная программа
+        if affiliate_stats['new_commissions']:
+            report += (
+                f"\n💼 *Реферальная программа:*\n"
+                f"  • Новых комиссий: {esc(affiliate_stats['new_commissions'])}\n"
+                f"  • Сумма комиссий: {esc(affiliate_stats['total_commission_amount'] or 0)} ⭐\n"
+                f"  • На холде: {esc(affiliate_stats['hold_commissions'])}\n"
+            )
+
+        # AI сервисы
+        if ai_metrics['total_requests']:
+            avg_resp_time = ai_metrics.get('avg_response_time', 0)
+            total_tokens = ai_metrics.get('total_tokens', 0)
+            report += (
+                f"\n🤖 *AI сервисы:*\n"
+                f"  • Всего запросов: {esc(ai_metrics['total_requests'])}\n"
+                f"  • Успешность: {esc(f'{ai_success_rate:.1f}%')}\n"
+                f"  • Среднее время: {esc(f'{avg_resp_time:.2f}')}с\n"
+                f"  • Использовано токенов: {esc(f'{total_tokens:,}')}\n"
+            )
+            
+            if ai_metrics['total_cost']:
+                total_cost = ai_metrics.get('total_cost', 0)
+                report += f"  • Приблизительная стоимость: ${esc(f'{total_cost:.3f}')}\n"
+                
+            if openai_stats['requests'] and google_stats['requests']:
+                openai_success = openai_stats.get('success_rate', 0) * 100
+                google_success = google_stats.get('success_rate', 0) * 100
+                report += (
+                    f"  • OpenAI: {esc(openai_stats['requests'])} зап., "
+                    f"{esc(f'{openai_success:.0f}')}% успех\n"
+                    f"  • Google: {esc(google_stats['requests'])} зап., "
+                    f"{esc(f'{google_success:.0f}')}% успех\n"
+                )
+
+        # Аналитика активности
+        if user_analytics['active_users_analytics']:
+            report += (
+                f"\n📈 *Активность пользователей:*\n"
+                f"  • Сообщений: {esc(user_analytics['total_messages'] or 0)}\n"
+                f"  • Голосовых: {esc(user_analytics['total_voice_messages'] or 0)}\n"
+                f"  • Фото: {esc(user_analytics['total_photos'] or 0)}\n"
+                f"  • AI категоризация: {esc(f'{ai_accuracy_rate:.1f}%')}\n"
+            )
+            
+            if user_analytics['total_pdf_reports']:
+                report += f"  • PDF отчетов: {esc(user_analytics['total_pdf_reports'])}\n"
+            
+            if user_analytics['total_cashback_calculated']:
+                cashback_calc = user_analytics['total_cashback_calculated']
+                report += f"  • Кешбэк рассчитан: {esc(f'{cashback_calc:.0f}')} ₽\n"
+
+        # Регулярные платежи
+        if recurring_payments_processed > 0:
+            report += f"\n🔄 *Регулярные платежи:* {esc(recurring_payments_processed)} обработано\n"
+
+        # Статус системы
+        report += f"\n⚡ *Статус системы:* {system_status}\n"
+
+        # Ошибки
+        if user_analytics['total_errors']:
+            report += f"\n⚠️ *Ошибки:* {esc(user_analytics['total_errors'])} за день\n"
+
         if categories_text:
-            report += f"\n📂 *Топ-5 категорий вчера:*\n{categories_text}\n"
+            report += f"\n📂 *Топ-5 категорий:*\n{categories_text}\n"
 
         report += f"\n⏰ Отчет сформирован: {esc(datetime.now().strftime('%H:%M'))}"
 
@@ -310,10 +550,518 @@ def send_daily_admin_report():
 
         loop.close()
 
-        logger.info(f"Ежедневный отчет за {yesterday} отправлен администратору")
+        logger.info(f"Расширенный ежедневный отчет за {yesterday} отправлен администратору")
 
     except Exception as e:
         logger.error(f"Ошибка отправки ежедневного отчета: {e}", exc_info=True)
+
+
+@shared_task
+def system_health_check():
+    """Периодическая проверка здоровья системы и сохранение метрик"""
+    try:
+        from expenses.models import SystemHealthCheck, AIServiceMetrics
+        from django.db import connection
+        from django.core.cache import cache
+        from django.utils import timezone
+        from django.conf import settings
+        import redis
+        import requests
+        import psutil
+        import os
+        from datetime import timedelta
+        
+        logger.info("Запуск проверки здоровья системы")
+        
+        # Временные метки
+        check_start = timezone.now()
+        issues = []
+        
+        # =====================================
+        # 1. БАЗА ДАННЫХ
+        # =====================================
+        database_status = False
+        database_response_time = None
+        try:
+            db_start = timezone.now()
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT COUNT(*) FROM users_profile")
+                result = cursor.fetchone()
+            database_response_time = (timezone.now() - db_start).total_seconds()
+            database_status = True
+            logger.info(f"Database check: OK ({database_response_time:.3f}s)")
+        except Exception as e:
+            logger.error(f"Database check failed: {e}")
+            issues.append(f"Database connection failed: {str(e)[:100]}")
+        
+        # =====================================
+        # 2. REDIS
+        # =====================================
+        redis_status = False
+        redis_response_time = None
+        redis_memory_usage = None
+        try:
+            redis_start = timezone.now()
+            r = redis.Redis(
+                host=getattr(settings, 'REDIS_HOST', 'localhost'),
+                port=int(getattr(settings, 'REDIS_PORT', 6379)),
+                db=0,
+                socket_connect_timeout=5
+            )
+            r.ping()
+            redis_response_time = (timezone.now() - redis_start).total_seconds()
+            
+            # Получаем информацию о памяти
+            info = r.info('memory')
+            redis_memory_usage = info.get('used_memory', 0)
+            
+            redis_status = True
+            logger.info(f"Redis check: OK ({redis_response_time:.3f}s, {redis_memory_usage//1024//1024}MB)")
+        except Exception as e:
+            logger.error(f"Redis check failed: {e}")
+            issues.append(f"Redis connection failed: {str(e)[:100]}")
+        
+        # =====================================
+        # 3. TELEGRAM API
+        # =====================================
+        telegram_api_status = False
+        telegram_api_response_time = None
+        try:
+            telegram_start = timezone.now()
+            bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') 
+            if bot_token:
+                response = requests.get(
+                    f"https://api.telegram.org/bot{bot_token}/getMe",
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    telegram_api_response_time = (timezone.now() - telegram_start).total_seconds()
+                    telegram_api_status = True
+                    logger.info(f"Telegram API check: OK ({telegram_api_response_time:.3f}s)")
+                else:
+                    issues.append(f"Telegram API returned status {response.status_code}")
+            else:
+                issues.append("Telegram bot token not configured")
+        except Exception as e:
+            logger.error(f"Telegram API check failed: {e}")
+            issues.append(f"Telegram API check failed: {str(e)[:100]}")
+        
+        # =====================================
+        # 4. OPENAI API
+        # =====================================
+        openai_api_status = False
+        openai_api_response_time = None
+        try:
+            openai_start = timezone.now()
+            openai_key = os.getenv('OPENAI_API_KEY')
+            if openai_key:
+                response = requests.get(
+                    "https://api.openai.com/v1/models",
+                    headers={"Authorization": f"Bearer {openai_key}"},
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    openai_api_response_time = (timezone.now() - openai_start).total_seconds()
+                    openai_api_status = True
+                    logger.info(f"OpenAI API check: OK ({openai_api_response_time:.3f}s)")
+                else:
+                    issues.append(f"OpenAI API returned status {response.status_code}")
+            else:
+                logger.info("OpenAI API key not configured - skipping check")
+        except Exception as e:
+            logger.error(f"OpenAI API check failed: {e}")
+            issues.append(f"OpenAI API check failed: {str(e)[:100]}")
+        
+        # =====================================
+        # 5. GOOGLE AI API
+        # =====================================
+        google_ai_api_status = False
+        google_ai_api_response_time = None
+        try:
+            google_start = timezone.now()
+            google_key = os.getenv('GOOGLE_AI_KEY')
+            if google_key:
+                # Простая проверка доступности API
+                response = requests.get(
+                    f"https://generativelanguage.googleapis.com/v1beta/models?key={google_key}",
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    google_ai_api_response_time = (timezone.now() - google_start).total_seconds()
+                    google_ai_api_status = True
+                    logger.info(f"Google AI API check: OK ({google_ai_api_response_time:.3f}s)")
+                else:
+                    issues.append(f"Google AI API returned status {response.status_code}")
+            else:
+                logger.info("Google AI API key not configured - skipping check")
+        except Exception as e:
+            logger.error(f"Google AI API check failed: {e}")
+            issues.append(f"Google AI API check failed: {str(e)[:100]}")
+        
+        # =====================================
+        # 6. CELERY
+        # =====================================
+        celery_status = False
+        celery_workers_count = None
+        celery_queue_size = None
+        try:
+            # Импортируем celery app
+            from expense_bot.celery import app
+            
+            # Получаем информацию о воркерах
+            inspect = app.control.inspect()
+            stats = inspect.stats()
+            
+            if stats:
+                celery_workers_count = len(stats)
+                celery_status = True
+                
+                # Получаем размер очередей
+                active_queues = inspect.active_queues()
+                queue_lengths = {}
+                for worker, queues in (active_queues or {}).items():
+                    for queue in queues:
+                        queue_name = queue.get('name', 'default')
+                        # Здесь можно добавить получение длины очереди из Redis
+                        # Пока просто считаем что очередь пуста если воркеры активны
+                        queue_lengths[queue_name] = 0
+                
+                celery_queue_size = sum(queue_lengths.values())
+                logger.info(f"Celery check: OK ({celery_workers_count} workers)")
+            else:
+                issues.append("No active Celery workers found")
+        except Exception as e:
+            logger.error(f"Celery check failed: {e}")
+            issues.append(f"Celery check failed: {str(e)[:100]}")
+        
+        # =====================================
+        # 7. СИСТЕМНЫЕ МЕТРИКИ
+        # =====================================
+        disk_free_gb = None
+        memory_usage_percent = None
+        cpu_usage_percent = None
+        try:
+            # Использование диска
+            disk_usage = psutil.disk_usage('/')
+            disk_free_gb = disk_usage.free / (1024**3)  # В гигабайтах
+            
+            # Использование памяти
+            memory = psutil.virtual_memory()
+            memory_usage_percent = memory.percent
+            
+            # Использование CPU (среднее за 1 секунду)
+            cpu_usage_percent = psutil.cpu_percent(interval=1)
+            
+            logger.info(f"System metrics: {disk_free_gb:.1f}GB free, {memory_usage_percent:.1f}% RAM, {cpu_usage_percent:.1f}% CPU")
+            
+            # Добавляем предупреждения
+            if disk_free_gb < 1.0:  # Меньше 1 ГБ свободного места
+                issues.append(f"Low disk space: {disk_free_gb:.1f}GB free")
+            
+            if memory_usage_percent > 90:
+                issues.append(f"High memory usage: {memory_usage_percent:.1f}%")
+            
+            if cpu_usage_percent > 80:
+                issues.append(f"High CPU usage: {cpu_usage_percent:.1f}%")
+                
+        except Exception as e:
+            logger.error(f"System metrics collection failed: {e}")
+            issues.append(f"System metrics failed: {str(e)[:100]}")
+        
+        # =====================================
+        # 8. ОПРЕДЕЛЕНИЕ ОБЩЕГО СТАТУСА
+        # =====================================
+        critical_components = [database_status, redis_status]
+        important_components = [telegram_api_status, celery_status]
+        
+        if all(critical_components):
+            if all(important_components):
+                overall_status = 'healthy'
+            else:
+                overall_status = 'degraded'
+        else:
+            overall_status = 'unhealthy'
+        
+        # =====================================
+        # 9. СОХРАНЕНИЕ РЕЗУЛЬТАТОВ
+        # =====================================
+        health_check = SystemHealthCheck.objects.create(
+            timestamp=check_start,
+            database_status=database_status,
+            database_response_time=database_response_time,
+            redis_status=redis_status,
+            redis_response_time=redis_response_time,
+            redis_memory_usage=redis_memory_usage,
+            telegram_api_status=telegram_api_status,
+            telegram_api_response_time=telegram_api_response_time,
+            openai_api_status=openai_api_status,
+            openai_api_response_time=openai_api_response_time,
+            google_ai_api_status=google_ai_api_status,
+            google_ai_api_response_time=google_ai_api_response_time,
+            celery_status=celery_status,
+            celery_workers_count=celery_workers_count,
+            celery_queue_size=celery_queue_size,
+            disk_free_gb=disk_free_gb,
+            memory_usage_percent=memory_usage_percent,
+            cpu_usage_percent=cpu_usage_percent,
+            overall_status=overall_status,
+            issues=issues
+        )
+        
+        # =====================================
+        # 10. ОТПРАВКА АЛЕРТОВ ЕСЛИ НЕОБХОДИМО
+        # =====================================
+        if overall_status in ['unhealthy', 'degraded'] or issues:
+            try:
+                from bot.services.admin_notifier import send_admin_alert, escape_markdown_v2
+                
+                status_emoji = {'healthy': '✅', 'degraded': '⚠️', 'unhealthy': '🚨'}
+                
+                alert_message = (
+                    f"{status_emoji.get(overall_status, '❓')} *Системный алерт*\n\n"
+                    f"Статус: {escape_markdown_v2(overall_status.title())}\n"
+                    f"Время: {escape_markdown_v2(check_start.strftime('%H:%M:%S'))}\n\n"
+                )
+                
+                if issues:
+                    alert_message += "*Проблемы:*\n"
+                    for issue in issues[:5]:  # Ограничиваем количество проблем
+                        alert_message += f"• {escape_markdown_v2(issue)}\n"
+                    
+                    if len(issues) > 5:
+                        alert_message += f"• ... и еще {len(issues) - 5} проблем\n"
+                
+                # Отправляем алерт асинхронно
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(send_admin_alert(alert_message))
+                loop.close()
+                
+                logger.warning(f"System health alert sent: {overall_status} with {len(issues)} issues")
+            
+            except Exception as e:
+                logger.error(f"Failed to send health alert: {e}")
+        
+        # =====================================
+        # 11. ОЧИСТКА СТАРЫХ ЗАПИСЕЙ
+        # =====================================
+        try:
+            # Удаляем записи старше 30 дней
+            old_threshold = timezone.now() - timedelta(days=30)
+            deleted_count, _ = SystemHealthCheck.objects.filter(
+                timestamp__lt=old_threshold
+            ).delete()
+            
+            if deleted_count > 0:
+                logger.info(f"Deleted {deleted_count} old health check records")
+        
+        except Exception as e:
+            logger.error(f"Failed to cleanup old health checks: {e}")
+        
+        total_time = (timezone.now() - check_start).total_seconds()
+        logger.info(f"System health check completed in {total_time:.2f}s: {overall_status}")
+        
+        return {
+            'status': overall_status,
+            'timestamp': check_start.isoformat(),
+            'total_time': total_time,
+            'issues_count': len(issues)
+        }
+        
+    except Exception as e:
+        logger.error(f"System health check task failed: {e}", exc_info=True)
+        return {'status': 'error', 'error': str(e)}
+
+
+@shared_task
+def collect_daily_analytics():
+    """Сбор аналитических данных за день (запускается в конце дня)"""
+    try:
+        from expenses.models import (
+            Profile, Expense, Income, UserAnalytics, 
+            AIServiceMetrics, Subscription, AffiliateCommission
+        )
+        from django.utils import timezone
+        from django.db.models import Count, Sum, Avg, Q
+        from datetime import timedelta
+        import json
+
+        logger.info("Начинаем сбор ежедневной аналитики")
+        
+        # Вчерашняя дата (данные за которую собираем)
+        target_date = (timezone.now() - timedelta(days=1)).date()
+        target_start = timezone.make_aware(datetime.combine(target_date, time.min))
+        target_end = timezone.make_aware(datetime.combine(target_date, time.max))
+        
+        processed_profiles = 0
+        created_analytics = 0
+        
+        # Получаем всех пользователей, которые были активны вчера
+        # (добавляли расходы, доходы, или имели другую активность)
+        active_profiles = Profile.objects.filter(
+            Q(expenses__created_at__gte=target_start, expenses__created_at__lte=target_end) |
+            Q(incomes__created_at__gte=target_start, incomes__created_at__lte=target_end) |
+            Q(subscriptions__created_at__gte=target_start, subscriptions__created_at__lte=target_end)
+        ).distinct()
+        
+        logger.info(f"Найдено {active_profiles.count()} активных пользователей за {target_date}")
+        
+        for profile in active_profiles:
+            try:
+                # Проверяем, нет ли уже записи за этот день
+                existing_analytics = UserAnalytics.objects.filter(
+                    profile=profile,
+                    date=target_date
+                ).first()
+                
+                # Собираем статистику по расходам
+                expenses = Expense.objects.filter(
+                    profile=profile,
+                    created_at__gte=target_start,
+                    created_at__lte=target_end
+                )
+                
+                expenses_stats = expenses.aggregate(
+                    count=Count('id'),
+                    ai_categorized_count=Count('id', filter=Q(ai_categorized=True)),
+                    manual_categorized_count=Count('id', filter=Q(ai_categorized=False)),
+                )
+                
+                # Собираем статистику по доходам
+                incomes = Income.objects.filter(
+                    profile=profile,
+                    created_at__gte=target_start,
+                    created_at__lte=target_end
+                )
+                
+                incomes_count = incomes.count()
+                
+                # Собираем статистику по категориям (топ-5 используемых)
+                categories_used = {}
+                for expense in expenses:
+                    if expense.category:
+                        cat_id = str(expense.category.id)
+                        categories_used[cat_id] = categories_used.get(cat_id, 0) + 1
+                
+                # Статистика по AI сервисам (приблизительно - по количеству AI категоризаций)
+                ai_categorizations = expenses_stats['ai_categorized_count'] or 0
+                manual_categorizations = expenses_stats['manual_categorized_count'] or 0
+                
+                # Рассчитываем кешбэк (если есть логика)
+                cashback_calculated = 0  # Можно добавить расчет кешбэка если нужно
+                cashback_transactions = 0
+                
+                # Подсчитываем ошибки (пока заглушка, можно интегрировать с логами)
+                errors_encountered = 0
+                error_types = {}
+                
+                # Примерное время сессии (заглушка)
+                total_session_time = 0
+                peak_hour = None
+                
+                # PDF отчеты (заглушка - можно интегрировать с логикой отчетов)
+                pdf_reports_generated = 0
+                
+                # Recurring payments processed (для данного пользователя)
+                recurring_payments_processed = 0
+                
+                # Budget checks (заглушка)
+                budget_checks = 0
+                
+                # Примерная активность по сообщениям/фото (заглушка)
+                messages_sent = expenses_stats['count'] or 0  # Примерно по количеству расходов
+                voice_messages = 0  # Заглушка
+                photos_sent = 0     # Заглушка
+                
+                # Определяем команды (заглушка)
+                commands_used = {}
+                if expenses_stats['count']:
+                    commands_used['expense_add'] = expenses_stats['count']
+                if incomes_count:
+                    commands_used['income_add'] = incomes_count
+                
+                # Создаем или обновляем запись аналитики
+                if existing_analytics:
+                    # Обновляем существующую запись
+                    existing_analytics.messages_sent = messages_sent
+                    existing_analytics.voice_messages = voice_messages
+                    existing_analytics.photos_sent = photos_sent
+                    existing_analytics.commands_used = commands_used
+                    existing_analytics.expenses_added = expenses_stats['count'] or 0
+                    existing_analytics.incomes_added = incomes_count
+                    existing_analytics.categories_used = categories_used
+                    existing_analytics.ai_categorizations = ai_categorizations
+                    existing_analytics.manual_categorizations = manual_categorizations
+                    existing_analytics.cashback_calculated = cashback_calculated
+                    existing_analytics.cashback_transactions = cashback_transactions
+                    existing_analytics.errors_encountered = errors_encountered
+                    existing_analytics.error_types = error_types
+                    existing_analytics.total_session_time = total_session_time
+                    existing_analytics.peak_hour = peak_hour
+                    existing_analytics.pdf_reports_generated = pdf_reports_generated
+                    existing_analytics.recurring_payments_processed = recurring_payments_processed
+                    existing_analytics.budget_checks = budget_checks
+                    existing_analytics.save()
+                    
+                    logger.info(f"Updated analytics for user {profile.telegram_id} for {target_date}")
+                else:
+                    # Создаем новую запись
+                    UserAnalytics.objects.create(
+                        profile=profile,
+                        date=target_date,
+                        messages_sent=messages_sent,
+                        voice_messages=voice_messages,
+                        photos_sent=photos_sent,
+                        commands_used=commands_used,
+                        expenses_added=expenses_stats['count'] or 0,
+                        incomes_added=incomes_count,
+                        categories_used=categories_used,
+                        ai_categorizations=ai_categorizations,
+                        manual_categorizations=manual_categorizations,
+                        cashback_calculated=cashback_calculated,
+                        cashback_transactions=cashback_transactions,
+                        errors_encountered=errors_encountered,
+                        error_types=error_types,
+                        total_session_time=total_session_time,
+                        peak_hour=peak_hour,
+                        pdf_reports_generated=pdf_reports_generated,
+                        recurring_payments_processed=recurring_payments_processed,
+                        budget_checks=budget_checks
+                    )
+                    created_analytics += 1
+                    logger.debug(f"Created analytics for user {profile.telegram_id} for {target_date}")
+                
+                processed_profiles += 1
+                
+            except Exception as e:
+                logger.error(f"Error processing analytics for user {profile.telegram_id}: {e}")
+                continue
+        
+        # Очистка старых записей аналитики (старше 90 дней)
+        try:
+            old_threshold = timezone.now() - timedelta(days=90)
+            deleted_count, _ = UserAnalytics.objects.filter(
+                date__lt=old_threshold.date()
+            ).delete()
+            
+            if deleted_count > 0:
+                logger.info(f"Deleted {deleted_count} old analytics records")
+        
+        except Exception as e:
+            logger.error(f"Failed to cleanup old analytics: {e}")
+        
+        logger.info(f"Daily analytics collection completed: {processed_profiles} users processed, {created_analytics} new records created")
+        
+        return {
+            'date': target_date.isoformat(),
+            'processed_profiles': processed_profiles,
+            'created_analytics': created_analytics,
+            'updated_analytics': processed_profiles - created_analytics
+        }
+    
+    except Exception as e:
+        logger.error(f"Daily analytics collection failed: {e}", exc_info=True)
+        return {'error': str(e)}
 
 
 @shared_task

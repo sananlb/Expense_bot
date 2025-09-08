@@ -8,6 +8,7 @@ import asyncio
 import os
 import platform
 import threading
+import time
 from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
 from django.conf import settings
@@ -196,6 +197,10 @@ class GoogleAIService(GoogleKeyRotationMixin):
                 key_name = self.get_key_name(key_index)
                 
                 loop = asyncio.get_event_loop()
+                
+                # Засекаем время перед вызовом
+                start_time = time.time()
+                
                 result = await loop.run_in_executor(
                     self.executor,
                     _process_categorization,
@@ -205,6 +210,29 @@ class GoogleAIService(GoogleKeyRotationMixin):
                     currency,
                     categories
                 )
+                
+                # Вычисляем время ответа
+                response_time = time.time() - start_time
+                
+                # Логируем метрики в БД
+                try:
+                    from expenses.models import AIServiceMetrics
+                    await asyncio.to_thread(
+                        AIServiceMetrics.objects.create,
+                        service='google',
+                        operation_type='categorize_expense',
+                        response_time=response_time,
+                        success=result is not None and 'error' not in result,
+                        model_used='gemini-2.5-flash',
+                        characters_processed=len(text),
+                        user_id=user_context.get('user_id') if user_context else None,
+                        error_type=('process_error' if result and 'error' in result else None)[:100] if (result and 'error' in result) else None,
+                        error_message=result.get('error')[:500] if result and 'error' in result else None
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to log AI metrics: {e}")
+                
+                logger.info(f"Google AI (Windows) categorization took {response_time:.2f}s")
                 
                 if result and 'error' in result:
                     logger.error(f"[GoogleAI-Adaptive] Process error: {result['error']}")
@@ -250,12 +278,36 @@ class GoogleAIService(GoogleKeyRotationMixin):
                     {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
                 ]
                 
+                # Засекаем время перед вызовом API
+                start_time = time.time()
+                
                 # Асинхронный вызов
                 response = await model.generate_content_async(
                     prompt,
                     generation_config=generation_config,
                     safety_settings=safety_settings
                 )
+                
+                # Вычисляем время ответа
+                response_time = time.time() - start_time
+                
+                # Логируем метрики в БД
+                try:
+                    from expenses.models import AIServiceMetrics
+                    await asyncio.to_thread(
+                        AIServiceMetrics.objects.create,
+                        service='google',
+                        operation_type='categorize_expense',
+                        response_time=response_time,
+                        success=response is not None and response.text is not None,
+                        model_used='gemini-2.5-flash',
+                        characters_processed=len(text),
+                        user_id=user_context.get('user_id') if user_context else None
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to log AI metrics: {e}")
+                
+                logger.info(f"Google AI (async) categorization took {response_time:.2f}s")
                 
                 if not response or not response.text:
                     return None
@@ -283,6 +335,22 @@ class GoogleAIService(GoogleKeyRotationMixin):
             return result
                 
         except Exception as e:
+            # Логируем неудачную попытку в метрики
+            try:
+                from expenses.models import AIServiceMetrics
+                await asyncio.to_thread(
+                    AIServiceMetrics.objects.create,
+                    service='google',
+                    operation_type='categorize_expense',
+                    response_time=0,
+                    success=False,
+                    error_type=type(e).__name__[:100],
+                    error_message=str(e)[:500],
+                    user_id=user_context.get('user_id') if user_context else None
+                )
+            except Exception as log_error:
+                logger.warning(f"Failed to log AI error metrics: {log_error}")
+            
             # Помечаем ключ как нерабочий если он был получен
             if 'key_index' in locals():
                 self.mark_key_failure(key_index, e)
@@ -336,6 +404,10 @@ class GoogleAIService(GoogleKeyRotationMixin):
                 
                 # Запускаем в процессном пуле
                 loop = asyncio.get_event_loop()
+                
+                # Засекаем время перед вызовом
+                start_time = time.time()
+                
                 result = await loop.run_in_executor(
                     self.executor,
                     _process_chat_wrapper,
@@ -344,6 +416,28 @@ class GoogleAIService(GoogleKeyRotationMixin):
                     context_str,
                     user_info
                 )
+                
+                # Вычисляем время ответа
+                response_time = time.time() - start_time
+                
+                # Логируем метрики в БД
+                try:
+                    from expenses.models import AIServiceMetrics
+                    await asyncio.to_thread(
+                        AIServiceMetrics.objects.create,
+                        service='google',
+                        operation_type='chat',
+                        response_time=response_time,
+                        success=True,
+                        model_used='gemini-2.5-flash',
+                        characters_processed=len(message),
+                        user_id=user_context.get('user_id') if user_context else None
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to log AI metrics: {e}")
+                
+                logger.info(f"Google AI (Windows) chat took {response_time:.2f}s")
+                
                 return result
                 
             except Exception as e:
@@ -375,7 +469,31 @@ class GoogleAIService(GoogleKeyRotationMixin):
                 user_id = user_context.get('user_id') if user_context else None
                 logger.info(f"[GoogleAI-Adaptive] Calling chat_with_functions with user_id={user_id}")
                 
+                # Засекаем время перед вызовом
+                start_time = time.time()
+                
                 result = await func_service.chat_with_functions(message, context, user_context, user_id)
+                
+                # Вычисляем время ответа
+                response_time = time.time() - start_time
+                
+                # Логируем метрики в БД
+                try:
+                    from expenses.models import AIServiceMetrics
+                    await asyncio.to_thread(
+                        AIServiceMetrics.objects.create,
+                        service='google',
+                        operation_type='chat_with_functions',
+                        response_time=response_time,
+                        success=True,
+                        model_used='gemini-2.0-flash-exp',
+                        characters_processed=len(message),
+                        user_id=user_id
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to log AI metrics: {e}")
+                
+                logger.info(f"Google AI (Linux) chat_with_functions took {response_time:.2f}s")
                 logger.info(f"[GoogleAI-Adaptive] Got result: {result[:100] if result else 'None'}...")
                 
                 return result

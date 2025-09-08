@@ -5,6 +5,7 @@ import logging
 import json
 import asyncio
 import threading
+import time
 from typing import Dict, List, Optional, Any
 import openai
 from openai import OpenAI
@@ -91,6 +92,9 @@ class OpenAIService(AIBaseService):
             # Получаем клиент с ротацией ключей
             client = self._get_client()
             
+            # Засекаем время перед вызовом API
+            start_time = time.time()
+            
             # Асинхронный вызов
             response = await asyncio.to_thread(
                 client.chat.completions.create,
@@ -109,6 +113,28 @@ class OpenAIService(AIBaseService):
                 temperature=0.1,
                 response_format={"type": "json_object"}
             )
+            
+            # Вычисляем время ответа
+            response_time = time.time() - start_time
+            
+            # Логируем метрики в БД
+            try:
+                from expenses.models import AIServiceMetrics
+                await asyncio.to_thread(
+                    AIServiceMetrics.objects.create,
+                    service='openai',
+                    operation_type='categorize_expense',
+                    response_time=response_time,
+                    success=True,
+                    model_used=model_name,
+                    characters_processed=len(text),
+                    tokens_used=response.usage.total_tokens if hasattr(response, 'usage') else None,
+                    user_id=user_context.get('user_id') if user_context else None
+                )
+            except Exception as e:
+                logger.warning(f"Failed to log AI metrics: {e}")
+            
+            logger.info(f"OpenAI categorization took {response_time:.2f}s for text length {len(text)}")
             
             content = response.choices[0].message.content
             
@@ -135,6 +161,23 @@ class OpenAIService(AIBaseService):
                 
         except Exception as e:
             logger.error(f"OpenAI categorization error: {e}")
+            
+            # Логируем неудачную попытку в метрики
+            try:
+                from expenses.models import AIServiceMetrics
+                await asyncio.to_thread(
+                    AIServiceMetrics.objects.create,
+                    service='openai',
+                    operation_type='categorize_expense',
+                    response_time=0,
+                    success=False,
+                    error_type=type(e).__name__[:100],
+                    error_message=str(e)[:500],
+                    user_id=user_context.get('user_id') if user_context else None
+                )
+            except Exception as log_error:
+                logger.warning(f"Failed to log AI error metrics: {log_error}")
+            
             return None
     
     async def chat(
@@ -175,6 +218,9 @@ class OpenAIService(AIBaseService):
             # Получаем клиент с ротацией ключей
             client = self._get_client()
             
+            # Засекаем время перед вызовом API
+            start_time = time.time()
+            
             # Асинхронный вызов
             response = await asyncio.to_thread(
                 client.chat.completions.create,
@@ -184,6 +230,28 @@ class OpenAIService(AIBaseService):
                 temperature=0.7,
                 top_p=0.9
             )
+            
+            # Вычисляем время ответа
+            response_time = time.time() - start_time
+            
+            # Логируем метрики в БД
+            try:
+                from expenses.models import AIServiceMetrics
+                await asyncio.to_thread(
+                    AIServiceMetrics.objects.create,
+                    service='openai',
+                    operation_type='chat',
+                    response_time=response_time,
+                    success=True,
+                    model_used=model_name,
+                    characters_processed=len(message),
+                    tokens_used=response.usage.total_tokens if hasattr(response, 'usage') else None,
+                    user_id=user_context.get('user_id') if user_context else None
+                )
+            except Exception as e:
+                logger.warning(f"Failed to log AI metrics: {e}")
+            
+            logger.info(f"OpenAI chat took {response_time:.2f}s for message length {len(message)}")
             
             result = response.choices[0].message.content.strip()
             
@@ -196,6 +264,22 @@ class OpenAIService(AIBaseService):
             
         except Exception as e:
             logger.error(f"OpenAI chat error: {e}")
+            
+            # Логируем неудачную попытку в метрики
+            try:
+                from expenses.models import AIServiceMetrics
+                await asyncio.to_thread(
+                    AIServiceMetrics.objects.create,
+                    service='openai',
+                    operation_type='chat',
+                    response_time=0,
+                    success=False,
+                    error_type=type(e).__name__[:100],
+                    error_message=str(e)[:500],
+                    user_id=user_context.get('user_id') if user_context else None
+                )
+            except Exception as log_error:
+                logger.warning(f"Failed to log AI error metrics: {log_error}")
             
             # Отчитываемся об ошибке
             if self.use_rotation and 'client' in locals():

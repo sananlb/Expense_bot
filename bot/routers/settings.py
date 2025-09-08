@@ -73,11 +73,15 @@ async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
         user_settings = await get_user_settings(message.from_user.id)
         cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
         
+        # Проверяем подписку
+        from bot.services.subscription import check_subscription
+        has_subscription = await check_subscription(message.from_user.id)
+        
         await send_message_with_cleanup(
             message, 
             state, 
             text, 
-            reply_markup=settings_keyboard(lang, cashback_enabled)
+            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription)
         )
         
     except Exception as e:
@@ -129,9 +133,13 @@ async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: st
         user_settings = await get_user_settings(callback.from_user.id)
         cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
         
+        # Проверяем подписку
+        from bot.services.subscription import check_subscription
+        has_subscription = await check_subscription(callback.from_user.id)
+        
         await callback.message.edit_text(
             text,
-            reply_markup=settings_keyboard(lang, cashback_enabled)
+            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription)
         )
         
     except Exception as e:
@@ -185,6 +193,12 @@ async def process_language_change(callback: CallbackQuery, state: FSMContext, la
 async def handle_toggle_cashback(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Переключить кешбэк"""
     try:
+        # Проверяем подписку
+        from bot.services.subscription import check_subscription
+        if not await check_subscription(callback.from_user.id):
+            await callback.answer(get_text('subscription_required', lang), show_alert=True)
+            return
+        
         # Переключаем состояние кешбэка
         new_state = await toggle_cashback(callback.from_user.id)
         

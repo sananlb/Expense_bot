@@ -979,6 +979,158 @@ class Top5Pin(models.Model):
         verbose_name = 'Закреп Топ‑5'
         verbose_name_plural = 'Закрепы Топ‑5'
 
+
+# =============================================================================
+# Модели для мониторинга и аналитики
+# =============================================================================
+
+class UserAnalytics(models.Model):
+    """Ежедневная аналитика активности пользователя"""
+    
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='analytics')
+    date = models.DateField(auto_now_add=True)
+    
+    # Активность
+    messages_sent = models.IntegerField(default=0)
+    voice_messages = models.IntegerField(default=0)
+    photos_sent = models.IntegerField(default=0)
+    commands_used = models.JSONField(default=dict)  # {"command": count}
+    
+    # Использование функций
+    expenses_added = models.IntegerField(default=0)
+    incomes_added = models.IntegerField(default=0)
+    categories_used = models.JSONField(default=dict)  # {"category_id": count}
+    ai_categorizations = models.IntegerField(default=0)
+    manual_categorizations = models.IntegerField(default=0)
+    
+    # Кешбэк
+    cashback_calculated = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    cashback_transactions = models.IntegerField(default=0)
+    
+    # Ошибки
+    errors_encountered = models.IntegerField(default=0)
+    error_types = models.JSONField(default=dict)  # {"error_type": count}
+    
+    # Время использования (в секундах)
+    total_session_time = models.IntegerField(default=0)
+    peak_hour = models.IntegerField(null=True)  # час максимальной активности (0-23)
+    
+    # Дополнительные метрики
+    pdf_reports_generated = models.IntegerField(default=0)
+    recurring_payments_processed = models.IntegerField(default=0)
+    budget_checks = models.IntegerField(default=0)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'user_analytics'
+        verbose_name = 'Аналитика пользователя'
+        verbose_name_plural = 'Аналитика пользователей'
+        unique_together = ['profile', 'date']
+        indexes = [
+            models.Index(fields=['date']),
+            models.Index(fields=['profile', 'date']),
+            models.Index(fields=['-date']),  # для быстрой сортировки по убыванию
+        ]
+    
+    def __str__(self):
+        return f"Analytics for {self.profile.telegram_id} on {self.date}"
+
+
+class AIServiceMetrics(models.Model):
+    """Метрики работы AI сервисов"""
+    
+    SERVICE_CHOICES = [
+        ('openai', 'OpenAI'),
+        ('google', 'Google AI'),
+        ('yandex', 'Yandex SpeechKit'),
+    ]
+    
+    service = models.CharField(max_length=50, choices=SERVICE_CHOICES)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    # Производительность
+    response_time = models.FloatField()  # в секундах
+    tokens_used = models.IntegerField(null=True, blank=True)  # для OpenAI
+    characters_processed = models.IntegerField(null=True, blank=True)  # для Google/Yandex
+    
+    # Результат
+    success = models.BooleanField(default=True)
+    error_type = models.CharField(max_length=100, null=True, blank=True)
+    error_message = models.TextField(null=True, blank=True)
+    
+    # Контекст
+    user_id = models.BigIntegerField(null=True)  # telegram_id пользователя
+    operation_type = models.CharField(max_length=50)  # 'categorization', 'voice_recognition', etc.
+    model_used = models.CharField(max_length=100, null=True, blank=True)  # название модели
+    
+    # Стоимость (в условных единицах, можно конвертировать в валюту)
+    estimated_cost = models.DecimalField(max_digits=10, decimal_places=6, null=True, blank=True)
+    
+    class Meta:
+        db_table = 'ai_service_metrics'
+        verbose_name = 'Метрика AI сервиса'
+        verbose_name_plural = 'Метрики AI сервисов'
+        indexes = [
+            models.Index(fields=['service', 'timestamp']),
+            models.Index(fields=['success']),
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['user_id', 'timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.service} - {self.timestamp} - {'✓' if self.success else '✗'}"
+
+
+class SystemHealthCheck(models.Model):
+    """История проверок здоровья системы"""
+    
+    timestamp = models.DateTimeField(auto_now_add=True)
+    
+    # Статус компонентов
+    database_status = models.BooleanField(default=True)
+    database_response_time = models.FloatField(null=True)  # в секундах
+    
+    redis_status = models.BooleanField(default=True)
+    redis_response_time = models.FloatField(null=True)
+    redis_memory_usage = models.BigIntegerField(null=True)  # в байтах
+    
+    telegram_api_status = models.BooleanField(default=True)
+    telegram_api_response_time = models.FloatField(null=True)
+    
+    openai_api_status = models.BooleanField(default=True)
+    openai_api_response_time = models.FloatField(null=True)
+    
+    google_ai_api_status = models.BooleanField(default=True)
+    google_ai_api_response_time = models.FloatField(null=True)
+    
+    celery_status = models.BooleanField(default=True)
+    celery_workers_count = models.IntegerField(null=True)
+    celery_queue_size = models.IntegerField(null=True)
+    
+    # Системные метрики
+    disk_free_gb = models.FloatField(null=True)
+    memory_usage_percent = models.FloatField(null=True)
+    cpu_usage_percent = models.FloatField(null=True)
+    
+    # Общий статус
+    overall_status = models.CharField(max_length=20, default='healthy')  # healthy, degraded, unhealthy
+    issues = models.JSONField(default=list)  # список проблем если есть
+    
+    class Meta:
+        db_table = 'system_health_checks'
+        verbose_name = 'Проверка здоровья системы'
+        verbose_name_plural = 'Проверки здоровья системы'
+        indexes = [
+            models.Index(fields=['-timestamp']),
+            models.Index(fields=['overall_status']),
+        ]
+    
+    def __str__(self):
+        return f"Health Check - {self.timestamp} - {self.overall_status}"
+
+
 DEFAULT_INCOME_CATEGORIES = [
     ('Зарплата', '💼'),
     ('Премии и бонусы', '🎁'),
