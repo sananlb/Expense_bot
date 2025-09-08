@@ -116,16 +116,12 @@ async def show_affiliate_stats(callback: CallbackQuery, state: FSMContext, lang:
     """Показать подробную статистику"""
     user_id = callback.from_user.id
     
+    # Автоматически создаём ссылку если её нет
+    bot_info = await callback.bot.get_me()
+    affiliate_link = await get_or_create_affiliate_link(user_id, bot_info.username)
+    
     # Получаем статистику
     stats = await get_referrer_stats(user_id)
-    
-    if not stats['has_link']:
-        if lang == 'en':
-            text = "⚠️ You don't have an affiliate link yet. Use /affiliate command."
-        else:
-            text = "⚠️ У вас ещё нет реферальной ссылки. Используйте команду /affiliate."
-        await callback.answer(text, show_alert=True)
-        return
     
     # Формируем детальную статистику
     if lang == 'en':

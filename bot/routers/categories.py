@@ -87,8 +87,8 @@ async def show_categories_menu(message: types.Message | types.CallbackQuery, sta
     
     # Кнопки выбора типа
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="get_text('expense_categories_button', lang)", callback_data="expense_categories_menu")],
-        [InlineKeyboardButton(text="get_text('income_categories_button', lang)", callback_data="income_categories_menu")],
+        [InlineKeyboardButton(text=get_text('expense_categories_button', lang), callback_data="expense_categories_menu")],
+        [InlineKeyboardButton(text=get_text('income_categories_button', lang), callback_data="income_categories_menu")],
         [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
     ])
     
@@ -158,7 +158,7 @@ async def show_expense_categories_menu(message: types.Message | types.CallbackQu
             [InlineKeyboardButton(text=get_text('add_button', lang), callback_data="add_category")],
             [InlineKeyboardButton(text=get_text('edit_button', lang), callback_data="edit_categories")],
             [InlineKeyboardButton(text=get_text('delete_button', lang), callback_data="delete_categories")],
-            [InlineKeyboardButton(text="get_text('income_categories_button', lang)", callback_data="income_categories_menu")],
+            [InlineKeyboardButton(text=get_text('income_categories_button', lang), callback_data="income_categories_menu")],
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
         ])
     else:
@@ -166,7 +166,7 @@ async def show_expense_categories_menu(message: types.Message | types.CallbackQu
         text += "\n\n" + get_text('categories_subscription_note', lang)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=get_text('get_subscription', lang), callback_data="menu_subscription")],
-            [InlineKeyboardButton(text="get_text('income_categories_button', lang)", callback_data="income_categories_menu")],
+            [InlineKeyboardButton(text=get_text('income_categories_button', lang), callback_data="income_categories_menu")],
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
         ])
     
@@ -234,7 +234,7 @@ async def show_income_categories_menu(message: types.Message | types.CallbackQue
             [InlineKeyboardButton(text=get_text('add_button', lang), callback_data="add_income_category")],
             [InlineKeyboardButton(text=get_text('edit_button', lang), callback_data="edit_income_categories")],
             [InlineKeyboardButton(text=get_text('delete_button', lang), callback_data="delete_income_categories")],
-            [InlineKeyboardButton(text="get_text('expense_categories_button', lang)", callback_data="expense_categories_menu")],
+            [InlineKeyboardButton(text=get_text('expense_categories_button', lang), callback_data="expense_categories_menu")],
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
         ])
     else:
@@ -242,7 +242,7 @@ async def show_income_categories_menu(message: types.Message | types.CallbackQue
         text += "\n\n" + (get_text('income_categories_subscription_note', lang) if lang == 'en' else "💎 Для управления категориями доходов необходима подписка")
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=get_text('get_subscription', lang), callback_data="menu_subscription")],
-            [InlineKeyboardButton(text="get_text('expense_categories_button', lang)", callback_data="expense_categories_menu")],
+            [InlineKeyboardButton(text=get_text('expense_categories_button', lang), callback_data="expense_categories_menu")],
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
         ])
     
