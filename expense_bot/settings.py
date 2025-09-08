@@ -4,6 +4,7 @@ Django settings for expense_bot project.
 
 from pathlib import Path
 import os
+import logging
 # import dj_database_url  # TODO: Install dj-database-url
 from dotenv import load_dotenv
 
