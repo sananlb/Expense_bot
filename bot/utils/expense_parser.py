@@ -456,6 +456,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             for kw in keywords:
                 if kw.keyword.lower() in text_lower:
                     # Используем язык пользователя для отображения категории
+                    from bot.utils.category_helpers import get_category_display_name
                     lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
                     category = get_category_display_name(user_cat, lang_code)
                     max_score = 100
