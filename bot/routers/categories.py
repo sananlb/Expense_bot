@@ -145,7 +145,7 @@ async def show_expense_categories_menu(message: types.Message | types.CallbackQu
         for i, cat in enumerate(categories):
             # Переводим название категории если нужно
             translated_name = get_category_display_name(cat, lang)
-            text += f"• {translated_name}\n"
+            text += f"{translated_name}\n"
             # Добавляем отступ между категориями
             if i < len(categories) - 1:
                 text += "\n"
@@ -221,7 +221,7 @@ async def show_income_categories_menu(message: types.Message | types.CallbackQue
     if income_categories:
         for i, cat in enumerate(income_categories):
             translated_name = get_category_display_name(cat, lang)
-            text += f"• {translated_name}\n"
+            text += f"{translated_name}\n"
             # Добавляем отступ между категориями
             if i < len(income_categories) - 1:
                 text += "\n"
