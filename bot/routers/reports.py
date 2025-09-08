@@ -152,25 +152,28 @@ async def show_expenses_summary(
             
             # По категориям расходов (если есть)
             if summary['by_category'] and has_expenses:
-                text += f"📊 <b>Расходы по категориям:</b>\n"
+                if lang == 'en':
+                    text += f"📊 <b>Expenses by category:</b>\n"
+                else:
+                    text += f"📊 <b>Расходы по категориям:</b>\n"
                 total_categories = len(summary['by_category'])
                 
                 # Логика отображения: если 22 или меньше - показываем все, если 23+ показываем 20 + остальные
                 if total_categories <= 22:
                     # Показываем все категории
                     for cat in summary['by_category']:
-                        # Категория в словаре содержит только имя, поэтому создаем псевдо-объект
-                        from types import SimpleNamespace
-                        cat_obj = SimpleNamespace(icon=cat.get('icon'), name=cat['name'])
-                        category_display = get_category_display_name(cat_obj, lang)
+                        # Формируем название с эмодзи
+                        icon = cat.get('icon', '')
+                        name = cat.get('name', 'Без категории')
+                        category_display = f"{icon} {name}" if icon else name
                         text += f"  {category_display}: {format_amount(cat['total'], summary['currency'], lang)}\n"
                 else:
                     # Показываем первые 20 категорий
                     for cat in summary['by_category'][:20]:
-                        # Категория в словаре содержит только имя, поэтому создаем псевдо-объект
-                        from types import SimpleNamespace
-                        cat_obj = SimpleNamespace(icon=cat.get('icon'), name=cat['name'])
-                        category_display = get_category_display_name(cat_obj, lang)
+                        # Формируем название с эмодзи
+                        icon = cat.get('icon', '')
+                        name = cat.get('name', 'Без категории')
+                        category_display = f"{icon} {name}" if icon else name
                         text += f"  {category_display}: {format_amount(cat['total'], summary['currency'], lang)}\n"
                     
                     # Добавляем "остальные траты"
@@ -189,7 +192,10 @@ async def show_expenses_summary(
             
             # По категориям доходов (если есть)
             if summary.get('by_income_category') and has_incomes:
-                text += f"💵 <b>Доходы по категориям:</b>\n"
+                if lang == 'en':
+                    text += f"💵 <b>Income by category:</b>\n"
+                else:
+                    text += f"💵 <b>Доходы по категориям:</b>\n"
                 income_categories = summary.get('by_income_category', [])
                 total_income_categories = len(income_categories)
                 
@@ -222,7 +228,10 @@ async def show_expenses_summary(
                 text += "\n"
         
         # Добавляем подсказку внизу курсивом
-        text += "\n\n<i>Показать отчет за другой период?</i>"
+        if lang == 'en':
+            text += "\n\n<i>Show report for another period?</i>"
+        else:
+            text += "\n\n<i>Показать отчет за другой период?</i>"
         
         # Определяем период для клавиатуры
         today = date.today()

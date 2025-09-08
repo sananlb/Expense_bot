@@ -48,6 +48,12 @@ TEXTS = {
         'could_not_delete_category': '❌ Не удалось удалить категорию',
         'error_category_not_found': '❌ Ошибка: не найдена редактируемая категория',
         'could_not_update_category': '❌ Не удалось обновить категорию.',
+        
+        # Меню категорий
+        'expense_categories_title': '📁 Категории трат',
+        'income_categories_title': '📁 Категории доходов', 
+        'expense_categories_button': '💸 Категории трат',
+        'income_categories_button': '💰 Категории доходов',
         'editing_category': '✏️ Редактирование категории «{name}»\n\nВведите новое название категории или нажмите «Пропустить», чтобы оставить текущее:',
         'name_unchanged': 'Название категории оставлено без изменений',
         'choose_new_icon': '🎨 Выберите новую иконку для категории «{name}»:',
@@ -188,8 +194,8 @@ TEXTS = {
         'change_currency': '💵 Изменить валюту',
         'configure_reports': '📊 Настройка отчетов',
         'toggle_cashback': '💳 {status} кешбэк',
-        'enable_cashback': 'Включить',
-        'disable_cashback': 'Отключить',
+        'enable_cashback': 'Вкл',
+        'disable_cashback': 'Откл',
         'cashback_enabled_message': '✅ Кешбэк включен',
         'cashback_disabled_message': '❌ Кешбэк отключен',
         'change_language_prompt': '🌐 Выберите язык / Select language:',
@@ -612,6 +618,12 @@ TEXTS = {
         'could_not_delete_category': '❌ Could not delete category',
         'error_category_not_found': '❌ Error: edited category not found',
         'could_not_update_category': '❌ Could not update category.',
+        
+        # Categories menu
+        'expense_categories_title': '📁 Expense Categories',
+        'income_categories_title': '📁 Income Categories',
+        'expense_categories_button': '💸 Expense Categories', 
+        'income_categories_button': '💰 Income Categories',
         'editing_category': '✏️ Editing category «{name}»\n\nEnter new category name or press «Skip» to keep current:',
         'name_unchanged': 'Category name unchanged',
         'choose_new_icon': '🎨 Choose new icon for category «{name}»:',

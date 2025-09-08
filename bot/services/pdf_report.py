@@ -38,7 +38,7 @@ class PDFReportService:
             content = f.read()
         return Template(content)
     
-    async def generate_monthly_report(self, user_id: int, year: int, month: int) -> Optional[bytes]:
+    async def generate_monthly_report(self, user_id: int, year: int, month: int, lang: str = 'ru') -> Optional[bytes]:
         """
         Генерация месячного отчета для пользователя
         
@@ -52,13 +52,13 @@ class PDFReportService:
         """
         try:
             # Получаем данные из БД
-            report_data = await self._prepare_report_data(user_id, year, month)
+            report_data = await self._prepare_report_data(user_id, year, month, lang)
             if not report_data:
                 logger.warning(f"No data for report: user_id={user_id}, year={year}, month={month}")
                 return None
             
             # Генерируем HTML
-            html_content = await self._render_html(report_data)
+            html_content = await self._render_html(report_data, lang)
             
             # Конвертируем в PDF
             pdf_bytes = await self._html_to_pdf(html_content)
@@ -69,7 +69,7 @@ class PDFReportService:
             logger.error(f"Error generating PDF report: {e}")
             return None
     
-    async def _prepare_report_data(self, user_id: int, year: int, month: int) -> Optional[Dict]:
+    async def _prepare_report_data(self, user_id: int, year: int, month: int, lang: str = 'ru') -> Optional[Dict]:
         """Подготовить данные для отчета из БД"""
         try:
             # Получаем профиль пользователя
@@ -139,14 +139,8 @@ class PDFReportService:
             async for exp in expenses.select_related('category'):
                 if exp.category and exp.category.id not in categories_with_multilang:
                     cat = exp.category
-                    # Определяем язык пользователя
-                    user_language = getattr(profile, 'language', 'ru')
-                    # Получаем правильное имя категории
-                    display_name = cat.name
-                    if user_language == 'en' and hasattr(cat, 'name_en') and cat.name_en:
-                        display_name = cat.name_en
-                    elif user_language == 'ru' and hasattr(cat, 'name_ru') and cat.name_ru:
-                        display_name = cat.name_ru
+                    # Используем стандартный метод для получения отображаемого имени
+                    display_name = cat.get_display_name(lang)
                     categories_with_multilang[cat.id] = display_name
             
             # Получаем категории с учетом мультиязычности
@@ -185,7 +179,7 @@ class PDFReportService:
                     
                     top_categories.append({
                         'name': cat_name,
-                        'icon': cat_stat['category__icon'] or '',
+                        'icon': '',  # Пустое, т.к. get_display_name() уже включает эмодзи
                         'amount': amount,
                         'cashback': category_cashback,
                         'color': category_colors[idx] if idx < len(category_colors) else '#95a5a6'
@@ -399,6 +393,15 @@ class PDFReportService:
             income_total_amount = float(income_stats['total_amount'] or 0)
             income_total_count = income_stats['total_count'] or 0
             
+            # Получаем все категории доходов для определения мультиязычности
+            income_categories_with_multilang = {}
+            async for income in incomes.select_related('category'):
+                if income.category and income.category.id not in income_categories_with_multilang:
+                    cat = income.category
+                    # Используем стандартный метод для получения отображаемого имени
+                    display_name = cat.get_display_name(lang)
+                    income_categories_with_multilang[cat.id] = display_name
+
             # Доходы по категориям
             income_category_stats = incomes.values('category__id', 'category__name', 'category__icon').annotate(
                 amount=Sum('amount')
@@ -406,9 +409,17 @@ class PDFReportService:
             
             income_categories = []
             async for cat_stat in income_category_stats:
+                # Используем переведенное название если есть, иначе fallback
+                if cat_stat['category__id'] and cat_stat['category__id'] in income_categories_with_multilang:
+                    category_name = income_categories_with_multilang[cat_stat['category__id']]
+                else:
+                    category_name = cat_stat['category__name'] if cat_stat['category__name'] else (
+                        '💵 Other income' if lang == 'en' else '💵 Прочие доходы'
+                    )
+                
                 income_categories.append({
-                    'name': cat_stat['category__name'] if cat_stat['category__name'] else 'Прочие доходы',
-                    'icon': cat_stat['category__icon'] or '💵',
+                    'name': category_name,
+                    'icon': '',  # Пустое, т.к. get_display_name() уже включает эмодзи
                     'amount': float(cat_stat['amount']),
                     'color': category_colors[len(income_categories) % len(category_colors)]
                 })
@@ -425,11 +436,16 @@ class PDFReportService:
             net_balance = income_total_amount - total_amount
             
             # Форматируем данные для шаблона
-            months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-                      'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
-            
-            prev_months = ['январю', 'февралю', 'марту', 'апрелю', 'маю', 'июню',
-                           'июлю', 'августу', 'сентябрю', 'октябрю', 'ноябрю', 'декабрю']
+            if lang == 'en':
+                months = ['January', 'February', 'March', 'April', 'May', 'June',
+                          'July', 'August', 'September', 'October', 'November', 'December']
+                prev_months = ['January', 'February', 'March', 'April', 'May', 'June',
+                               'July', 'August', 'September', 'October', 'November', 'December']
+            else:
+                months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+                          'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря']
+                prev_months = ['январю', 'февралю', 'марту', 'апрелю', 'маю', 'июню',
+                               'июлю', 'августу', 'сентябрю', 'октябрю', 'ноябрю', 'декабрю']
             
             report_data = {
                 'period': f"1 - {end_date.day} {months[month-1]} {year}",
@@ -472,7 +488,7 @@ class PDFReportService:
         except:
             return ""
     
-    async def _render_html(self, report_data: Dict) -> str:
+    async def _render_html(self, report_data: Dict, lang: str = 'ru') -> str:
         """Рендеринг HTML из шаблона с данными"""
         # Вычисляем общую сумму для процентов
         total_raw = 0
@@ -557,6 +573,48 @@ class PDFReportService:
         
         daily_incomes_json = json.dumps(daily_incomes_list, ensure_ascii=False)
         
+        # Подготавливаем переводы для шаблона
+        if lang == 'en':
+            translations = {
+                'report_title': 'Coins - Expense Report',
+                'report_for_period': 'Report for period:',
+                'total_spent': 'Total Spent',
+                'total_income': 'Total Income', 
+                'balance': 'Balance',
+                'expense_count': 'Number of Expenses',
+                'monthly_cashback': 'Monthly Cashback',
+                'expenses_by_category': 'Expenses by Category',
+                'daily_expenses': 'Daily Expense Dynamics',
+                'income_by_category': 'Income by Category', 
+                'daily_income': 'Daily Income Dynamics',
+                'monthly_statistics': 'Monthly Statistics',
+                'month': 'Month',
+                'expenses': 'Expenses',
+                'income': 'Income',
+                'generated_by': 'Generated by Coins bot • @showmecoinbot',
+                'to_prev_month': f'vs {report_data.get("prev_month_name", "")}'
+            }
+        else:
+            translations = {
+                'report_title': 'Coins - Отчет о расходах',
+                'report_for_period': 'Отчет за период:',
+                'total_spent': 'Всего потрачено',
+                'total_income': 'Всего доходов',
+                'balance': 'Баланс месяца',
+                'expense_count': 'Количество трат',
+                'monthly_cashback': 'Кешбек за месяц',
+                'expenses_by_category': 'Расходы по категориям',
+                'daily_expenses': 'Динамика расходов по дням',
+                'income_by_category': 'Доходы по категориям',
+                'daily_income': 'Динамика доходов по дням',
+                'monthly_statistics': 'Статистика по месяцам',
+                'month': 'Месяц',
+                'expenses': 'Расходы',
+                'income': 'Доходы',
+                'generated_by': 'Сгенерировано ботом Coins • @showmecoinbot',
+                'to_prev_month': f'к {report_data.get("prev_month_name", "")}'
+            }
+
         # Рендерим шаблон с данными
         html = self.template.render(
             period=report_data['period'],
@@ -578,6 +636,8 @@ class PDFReportService:
             daily_incomes_json=daily_incomes_json,
             net_balance=report_data.get('net_balance', '0'),
             has_incomes=report_data.get('has_incomes', False),
+            # Переводы
+            **translations,
             prev_summaries=report_data.get('prev_summaries', [])
         )
         

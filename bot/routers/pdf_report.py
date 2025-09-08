@@ -93,7 +93,8 @@ async def process_pdf_report_request(callback: types.CallbackQuery, state: FSMCo
         pdf_bytes = await pdf_service.generate_monthly_report(
             user_id=callback.from_user.id,
             year=year,
-            month=month
+            month=month,
+            lang=lang
         )
         
         if not pdf_bytes:

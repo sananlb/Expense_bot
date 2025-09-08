@@ -56,12 +56,6 @@ async def cmd_affiliate(message: Message, state: FSMContext, lang: str = 'ru'):
         message_text = (
             "Referral link:\n"
             f"<code>{affiliate_link.telegram_link}</code>\n\n"
-            f"📊 <b>Your statistics:</b>\n"
-            f"• New users: {stats['referrals_count']}\n"
-            f"• Paying users: {stats['active_referrals']}\n\n"
-            f"💰 <b>Earnings:</b>\n"
-            f"• Earned: {stats['total_earned']} ⭐\n"
-            f"• Pending: {stats['pending_amount']} ⭐\n\n"
             f"ℹ️ <b>How it works:</b>\n"
             f"1. Share your referral link\n"
             f"2. Get {affiliate_program.get_commission_percent()}% from each payment\n"
@@ -73,12 +67,6 @@ async def cmd_affiliate(message: Message, state: FSMContext, lang: str = 'ru'):
         message_text = (
             "Ваша реферальная ссылка:\n"
             f"<code>{affiliate_link.telegram_link}</code>\n\n"
-            f"📊 <b>Ваша статистика:</b>\n"
-            f"• Новых пользователей: {stats['referrals_count']}\n"
-            f"• Платящих: {stats['active_referrals']}\n\n"
-            f"💰 <b>Заработок:</b>\n"
-            f"• Заработано: {stats['total_earned']} ⭐\n"
-            f"• В ожидании: {stats['pending_amount']} ⭐\n\n"
             f"ℹ️ <b>Как это работает:</b>\n"
             f"1. Делитесь своей реферальной ссылкой\n"
             f"2. Получайте {affiliate_program.get_commission_percent()}% от каждого платежа\n"
@@ -91,14 +79,20 @@ async def cmd_affiliate(message: Message, state: FSMContext, lang: str = 'ru'):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="📊 Подробная статистика" if lang == 'ru' else "📊 Detailed stats",
+                text="📊 Статистика" if lang == 'ru' else "📊 Statistics",
                 callback_data="affiliate_stats"
             )
         ],
         [
             InlineKeyboardButton(
-                text="💸 История выплат" if lang == 'ru' else "💸 Payment history",
+                text="📅 История выплат" if lang == 'ru' else "📅 Payment history",
                 callback_data="affiliate_commissions"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="◀️ Назад" if lang == 'ru' else "◀️ Back",
+                callback_data="back_to_subscription"
             )
         ],
         [
@@ -136,28 +130,28 @@ async def show_affiliate_stats(callback: CallbackQuery, state: FSMContext, lang:
     # Формируем детальную статистику
     if lang == 'en':
         text = (
-            "📊 <b>Detailed Statistics</b>\n\n"
-            f"<b>Link performance:</b>\n"
+            "📊 <b>Statistics</b>\n\n"
+            f"<b>Your referrals:</b>\n"
             f"• Users attracted: {stats['referrals_count']}\n"
-            f"• Paying users: {stats['active_referrals']}\n"
+            f"• Paid users: {stats['active_referrals']}\n"
             f"• Conversion rate: {stats['conversion_rate']}%\n\n"
             f"<b>Earnings:</b>\n"
-            f"• Total earned: {stats['total_earned']} ⭐\n"
-            f"• On hold (21 days): {stats['pending_amount']} ⭐"
+            f"• Earned: {stats['total_earned']} ⭐\n"
+            f"• Pending: {stats['pending_amount']} ⭐"
         )
         if stats['referrals_count'] > 0:
             avg_earning = stats['total_earned'] / stats['referrals_count']
             text += f"\n• Average per user: {avg_earning:.1f} ⭐"
     else:
         text = (
-            "📊 <b>Детальная статистика</b>\n\n"
-            f"<b>Эффективность ссылки:</b>\n"
+            "📊 <b>Статистика</b>\n\n"
+            f"<b>Ваши рефералы:</b>\n"
             f"• Привлечено пользователей: {stats['referrals_count']}\n"
-            f"• Из них платящих: {stats['active_referrals']}\n"
-            f"• Конверсия в платящих: {stats['conversion_rate']}%\n\n"
+            f"• Оплатили подписку: {stats['active_referrals']}\n"
+            f"• Конверсия: {stats['conversion_rate']}%\n\n"
             f"<b>Заработок:</b>\n"
-            f"• Всего заработано: {stats['total_earned']} ⭐\n"
-            f"• На холде (21 день): {stats['pending_amount']} ⭐"
+            f"• Заработано: {stats['total_earned']} ⭐\n"
+            f"• В ожидании: {stats['pending_amount']} ⭐"
         )
         if stats['referrals_count'] > 0:
             avg_earning = stats['total_earned'] / stats['referrals_count']
@@ -248,12 +242,12 @@ async def show_commissions(callback: CallbackQuery, state: FSMContext, lang: str
     
     if not commissions:
         if lang == 'en':
-            text = "💸 <b>Payment history</b>\n\nYou don't have any payments yet.\nYour referrals need to make purchases."
+            text = "📅 <b>Payment history</b>\n\nYou don't have any payments yet.\nYour referrals need to make purchases."
         else:
-            text = "💸 <b>История выплат</b>\n\nУ вас пока нет выплат.\nВаши рефералы должны совершить покупки."
+            text = "📅 <b>История выплат</b>\n\nУ вас пока нет выплат.\nВаши рефералы должны совершить покупки."
     else:
         if lang == 'en':
-            text = "💸 <b>Payment history (last 10)</b>\n\n"
+            text = "📅 <b>Payment history (last 10)</b>\n\n"
             for comm in commissions:
                 date = comm['created_at'].strftime('%d.%m.%Y %H:%M')
                 status_emoji = {
@@ -273,7 +267,7 @@ async def show_commissions(callback: CallbackQuery, state: FSMContext, lang: str
                     text += f"  Available after: {hold_date}\n"
                 text += "\n"
         else:
-            text = "💸 <b>История выплат (последние 10)</b>\n\n"
+            text = "📅 <b>История выплат (последние 10)</b>\n\n"
             for comm in commissions:
                 date = comm['created_at'].strftime('%d.%m.%Y %H:%M')
                 status_emoji = {
@@ -315,4 +309,12 @@ async def show_commissions(callback: CallbackQuery, state: FSMContext, lang: str
 async def back_to_affiliate(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Вернуться к главному меню affiliate"""
     await cmd_affiliate(callback.message, state, lang)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "back_to_subscription")
+async def back_to_subscription(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Вернуться к меню подписки"""
+    from bot.routers.subscription import cmd_subscription
+    await cmd_subscription(callback.message, state, lang)
     await callback.answer()

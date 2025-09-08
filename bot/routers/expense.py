@@ -8,6 +8,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramNotFound, TelegramForbiddenError
 from datetime import date, datetime
+from decimal import Decimal
 import asyncio
 import logging
 
@@ -465,7 +466,8 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
         pdf_bytes = await pdf_service.generate_monthly_report(
             user_id=callback.from_user.id,
             year=year,
-            month=month
+            month=month,
+            lang=lang
         )
         
         if not pdf_bytes:
@@ -477,18 +479,32 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
             return
         
         # Формируем имя файла
-        months = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
-                  'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
-        filename = f"Отчет_Coins_{months[month-1]}_{year}.pdf"
+        if lang == 'en':
+            months = ['January', 'February', 'March', 'April', 'May', 'June',
+                      'July', 'August', 'September', 'October', 'November', 'December']
+            filename = f"Coins_Report_{months[month-1]}_{year}.pdf"
+        else:
+            months = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+                      'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+            filename = f"Отчет_Coins_{months[month-1]}_{year}.pdf"
         
         # Создаем файл для отправки
         from aiogram.types import BufferedInputFile
         pdf_file = BufferedInputFile(pdf_bytes, filename=filename)
         
         # Отправляем PDF
-        await callback.message.answer_document(
-            document=pdf_file,
-            caption=(
+        if lang == 'en':
+            caption = (
+                f"📊 <b>Report for {months[month-1]} {year}</b>\n\n"
+                "The report contains:\n"
+                "• Overall expense statistics\n"
+                "• Distribution by categories\n"
+                "• Daily spending dynamics\n"
+                "• Cashback information\n\n"
+                "💡 <i>Tip: Save the report to track expense dynamics</i>"
+            )
+        else:
+            caption = (
                 f"📊 <b>Отчет за {months[month-1]} {year}</b>\n\n"
                 "В отчете содержится:\n"
                 "• Общая статистика расходов\n"
@@ -497,6 +513,9 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
                 "• Информация о кешбеке\n\n"
                 "💡 <i>Совет: сохраните отчет для отслеживания динамики расходов</i>"
             )
+        await callback.message.answer_document(
+            document=pdf_file,
+            caption=caption
         )
         
         # Удаляем предыдущее сообщение со сводкой
@@ -508,9 +527,18 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
         
     except Exception as e:
         logger.error(f"Error generating report: {e}")
+        if lang == 'en':
+            error_text = (
+                "❌ <b>Error generating report</b>\n\n"
+                "Please try again later or contact support."
+            )
+        else:
+            error_text = (
+                "❌ <b>Ошибка при генерации отчета</b>\n\n"
+                "Попробуйте позже или обратитесь в поддержку."
+            )
         await callback.message.answer(
-            "❌ <b>Ошибка при генерации отчета</b>\n\n"
-            "Попробуйте позже или обратитесь в поддержку.",
+            error_text,
             parse_mode="HTML"
         )
     finally:
@@ -689,6 +717,9 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
         )
         if cashback > 0:
             cashback_text = f" (+{cashback:.0f} ₽)"
+            # Сохраняем кешбек в базе данных
+            expense.cashback_amount = Decimal(str(cashback))
+            await expense.asave()
     
     # Удаляем сообщение с запросом суммы
     clarification_message_id = data.get('clarification_message_id')
@@ -1158,6 +1189,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     )
                     if cashback > 0:
                         cashback_text = f" (+{cashback:.0f} ₽)"
+                        # Сохраняем кешбек в базе данных
+                        expense.cashback_amount = Decimal(str(cashback))
+                        await expense.asave()
                 
                 # Формируем сообщение с информацией о потраченном за день
                 message_text = await format_expense_added_message(
@@ -1258,6 +1292,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         )
         if cashback > 0:
             cashback_text = f" (+{cashback:.0f} ₽)"
+            # Сохраняем кешбек в базе данных
+            expense.cashback_amount = Decimal(str(cashback))
+            await expense.asave()
     
     # Формируем сообщение с информацией о потраченном за день
     message_text = await format_expense_added_message(
@@ -1676,6 +1713,9 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext, lang: str 
                 )
                 if cashback > 0:
                     cashback_text = f" (+{cashback:.0f} ₽)"
+                    # Сохраняем кешбек в базе данных
+                    expense.cashback_amount = Decimal(str(cashback))
+                    await expense.asave()
         
         # Формируем сообщение
         if is_income:
@@ -1955,6 +1995,9 @@ async def show_updated_expense(message: types.Message, state: FSMContext, item_i
                 )
                 if cashback > 0:
                     cashback_text = f" (+{cashback:.0f} ₽)"
+                    # Сохраняем кешбек в базе данных
+                    expense.cashback_amount = Decimal(str(cashback))
+                    await expense.asave()
             
             message_text = await format_expense_added_message(
                 expense=expense,
@@ -2027,6 +2070,9 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
                 )
                 if cashback > 0:
                     cashback_text = f" (+{cashback:.0f} ₽)"
+                    # Сохраняем кешбек в базе данных
+                    expense.cashback_amount = Decimal(str(cashback))
+                    await expense.asave()
             
             message_text = await format_expense_added_message(
                 expense=expense,

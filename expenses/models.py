@@ -289,6 +289,12 @@ class Expense(models.Model):
     
     # Кешбек
     cashback_excluded = models.BooleanField(default=False)  # Исключить кешбек для этой траты
+    cashback_amount = models.DecimalField(
+        max_digits=12, 
+        decimal_places=2, 
+        default=Decimal('0'),
+        validators=[MinValueValidator(0)]
+    )  # Сумма кешбека для этой траты
     
     # Временные метки
     created_at = models.DateTimeField(auto_now_add=True)

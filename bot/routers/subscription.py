@@ -107,7 +107,15 @@ async def get_subscription_info_text(profile: Profile, lang: str = 'ru') -> str:
             subscription_type = get_text('trial_period', lang) if lang == 'ru' else "Trial period"
         else:
             emoji = "✅"
-            subscription_type = active_subscription.get_type_display()
+            # Переводим тип подписки в зависимости от языка
+            if lang == 'en':
+                type_translations = {
+                    'month': 'Monthly subscription',
+                    'six_months': 'Six-month subscription'
+                }
+                subscription_type = type_translations.get(active_subscription.type, active_subscription.get_type_display())
+            else:
+                subscription_type = active_subscription.get_type_display()
             
         return (
             f"{emoji} <b>{get_text('active_subscription_text', lang)}</b>\n\n"

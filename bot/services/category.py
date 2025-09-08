@@ -264,7 +264,7 @@ async def create_category(user_id: int, name: str, icon: str = '💰') -> Expens
                 is_translatable=(original_language == user_lang)
             )
             
-            logger.info(f"Created category '{category_name}' (id: {category.id}) for user {user_id}")
+            logger.info(f"Created category '{name}' (id: {category.id}) for user {user_id}")
             return category, True
     
     category, is_new = await _create_category()

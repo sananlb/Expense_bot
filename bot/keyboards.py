@@ -53,12 +53,15 @@ def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True, has_subsc
         status = get_text('disable_cashback' if cashback_enabled else 'enable_cashback', lang)
         cashback_text = get_text('toggle_cashback', lang).format(status=status)
         keyboard.button(text=cashback_text, callback_data="toggle_cashback")
-        keyboard.adjust(1, 1, 1, 1, 1)
-    else:
-        keyboard.adjust(1, 1, 1, 1)
     
     # Кнопка навигации
     keyboard.button(text=get_text('close', lang), callback_data="close")
+    
+    # Правильная настройка кнопок - по одной в ряд
+    if has_subscription:
+        keyboard.adjust(1, 1, 1, 1, 1)  # 5 кнопок: язык, часовой пояс, валюта, кешбэк, закрыть
+    else:
+        keyboard.adjust(1, 1, 1, 1)  # 4 кнопки: язык, часовой пояс, валюта, закрыть
     
     return keyboard.as_markup()
 

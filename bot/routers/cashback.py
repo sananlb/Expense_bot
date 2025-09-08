@@ -491,7 +491,8 @@ async def process_bank_text(message: types.Message, state: FSMContext):
     bank_name = message.text.strip()
     
     if len(bank_name) > 100:
-        await message.answer("❌ Название банка слишком длинное. Максимум 100 символов.")
+        error_msg = "❌ Bank name is too long. Maximum 100 characters." if lang == 'en' else "❌ Название банка слишком длинное. Максимум 100 символов."
+        await message.answer(error_msg)
         return
     
     await state.update_data(bank_name=bank_name)
@@ -634,7 +635,7 @@ async def edit_cashback_list(callback: types.CallbackQuery, state: FSMContext, l
 
 
 @router.callback_query(lambda c: c.data.startswith("edit_cb_"), CashbackForm.choosing_cashback_to_edit)
-async def edit_cashback_selected(callback: types.CallbackQuery, state: FSMContext):
+async def edit_cashback_selected(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Кешбэк выбран для редактирования - показываем выбор банка"""
     cashback_id = int(callback.data.split("_")[-1])
     
@@ -649,31 +650,39 @@ async def edit_cashback_selected(callback: types.CallbackQuery, state: FSMContex
     await state.update_data(
         editing_cashback_id=cashback_id,
         current_bank=cashback.bank_name,
-        current_percent=cashback.cashback_percent,
+        current_percent=float(cashback.cashback_percent),  # Преобразуем Decimal в float для JSON
         current_description=cashback.description or '',
         current_category_id=cashback.category_id
     )
     
     # Показываем список банков с кнопкой "Пропустить"
-    banks = [
-        "Т-Банк", "Альфа", "ВТБ", "Сбер", 
-        "Райффайзен", "Яндекс", "Озон"
-    ]
-    
     keyboard_buttons = []
-    for i in range(0, len(banks), 2):
-        row = [InlineKeyboardButton(text=banks[i], callback_data=f"edit_bank_{banks[i]}")]
-        if i + 1 < len(banks):
-            row.append(InlineKeyboardButton(text=banks[i + 1], callback_data=f"edit_bank_{banks[i + 1]}"))
-        keyboard_buttons.append(row)
+    
+    if lang == 'en':
+        # Для английского языка не показываем предустановленные банки
+        text = f"💳 <b>Edit Cashback</b>\n\n"
+        text += f"Current bank: {cashback.bank_name}\n\n"
+        text += "Enter the new bank name:"
+    else:
+        # Для русского языка показываем российские банки
+        banks = [
+            "Т-Банк", "Альфа", "ВТБ", "Сбер", 
+            "Райффайзен", "Яндекс", "Озон"
+        ]
+        
+        for i in range(0, len(banks), 2):
+            row = [InlineKeyboardButton(text=banks[i], callback_data=f"edit_bank_{banks[i]}")]
+            if i + 1 < len(banks):
+                row.append(InlineKeyboardButton(text=banks[i + 1], callback_data=f"edit_bank_{banks[i + 1]}"))
+            keyboard_buttons.append(row)
+        
+        text = f"💳 <b>Редактирование кешбэка</b>\n\n"
+        text += f"Текущий банк: {cashback.bank_name}\n\n"
+        text += "Выберите новый банк или введите название:"
     
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('skip', lang), callback_data="skip_edit_bank")])
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_button', lang), callback_data="cashback_edit")])
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu")])
-    
-    text = f"💳 <b>Редактирование кешбэка</b>\n\n"
-    text += f"Текущий банк: {cashback.bank_name}\n\n"
-    text += "Выберите новый банк или введите название:"
     
     await callback.message.edit_text(
         text,
@@ -686,56 +695,69 @@ async def edit_cashback_selected(callback: types.CallbackQuery, state: FSMContex
 
 
 @router.callback_query(lambda c: c.data.startswith("edit_bank_"), CashbackForm.editing_bank)
-async def process_edit_bank(callback: types.CallbackQuery, state: FSMContext):
+async def process_edit_bank(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Обработка выбора нового банка"""
     bank = callback.data.replace("edit_bank_", "")
     
     await state.update_data(new_bank=bank)
-    await show_edit_percent_prompt(callback, state)
+    await show_edit_percent_prompt(callback, state, lang)
     await callback.answer()
 
 
 @router.callback_query(lambda c: c.data == "skip_edit_bank", CashbackForm.editing_bank)
-async def skip_edit_bank(callback: types.CallbackQuery, state: FSMContext):
+async def skip_edit_bank(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Пропустить изменение банка"""
     data = await state.get_data()
     await state.update_data(new_bank=data['current_bank'])  # Оставляем текущий банк
-    await show_edit_percent_prompt(callback, state)
+    await show_edit_percent_prompt(callback, state, lang)
     await callback.answer()
 
 
 @router.message(CashbackForm.editing_bank)
-async def process_edit_bank_text(message: types.Message, state: FSMContext):
+async def process_edit_bank_text(message: types.Message, state: FSMContext, lang: str = 'ru'):
     """Обработка ввода названия банка текстом при редактировании"""
     bank_name = message.text.strip()
     
     if len(bank_name) > 100:
-        await message.answer("❌ Название банка слишком длинное. Максимум 100 символов.")
+        error_msg = "❌ Bank name is too long. Maximum 100 characters." if lang == 'en' else "❌ Название банка слишком длинное. Максимум 100 символов."
+        await message.answer(error_msg)
         return
     
     await state.update_data(new_bank=bank_name)
-    await show_edit_percent_prompt(message, state)
+    await show_edit_percent_prompt(message, state, lang)
 
 
-async def show_edit_percent_prompt(message_or_callback, state: FSMContext):
+async def show_edit_percent_prompt(message_or_callback, state: FSMContext, lang: str = 'ru'):
     """Показать запрос на ввод описания и процента при редактировании"""
     data = await state.get_data()
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=get_text('back_button', lang), callback_data=f"edit_cb_{data['editing_cashback_id']}")],
+        [InlineKeyboardButton(text=get_text('back_button', lang), callback_data="back_to_edit_list")],
         [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu")]
     ])
     
-    text = f"💳 <b>Редактирование кешбэка</b>\n\n"
-    text += f"Банк: {data.get('new_bank', data['current_bank'])}\n"
-    text += f"Текущий процент: {data['current_percent']}%\n"
-    if data['current_description']:
-        text += f"Текущее описание: {data['current_description']}\n"
-    text += "\n💰 Введите новое описание (необязательно) и процент:\n\n"
-    text += "<b>Примеры:</b>\n"
-    text += "• 5\n"
-    text += "• Все покупки 3.5\n"
-    text += "• Только онлайн 10%"
+    if lang == 'en':
+        text = f"💳 <b>Edit Cashback</b>\n\n"
+        text += f"Bank: {data.get('new_bank', data['current_bank'])}\n"
+        text += f"Current percent: {data['current_percent']}%\n"
+        if data['current_description']:
+            text += f"Current description: {data['current_description']}\n"
+        text += "\n💰 Enter new description (optional) and percent:\n\n"
+        text += "<b>Examples:</b>\n"
+        text += "• 5\n"
+        text += "• All purchases 3.5\n"
+        text += "• Online only 10%"
+    else:
+        text = f"💳 <b>Редактирование кешбэка</b>\n\n"
+        text += f"Банк: {data.get('new_bank', data['current_bank'])}\n"
+        text += f"Текущий процент: {data['current_percent']}%\n"
+        if data['current_description']:
+            text += f"Текущее описание: {data['current_description']}\n"
+        text += "\n💰 Введите новое описание (необязательно) и процент:\n\n"
+        text += "<b>Примеры:</b>\n"
+        text += "• 5\n"
+        text += "• Все покупки 3.5\n"
+        text += "• Только онлайн 10%"
     
     if isinstance(message_or_callback, types.CallbackQuery):
         await message_or_callback.message.edit_text(
@@ -751,6 +773,13 @@ async def show_edit_percent_prompt(message_or_callback, state: FSMContext):
         )
     
     await state.set_state(CashbackForm.editing_percent)
+
+
+@router.callback_query(lambda c: c.data == "back_to_edit_list", CashbackForm.editing_percent)
+async def back_to_edit_list(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Вернуться к списку кешбеков для редактирования"""
+    await edit_cashback_list(callback, state, lang)
+    await callback.answer()
 
 
 @router.message(CashbackForm.editing_percent)
