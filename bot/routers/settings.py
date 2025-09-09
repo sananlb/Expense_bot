@@ -88,13 +88,20 @@ async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
         currency_text = profile.currency or 'RUB'
         view_scope = settings.view_scope if hasattr(settings, 'view_scope') else 'personal'
         scope_text = get_text('view_scope_personal', lang) if view_scope == 'personal' else get_text('view_scope_household', lang)
-        
-        text = f"""{get_text('settings_menu', lang)}
 
-{get_text('language', lang)}: {lang_text}
-{get_text('timezone', lang)}: {timezone_text}
-{get_text('currency', lang)}: {currency_text}
-{get_text('view_scope', lang)}: {scope_text}"""
+        # Базовый текст настроек
+        text_lines = [
+            f"{get_text('settings_menu', lang)}",
+            "",
+            f"{get_text('language', lang)}: {lang_text}",
+            f"{get_text('timezone', lang)}: {timezone_text}",
+            f"{get_text('currency', lang)}: {currency_text}",
+        ]
+        # Режим отображения показываем только если активирован семейный бюджет
+        # Используем household_id (не триггерит ORM в async контексте)
+        if getattr(profile, 'household_id', None):
+            text_lines.append(f"{get_text('view_scope', lang)}: {scope_text}")
+        text = "\n".join(text_lines)
         
         # Получаем настройки кешбэка
         user_settings = await get_user_settings(message.from_user.id)
@@ -151,13 +158,20 @@ async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: st
         currency_text = profile.currency or 'RUB'
         view_scope = settings.view_scope if hasattr(settings, 'view_scope') else 'personal'
         scope_text = get_text('view_scope_personal', lang) if view_scope == 'personal' else get_text('view_scope_household', lang)
-        
-        text = f"""{get_text('settings_menu', lang)}
 
-{get_text('language', lang)}: {lang_text}
-{get_text('timezone', lang)}: {timezone_text}
-{get_text('currency', lang)}: {currency_text}
-{get_text('view_scope', lang)}: {scope_text}"""
+        # Базовый текст настроек
+        text_lines = [
+            f"{get_text('settings_menu', lang)}",
+            "",
+            f"{get_text('language', lang)}: {lang_text}",
+            f"{get_text('timezone', lang)}: {timezone_text}",
+            f"{get_text('currency', lang)}: {currency_text}",
+        ]
+        # Режим отображения показываем только если активирован семейный бюджет
+        # Используем household_id (не триггерит ORM в async контексте)
+        if getattr(profile, 'household_id', None):
+            text_lines.append(f"{get_text('view_scope', lang)}: {scope_text}")
+        text = "\n".join(text_lines)
         
         # Получаем настройки кешбэка
         user_settings = await get_user_settings(callback.from_user.id)

@@ -279,6 +279,180 @@ docker run -p 5555:5555 mher/flower celery flower --broker=redis://redis:6379/0
 | "Received unregistered task" | Несоответствие версий | Пересобрать контейнеры |
 | "WorkerLostError" | Worker упал | Проверить логи, увеличить таймауты |
 
+## Решение проблемы с задачами в 10:00 утра
+
+### Основная причина
+Задачи не выполняются, потому что они **НЕ СОЗДАНЫ в таблицах django_celery_beat** в БД. 
+Настройки в `CELERY_BEAT_SCHEDULE` в settings.py недостаточно при использовании `USE_DB_BEAT=true`.
+
+### Быстрая диагностика
+```bash
+# Запустить на сервере
+cd /home/batman/expense_bot
+bash scripts/check_celery.sh
+```
+
+### Решение проблемы
+
+#### Шаг 1: Создать периодические задачи в БД
+```bash
+docker exec -it expense_bot_web python manage.py shell
+```
+
+```python
+from django_celery_beat.models import PeriodicTask, CrontabSchedule, IntervalSchedule
+from django.utils import timezone
+
+# 1. Создаем расписание для задачи в 10:00
+schedule_10am, _ = CrontabSchedule.objects.get_or_create(
+    minute=0,
+    hour=10,
+    day_of_week='*',
+    day_of_month='*',
+    month_of_year='*',
+    timezone=timezone.get_current_timezone()
+)
+
+# 2. Создаем задачу ежедневного отчета админу
+PeriodicTask.objects.update_or_create(
+    task='expense_bot.celery_tasks.send_daily_admin_report',
+    defaults={
+        'crontab': schedule_10am,
+        'name': 'Daily Admin Report at 10:00',
+        'queue': 'reports',
+        'enabled': True
+    }
+)
+
+# 3. Создаем другие периодические задачи
+# Ежемесячные отчеты (20:00)
+schedule_20pm, _ = CrontabSchedule.objects.get_or_create(
+    minute=0,
+    hour=20,
+    day_of_week='*',
+    day_of_month='*', 
+    month_of_year='*',
+    timezone=timezone.get_current_timezone()
+)
+
+PeriodicTask.objects.update_or_create(
+    task='expense_bot.celery_tasks.send_monthly_reports',
+    defaults={
+        'crontab': schedule_20pm,
+        'name': 'Monthly Reports at 20:00',
+        'queue': 'reports',
+        'enabled': True
+    }
+)
+
+# Проверка бюджетных лимитов (каждые 30 минут)
+interval_30min, _ = IntervalSchedule.objects.get_or_create(
+    every=30,
+    period=IntervalSchedule.MINUTES
+)
+
+PeriodicTask.objects.update_or_create(
+    task='expense_bot.celery_tasks.check_budget_limits',
+    defaults={
+        'interval': interval_30min,
+        'name': 'Check Budget Limits',
+        'queue': 'notifications',
+        'enabled': True
+    }
+)
+
+# Регулярные платежи (12:00)
+schedule_12pm, _ = CrontabSchedule.objects.get_or_create(
+    minute=0,
+    hour=12,
+    day_of_week='*',
+    day_of_month='*',
+    month_of_year='*',
+    timezone=timezone.get_current_timezone()
+)
+
+PeriodicTask.objects.update_or_create(
+    task='expense_bot.celery_tasks.process_recurring_payments',
+    defaults={
+        'crontab': schedule_12pm,
+        'name': 'Process Recurring Payments at 12:00',
+        'queue': 'recurring',
+        'enabled': True
+    }
+)
+
+# Очистка старых данных (воскресенье 03:00)
+schedule_cleanup, _ = CrontabSchedule.objects.get_or_create(
+    minute=0,
+    hour=3,
+    day_of_week='0',  # 0 = воскресенье
+    day_of_month='*',
+    month_of_year='*',
+    timezone=timezone.get_current_timezone()
+)
+
+PeriodicTask.objects.update_or_create(
+    task='expense_bot.celery_tasks.cleanup_old_expenses',
+    defaults={
+        'crontab': schedule_cleanup,
+        'name': 'Cleanup Old Expenses on Sunday',
+        'queue': 'maintenance',
+        'enabled': True
+    }
+)
+
+# Проверяем созданные задачи
+for task in PeriodicTask.objects.all():
+    print(f"✅ {task.name}: {task.task} - Enabled: {task.enabled}")
+
+exit()
+```
+
+#### Шаг 2: Перезапустить Celery Beat
+```bash
+docker-compose restart expense_bot_celery_beat
+docker logs -f expense_bot_celery_beat  # Проверить, что задачи подхватились
+```
+
+#### Шаг 3: Проверить работу
+```bash
+# Проверить зарегистрированные задачи
+docker exec expense_bot_celery celery -A expense_bot inspect registered
+
+# Проверить запланированные задачи
+docker exec expense_bot_celery celery -A expense_bot inspect scheduled
+
+# Тест задачи вручную
+docker exec -it expense_bot_web python manage.py shell
+>>> from expense_bot.celery_tasks import send_daily_admin_report
+>>> result = send_daily_admin_report.delay()
+>>> print(f"Task executed: {result.get(timeout=30)}")
+>>> exit()
+```
+
+### Автоматизация создания задач при деплое
+
+Для автоматического создания задач при развертывании, создайте management команду:
+
+**File: `bot/management/commands/setup_periodic_tasks.py`**
+```python
+from django.core.management.base import BaseCommand
+from django_celery_beat.models import PeriodicTask, CrontabSchedule, IntervalSchedule
+from django.utils import timezone
+
+class Command(BaseCommand):
+    help = 'Создает периодические задачи Celery в БД'
+
+    def handle(self, *args, **options):
+        # Код создания задач из шага 1
+        self.stdout.write(self.style.SUCCESS('✅ Периодические задачи созданы'))
+```
+
+Затем добавить в docker-entrypoint.sh:
+```bash
+python manage.py setup_periodic_tasks
+```
+
 ## Контакты для поддержки
 
 При возникновении проблем проверьте:
@@ -286,3 +460,4 @@ docker run -p 5555:5555 mher/flower celery flower --broker=redis://redis:6379/0
 2. Логи контейнеров (`docker logs`)
 3. Статус сервисов (`docker ps`)
 4. Подключение к Redis и PostgreSQL
+5. Запустите диагностику: `bash scripts/check_celery.sh`

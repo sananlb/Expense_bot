@@ -75,7 +75,7 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    command: celery -A expense_bot worker --loglevel=info
+    command: celery -A expense_bot worker --loglevel=info -Q default,reports,recurring,maintenance,notifications,monitoring,analytics
 
   celery-beat:
     build:

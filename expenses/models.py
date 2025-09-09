@@ -127,7 +127,7 @@ class Household(models.Model):
         related_name='created_households',
         verbose_name='Создатель'
     )
-    max_members = models.IntegerField(default=10, verbose_name='Максимум участников')
+    max_members = models.IntegerField(default=5, verbose_name='Максимум участников')
     is_active = models.BooleanField(default=True, verbose_name='Активно')
 
     class Meta:

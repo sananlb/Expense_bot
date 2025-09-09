@@ -77,6 +77,10 @@ def accept_invite(joiner_telegram_id: int, token: str) -> tuple[bool, str]:
     joiner = Profile.objects.get(telegram_id=joiner_telegram_id)
     target_hh = invite.household
 
+    # Check capacity before joining
+    if not target_hh.is_active or target_hh.profiles.count() >= target_hh.max_members:
+        return False, 'full'
+
     if joiner.household_id == target_hh.id:
         return False, 'already_in_same'
 
@@ -86,4 +90,3 @@ def accept_invite(joiner_telegram_id: int, token: str) -> tuple[bool, str]:
         joiner.save(update_fields=["household"])
         # we keep invite active for reuse (multiple members may join)
     return True, 'ok'
-

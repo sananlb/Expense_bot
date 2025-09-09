@@ -92,6 +92,10 @@ async def family_accept(callback: CallbackQuery):
         except Exception:
             pass
     else:
-        key = 'family_already_in_same' if code == 'already_in_same' else 'family_invite_invalid'
+        if code == 'already_in_same':
+            key = 'family_already_in_same'
+        elif code == 'full':
+            key = 'household_full'
+        else:
+            key = 'family_invite_invalid'
         await callback.answer(get_text(key, lang), show_alert=True)
-

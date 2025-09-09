@@ -71,6 +71,16 @@ app.conf.task_routes = {
         'routing_key': 'recurring.process',
         'priority': 8,
     },
+    'expense_bot.celery_tasks.system_health_check': {
+        'queue': 'monitoring',
+        'routing_key': 'monitoring.health',
+        'priority': 6,
+    },
+    'expense_bot.celery_tasks.collect_daily_analytics': {
+        'queue': 'analytics',
+        'routing_key': 'analytics.collect',
+        'priority': 5,
+    },
     'expenses.tasks.process_recurring_expenses': {
         'queue': 'recurring',
         'routing_key': 'recurring.process',
@@ -105,6 +115,8 @@ app.conf.task_queues = (
     Queue('recurring', routing_key='recurring.#'),
     Queue('maintenance', routing_key='maintenance.#'),
     Queue('notifications', routing_key='notification.#'),
+    Queue('monitoring', routing_key='monitoring.#'),
+    Queue('analytics', routing_key='analytics.#'),
 )
 
 # Task execution configuration

@@ -211,7 +211,7 @@ async def show_expenses_summary(
                 return "Семейный бюджет"
             
             household_name = await sync_to_async(get_household_name)(user_id)
-            text = f"👨‍👩‍👧‍👦 <b>{household_name}</b>\n"
+            text = f"🏠 <b>{household_name}</b>\n"
             text += f"📊 <b>{get_text('summary', lang)} {period_text}</b>\n\n"
         else:
             text = f"📊 <b>{get_text('summary', lang)} {period_text}</b>\n\n"

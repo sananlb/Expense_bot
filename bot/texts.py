@@ -6,7 +6,8 @@ TEXTS = {
     'ru': {
         # Семейный бюджет (домохозяйство)
         'household_default_name': 'Семейный бюджет',
-        'household_intro': '🏠 <b>Семейный бюджет</b>\n\nСемейный бюджет позволяет нескольким пользователям вести общий учет доходов и расходов.\n\n• Все участники видят общие траты\n• Максимум 10 участников\n• Приглашение через ссылку',
+        'household_intro': '🏠 <b>Семейный бюджет</b>\n\nСемейный бюджет позволяет нескольким пользователям вести общий учет доходов и расходов.\n\n• Все участники видят общие траты\n• Максимум 5 участников\n• Приглашение через ссылку',
+        'household_full': '❌ В семейном бюджете достигнут максимум участников',
         'create_household_button': '➕ Создать семейный бюджет',
         'invite_member_button': '🔗 Пригласить участника',
         'members_list_button': '👥 Список участников',
@@ -612,7 +613,8 @@ TEXTS = {
     'en': {
         # Household (family budget)
         'household_default_name': 'Household',
-        'household_intro': '🏠 <b>Household</b>\n\nThe household lets multiple users track finances together.\n\n• All participants see shared expenses\n• Up to 10 members\n• Invitation via link',
+        'household_intro': '🏠 <b>Household</b>\n\nThe household lets multiple users track finances together.\n\n• All participants see shared expenses\n• Up to 5 members\n• Invitation via link',
+        'household_full': '❌ The household is full',
         'create_household_button': '➕ Create household',
         'invite_member_button': '🔗 Invite member',
         'members_list_button': '👥 Members',

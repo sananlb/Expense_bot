@@ -100,7 +100,7 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    command: celery -A expense_bot worker --loglevel=info --concurrency=2 -Q default,reports,recurring,maintenance,notifications
+    command: celery -A expense_bot worker --loglevel=info --concurrency=2 -Q default,reports,recurring,maintenance,notifications,monitoring,analytics
     networks:
       - expense_bot_network
 
