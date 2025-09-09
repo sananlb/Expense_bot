@@ -379,15 +379,16 @@ async def add_cashback_start(callback: types.CallbackQuery, state: FSMContext):
     
     # Группируем категории по 2 в строке
     for i in range(0, len(categories), 2):
+        # get_category_display_name уже возвращает строку с эмодзи, поэтому НЕ добавляем icon повторно
         category_name = get_category_display_name(categories[i], lang)
         row = [InlineKeyboardButton(
-            text=f"{categories[i].icon} {category_name}", 
+            text=category_name,
             callback_data=f"cashback_cat_{categories[i].id}"
         )]
         if i + 1 < len(categories):
             category_name_2 = get_category_display_name(categories[i + 1], lang)
             row.append(InlineKeyboardButton(
-                text=f"{categories[i + 1].icon} {category_name_2}", 
+                text=category_name_2,
                 callback_data=f"cashback_cat_{categories[i + 1].id}"
             ))
         keyboard_buttons.append(row)

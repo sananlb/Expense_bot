@@ -478,6 +478,19 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
             )
             return
         
+        # Определяем режим (личный/семейный) для пометки в заголовке PDF
+        from asgiref.sync import sync_to_async
+        @sync_to_async
+        def is_household(uid):
+            from expenses.models import Profile, UserSettings
+            try:
+                profile = Profile.objects.get(telegram_id=uid)
+                settings = profile.settings if hasattr(profile, 'settings') else UserSettings.objects.create(profile=profile)
+                return bool(profile.household_id) and getattr(settings, 'view_scope', 'personal') == 'household'
+            except Exception:
+                return False
+        household_mode = await is_household(callback.from_user.id)
+
         # Формируем имя файла
         if lang == 'en':
             months = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -494,8 +507,9 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
         
         # Отправляем PDF
         if lang == 'en':
+            mode = " – 🏠 Household" if household_mode else ""
             caption = (
-                f"📊 <b>Report for {months[month-1]} {year}</b>\n\n"
+                f"📊 <b>Report for {months[month-1]} {year}{mode}</b>\n\n"
                 "The report contains:\n"
                 "• Overall expense statistics\n"
                 "• Distribution by categories\n"
@@ -504,8 +518,9 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
                 "💡 <i>Tip: Save the report to track expense dynamics</i>"
             )
         else:
+            mode = " – 🏠 Семейный бюджет" if household_mode else ""
             caption = (
-                f"📊 <b>Отчет за {months[month-1]} {year}</b>\n\n"
+                f"📊 <b>Отчет за {months[month-1]} {year}{mode}</b>\n\n"
                 "В отчете содержится:\n"
                 "• Общая статистика расходов\n"
                 "• Распределение по категориям\n"

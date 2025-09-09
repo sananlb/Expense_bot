@@ -10,6 +10,7 @@ from decimal import Decimal
 import logging
 
 from bot.utils import get_text, format_amount
+from bot.utils.message_utils import send_message_with_cleanup
 from bot.services.expense import create_expense
 from bot.services.income import create_income
 from bot.services.top5 import (
@@ -60,16 +61,15 @@ async def show_top5(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'
         hint_raw = get_text('top5_info_pin_hint', lang)
         # Уберём markdown-символы и оставим HTML курсив
         hint_line = hint_raw.replace('💡 ', '').replace('_', '').replace('*', '')
-        text = f"{title_line}\n💡 <i>{hint_line}</i>"
+        text = f"{title_line}\n\n💡 <i>{hint_line}</i>"
 
         # Клавиатура
         if not items:
             text += f"\n\n{get_text('top5_empty', lang)}"
         kb = build_top5_keyboard(items, lang)
 
-        # Важно: отправляем новое сообщение, НЕ редактируем текущее меню,
-        # чтобы Top-5 не исчезало при других командах
-        await callback.message.answer(text, reply_markup=kb, parse_mode='HTML')
+        # Отправляем как и другие меню: удаляем предыдущее и сохраняем новое
+        await send_message_with_cleanup(callback, state, text, reply_markup=kb, parse_mode='HTML')
         await callback.answer()
     except Exception as e:
         logger.error(f"Error showing Top-5: {e}")

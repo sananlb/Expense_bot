@@ -143,7 +143,8 @@ def get_user_expenses(
 def get_expenses_summary(
     user_id: int,
     start_date: date,
-    end_date: date
+    end_date: date,
+    household_mode: bool = False
 ) -> Dict:
     """
     Получить сводку трат за период
@@ -152,6 +153,7 @@ def get_expenses_summary(
         user_id: ID пользователя в Telegram
         start_date: Начальная дата
         end_date: Конечная дата
+        household_mode: Включить режим семейного бюджета
         
     Returns:
         Словарь со сводкой:
@@ -163,16 +165,27 @@ def get_expenses_summary(
             'potential_cashback': Decimal
         }
     """
-    logger.info(f"get_expenses_summary called: user_id={user_id}, start={start_date}, end={end_date}")
+    logger.info(f"get_expenses_summary called: user_id={user_id}, start={start_date}, end={end_date}, household={household_mode}")
     profile = get_or_create_user_profile_sync(user_id)
     logger.info(f"Profile found/created: {profile.id} for telegram_id={profile.telegram_id}")
     
     try:
-        expenses = Expense.objects.filter(
-            profile=profile,
-            expense_date__gte=start_date,
-            expense_date__lte=end_date
-        ).select_related('category')
+        # Если включен режим семейного бюджета, получаем траты всех участников
+        if household_mode and profile.household:
+            # Получаем всех участников домохозяйства
+            household_profiles = Profile.objects.filter(household=profile.household)
+            expenses = Expense.objects.filter(
+                profile__in=household_profiles,
+                expense_date__gte=start_date,
+                expense_date__lte=end_date
+            ).select_related('category')
+            logger.info(f"Household mode: found {household_profiles.count()} members, {expenses.count()} expenses")
+        else:
+            expenses = Expense.objects.filter(
+                profile=profile,
+                expense_date__gte=start_date,
+                expense_date__lte=end_date
+            ).select_related('category')
         logger.info(f"Query: profile={profile.id}, date>={start_date}, date<={end_date}, found={expenses.count()} expenses")
         
         # Группируем по валютам
@@ -244,13 +257,21 @@ def get_expenses_summary(
             count = 0
             categories_list = []
             
-        # НОВОЕ: Получаем данные о доходах
+        # НОВОЕ: Получаем данные о доходах (учитываем семейный режим)
         from expenses.models import Income
-        incomes = Income.objects.filter(
-            profile=profile,
-            income_date__gte=start_date,
-            income_date__lte=end_date
-        )
+        if household_mode and profile.household:
+            household_profiles = Profile.objects.filter(household=profile.household)
+            incomes = Income.objects.filter(
+                profile__in=household_profiles,
+                income_date__gte=start_date,
+                income_date__lte=end_date
+            )
+        else:
+            incomes = Income.objects.filter(
+                profile=profile,
+                income_date__gte=start_date,
+                income_date__lte=end_date
+            )
         
         # Общая сумма и количество доходов
         income_total = incomes.aggregate(total=Sum('amount'))['total'] or Decimal('0')
@@ -284,35 +305,69 @@ def get_expenses_summary(
         potential_cashback = Decimal('0')
         current_month = start_date.month
         
-        # Получаем кешбэки для текущего месяца
-        cashbacks = Cashback.objects.filter(
-            profile=profile,
-            month=current_month
-        ).select_related('category')
-        
-        # Словарь кешбэков по категориям
-        cashback_map = {}
-        for cb in cashbacks:
-            if cb.category_id not in cashback_map:
-                cashback_map[cb.category_id] = []
-            cashback_map[cb.category_id].append(cb)
+        if household_mode and profile.household and expenses_by_currency:
+            # Считаем кешбэк по участникам семьи и суммируем. Используем основную валюту.
+            main_cur = main_currency
+
+            # Собираем суммы по категориям для каждого участника (только основная валюта)
+            member_totals: Dict[int, Dict[int, Decimal]] = {}
+            for exp in expenses:
+                if (exp.currency or 'RUB') != main_cur:
+                    continue
+                if not exp.category_id:
+                    continue  # кешбэк без категории не применяется
+                pid = exp.profile_id
+                cid = exp.category_id
+                if pid not in member_totals:
+                    member_totals[pid] = {}
+                if cid not in member_totals[pid]:
+                    member_totals[pid][cid] = Decimal('0')
+                member_totals[pid][cid] += exp.amount
+
+            # Для каждого участника применяем его правила кешбэка
+            for pid, cat_map in member_totals.items():
+                cbs = Cashback.objects.filter(profile_id=pid, month=current_month).select_related('category')
+
+                per_cat: Dict[int, list] = {}
+                for cb in cbs:
+                    key = cb.category_id
+                    if key not in per_cat:
+                        per_cat[key] = []
+                    per_cat[key].append(cb)
+
+                for cid, total_sum in cat_map.items():
+                    if cid not in per_cat:
+                        continue
+                    max_cb = max(per_cat[cid], key=lambda x: x.cashback_percent)
+                    if max_cb.limit_amount:
+                        cb_amount = min(total_sum * max_cb.cashback_percent / 100, max_cb.limit_amount)
+                    else:
+                        cb_amount = total_sum * max_cb.cashback_percent / 100
+                    potential_cashback += cb_amount
+        else:
+            # Обычный (личный) расчет кешбэка
+            cashbacks = Cashback.objects.filter(
+                profile=profile,
+                month=current_month
+            ).select_related('category')
             
-        # Рассчитываем кешбэк для каждой категории
-        for cat in categories_list:
-            if cat['id'] in cashback_map:
-                # Берем максимальный кешбэк из доступных
-                max_cashback = max(cashback_map[cat['id']], key=lambda x: x.cashback_percent)
-                
-                # Проверяем лимит
-                if max_cashback.limit_amount:
-                    cashback_amount = min(
-                        cat['total'] * max_cashback.cashback_percent / 100,
-                        max_cashback.limit_amount
-                    )
-                else:
-                    cashback_amount = cat['total'] * max_cashback.cashback_percent / 100
-                    
-                potential_cashback += cashback_amount
+            cashback_map = {}
+            for cb in cashbacks:
+                if cb.category_id not in cashback_map:
+                    cashback_map[cb.category_id] = []
+                cashback_map[cb.category_id].append(cb)
+            
+            for cat in categories_list:
+                if cat['id'] in cashback_map:
+                    max_cashback = max(cashback_map[cat['id']], key=lambda x: x.cashback_percent)
+                    if max_cashback.limit_amount:
+                        cashback_amount = min(
+                            cat['total'] * max_cashback.cashback_percent / 100,
+                            max_cashback.limit_amount
+                        )
+                    else:
+                        cashback_amount = cat['total'] * max_cashback.cashback_percent / 100
+                    potential_cashback += cashback_amount
                 
         return {
             'total': total,
@@ -807,5 +862,4 @@ def get_last_expenses(telegram_id: int, limit: int = 30) -> List[Expense]:
     except Exception as e:
         logger.error(f"Error getting last expenses: {e}")
         return []
-
 

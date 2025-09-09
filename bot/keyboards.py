@@ -40,13 +40,16 @@ def back_close_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     return keyboard.as_markup()
 
 
-def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True, has_subscription: bool = False) -> InlineKeyboardMarkup:
+def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True, has_subscription: bool = False, view_scope: str = 'personal') -> InlineKeyboardMarkup:
     """Меню настроек"""
     keyboard = InlineKeyboardBuilder()
     
     keyboard.button(text=get_text('change_language', lang), callback_data="change_language")
     keyboard.button(text=get_text('change_timezone', lang), callback_data="change_timezone")
     keyboard.button(text=get_text('change_currency', lang), callback_data="change_currency")
+    
+    # Кнопка семейного бюджета
+    keyboard.button(text=get_text('household_button', lang), callback_data="household_budget")
     
     # Кнопка переключения кешбэка - только для пользователей с подпиской
     if has_subscription:
@@ -59,9 +62,9 @@ def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True, has_subsc
     
     # Правильная настройка кнопок - по одной в ряд
     if has_subscription:
-        keyboard.adjust(1, 1, 1, 1, 1)  # 5 кнопок: язык, часовой пояс, валюта, кешбэк, закрыть
+        keyboard.adjust(1, 1, 1, 1, 1, 1)
     else:
-        keyboard.adjust(1, 1, 1, 1)  # 4 кнопки: язык, часовой пояс, валюта, закрыть
+        keyboard.adjust(1, 1, 1, 1, 1)
     
     return keyboard.as_markup()
 
@@ -159,7 +162,15 @@ def get_currency_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     return keyboard.as_markup()
 
 
-def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf: bool = True, current_month: int = None, current_year: int = None) -> InlineKeyboardMarkup:
+def expenses_summary_keyboard(
+    lang: str = 'ru',
+    period: str = 'today',
+    show_pdf: bool = True,
+    current_month: int = None,
+    current_year: int = None,
+    show_scope_toggle: bool = False,
+    current_scope: str = 'personal'
+) -> InlineKeyboardMarkup:
     """Клавиатура для сводки расходов"""
     from datetime import date
     from bot.utils import get_month_name
@@ -167,21 +178,33 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
     keyboard = InlineKeyboardBuilder()
     today = date.today()
     
+    # Кнопка переключения режима (личный/семейный) — только если есть семья
+    if show_scope_toggle:
+        # Показываем текущий режим (а не цель переключения)
+        scope_btn_text = (
+            get_text('household_budget_button', lang)
+            if current_scope == 'household'
+            else get_text('my_budget_button', lang)
+        )
+        keyboard.button(text=scope_btn_text, callback_data="toggle_view_scope_expenses")
+
     # Кнопка дневника трат - добавляем только для периода 'today'
     if period == 'today':
         keyboard.button(text=get_text('diary_button', lang), callback_data="show_diary")
-        keyboard.button(text=get_text('month_start_button', lang), callback_data="show_month_start")
-        
-        # Добавляем кнопку предыдущего месяца для удобства навигации
+
+        # Добавляем кнопки месяцев в один ряд: слева предыдущий месяц, справа текущий
         from bot.utils import get_month_name
         prev_month = today.month - 1 if today.month > 1 else 12
         prev_month_name = get_month_name(prev_month, lang).capitalize()
         keyboard.button(text=f"← {prev_month_name}", callback_data="expenses_prev_month")
-        
+
+        current_month_name = get_month_name(today.month, lang).capitalize()
+        keyboard.button(text=current_month_name, callback_data="show_month_start")
+
         # Кнопка Топ-5
         keyboard.button(text=get_text('top5_button', lang), callback_data="top5_menu")
     elif period == 'month' and show_pdf:
-        # Для месячных отчетов показываем кнопку PDF
+        # Для месячных отчетов показываем кнопку PDF (отдельной строкой)
         keyboard.button(text=get_text('generate_pdf', lang), callback_data="pdf_generate_current")
         
         # Кнопки навигации по месяцам
@@ -225,7 +248,11 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
     keyboard.button(text=get_text('close', lang), callback_data="close")
     
     if period == 'today':
-        keyboard.adjust(1, 1, 1, 1, 1)  # 5 кнопок: дневник, с начала месяца, предыдущий месяц, Топ-5, закрыть
+        if show_scope_toggle:
+            # Переключатель, дневник, (предыдущий месяц + текущий месяц), Топ-5, закрыть
+            keyboard.adjust(1, 1, 2, 1, 1)
+        else:
+            keyboard.adjust(1, 2, 1, 1)
     elif period == 'month' and show_pdf:
         if current_month and current_year:
             # Проверяем количество кнопок навигации
@@ -241,15 +268,26 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
                 
             if not is_future:
                 nav_buttons += 1  # Добавляем кнопку следующего месяца
-            
+
+            # Формируем схему рядов с учетом возможной кнопки переключателя вверху
+            rows = []
+            if show_scope_toggle:
+                rows.append(1)  # Переключатель режимов
+            rows.append(1)      # PDF отдельной строкой
             if nav_buttons == 1:
-                keyboard.adjust(1, 1, 1)  # PDF, одна кнопка навигации, закрыть
+                rows.append(1)
             elif nav_buttons == 2:
-                keyboard.adjust(1, 2, 1)  # PDF, две кнопки навигации, закрыть
+                rows.append(2)
             else:
-                keyboard.adjust(1, 3, 1)  # PDF, три кнопки навигации, закрыть
+                rows.append(3)
+            rows.append(1)      # Закрыть
+            keyboard.adjust(*rows)
         else:
-            keyboard.adjust(1, 1, 1)  # PDF, предыдущий месяц, закрыть
+            rows = []
+            if show_scope_toggle:
+                rows.append(1)
+            rows.extend([1, 1, 1])  # PDF, предыдущий месяц, закрыть
+            keyboard.adjust(*rows)
     elif period == 'month':  # Месячный отчет без PDF
         if current_month and current_year:
             # Проверяем количество кнопок навигации
@@ -266,14 +304,21 @@ def expenses_summary_keyboard(lang: str = 'ru', period: str = 'today', show_pdf:
             if not is_future:
                 nav_buttons += 1  # Добавляем кнопку следующего месяца
             
+            rows = []
+            if show_scope_toggle:
+                rows.append(1)
             if nav_buttons == 1:
-                keyboard.adjust(1, 1)  # Одна кнопка навигации, закрыть
+                rows.extend([1, 1])
             elif nav_buttons == 2:
-                keyboard.adjust(2, 1)  # Две кнопки навигации, закрыть
+                rows.extend([2, 1])
             else:
-                keyboard.adjust(3, 1)  # Три кнопки навигации, закрыть
+                rows.extend([3, 1])
+            keyboard.adjust(*rows)
         else:
-            keyboard.adjust(1, 1)  # Предыдущий месяц, закрыть
+            rows = [1]
+            if show_scope_toggle:
+                rows.insert(0, 1)
+            keyboard.adjust(*rows)  # Предыдущий месяц, закрыть (+переключатель при наличии)
     else:
         keyboard.adjust(1)  # Только закрытие
     

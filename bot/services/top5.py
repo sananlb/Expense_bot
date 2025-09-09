@@ -211,8 +211,9 @@ def build_top5_keyboard(items: List[Dict], lang: str = 'ru') -> InlineKeyboardMa
 
         rows.append([InlineKeyboardButton(text=btn_text, callback_data=f"t5:{it['id']}")])
 
-    # Добавляем кнопку закрыть
+    # Добавляем кнопку Назад и Закрыть
     from bot.utils import get_text
+    rows.append([InlineKeyboardButton(text=get_text('back_button', lang), callback_data='expenses_today')])
     rows.append([InlineKeyboardButton(text=get_text('close', lang), callback_data='close')])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 

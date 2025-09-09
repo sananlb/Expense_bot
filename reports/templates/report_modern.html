@@ -309,7 +309,7 @@
                 {% endif %}
                 <h1 class="brand-name">Coins</h1>
             </div>
-            <p class="report-period">{{ report_for_period }} {{ period }}</p>
+            <p class="report-period">{% if household_mode %}🏠 {{ household_name }} — {% endif %}{{ report_for_period }} {{ period }}</p>
         </div>
         
         <!-- Summary Cards - Simplified layout -->

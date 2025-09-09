@@ -32,6 +32,7 @@ from .routers import (
     budget_router,
     affiliate_router,
     top5_router,
+    household_router,
     # pdf_report_router  # Временно отключено
 )
 from .middlewares import (
@@ -168,16 +169,17 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(category_router)  # Перемещаем выше expense_router
     dp.include_router(recurring_router)
     dp.include_router(cashback_router)
-    dp.include_router(budget_router)       # Роутер бюджетов
+    dp.include_router(expense_router)  # Команды должны быть выше FSM состояний
+    dp.include_router(reports_router)  # Команды должны быть выше FSM состояний
+    dp.include_router(household_router)     # Роутер семейного бюджета (FSM состояния)
+    dp.include_router(budget_router)        # Роутер бюджетов
     dp.include_router(subscription_router)  # Роутер подписок
     dp.include_router(referral_router)     # Роутер реферальной системы
     dp.include_router(affiliate_router)    # Роутер партнёрской программы Telegram Stars
     dp.include_router(top5_router)
     dp.include_router(settings_router)
-    dp.include_router(reports_router)
     # dp.include_router(pdf_report_router)   # PDF отчеты - временно отключено из-за проблем с playwright
     dp.include_router(info_router)
-    dp.include_router(expense_router)  # Обработка расходов после специфичных роутеров
     dp.include_router(chat_router)     # Низкий приоритет для обработки чата
     
     return dp

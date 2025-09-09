@@ -68,6 +68,18 @@ class Profile(models.Model):
         help_text='Время последней активности пользователя'
     )
     
+    # Семейный бюджет (домохозяйство)
+    # Пользователь может принадлежать одному домохозяйству.
+    # Если null — ведет личный бюджет.
+    household = models.ForeignKey(
+        'Household',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='profiles',
+        verbose_name='Домохозяйство'
+    )
+    
     class Meta:
         db_table = 'users_profile'
         verbose_name = 'Профиль'
@@ -104,6 +116,88 @@ class Profile(models.Model):
         ).distinct().count()
 
 
+class Household(models.Model):
+    """Домохозяйство (семейный бюджет)"""
+    created_at = models.DateTimeField(auto_now_add=True)
+    name = models.CharField(max_length=100, null=True, blank=True)
+    creator = models.ForeignKey(
+        Profile, 
+        on_delete=models.SET_NULL, 
+        null=True,
+        related_name='created_households',
+        verbose_name='Создатель'
+    )
+    max_members = models.IntegerField(default=10, verbose_name='Максимум участников')
+    is_active = models.BooleanField(default=True, verbose_name='Активно')
+
+    class Meta:
+        db_table = 'households'
+        verbose_name = 'Домохозяйство'
+        verbose_name_plural = 'Домохозяйства'
+        indexes = [
+            models.Index(fields=['is_active']),
+        ]
+
+    def __str__(self):
+        return self.name or f"Household #{self.id}"
+    
+    @property
+    def members_count(self):
+        """Количество участников домохозяйства"""
+        return self.profiles.count()
+    
+    def can_add_member(self):
+        """Проверка возможности добавления нового участника"""
+        return self.is_active and self.members_count < self.max_members
+
+
+class FamilyInvite(models.Model):
+    """Приглашение в домохозяйство через deep-link"""
+    inviter = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='family_invites')
+    household = models.ForeignKey(Household, on_delete=models.CASCADE, related_name='invites')
+    token = models.CharField(max_length=64, unique=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    used_by = models.ForeignKey(
+        Profile, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='used_invites',
+        verbose_name='Использовано пользователем'
+    )
+    used_at = models.DateTimeField(null=True, blank=True, verbose_name='Дата использования')
+
+    class Meta:
+        db_table = 'family_invites'
+        verbose_name = 'Приглашение в сем. бюджет'
+        verbose_name_plural = 'Приглашения в сем. бюджет'
+        indexes = [
+            models.Index(fields=['token']),
+            models.Index(fields=['is_active', 'expires_at']),
+        ]
+
+    def __str__(self):
+        return f"Invite {self.token} -> HH#{self.household_id} by {self.inviter_id}"
+
+    def is_valid(self):
+        from django.utils import timezone as dj_tz
+        if not self.is_active:
+            return False
+        if self.used_by:
+            return False
+        if self.expires_at and dj_tz.now() > self.expires_at:
+            return False
+        return True
+    
+    @staticmethod
+    def generate_token():
+        """Генерация уникального токена для приглашения"""
+        import secrets
+        return secrets.token_urlsafe(32)
+
+
 class UserSettings(models.Model):
     """Настройки пользователя согласно ТЗ"""
     profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name='settings')
@@ -113,6 +207,18 @@ class UserSettings(models.Model):
     
     # Кешбэк
     cashback_enabled = models.BooleanField(default=True, verbose_name='Кешбэк включен')
+
+    # Режим отображения данных: личный или семейный
+    VIEW_SCOPE_CHOICES = [
+        ('personal', 'Личный'),
+        ('household', 'Семья'),
+    ]
+    view_scope = models.CharField(
+        max_length=20,
+        choices=VIEW_SCOPE_CHOICES,
+        default='personal',
+        verbose_name='Режим отображения'
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -1291,11 +1397,11 @@ class AffiliateProgram(models.Model):
         ordering = ['-created_at']
     
     def __str__(self):
-        return f"Affiliate Program ({self.commission_permille/10}%)"
+        return f"Affiliate Program ({int(self.commission_permille/10)}%)"
     
     def get_commission_percent(self):
         """Получить комиссию в процентах"""
-        return self.commission_permille / 10
+        return int(self.commission_permille / 10)
     
     def calculate_commission(self, amount):
         """Рассчитать комиссию от суммы"""
@@ -1524,7 +1630,7 @@ class AffiliateCommission(models.Model):
     
     def get_commission_percent(self):
         """Получить процент комиссии"""
-        return self.commission_rate / 10  # промилле в проценты
+        return int(self.commission_rate / 10)  # промилле в проценты
     
     def calculate_hold_date(self):
         """Рассчитать дату окончания холда (21 день)"""

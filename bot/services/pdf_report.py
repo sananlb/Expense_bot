@@ -18,7 +18,7 @@ from django.conf import settings
 from django.db.models import Sum, Count, Q
 from dateutil.relativedelta import relativedelta
 
-from expenses.models import Expense, ExpenseCategory, Profile, Cashback, Income, IncomeCategory
+from expenses.models import Expense, ExpenseCategory, Profile, Cashback, Income, IncomeCategory, UserSettings
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +98,24 @@ class PDFReportService:
             
             if total_count == 0:
                 return None
+
+            # Определяем режим отображения (личный/семейный) для пометки в отчете
+            household_mode = False
+            household_name = None
+            try:
+                settings_obj = await UserSettings.objects.aget(profile=profile)
+            except UserSettings.DoesNotExist:
+                settings_obj = None
+            if getattr(profile, 'household_id', None) and settings_obj and getattr(settings_obj, 'view_scope', 'personal') == 'household':
+                household_mode = True
+                try:
+                    # Берем имя семьи, если есть
+                    if profile.household_id:
+                        hh = await Profile.objects.select_related('household').aget(id=profile.id)
+                        if hh.household and hh.household.name:
+                            household_name = hh.household.name
+                except Exception:
+                    household_name = None
             
             # Статистика по категориям (нежная палитра с чуть более темными оттенками)
             category_colors = [
@@ -616,30 +634,33 @@ class PDFReportService:
             }
 
         # Рендерим шаблон с данными
-        html = self.template.render(
-            period=report_data['period'],
-            total_amount=report_data['total_amount'],
-            total_count=report_data['total_count'],
-            total_cashback=report_data['total_cashback'],
-            change_direction=report_data.get('change_direction', ''),
-            change_percent=report_data.get('change_percent', 0),
-            prev_month_name=report_data.get('prev_month_name', ''),
-            categories=report_data['categories'],
-            logo_base64=report_data.get('logo_base64', ''),
-            categories_json=categories_json,
-            daily_json=daily_json,
-            # Новые поля для доходов
-            income_total_amount=report_data.get('income_total_amount', '0'),
-            income_total_count=report_data.get('income_total_count', 0),
-            income_categories=report_data.get('income_categories', []),
-            income_categories_json=income_categories_json,
-            daily_incomes_json=daily_incomes_json,
-            net_balance=report_data.get('net_balance', '0'),
-            has_incomes=report_data.get('has_incomes', False),
-            # Переводы
-            **translations,
-            prev_summaries=report_data.get('prev_summaries', [])
-        )
+            html = self.template.render(
+                period=report_data['period'],
+                total_amount=report_data['total_amount'],
+                total_count=report_data['total_count'],
+                total_cashback=report_data['total_cashback'],
+                change_direction=report_data.get('change_direction', ''),
+                change_percent=report_data.get('change_percent', 0),
+                prev_month_name=report_data.get('prev_month_name', ''),
+                categories=report_data['categories'],
+                logo_base64=report_data.get('logo_base64', ''),
+                categories_json=categories_json,
+                daily_json=daily_json,
+                # Новые поля для доходов
+                income_total_amount=report_data.get('income_total_amount', '0'),
+                income_total_count=report_data.get('income_total_count', 0),
+                income_categories=report_data.get('income_categories', []),
+                income_categories_json=income_categories_json,
+                daily_incomes_json=daily_incomes_json,
+                net_balance=report_data.get('net_balance', '0'),
+                has_incomes=report_data.get('has_incomes', False),
+                # Режим отчета
+                household_mode=household_mode,
+                household_name=household_name,
+                # Переводы
+                **translations,
+                prev_summaries=report_data.get('prev_summaries', [])
+            )
         
         return html
     

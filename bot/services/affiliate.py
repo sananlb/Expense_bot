@@ -352,7 +352,9 @@ def get_referrer_stats(user_id: int) -> Dict[str, Any]:
         active_referrals = referrals['active'] or 0
         conversion_rate = 0
         if referrals_count > 0:
-            conversion_rate = round((active_referrals / referrals_count) * 100, 1)
+            rate = (active_referrals / referrals_count) * 100
+            # Показываем целое число, если нет дробной части
+            conversion_rate = int(rate) if rate == int(rate) else round(rate, 1)
         
         return {
             'has_link': True,

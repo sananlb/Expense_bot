@@ -70,6 +70,58 @@ async def callback_show_month_start(callback: CallbackQuery, state: FSMContext, 
     await callback.answer()
 
 
+@router.callback_query(F.data == "toggle_view_scope_expenses")
+async def toggle_view_scope_expenses(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Переключить режим (личный/семейный) из экрана расходов и обновить сводку"""
+    try:
+        from asgiref.sync import sync_to_async
+        from expenses.models import Profile, UserSettings
+        
+        @sync_to_async
+        def toggle(uid):
+            profile = Profile.objects.get(telegram_id=uid)
+            if not profile.household_id:
+                return False
+            settings = profile.settings if hasattr(profile, 'settings') else UserSettings.objects.create(profile=profile)
+            current = getattr(settings, 'view_scope', 'personal')
+            settings.view_scope = 'household' if current == 'personal' else 'personal'
+            settings.save()
+            return True
+        
+        ok = await toggle(callback.from_user.id)
+        if not ok:
+            await callback.answer('Нет семейного бюджета' if lang == 'ru' else 'No household', show_alert=True)
+            return
+        
+        data = await state.get_data()
+        from datetime import date as date_type, date
+        start_date = data.get('report_start_date')
+        end_date = data.get('report_end_date')
+        if isinstance(start_date, str):
+            start_date = date_type.fromisoformat(start_date)
+        if isinstance(end_date, str):
+            end_date = date_type.fromisoformat(end_date)
+        if not start_date or not end_date:
+            today = date.today()
+            start_date = today
+            end_date = today
+        
+        await show_expenses_summary(
+            callback.message,
+            start_date,
+            end_date,
+            lang,
+            state=state,
+            edit=True,
+            original_message=callback.message,
+            callback=callback
+        )
+        await callback.answer()
+    except Exception as e:
+        logger.error(f"Error toggling scope from expenses: {e}")
+        await callback.answer(get_text('error_occurred', lang))
+
+
 
 
 async def show_expenses_summary(
@@ -96,10 +148,38 @@ async def show_expenses_summary(
         
         logger.info(f"Getting expenses summary for user {user_id}, period: {start_date} to {end_date}")
         
+        # Определяем режим отображения (личный/семья)
+        from bot.services.profile import get_or_create_profile, get_user_settings
+        from asgiref.sync import sync_to_async
+        
+        # Создаем синхронную функцию для получения настроек
+        def get_household_mode(uid):
+            from expenses.models import Profile, UserSettings
+            try:
+                profile = Profile.objects.get(telegram_id=uid)
+                settings = profile.settings if hasattr(profile, 'settings') else UserSettings.objects.create(profile=profile)
+                return bool(profile.household) and getattr(settings, 'view_scope', 'personal') == 'household'
+            except Profile.DoesNotExist:
+                return False
+        
+        household_mode = await sync_to_async(get_household_mode)(user_id)
+
+        # Определяем, есть ли у пользователя семья (для показа переключателя)
+        @sync_to_async
+        def has_household(uid):
+            from expenses.models import Profile
+            try:
+                return Profile.objects.filter(telegram_id=uid, household__isnull=False).exists()
+            except Exception:
+                return False
+        
+        user_has_household = await has_household(user_id)
+        
         summary = await get_expenses_summary(
             user_id=user_id,
             start_date=start_date,
-            end_date=end_date
+            end_date=end_date,
+            household_mode=household_mode
         )
         
         logger.info(f"Summary result: total={summary.get('total', 0)}, count={summary.get('count', 0)}, categories={len(summary.get('by_category', []))}")
@@ -117,7 +197,24 @@ async def show_expenses_summary(
             else:
                 period_text = f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
         
-        text = f"📊 <b>{get_text('summary', lang)} {period_text}</b>\n\n"
+        # Добавляем индикатор семейного бюджета
+        if household_mode:
+            # Получаем название домохозяйства через sync_to_async
+            def get_household_name(uid):
+                from expenses.models import Profile
+                try:
+                    profile = Profile.objects.get(telegram_id=uid)
+                    if profile.household:
+                        return profile.household.name or "Семейный бюджет"
+                except Profile.DoesNotExist:
+                    pass
+                return "Семейный бюджет"
+            
+            household_name = await sync_to_async(get_household_name)(user_id)
+            text = f"👨‍👩‍👧‍👦 <b>{household_name}</b>\n"
+            text += f"📊 <b>{get_text('summary', lang)} {period_text}</b>\n\n"
+        else:
+            text = f"📊 <b>{get_text('summary', lang)} {period_text}</b>\n\n"
         
         # Проверяем есть ли операции вообще
         has_expenses = summary['total'] > 0
@@ -227,11 +324,11 @@ async def show_expenses_summary(
                 
                 text += "\n"
         
-        # Добавляем подсказку внизу курсивом
+        # Добавляем подсказку внизу курсивом с лампочкой
         if lang == 'en':
-            text += "\n\n<i>Show report for another period?</i>"
+            text += "\n\n<i>💡 Show report for another period?</i>"
         else:
-            text += "\n\n<i>Показать отчет за другой период?</i>"
+            text += "\n\n<i>💡 Показать отчет за другой период?</i>"
         
         # Определяем период для клавиатуры
         today = date.today()
@@ -270,7 +367,9 @@ async def show_expenses_summary(
                 reply_markup=expenses_summary_keyboard(
                     lang, period, show_pdf,
                     current_month=start_date.month if start_date.day == 1 else None,
-                    current_year=start_date.year if start_date.day == 1 else None
+                    current_year=start_date.year if start_date.day == 1 else None,
+                    show_scope_toggle=user_has_household,
+                    current_scope=('household' if household_mode else 'personal')
                 )
             )
         else:
@@ -279,7 +378,9 @@ async def show_expenses_summary(
                 reply_markup=expenses_summary_keyboard(
                     lang, period, show_pdf,
                     current_month=start_date.month if start_date.day == 1 else None,
-                    current_year=start_date.year if start_date.day == 1 else None
+                    current_year=start_date.year if start_date.day == 1 else None,
+                    show_scope_toggle=user_has_household,
+                    current_scope=('household' if household_mode else 'personal')
                 )
             )
             
@@ -335,20 +436,40 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
         @sync_to_async
         def get_recent_operations():
             from expenses.models import Income
+            from bot.services.profile import get_user_settings as gus
+            # Получаем глобальный режим (sync доступ к wrapped функции)
+            settings = gus.__wrapped__(user_id)
+            household_mode = bool(profile and profile.household) and getattr(settings, 'view_scope', 'personal') == 'household'
             
             # Получаем расходы
-            expenses = list(Expense.objects.filter(
-                profile__telegram_id=user_id,
-                expense_date__gte=start_date,
-                expense_date__lte=end_date
-            ).select_related('category').order_by('-expense_date', '-expense_time')[:30])
+            if household_mode:
+                expenses_qs = Expense.objects.filter(
+                    profile__household=profile.household,
+                    expense_date__gte=start_date,
+                    expense_date__lte=end_date
+                )
+            else:
+                expenses_qs = Expense.objects.filter(
+                    profile__telegram_id=user_id,
+                    expense_date__gte=start_date,
+                    expense_date__lte=end_date
+                )
+            expenses = list(expenses_qs.select_related('category').order_by('-expense_date', '-expense_time')[:30])
             
             # Получаем доходы
-            incomes = list(Income.objects.filter(
-                profile__telegram_id=user_id,
-                income_date__gte=start_date,
-                income_date__lte=end_date
-            ).select_related('category').order_by('-income_date', '-income_time')[:30])
+            if household_mode:
+                incomes_qs = Income.objects.filter(
+                    profile__household=profile.household,
+                    income_date__gte=start_date,
+                    income_date__lte=end_date
+                )
+            else:
+                incomes_qs = Income.objects.filter(
+                    profile__telegram_id=user_id,
+                    income_date__gte=start_date,
+                    income_date__lte=end_date
+                )
+            incomes = list(incomes_qs.select_related('category').order_by('-income_date', '-income_time')[:30])
             
             # Объединяем и сортируем по дате (от новых к старым)
             operations = []

@@ -29,13 +29,17 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
     """Обработка команды /start - показать информацию о боте"""
     user_id = message.from_user.id
     
-    # Проверяем, есть ли реферальный код в команде
+    # Проверяем, есть ли реферальный код или приглашение в семейный бюджет в команде
     referral_code = None
+    family_token = None
     if command.args:
-        # Формат: /start ref_ABCD1234
         args = command.args.strip()
         if args.startswith('ref_'):
+            # Формат: /start ref_ABCD1234
             referral_code = args[4:]  # Убираем префикс ref_
+        elif args.startswith('family_'):
+            # Формат: /start family_TOKEN
+            family_token = args[7:]  # Убираем префикс family_
     
     # Создаем или получаем профиль пользователя
     profile = await get_or_create_profile(
@@ -59,10 +63,49 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
         profile.language_code = display_lang
         await profile.asave()
     
+    # Обработка приглашения в семейный бюджет
+    if family_token:
+        # Импортируем функцию обработки приглашения
+        from bot.routers.household import process_family_invite
+        await process_family_invite(message, family_token)
+        return  # Прекращаем выполнение команды /start
+    
     # Создаем базовые категории для нового пользователя
     categories_created = await create_default_categories(user_id)
     # Создаем базовые категории доходов
     income_categories_created = await create_default_income_categories(user_id)
+    
+    # Если пришли по семейной ссылке, предлагаем подтвердить присоединение
+    if family_token:
+        try:
+            from bot.services.family import get_invite_by_token
+            inv = await get_invite_by_token(family_token)
+            if inv and inv.is_valid():
+                inviter_tid = inv.inviter.telegram_id
+                if display_lang == 'en':
+                    confirm_text = (
+                        "👥 Do you want to share a family budget with user "
+                        f"<code>{inviter_tid}</code>?"
+                    )
+                    yes_text, no_text = "✅ Yes", "✖️ No"
+                else:
+                    confirm_text = (
+                        "👥 Вы действительно хотите вести совместный бюджет с пользователем "
+                        f"<code>{inviter_tid}</code>?"
+                    )
+                    yes_text, no_text = "✅ Да", "✖️ Нет"
+                from aiogram.utils.keyboard import InlineKeyboardBuilder
+                kb = InlineKeyboardBuilder()
+                kb.button(text=yes_text, callback_data=f"family_accept:{inv.token}")
+                kb.button(text=no_text, callback_data="close")
+                kb.adjust(2)
+                await message.answer(confirm_text, reply_markup=kb.as_markup(), parse_mode="HTML")
+            else:
+                await message.answer(
+                    "Invite link is invalid or expired" if display_lang=='en' else "Ссылка-приглашение недействительна или истек срок действия"
+                )
+        except Exception as e:
+            logger.error(f"Error handling family invite: {e}")
     
     # Обработка реферальной ссылки для новых пользователей
     referral_message = ""
@@ -270,6 +313,15 @@ async def close_message(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.delete()
     # Очищаем последнее сохраненное сообщение меню
     # НЕ трогаем флаг persistent_cashback_menu - он управляется только в cashback.py
+    await state.update_data(
+        last_menu_message_id=None
+    )
+
+
+@router.callback_query(F.data == "close_menu")
+async def close_menu_compat(callback: types.CallbackQuery, state: FSMContext):
+    """Совместимость: обработка старого callback 'close_menu' как обычного закрытия"""
+    await callback.message.delete()
     await state.update_data(
         last_menu_message_id=None
     )

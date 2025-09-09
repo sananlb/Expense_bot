@@ -4,6 +4,30 @@
 
 TEXTS = {
     'ru': {
+        # Семейный бюджет (домохозяйство)
+        'household_default_name': 'Семейный бюджет',
+        'household_intro': '🏠 <b>Семейный бюджет</b>\n\nСемейный бюджет позволяет нескольким пользователям вести общий учет доходов и расходов.\n\n• Все участники видят общие траты\n• Максимум 10 участников\n• Приглашение через ссылку',
+        'create_household_button': '➕ Создать семейный бюджет',
+        'invite_member_button': '🔗 Пригласить участника',
+        'members_list_button': '👥 Список участников',
+        'rename_household_button': '✏️ Переименовать',
+        'leave_household_button': '🚪 Выйти из семейного бюджета',
+        'back_to_settings': '◀️ Назад к настройкам',
+        'household_members_count': 'Участников: {count}/{max}',
+        'enter_household_name': 'Введите название для вашего семейного бюджета\n(от 3 до 50 символов)',
+        'enter_new_household_name': 'Введите новое название для семейного бюджета\n(от 3 до 50 символов)',
+        'use_buttons_only': 'Пожалуйста, используйте кнопки \'Назад\' или \'Закрыть\'',
+        'not_in_household': 'Вы не состоите в семейном бюджете',
+        'only_creator_can_rename': 'Только создатель может переименовать семейный бюджет',
+        'household_leave_confirm': '⚠️ <b>Вы уверены, что хотите выйти из семейного бюджета?</b>\n\nПосле выхода вы будете вести личный учет финансов.',
+        'invite_link_title': '🔗 <b>Ссылка-приглашение в семейный бюджет:</b>',
+        'invite_link_note': 'Отправьте эту ссылку тому, кого хотите пригласить.',
+        'invite_link_valid': 'Ссылка действительна 48 часов.',
+        'yes_join': '✅ Да, присоединиться',
+        'yes_leave': '✅ Да, выйти',
+        'action_cancelled': 'Действие отменено',
+        'member_left_notification': '👤 Пользователь {user_id} вышел из семейного бюджета',
+        'household_disbanded_notification': '⚠️ Домохозяйство расформировано создателем {user_id}',
         # Основные сообщения
         'welcome': '💰 Добро пожаловать в Coins!',
         'welcome_text': '''Я помогу вам вести учет трат и отслеживать кешбэки.
@@ -174,6 +198,15 @@ TEXTS = {
         # Настройки
         'settings': 'Настройки',
         'settings_menu': 'Настройки',
+        'household_button': '🏠 Семейный бюджет',
+        'my_budget_button': '👤 Мой бюджет',
+        'household_budget_button': '🏠 Семейный бюджет',
+        'view_scope': 'Режим отображения',
+        'view_scope_personal': '👤 Личный',
+        'view_scope_household': '🏠 Семейный',
+        'toggle_view_scope': 'Переключить режим (сейчас: {scope})',
+        'scope_switched_to_personal': 'Режим переключен: Личный',
+        'scope_switched_to_household': 'Режим переключен: Семейный',
         'language': 'Язык',
         'timezone': 'Часовой пояс',
         'currency': 'Основная валюта',
@@ -202,6 +235,9 @@ TEXTS = {
         'language_changed': '✅ Язык изменен',
         'timezone_changed': '✅ Часовой пояс изменен',
         'currency_changed': '✅ Валюта изменена',
+
+        # Регулярные операции
+        'recurring_hint': 'Добавьте ежемесячный платеж или ежемесячный доход, и он будет автоматически записываться в выбранный день.',
         
         # Кнопки
         'add': 'Добавить',
@@ -574,6 +610,30 @@ TEXTS = {
         'recognized': '📝 Распознано: {text}',
     },
     'en': {
+        # Household (family budget)
+        'household_default_name': 'Household',
+        'household_intro': '🏠 <b>Household</b>\n\nThe household lets multiple users track finances together.\n\n• All participants see shared expenses\n• Up to 10 members\n• Invitation via link',
+        'create_household_button': '➕ Create household',
+        'invite_member_button': '🔗 Invite member',
+        'members_list_button': '👥 Members',
+        'rename_household_button': '✏️ Rename',
+        'leave_household_button': '🚪 Leave household',
+        'back_to_settings': '◀️ Back to settings',
+        'household_members_count': 'Members: {count}/{max}',
+        'enter_household_name': 'Enter a name for your household\n(3 to 50 characters)',
+        'use_buttons_only': 'Please use Back or Close buttons',
+        'enter_new_household_name': 'Enter a new name for your household\n(3 to 50 characters)',
+        'not_in_household': 'You are not in a household',
+        'only_creator_can_rename': 'Only the household creator can rename it',
+        'household_leave_confirm': '⚠️ <b>Are you sure you want to leave the household?</b>\n\nAfter leaving you will track finances personally.',
+        'invite_link_title': '🔗 <b>Household invite link:</b>',
+        'invite_link_note': 'Send this link to the person you want to invite.',
+        'invite_link_valid': 'The link is valid for 48 hours.',
+        'yes_join': '✅ Yes, join',
+        'yes_leave': '✅ Yes, leave',
+        'action_cancelled': 'Action cancelled',
+        'member_left_notification': '👤 User {user_id} left the household',
+        'household_disbanded_notification': '⚠️ Household was disbanded by creator {user_id}',
         # Basic messages
         'welcome': '💰 Welcome to Coins!',
         'welcome_text': '''I'll help you track expenses and monitor cashbacks.
@@ -740,6 +800,15 @@ Example: "alphabank 5% 2000 rub"''',
         # Settings
         'settings': 'Settings',
         'settings_menu': 'Settings',
+        'household_button': '🏠 Household',
+        'my_budget_button': '👤 My budget',
+        'household_budget_button': '🏠 Household budget',
+        'view_scope': 'View scope',
+        'view_scope_personal': '👤 Personal',
+        'view_scope_household': '🏠 Household',
+        'toggle_view_scope': 'Toggle view (now: {scope})',
+        'scope_switched_to_personal': 'Scope switched: Personal',
+        'scope_switched_to_household': 'Scope switched: Household',
         'language': 'Language',
         'timezone': 'Timezone',
         'currency': 'Main currency',
@@ -759,6 +828,9 @@ Example: "alphabank 5% 2000 rub"''',
         'language_changed': '✅ Language changed',
         'timezone_changed': '✅ Timezone changed',
         'currency_changed': '✅ Currency changed',
+
+        # Recurring operations
+        'recurring_hint': 'Add a monthly payment or monthly income, and it will be recorded automatically on the selected day.',
         
         # Buttons
         'add': 'Add',

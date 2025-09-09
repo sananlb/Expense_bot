@@ -29,6 +29,30 @@ class SettingsStates(StatesGroup):
     currency = State()
 
 
+@router.callback_query(F.data == "toggle_view_scope")
+async def toggle_view_scope(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Переключить глобальный режим отображения (личный/семья)"""
+    try:
+        profile = await get_or_create_profile(callback.from_user.id)
+        settings = await sync_to_async(lambda: profile.settings)()
+        current = getattr(settings, 'view_scope', 'personal')
+        # Нельзя переключиться в семейный режим, если нет домохозяйства
+        if current == 'personal' and not profile.household:
+            warn = 'Нет семейного бюджета' if lang == 'ru' else 'No household'
+            await callback.answer(warn, show_alert=True)
+            return
+        new_scope = 'household' if current == 'personal' else 'personal'
+        setattr(settings, 'view_scope', new_scope)
+        await sync_to_async(settings.save)()
+        msg_key = 'scope_switched_to_household' if new_scope == 'household' else 'scope_switched_to_personal'
+        await callback.answer(get_text(msg_key, lang))
+        # Обновляем меню настроек
+        await callback_settings(callback, state, lang)
+    except Exception as e:
+        logger.error(f"Error toggling view scope: {e}")
+        await callback.answer(get_text('error_occurred', lang))
+
+
 @router.message(Command("settings"))
 async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
     """Показать меню настроек"""
@@ -62,12 +86,15 @@ async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
             timezone_text = 'UTC+0'
             
         currency_text = profile.currency or 'RUB'
+        view_scope = settings.view_scope if hasattr(settings, 'view_scope') else 'personal'
+        scope_text = get_text('view_scope_personal', lang) if view_scope == 'personal' else get_text('view_scope_household', lang)
         
         text = f"""{get_text('settings_menu', lang)}
 
 {get_text('language', lang)}: {lang_text}
 {get_text('timezone', lang)}: {timezone_text}
-{get_text('currency', lang)}: {currency_text}"""
+{get_text('currency', lang)}: {currency_text}
+{get_text('view_scope', lang)}: {scope_text}"""
         
         # Получаем настройки кешбэка
         user_settings = await get_user_settings(message.from_user.id)
@@ -81,7 +108,7 @@ async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
             message, 
             state, 
             text, 
-            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription)
+            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription, view_scope)
         )
         
     except Exception as e:
@@ -122,12 +149,15 @@ async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: st
             timezone_text = 'UTC+0'
             
         currency_text = profile.currency or 'RUB'
+        view_scope = settings.view_scope if hasattr(settings, 'view_scope') else 'personal'
+        scope_text = get_text('view_scope_personal', lang) if view_scope == 'personal' else get_text('view_scope_household', lang)
         
         text = f"""{get_text('settings_menu', lang)}
 
 {get_text('language', lang)}: {lang_text}
 {get_text('timezone', lang)}: {timezone_text}
-{get_text('currency', lang)}: {currency_text}"""
+{get_text('currency', lang)}: {currency_text}
+{get_text('view_scope', lang)}: {scope_text}"""
         
         # Получаем настройки кешбэка
         user_settings = await get_user_settings(callback.from_user.id)
@@ -139,7 +169,7 @@ async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: st
         
         await callback.message.edit_text(
             text,
-            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription)
+            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription, view_scope)
         )
         
     except Exception as e:
