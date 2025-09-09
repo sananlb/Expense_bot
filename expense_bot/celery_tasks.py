@@ -7,7 +7,7 @@ import os
 from typing import List
 
 from django.conf import settings
-from django.db.models import Count, Sum, Q
+from django.db.models import Count, Sum, Q, Avg, Case, When, FloatField
 from django.utils import timezone
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup
@@ -350,7 +350,11 @@ def send_daily_admin_report():
         ).aggregate(
             requests=Count('id'),
             avg_time=Avg('response_time'),
-            success_rate=Avg('success')
+            success_rate=Avg(Case(
+                When(success=True, then=1.0),
+                When(success=False, then=0.0),
+                output_field=FloatField()
+            ))
         )
 
         google_stats = AIServiceMetrics.objects.filter(
@@ -360,7 +364,11 @@ def send_daily_admin_report():
         ).aggregate(
             requests=Count('id'),
             avg_time=Avg('response_time'),
-            success_rate=Avg('success')
+            success_rate=Avg(Case(
+                When(success=True, then=1.0),
+                When(success=False, then=0.0),
+                output_field=FloatField()
+            ))
         )
 
         # ===============================
