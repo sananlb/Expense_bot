@@ -7,9 +7,10 @@ from django.db.models import Sum, Count
 from django.urls import reverse
 from django.utils.safestring import mark_safe
 from .models import (
-    Profile, UserSettings, ExpenseCategory, Expense, Budget, 
-    Cashback, RecurringPayment, Subscription, PromoCode, 
-    PromoCodeUsage, ReferralBonus, Income, IncomeCategory
+    Profile, UserSettings, ExpenseCategory, Expense, Budget,
+    Cashback, RecurringPayment, Subscription, PromoCode,
+    PromoCodeUsage, ReferralBonus, Income, IncomeCategory,
+    AffiliateProgram, AffiliateLink, AffiliateReferral, AffiliateCommission
 )
 from dateutil.relativedelta import relativedelta
 from bot.utils.category_helpers import get_category_display_name
@@ -614,3 +615,173 @@ class IncomeAdmin(admin.ModelAdmin):
 admin.site.site_header = "ExpenseBot Admin"
 admin.site.site_title = "ExpenseBot"
 admin.site.index_title = "Панель управления"
+
+
+# ==============================
+# Партнёрская программа (просмотр)
+# ==============================
+
+@admin.register(AffiliateProgram)
+class AffiliateProgramAdmin(admin.ModelAdmin):
+    list_display = [
+        'commission_percent', 'commission_permille', 'is_active',
+        'duration_months', 'start_date', 'end_date', 'telegram_program_id',
+        'created_at'
+    ]
+    list_filter = ['is_active', 'duration_months', 'start_date', 'created_at']
+    search_fields = ['telegram_program_id']
+    readonly_fields = ['start_date', 'end_date', 'created_at', 'updated_at', 'telegram_program_id']
+    fieldsets = (
+        ('Общие', {
+            'fields': ('is_active', 'commission_permille', 'duration_months')
+        }),
+        ('Telegram', {
+            'fields': ('telegram_program_id',),
+            'classes': ('collapse',)
+        }),
+        ('Системные', {
+            'fields': ('start_date', 'end_date', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def commission_percent(self, obj):
+        return f"{obj.get_commission_percent()}%"
+    commission_percent.short_description = 'Комиссия'
+
+
+@admin.register(AffiliateLink)
+class AffiliateLinkAdmin(admin.ModelAdmin):
+    list_display = [
+        'profile_link', 'affiliate_code', 'clicks', 'conversions',
+        'conversion_rate_display', 'total_earned', 'is_active', 'created_at'
+    ]
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['affiliate_code', 'profile__telegram_id']
+    readonly_fields = [
+        'profile', 'affiliate_code', 'telegram_link', 'clicks', 'conversions',
+        'total_earned', 'created_at', 'updated_at'
+    ]
+    fieldsets = (
+        (None, {
+            'fields': ('profile', 'affiliate_code', 'telegram_link', 'is_active')
+        }),
+        ('Статистика', {
+            'fields': ('clicks', 'conversions', 'total_earned')
+        }),
+        ('Системные', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    list_per_page = 50
+
+    def profile_link(self, obj):
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:expenses_profile_change', args=[obj.profile.id]),
+            obj.profile.telegram_id
+        )
+    profile_link.short_description = 'Профиль'
+
+    def conversion_rate_display(self, obj):
+        return f"{obj.get_conversion_rate()}%"
+    conversion_rate_display.short_description = 'Конверсия'
+
+
+@admin.register(AffiliateReferral)
+class AffiliateReferralAdmin(admin.ModelAdmin):
+    list_display = [
+        'referrer_link', 'referred_link', 'joined_at', 'first_payment_at',
+        'total_payments', 'total_spent'
+    ]
+    list_filter = ['joined_at', 'first_payment_at']
+    search_fields = ['referrer__telegram_id', 'referred__telegram_id']
+    readonly_fields = [
+        'referrer', 'referred', 'affiliate_link', 'joined_at', 'first_payment_at',
+        'total_payments', 'total_spent'
+    ]
+    fieldsets = (
+        (None, {
+            'fields': ('referrer', 'referred', 'affiliate_link')
+        }),
+        ('Статистика', {
+            'fields': ('joined_at', 'first_payment_at', 'total_payments', 'total_spent')
+        }),
+    )
+
+    def referrer_link(self, obj):
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:expenses_profile_change', args=[obj.referrer.id]),
+            obj.referrer.telegram_id
+        )
+    referrer_link.short_description = 'Реферер'
+
+    def referred_link(self, obj):
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:expenses_profile_change', args=[obj.referred.id]),
+            obj.referred.telegram_id
+        )
+    referred_link.short_description = 'Реферал'
+
+
+@admin.register(AffiliateCommission)
+class AffiliateCommissionAdmin(admin.ModelAdmin):
+    list_display = [
+        'id', 'referrer_link', 'referred_link', 'payment_amount',
+        'commission_amount', 'commission_rate_display', 'status',
+        'created_at', 'hold_until', 'paid_at'
+    ]
+    list_filter = ['status', 'created_at', 'hold_until', 'paid_at']
+    search_fields = [
+        'referrer__telegram_id', 'referred__telegram_id',
+        'telegram_payment_id', 'telegram_transaction_id'
+    ]
+    readonly_fields = [
+        'referrer', 'referred', 'subscription', 'referral', 'payment_amount',
+        'commission_amount', 'commission_rate', 'telegram_transaction_id',
+        'telegram_payment_id', 'status', 'created_at', 'hold_until', 'paid_at',
+        'notes'
+    ]
+    fieldsets = (
+        ('Связи', {
+            'fields': ('referrer', 'referred', 'subscription', 'referral')
+        }),
+        ('Финансы', {
+            'fields': ('payment_amount', 'commission_amount', 'commission_rate')
+        }),
+        ('Telegram', {
+            'fields': ('telegram_payment_id', 'telegram_transaction_id'),
+            'classes': ('collapse',)
+        }),
+        ('Статус и даты', {
+            'fields': ('status', 'created_at', 'hold_until', 'paid_at')
+        }),
+        ('Примечания', {
+            'fields': ('notes',),
+            'classes': ('collapse',)
+        }),
+    )
+    list_per_page = 100
+
+    def referrer_link(self, obj):
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:expenses_profile_change', args=[obj.referrer.id]),
+            obj.referrer.telegram_id
+        )
+    referrer_link.short_description = 'Реферер'
+
+    def referred_link(self, obj):
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:expenses_profile_change', args=[obj.referred.id]),
+            obj.referred.telegram_id
+        )
+    referred_link.short_description = 'Реферал'
+
+    def commission_rate_display(self, obj):
+        return f"{obj.get_commission_percent()}%"
+    commission_rate_display.short_description = 'Ставка'

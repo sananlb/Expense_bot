@@ -11,7 +11,10 @@ import logging
 from .decorators import admin_required
 from .models import BroadcastMessage, BroadcastRecipient
 from .forms import BroadcastMessageForm, BroadcastFilterForm
-from expenses.models import Profile, Expense, ExpenseCategory, Subscription, Income, RecurringPayment
+from expenses.models import (
+    Profile, Expense, ExpenseCategory, Subscription, Income, RecurringPayment,
+    AffiliateProgram, AffiliateLink, AffiliateReferral, AffiliateCommission
+)
 from bot.telegram_utils import send_telegram_message
 
 logger = logging.getLogger(__name__)
@@ -561,3 +564,134 @@ def api_users_search(request):
     } for user in users]
     
     return JsonResponse({'results': results})
+
+
+# ==============================
+# Партнёрская программа (кастомная админка)
+# ==============================
+
+@login_required
+@admin_required
+def affiliate_dashboard(request):
+    """Сводная страница партнёрской программы"""
+    program = AffiliateProgram.objects.filter(is_active=True).first()
+
+    # Агрегаты по ссылкам/рефералам/комиссиям
+    total_links = AffiliateLink.objects.count()
+    total_referrals = AffiliateReferral.objects.count()
+    active_referrals = AffiliateReferral.objects.filter(total_payments__gt=0).count()
+
+    commissions_qs = AffiliateCommission.objects.all()
+    total_commissions = commissions_qs.count()
+    paid_amount = commissions_qs.filter(status='paid').aggregate(total=Sum('commission_amount'))['total'] or 0
+    hold_amount = commissions_qs.filter(status='hold').aggregate(total=Sum('commission_amount'))['total'] or 0
+    pending_amount = commissions_qs.filter(status='pending').aggregate(total=Sum('commission_amount'))['total'] or 0
+
+    recent_commissions = commissions_qs.select_related('referrer', 'referred').order_by('-created_at')[:10]
+
+    context = {
+        'program': program,
+        'total_links': total_links,
+        'total_referrals': total_referrals,
+        'active_referrals': active_referrals,
+        'total_commissions': total_commissions,
+        'paid_amount': paid_amount,
+        'hold_amount': hold_amount,
+        'pending_amount': pending_amount,
+        'recent_commissions': recent_commissions,
+    }
+
+    return render(request, 'admin_panel/affiliate_dashboard.html', context)
+
+
+@login_required
+@admin_required
+def affiliate_links(request):
+    """Список реферальных ссылок"""
+    search = request.GET.get('q', '').strip()
+    active = request.GET.get('active', '')  # '', '1', '0'
+
+    links = AffiliateLink.objects.select_related('profile').all()
+    if search:
+        links = links.filter(
+            Q(affiliate_code__icontains=search) |
+            Q(profile__telegram_id__icontains=search)
+        )
+    if active == '1':
+        links = links.filter(is_active=True)
+    elif active == '0':
+        links = links.filter(is_active=False)
+
+    links = links.order_by('-created_at')
+
+    paginator = Paginator(links, 50)
+    page = request.GET.get('page')
+    page_obj = paginator.get_page(page)
+
+    context = {
+        'page_obj': page_obj,
+        'search': search,
+        'active': active,
+    }
+    return render(request, 'admin_panel/affiliate_links.html', context)
+
+
+@login_required
+@admin_required
+def affiliate_referrals(request):
+    """Список рефералов"""
+    search = request.GET.get('q', '').strip()
+
+    referrals = AffiliateReferral.objects.select_related('referrer', 'referred').all()
+    if search:
+        referrals = referrals.filter(
+            Q(referrer__telegram_id__icontains=search) |
+            Q(referred__telegram_id__icontains=search)
+        )
+
+    referrals = referrals.order_by('-joined_at')
+    paginator = Paginator(referrals, 50)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    context = {
+        'page_obj': page_obj,
+        'search': search,
+    }
+    return render(request, 'admin_panel/affiliate_referrals.html', context)
+
+
+@login_required
+@admin_required
+def affiliate_commissions(request):
+    """Список комиссий"""
+    search = request.GET.get('q', '').strip()
+    status = request.GET.get('status', '')  # '', 'pending','hold','paid','cancelled','refunded'
+
+    commissions = AffiliateCommission.objects.select_related('referrer', 'referred').all()
+    if search:
+        commissions = commissions.filter(
+            Q(referrer__telegram_id__icontains=search) |
+            Q(referred__telegram_id__icontains=search) |
+            Q(telegram_payment_id__icontains=search) |
+            Q(telegram_transaction_id__icontains=search)
+        )
+    if status in ['pending', 'hold', 'paid', 'cancelled', 'refunded']:
+        commissions = commissions.filter(status=status)
+
+    commissions = commissions.order_by('-created_at')
+
+    agg = commissions.aggregate(
+        total_amount=Sum('commission_amount'),
+        count=Count('id')
+    )
+
+    paginator = Paginator(commissions, 50)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    context = {
+        'page_obj': page_obj,
+        'search': search,
+        'status': status,
+        'agg': agg,
+    }
+    return render(request, 'admin_panel/affiliate_commissions.html', context)

@@ -1,0 +1,84 @@
+{% extends 'admin_panel/base.html' %}
+{% block title %}Партнёрская программа - ExpenseBot Admin{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="mb-0">Партнёрская программа</h2>
+    <div>
+      <a href="{% url 'panel:affiliate_links' %}" class="btn btn-outline-primary btn-sm">Ссылки</a>
+      <a href="{% url 'panel:affiliate_referrals' %}" class="btn btn-outline-primary btn-sm">Рефералы</a>
+      <a href="{% url 'panel:affiliate_commissions' %}" class="btn btn-outline-primary btn-sm">Комиссии</a>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title">Программа</h5>
+          {% if program %}
+            <p class="mb-1">Статус: <span class="badge {% if program.is_active %}bg-success{% else %}bg-secondary{% endif %}">{{ program.is_active|yesno:"Активна,Выключена" }}</span></p>
+            <p class="mb-1">Комиссия: <b>{{ program.get_commission_percent }}%</b> ({{ program.commission_permille }}‰)</p>
+            <p class="mb-0">Срок: {% if program.duration_months %}{{ program.duration_months }} мес.{% else %}бессрочно{% endif %}</p>
+          {% else %}
+            <p class="text-muted mb-0">Нет активной программы</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <div class="col-md-8">
+      <div class="card h-100">
+        <div class="card-body">
+          <h5 class="card-title">Итоги</h5>
+          <div class="row text-center">
+            <div class="col-6 col-md-3"><div class="fw-bold fs-5">{{ total_links }}</div><div class="text-muted">Ссылки</div></div>
+            <div class="col-6 col-md-3"><div class="fw-bold fs-5">{{ total_referrals }}</div><div class="text-muted">Рефералы</div></div>
+            <div class="col-6 col-md-3 mt-3 mt-md-0"><div class="fw-bold fs-5">{{ active_referrals }}</div><div class="text-muted">Активные</div></div>
+            <div class="col-6 col-md-3 mt-3 mt-md-0"><div class="fw-bold fs-5">{{ total_commissions }}</div><div class="text-muted">Комиссии</div></div>
+          </div>
+          <hr/>
+          <div class="row text-center">
+            <div class="col-4"><div class="fw-bold">{{ paid_amount }} ⭐</div><div class="text-muted">Выплачено</div></div>
+            <div class="col-4"><div class="fw-bold">{{ hold_amount }} ⭐</div><div class="text-muted">На холде</div></div>
+            <div class="col-4"><div class="fw-bold">{{ pending_amount }} ⭐</div><div class="text-muted">В ожидании</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <h5 class="card-title">Последние комиссии</h5>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Реферер</th>
+              <th>Реферал</th>
+              <th>Комиссия</th>
+              <th>Статус</th>
+              <th>Дата</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in recent_commissions %}
+            <tr>
+              <td>{{ c.id }}</td>
+              <td><a href="{% url 'panel:user_detail' c.referrer.id %}">{{ c.referrer.telegram_id }}</a></td>
+              <td><a href="{% url 'panel:user_detail' c.referred.id %}">{{ c.referred.telegram_id }}</a></td>
+              <td><b>{{ c.commission_amount }} ⭐</b> <span class="text-muted">({{ c.payment_amount }})</span></td>
+              <td><span class="badge {% if c.status == 'paid' %}bg-success{% elif c.status == 'hold' %}bg-warning text-dark{% elif c.status == 'pending' %}bg-secondary{% else %}bg-light text-dark{% endif %}">{{ c.get_status_display }}</span></td>
+              <td>{{ c.created_at|date:'d.m.Y H:i' }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-muted">Нет данных</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

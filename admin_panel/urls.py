@@ -21,4 +21,10 @@ urlpatterns = [
     # API endpoints для AJAX
     path('api/stats/', views.api_stats, name='api_stats'),
     path('api/users/search/', views.api_users_search, name='api_users_search'),
+
+    # Партнёрская программа (кастомная админка)
+    path('affiliate/', views.affiliate_dashboard, name='affiliate_dashboard'),
+    path('affiliate/links/', views.affiliate_links, name='affiliate_links'),
+    path('affiliate/referrals/', views.affiliate_referrals, name='affiliate_referrals'),
+    path('affiliate/commissions/', views.affiliate_commissions, name='affiliate_commissions'),
 ]

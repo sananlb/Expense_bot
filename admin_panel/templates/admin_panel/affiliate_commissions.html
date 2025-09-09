@@ -1,0 +1,87 @@
+{% extends 'admin_panel/base.html' %}
+{% block title %}Партнёрка — Комиссии{% endblock %}
+{% block content %}
+<div class="container py-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3 class="mb-0">Комиссии</h3>
+    <a href="{% url 'panel:affiliate_dashboard' %}" class="btn btn-outline-secondary btn-sm">Назад</a>
+  </div>
+
+  <form method="get" class="row g-2 mb-3">
+    <div class="col-md-5">
+      <input type="text" name="q" value="{{ search }}" class="form-control" placeholder="Поиск: TG ID / payment_id / transaction_id">
+    </div>
+    <div class="col-md-3">
+      <select name="status" class="form-select">
+        <option value="" {% if not status %}selected{% endif %}>Все статусы</option>
+        <option value="pending" {% if status == 'pending' %}selected{% endif %}>Ожидает</option>
+        <option value="hold" {% if status == 'hold' %}selected{% endif %}>Холд</option>
+        <option value="paid" {% if status == 'paid' %}selected{% endif %}>Выплачено</option>
+        <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>Отменено</option>
+        <option value="refunded" {% if status == 'refunded' %}selected{% endif %}>Возврат</option>
+      </select>
+    </div>
+    <div class="col-md-2 d-flex align-items-center">
+      <div class="text-muted small">
+        Выбрано: <b>{{ agg.count }}</b>, сумма: <b>{{ agg.total_amount|default:0 }} ⭐</b>
+      </div>
+    </div>
+    <div class="col-md-2">
+      <button class="btn btn-primary w-100">Фильтр</button>
+    </div>
+  </form>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-sm align-middle">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Реферер</th>
+              <th>Реферал</th>
+              <th>Платёж</th>
+              <th>Комиссия</th>
+              <th>Статус</th>
+              <th>Холд до</th>
+              <th>Создано</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in page_obj.object_list %}
+            <tr>
+              <td>{{ c.id }}</td>
+              <td><a href="{% url 'panel:user_detail' c.referrer.id %}">{{ c.referrer.telegram_id }}</a></td>
+              <td><a href="{% url 'panel:user_detail' c.referred.id %}">{{ c.referred.telegram_id }}</a></td>
+              <td>{{ c.payment_amount }} ⭐</td>
+              <td><b>{{ c.commission_amount }} ⭐</b> <span class="text-muted">({{ c.get_commission_percent }}%)</span></td>
+              <td><span class="badge {% if c.status == 'paid' %}bg-success{% elif c.status == 'hold' %}bg-warning text-dark{% elif c.status == 'pending' %}bg-secondary{% else %}bg-light text-dark{% endif %}">{{ c.get_status_display }}</span></td>
+              <td>{% if c.hold_until %}{{ c.hold_until|date:'d.m.Y' }}{% else %}—{% endif %}</td>
+              <td>{{ c.created_at|date:'d.m.Y H:i' }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="8" class="text-muted">Нет данных</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <nav>
+        <ul class="pagination pagination-sm mb-0">
+          {% if page_obj.has_previous %}
+          <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ search }}&status={{ status }}">«</a></li>
+          {% else %}
+          <li class="page-item disabled"><span class="page-link">«</span></li>
+          {% endif %}
+          <li class="page-item disabled"><span class="page-link">Стр. {{ page_obj.number }} из {{ page_obj.paginator.num_pages }}</span></li>
+          {% if page_obj.has_next %}
+          <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ search }}&status={{ status }}">»</a></li>
+          {% else %}
+          <li class="page-item disabled"><span class="page-link">»</span></li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
+  </div>
+</div>
+{% endblock %}
