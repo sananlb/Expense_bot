@@ -478,6 +478,9 @@ class PDFReportService:
                 'daily_categories': daily_categories,
                 'days_in_month': end_date.day,
                 'logo_base64': await self._get_logo_base64(),
+                # Режим отчёта
+                'household_mode': household_mode,
+                'household_name': household_name,
                 # Новые поля для доходов
                 'income_total_amount': f"{round(income_total_amount):,.0f}",
                 'income_total_count': income_total_count,
@@ -508,6 +511,9 @@ class PDFReportService:
     
     async def _render_html(self, report_data: Dict, lang: str = 'ru') -> str:
         """Рендеринг HTML из шаблона с данными"""
+        # Безопасно извлекаем флаги режима отчёта (личный/семейный)
+        household_mode = report_data.get('household_mode', False)
+        household_name = report_data.get('household_name')
         # Вычисляем общую сумму для процентов
         total_raw = 0
         for cat in report_data['categories']:
@@ -634,33 +640,33 @@ class PDFReportService:
             }
 
         # Рендерим шаблон с данными
-            html = self.template.render(
-                period=report_data['period'],
-                total_amount=report_data['total_amount'],
-                total_count=report_data['total_count'],
-                total_cashback=report_data['total_cashback'],
-                change_direction=report_data.get('change_direction', ''),
-                change_percent=report_data.get('change_percent', 0),
-                prev_month_name=report_data.get('prev_month_name', ''),
-                categories=report_data['categories'],
-                logo_base64=report_data.get('logo_base64', ''),
-                categories_json=categories_json,
-                daily_json=daily_json,
-                # Новые поля для доходов
-                income_total_amount=report_data.get('income_total_amount', '0'),
-                income_total_count=report_data.get('income_total_count', 0),
-                income_categories=report_data.get('income_categories', []),
-                income_categories_json=income_categories_json,
-                daily_incomes_json=daily_incomes_json,
-                net_balance=report_data.get('net_balance', '0'),
-                has_incomes=report_data.get('has_incomes', False),
-                # Режим отчета
-                household_mode=household_mode,
-                household_name=household_name,
-                # Переводы
-                **translations,
-                prev_summaries=report_data.get('prev_summaries', [])
-            )
+        html = self.template.render(
+            period=report_data['period'],
+            total_amount=report_data['total_amount'],
+            total_count=report_data['total_count'],
+            total_cashback=report_data['total_cashback'],
+            change_direction=report_data.get('change_direction', ''),
+            change_percent=report_data.get('change_percent', 0),
+            prev_month_name=report_data.get('prev_month_name', ''),
+            categories=report_data['categories'],
+            logo_base64=report_data.get('logo_base64', ''),
+            categories_json=categories_json,
+            daily_json=daily_json,
+            # Новые поля для доходов
+            income_total_amount=report_data.get('income_total_amount', '0'),
+            income_total_count=report_data.get('income_total_count', 0),
+            income_categories=report_data.get('income_categories', []),
+            income_categories_json=income_categories_json,
+            daily_incomes_json=daily_incomes_json,
+            net_balance=report_data.get('net_balance', '0'),
+            has_incomes=report_data.get('has_incomes', False),
+            # Режим отчета
+            household_mode=household_mode,
+            household_name=household_name,
+            # Переводы
+            **translations,
+            prev_summaries=report_data.get('prev_summaries', [])
+        )
         
         return html
     
