@@ -704,14 +704,20 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
     
     # Сохраняем трату
     expense_date = parsed_full.get('expense_date') if parsed_full else parsed_amount.get('expense_date')
-    expense = await add_expense(
-        user_id=user_id,
-        category_id=category.id,
-        amount=amount,
-        description=final_description,
-        currency=currency,
-        expense_date=expense_date  # Добавляем дату, если она была указана
-    )
+    try:
+        expense = await add_expense(
+            user_id=user_id,
+            category_id=category.id,
+            amount=amount,
+            description=final_description,
+            currency=currency,
+            expense_date=expense_date  # Добавляем дату, если она была указана
+        )
+    except ValueError as e:
+        # Обработка ошибок валидации даты
+        await message.answer(f"❌ {str(e)}", parse_mode="HTML")
+        await state.clear()
+        return
     
     # Форматируем сообщение с учетом валюты
     amount_text = format_currency(expense.amount, currency)
@@ -925,17 +931,22 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     pass
             
             # Создаем доход
-            income = await create_income(
-                user_id=user_id,
-                amount=parsed_income['amount'],
-                category_id=category.id if category else None,
-                description=parsed_income.get('description', 'Доход'),
-                income_date=parsed_income.get('income_date'),
-                income_type=parsed_income.get('income_type', 'other'),
-                ai_categorized=parsed_income.get('ai_enhanced', False),
-                ai_confidence=parsed_income.get('confidence', 0.5),
-                currency=parsed_income.get('currency', 'RUB')
-            )
+            try:
+                income = await create_income(
+                    user_id=user_id,
+                    amount=parsed_income['amount'],
+                    category_id=category.id if category else None,
+                    description=parsed_income.get('description', 'Доход'),
+                    income_date=parsed_income.get('income_date'),
+                    income_type=parsed_income.get('income_type', 'other'),
+                    ai_categorized=parsed_income.get('ai_enhanced', False),
+                    ai_confidence=parsed_income.get('confidence', 0.5),
+                    currency=parsed_income.get('currency', 'RUB')
+                )
+            except ValueError as e:
+                # Обработка ошибок валидации даты
+                await message.answer(f"❌ {str(e)}", parse_mode="HTML")
+                return
             
             if income:
                 cancel_typing()  # Отменяем индикатор печатания
@@ -1061,13 +1072,18 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     description_capitalized = text[0].upper() + text[1:] if text else text
                     
                     # Создаем доход
-                    income = await create_income(
-                        user_id=user_id,
-                        amount=amount,
-                        category_id=category.id if category else None,
-                        description=description_capitalized,
-                        currency=currency
-                    )
+                    try:
+                        income = await create_income(
+                            user_id=user_id,
+                            amount=amount,
+                            category_id=category.id if category else None,
+                            description=description_capitalized,
+                            currency=currency
+                        )
+                    except ValueError as e:
+                        # Обработка ошибок валидации даты
+                        await message.answer(f"❌ {str(e)}", parse_mode="HTML")
+                        return
                     
                     if income:
                         cancel_typing()
@@ -1125,13 +1141,18 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                         description_capitalized = text[0].upper() + text[1:] if text else text
                         
                         # Создаем доход
-                        income = await create_income(
-                            user_id=user_id,
-                            amount=amount,
-                            category_id=category.id if category else None,
-                            description=description_capitalized,
-                            currency=currency
-                        )
+                        try:
+                            income = await create_income(
+                                user_id=user_id,
+                                amount=amount,
+                                category_id=category.id if category else None,
+                                description=description_capitalized,
+                                currency=currency
+                            )
+                        except ValueError as e:
+                            # Обработка ошибок валидации даты
+                            await message.answer(f"❌ {str(e)}", parse_mode="HTML")
+                            return
                         
                         if income:
                             cancel_typing()
@@ -1177,14 +1198,19 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 description_capitalized = text[0].upper() + text[1:] if text else text
                 
                 # Сохраняем трату
-                expense = await add_expense(
-                    user_id=user_id,
-                    category_id=category.id,
-                    amount=amount,
-                    description=description_capitalized,
-                    currency=currency,
-                    expense_date=parsed.get('expense_date') if parsed else None  # Добавляем дату, если она была указана
-                )
+                try:
+                    expense = await add_expense(
+                        user_id=user_id,
+                        category_id=category.id,
+                        amount=amount,
+                        description=description_capitalized,
+                        currency=currency,
+                        expense_date=parsed.get('expense_date') if parsed else None  # Добавляем дату, если она была указана
+                    )
+                except ValueError as e:
+                    # Обработка ошибок валидации даты
+                    await message.answer(f"❌ {str(e)}", parse_mode="HTML")
+                    return
                 
                 # Форматируем сообщение с учетом валюты
                 amount_text = format_currency(expense.amount, currency)
@@ -1273,14 +1299,19 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     currency = parsed.get('currency', 'RUB')
     
     # Добавляем трату в оригинальной валюте
-    expense = await add_expense(
-        user_id=user_id,
-        category_id=category.id,
-        amount=amount,
-        description=parsed['description'],
-        currency=currency,
-        expense_date=parsed.get('expense_date')  # Добавляем дату, если она была указана
-    )
+    try:
+        expense = await add_expense(
+            user_id=user_id,
+            category_id=category.id,
+            amount=amount,
+            description=parsed['description'],
+            currency=currency,
+            expense_date=parsed.get('expense_date')  # Добавляем дату, если она была указана
+        )
+    except ValueError as e:
+        # Обработка ошибок валидации даты
+        await message.answer(f"❌ {str(e)}", parse_mode="HTML")
+        return
     
     # Формируем ответ (убираем вывод AI уверенности)
     confidence_text = ""

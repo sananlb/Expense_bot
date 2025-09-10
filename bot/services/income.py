@@ -50,33 +50,52 @@ def create_income(
         # Получаем или создаем профиль пользователя
         profile = get_or_create_user_profile_sync(user_id)
         
+        # Обрабатываем дату
+        if income_date is None:
+            income_date = date.today()
+        
+        # Проверка 1: Не вносить доходы в будущем
+        if income_date > date.today():
+            logger.warning(f"User {user_id} tried to add income in future: {income_date}")
+            raise ValueError("Нельзя вносить доходы в будущем")
+        
+        # Проверка 2: Не вносить доходы старше 1 года
+        one_year_ago = date.today() - timedelta(days=365)
+        if income_date < one_year_ago:
+            logger.warning(f"User {user_id} tried to add income older than 1 year: {income_date}")
+            raise ValueError("Нельзя вносить доходы старше 1 года")
+        
+        # Проверка 3: Не вносить доходы до даты регистрации пользователя
+        profile_created_date = profile.created_at.date() if profile.created_at else date.today()
+        if income_date < profile_created_date:
+            logger.warning(f"User {user_id} tried to add income before registration: {income_date}, registered: {profile_created_date}")
+            raise ValueError(f"Нельзя вносить доходы до даты регистрации ({profile_created_date.strftime('%d.%m.%Y')})")
+        
         # Проверяем общий лимит операций (доходы + расходы) в 100 записей в день
-        today = timezone.now().date()
         today_incomes_count = Income.objects.filter(
             profile=profile,
-            income_date=today
+            income_date=income_date
         ).count()
         
         # Также проверяем количество расходов
         from expenses.models import Expense
         today_expenses_count = Expense.objects.filter(
             profile=profile,
-            expense_date=today
+            expense_date=income_date
         ).count()
         
         total_operations = today_incomes_count + today_expenses_count
         
         if total_operations >= 100:
             logger.warning(f"User {user_id} reached daily operations limit (100)")
-            return None
+            raise ValueError("Достигнут лимит записей в день (максимум 100). Попробуйте завтра.")
         
         # Проверяем длину описания
         if description and len(description) > 500:
             description = description[:500]
         
-        # Обрабатываем дату
-        if income_date is None:
-            income_date = today
+        # Определяем время для дохода
+        if income_date == date.today():
             income_time = datetime.now().time()
         else:
             # Для прошлых дат используем 12:00
@@ -111,6 +130,8 @@ def create_income(
         logger.info(f"Created income {income.id} for user {user_id}: {amount} {currency}")
         return income
         
+    except ValueError:
+        raise  # Пробрасываем ValueError дальше для обработки в роутере
     except Exception as e:
         logger.error(f"Error creating income for user {user_id}: {e}")
         return None

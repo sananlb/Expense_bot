@@ -48,6 +48,24 @@ def create_expense(
         if expense_date is None:
             expense_date = date.today()
         
+        # Проверка 1: Не вносить траты в будущем
+        if expense_date > date.today():
+            logger.warning(f"User {user_id} tried to add expense in future: {expense_date}")
+            raise ValueError("Нельзя вносить траты в будущем")
+        
+        # Проверка 2: Не вносить траты старше 1 года
+        one_year_ago = date.today() - timedelta(days=365)
+        if expense_date < one_year_ago:
+            logger.warning(f"User {user_id} tried to add expense older than 1 year: {expense_date}")
+            raise ValueError("Нельзя вносить траты старше 1 года")
+        
+        # Проверка 3: Не вносить траты до даты регистрации пользователя
+        # Используем дату создания профиля как дату регистрации
+        profile_created_date = profile.created_at.date() if profile.created_at else date.today()
+        if expense_date < profile_created_date:
+            logger.warning(f"User {user_id} tried to add expense before registration: {expense_date}, registered: {profile_created_date}")
+            raise ValueError(f"Нельзя вносить траты до даты регистрации ({profile_created_date.strftime('%d.%m.%Y')})")
+        
         # Проверяем лимит расходов в день (максимум 100)
         today_expenses_count = Expense.objects.filter(
             profile=profile,
