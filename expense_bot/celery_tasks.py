@@ -443,17 +443,17 @@ def send_daily_admin_report():
         
         # Формируем отчет
         report = (
-            f"📊 *Расширенный отчет ExpenseBot*\n"
+            f"📊 \*Расширенный отчет ExpenseBot\*\n"
             f"📅 За {date_formatted}\n\n"
             
-            f"👥 *Пользователи:*\n"
+            f"👥 \*Пользователи:\*\n"
             f"  • Всего: {esc(f'{total_users:,}')}\n"
             f"  • Активных вчера: {esc(active_users)}\n"
             f"  • Активных за неделю: {esc(weekly_active_users)}\n"
             f"  • Новых регистраций: {esc(new_users)}\n"
             f"  • Retention (7d): {esc(f'{retention_rate:.1f}%')}\n\n"
             
-            f"💰 *Финансы за вчера:*\n"
+            f"💰 \*Финансы за вчера:\*\n"
             f"  • Расходы: {esc(count_formatted)} зап., {esc(total_formatted)} ₽\n"
         )
 
@@ -471,7 +471,7 @@ def send_daily_admin_report():
             report += f"  • Доход с подписок: {esc(subscription_revenue)} ⭐\n"
 
         report += (
-            f"\n⭐ *Подписки:*\n"
+            f"\n⭐ \*Подписки:\*\n"
             f"  • Активных всего: {esc(active_subscriptions)}\n"
             f"  • Истекают в 3 дня: {esc(expiring_soon)}\n"
         )
@@ -485,7 +485,7 @@ def send_daily_admin_report():
         # Реферальная программа
         if affiliate_stats['new_commissions']:
             report += (
-                f"\n💼 *Реферальная программа:*\n"
+                f"\n💼 \*Реферальная программа:\*\n"
                 f"  • Новых комиссий: {esc(affiliate_stats['new_commissions'])}\n"
                 f"  • Сумма комиссий: {esc(affiliate_stats['total_commission_amount'] or 0)} ⭐\n"
                 f"  • На холде: {esc(affiliate_stats['hold_commissions'])}\n"
@@ -496,7 +496,7 @@ def send_daily_admin_report():
             avg_resp_time = ai_metrics.get('avg_response_time', 0)
             total_tokens = ai_metrics.get('total_tokens', 0)
             report += (
-                f"\n🤖 *AI сервисы:*\n"
+                f"\n🤖 \*AI сервисы:\*\n"
                 f"  • Всего запросов: {esc(ai_metrics['total_requests'])}\n"
                 f"  • Успешность: {esc(f'{ai_success_rate:.1f}%')}\n"
                 f"  • Среднее время: {esc(f'{avg_resp_time:.2f}')}с\n"
@@ -520,7 +520,7 @@ def send_daily_admin_report():
         # Аналитика активности
         if user_analytics['active_users_analytics']:
             report += (
-                f"\n📈 *Активность пользователей:*\n"
+                f"\n📈 \*Активность пользователей:\*\n"
                 f"  • Сообщений: {esc(user_analytics['total_messages'] or 0)}\n"
                 f"  • Голосовых: {esc(user_analytics['total_voice_messages'] or 0)}\n"
                 f"  • Фото: {esc(user_analytics['total_photos'] or 0)}\n"
@@ -536,17 +536,17 @@ def send_daily_admin_report():
 
         # Регулярные платежи
         if recurring_payments_processed > 0:
-            report += f"\n🔄 *Регулярные платежи:* {esc(recurring_payments_processed)} обработано\n"
+            report += f"\n🔄 \*Регулярные платежи:\* {esc(recurring_payments_processed)} обработано\n"
 
         # Статус системы
-        report += f"\n⚡ *Статус системы:* {system_status}\n"
+        report += f"\n⚡ \*Статус системы:\* {system_status}\n"
 
         # Ошибки
         if user_analytics['total_errors']:
-            report += f"\n⚠️ *Ошибки:* {esc(user_analytics['total_errors'])} за день\n"
+            report += f"\n⚠️ \*Ошибки:\* {esc(user_analytics['total_errors'])} за день\n"
 
         if categories_text:
-            report += f"\n📂 *Топ-5 категорий:*\n{categories_text}\n"
+            report += f"\n📂 \*Топ\-5 категорий:\*\n{categories_text}\n"
 
         report += f"\n⏰ Отчет сформирован: {esc(datetime.now().strftime('%H:%M'))}"
 
