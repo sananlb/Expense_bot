@@ -145,8 +145,10 @@ def is_show_expenses_request(text: str) -> Tuple[bool, float]:
         return True, 0.8
     
     # Слабые индикаторы только для НЕ-вопросов
-    if not is_question and has_time_marker and len(text_lower.split()) <= 3:
-        # Короткая фраза с временным маркером
+    # Исключаем фразы с числами - это скорее всего добавление траты с суммой
+    has_numbers = any(char.isdigit() for char in text_lower)
+    if not is_question and has_time_marker and len(text_lower.split()) <= 3 and not has_numbers:
+        # Короткая фраза с временным маркером БЕЗ чисел
         return True, 0.7
     
     # Не является запросом показа

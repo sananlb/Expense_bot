@@ -648,7 +648,7 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
         from bot.utils.state_utils import clear_state_keep_cashback
         await clear_state_keep_cashback(state)
         from ..routers.chat import process_chat_message
-        await process_chat_message(message, state, text)
+        await process_chat_message(message, state, text, skip_typing=True)
         return
     
     # Получаем сохраненное описание
@@ -864,11 +864,15 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     typing_task = asyncio.create_task(delayed_typing())
     
     # Функция для отмены индикатора печатания
-    def cancel_typing():
+    async def cancel_typing():
         nonlocal typing_cancelled
         typing_cancelled = True
         if typing_task and not typing_task.done():
             typing_task.cancel()
+            try:
+                await typing_task
+            except asyncio.CancelledError:
+                pass
     
     # Если текст не передан явно, берем из сообщения
     if text is None:
@@ -881,9 +885,10 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     is_show_request, confidence = is_show_expenses_request(text)
     if is_show_request and confidence >= 0.7:
         logger.info(f"Detected show expenses request: '{text}' (confidence: {confidence:.2f})")
-        cancel_typing()  # Отменяем индикатор печатания
+        await cancel_typing()  # Отменяем наш индикатор печатания
         from ..routers.chat import process_chat_message
-        await process_chat_message(message, state, text)
+        # Передаем skip_typing=True, так как индикатор уже был запущен в handle_text_expense
+        await process_chat_message(message, state, text, skip_typing=True)
         return
     
     # НОВОЕ: Проверка на доход перед парсингом как расход
@@ -949,7 +954,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 return
             
             if income:
-                cancel_typing()  # Отменяем индикатор печатания
+                await cancel_typing()  # Отменяем индикатор печатания
                 
                 # Используем единую функцию форматирования
                 from ..utils.expense_messages import format_income_added_message
@@ -982,7 +987,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 return
             else:
                 # Если не удалось создать доход (например, лимит)
-                cancel_typing()
+                await cancel_typing()
                 await message.answer(
                     "❌ Не удалось добавить доход. Возможно, достигнут дневной лимит операций (100).",
                     parse_mode="HTML"
@@ -1014,9 +1019,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         is_show_request, show_confidence = is_show_expenses_request(text)
         if is_show_request and show_confidence >= 0.6:
             logger.info(f"Show expenses request detected after parsing failed: '{text}'")
-            cancel_typing()  # Отменяем индикатор печатания
+            await cancel_typing()  # Отменяем индикатор печатания
             from ..routers.chat import process_chat_message
-            await process_chat_message(message, state, text)
+            await process_chat_message(message, state, text, skip_typing=True)
             return
         
         # Используем улучшенный классификатор для определения типа сообщения
@@ -1032,9 +1037,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         # Если классификатор определил это как чат - направляем в чат
         if message_type == 'chat':
             logger.info(f"Message classified as chat, redirecting: '{text}'")
-            cancel_typing()  # Отменяем индикатор печатания
+            await cancel_typing()  # Отменяем индикатор печатания
             from ..routers.chat import process_chat_message
-            await process_chat_message(message, state, text)
+            await process_chat_message(message, state, text, skip_typing=True)
             return
         
         # Иначе это трата (message_type == 'record')
@@ -1086,7 +1091,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                         return
                     
                     if income:
-                        cancel_typing()
+                        await cancel_typing()
                         
                         # Используем единую функцию форматирования для дохода
                         from ..utils.expense_messages import format_income_added_message
@@ -1155,7 +1160,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                             return
                         
                         if income:
-                            cancel_typing()
+                            await cancel_typing()
                             
                             # Используем единую функцию форматирования для дохода
                             from ..utils.expense_messages import format_income_added_message
@@ -1245,7 +1250,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 )
                 
                 # Отправляем подтверждение (сообщение о трате не должно исчезать)
-                cancel_typing()
+                await cancel_typing()
                 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
                 await send_message_with_cleanup(message, state,
                     message_text,
@@ -1265,7 +1270,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 # Язык пользователя берём из middleware или используем русский по умолчанию
                 lang = 'ru'
                 
-                cancel_typing()
+                await cancel_typing()
                 
                 # Создаем inline клавиатуру с кнопкой отмены
                 cancel_keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
@@ -1284,8 +1289,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         
         # Не похоже на трату - обрабатываем как чат
         logger.info(f"Expense parser returned None for text: '{text}', processing as chat")
-        cancel_typing()
-        await process_chat_message(message, state, text)
+        await cancel_typing()
+        await process_chat_message(message, state, text, skip_typing=True)
         return
     
     # Проверяем, использовались ли данные из предыдущей траты
@@ -1353,7 +1358,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         lang=lang
     )
     
-    cancel_typing()
+    await cancel_typing()
     await send_message_with_cleanup(message, state,
         message_text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
@@ -1366,7 +1371,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     )
     
     # Гарантируем отмену задачи
-    cancel_typing()
+    await cancel_typing()
     
     # # Восстанавливаем меню кешбека если оно было активно
     # from ..routers.cashback import restore_cashback_menu_if_needed

@@ -125,25 +125,33 @@ def classify_by_heuristics(text: str, lang: str = 'ru') -> str:
     return 'expense'
 
 
-async def process_chat_message(message: types.Message, state: FSMContext, text: str, use_ai: bool = True):
-    """Обработать сообщение как чат"""
+async def process_chat_message(message: types.Message, state: FSMContext, text: str, use_ai: bool = True, skip_typing: bool = False):
+    """Обработать сообщение как чат
+    
+    Args:
+        message: Сообщение Telegram
+        state: Состояние FSM
+        text: Текст для обработки
+        use_ai: Использовать ли AI для обработки
+        skip_typing: Пропустить ли индикатор печатания (если уже запущен извне)
+    """
     user_id = message.from_user.id
     
-    # Запускаем индикацию "печатает..."
-    from ..utils.typing_action import TypingAction
-    async with TypingAction(message):
-        # УБРАНО: Больше не проверяем запросы дневника трат
-        # Все сообщения идут через AI
-        
-        # Проверяем подписку для AI чата (включая пробный период)
-        has_subscription = await check_subscription(user_id, include_trial=True)
-        
-        # Получаем или создаем сессию
-        session_id = await ChatContextManager.get_or_create_session(user_id, state)
-        
-        # Добавляем сообщение пользователя в контекст
-        await ChatContextManager.add_message(state, 'user', text)
-        
+    # Основная логика обработки
+    # УБРАНО: Больше не проверяем запросы дневника трат
+    # Все сообщения идут через AI
+    
+    # Проверяем подписку для AI чата (включая пробный период)
+    has_subscription = await check_subscription(user_id, include_trial=True)
+    
+    # Получаем или создаем сессию
+    session_id = await ChatContextManager.get_or_create_session(user_id, state)
+    
+    # Добавляем сообщение пользователя в контекст
+    await ChatContextManager.add_message(state, 'user', text)
+    
+    # Функция для выполнения основной логики
+    async def _process():
         # Если есть подписка (включая пробный период) и включен AI - используем AI для ответа
         if has_subscription and use_ai:
             try:
@@ -227,6 +235,18 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
         # Если нет подписки и пробного периода, предлагаем оформить
         if not has_subscription and use_ai:
             response += "\n\n💡 Для доступа к AI-ассистенту оформите подписку /subscription"
+        
+        return response
+    
+    # Выполняем обработку с индикатором печатания или без него
+    if skip_typing:
+        # Если индикатор уже запущен извне, просто выполняем логику
+        response = await _process()
+    else:
+        # Запускаем индикацию "печатает..."
+        from ..utils.typing_action import TypingAction
+        async with TypingAction(message):
+            response = await _process()
     
     # Добавляем ответ в контекст
     await ChatContextManager.add_message(state, 'assistant', response)
@@ -409,24 +429,9 @@ async def parse_dates_from_text(text: str) -> Optional[tuple[datetime.date, date
 @rate_limit(max_calls=20, period=60)  # 20 сообщений в минуту для чата
 async def handle_chat_message(message: types.Message, state: FSMContext):
     """Обработка текстовых сообщений как чат"""
-    import asyncio
-    
-    # Отправляем "печатает..."
-    await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
-    
-    # Планируем второй "печатает..." через 4 секунды (как в nutrition_bot)
-    async def send_typing_again():
-        await asyncio.sleep(4)
-        try:
-            await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
-        except:
-            pass  # Игнорируем ошибки если чат уже недоступен
-    
-    # Запускаем асинхронную задачу для повторной отправки
-    asyncio.create_task(send_typing_again())
-    
     text = message.text.strip()
     
     # Если сообщение дошло до этого обработчика, значит expense handler
     # не смог его распознать как трату, поэтому обрабатываем как чат
-    await process_chat_message(message, state, text)
+    # Не запускаем свой typing indicator, так как process_chat_message сам управляет им
+    await process_chat_message(message, state, text, skip_typing=False)

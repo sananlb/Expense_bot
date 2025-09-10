@@ -73,12 +73,15 @@ from bot.utils.category_helpers import get_category_display_name
 def extract_date_from_text(text: str) -> Tuple[Optional[date], str]:
     """
     Извлекает дату из текста и возвращает кортеж (дата, текст_без_даты)
+    Поддерживает только числовые даты в форматах: дд.мм.гггг, дд.мм.гг, дд.мм
     
     Примеры:
     - "Кофе 200 15.03.2024" -> (date(2024, 3, 15), "Кофе 200")
     - "25.12.2023 подарки 5000" -> (date(2023, 12, 25), "подарки 5000")
+    - "Продукты 1500 08.09" -> (date(current_year, 9, 8), "Продукты 1500")
     - "Продукты 1500" -> (None, "Продукты 1500")
     """
+    # Проверяем числовые даты
     for pattern in DATE_PATTERNS:
         match = re.search(pattern, text)
         if match:
@@ -334,7 +337,6 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     
     # Используем текст без даты для дальнейшего парсинга
     text_to_parse = text_without_date
-    text_lower = text_to_parse.lower()
     
     # Ищем сумму
     amount = None
@@ -342,7 +344,8 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     text_without_amount = None
     
     for pattern in AMOUNT_PATTERNS:
-        match = re.search(pattern, text_lower, re.IGNORECASE)
+        # Ищем в тексте без даты (не в lowercase, чтобы позиции совпадали)
+        match = re.search(pattern, text_to_parse, re.IGNORECASE)
         if match:
             amount_str = match.group(1).replace(',', '.')
             try:
@@ -351,7 +354,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                 # Находим позицию совпадения в тексте без даты
                 match_start = match.start()
                 match_end = match.end()
-                text_without_amount = (text_without_date[:match_start] + ' ' + text_without_date[match_end:]).strip()
+                text_without_amount = (text_to_parse[:match_start] + ' ' + text_to_parse[match_end:]).strip()
                 break
             except (ValueError, InvalidOperation) as e:
                 logger.debug(f"Ошибка при парсинге суммы '{amount_str}': {e}")
@@ -404,7 +407,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     # Определяем категорию
     category = None
     max_score = 0
-    # text_lower уже определен выше
+    text_lower = text_to_parse.lower()  # Создаем text_lower для поиска категорий
     
     # Сначала проверяем пользовательские категории, если есть профиль
     if profile:
@@ -458,6 +461,11 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     
     # Формируем описание (текст без суммы и без даты)
     description = text_without_amount if text_without_amount is not None else text_without_date
+    
+    # Убираем слова-маркеры времени из описания, даже если они не были обработаны как даты
+    time_words = ['вчера', 'позавчера', 'сегодня', 'завтра']
+    for word in time_words:
+        description = re.sub(r'\b' + word + r'\b', '', description, flags=re.IGNORECASE)
     
     # Убираем лишние пробелы
     description = ' '.join(description.split())
