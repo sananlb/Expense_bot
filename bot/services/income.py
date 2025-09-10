@@ -328,6 +328,54 @@ def get_today_income_summary(user_id: int) -> Dict:
 
 
 @sync_to_async
+def get_date_income_summary(user_id: int, target_date: date) -> Dict:
+    """
+    Получить сводку по доходам за конкретную дату
+    
+    Args:
+        user_id: ID пользователя в Telegram
+        target_date: Дата для получения сводки
+        
+    Returns:
+        Словарь с суммами по валютам
+    """
+    try:
+        from expenses.models import Profile, Income
+        from django.db.models import Sum
+        from decimal import Decimal
+        
+        profile = Profile.objects.get(telegram_id=user_id)
+        
+        # Получаем все доходы за указанную дату с категориями
+        incomes = Income.objects.filter(
+            profile=profile,
+            income_date=target_date
+        ).select_related('category')
+        
+        # Группируем по валютам
+        currency_totals = {}
+        for income in incomes:
+            currency = income.currency or 'RUB'
+            if currency not in currency_totals:
+                currency_totals[currency] = Decimal('0')
+            currency_totals[currency] += income.amount
+        
+        # Преобразуем Decimal в float для сериализации
+        currency_totals = {k: float(v) for k, v in currency_totals.items()}
+        
+        return {
+            'currency_totals': currency_totals,
+            'count': incomes.count()
+        }
+        
+    except Profile.DoesNotExist:
+        return {'currency_totals': {}, 'count': 0}
+    except Exception as e:
+        logger.error(f"Error getting income summary for user {user_id} on {target_date}: {e}")
+        return {'currency_totals': {}, 'count': 0}
+
+
+@sync_to_async
 def get_incomes_by_period(
     user_id: int,
     period: str = 'month'

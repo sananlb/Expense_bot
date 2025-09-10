@@ -65,13 +65,30 @@ async def format_expense_added_message(
     if similar_expense or reused_from_last:
         message += "\n\n<i>💡 Использованы данные из последней похожей траты</i>"
     
-    # Получаем сводку за сегодня
+    # Получаем сводку за дату операции
     try:
-        today_summary = await get_today_summary(expense.profile.telegram_id)
+        # Определяем за какой день показывать итоги
+        from datetime import date
+        expense_date = expense.expense_date if hasattr(expense, 'expense_date') else date.today()
+        today = date.today()
+        
+        # Если операция за сегодня - используем get_today_summary
+        if expense_date == today:
+            today_summary = await get_today_summary(expense.profile.telegram_id)
+            date_label = "Потрачено сегодня"
+        else:
+            # Для операций задним числом получаем итоги за ту дату
+            from ..services.expense import get_date_summary
+            today_summary = await get_date_summary(expense.profile.telegram_id, expense_date)
+            # Форматируем дату для отображения
+            if expense_date == today.replace(day=today.day - 1) if today.day > 1 else None:
+                date_label = "Потрачено вчера"
+            else:
+                date_label = f"Потрачено {expense_date.strftime('%d.%m.%Y')}"
         
         if today_summary and today_summary.get('currency_totals'):
             message += "\n\n━━━━━━━━━━━━━━━"
-            message += "\n💸 <b>Потрачено сегодня:</b>"
+            message += f"\n💸 <b>{date_label}:</b>"
             
             # Показываем все валюты, в которых были траты
             currency_totals = today_summary.get('currency_totals', {})
@@ -148,14 +165,31 @@ async def format_income_added_message(
     if similar_income:
         message += "\n\n<i>💡 Использованы данные из последнего похожего дохода</i>"
     
-    # Получаем сводку за сегодня (доходы)
+    # Получаем сводку за дату операции (доходы)
     try:
-        from ..services.income import get_today_income_summary
-        today_summary = await get_today_income_summary(income.profile.telegram_id)
+        # Определяем за какой день показывать итоги
+        from datetime import date
+        income_date = income.income_date if hasattr(income, 'income_date') else date.today()
+        today = date.today()
+        
+        # Если операция за сегодня - используем get_today_income_summary
+        if income_date == today:
+            from ..services.income import get_today_income_summary
+            today_summary = await get_today_income_summary(income.profile.telegram_id)
+            date_label = "Получено сегодня"
+        else:
+            # Для операций задним числом получаем итоги за ту дату
+            from ..services.income import get_date_income_summary
+            today_summary = await get_date_income_summary(income.profile.telegram_id, income_date)
+            # Форматируем дату для отображения
+            if income_date == today.replace(day=today.day - 1) if today.day > 1 else None:
+                date_label = "Получено вчера"
+            else:
+                date_label = f"Получено {income_date.strftime('%d.%m.%Y')}"
         
         if today_summary and today_summary.get('currency_totals'):
             message += "\n\n━━━━━━━━━━━━━━━"
-            message += "\n💵 <b>Получено сегодня:</b>"
+            message += f"\n💵 <b>{date_label}:</b>"
             
             # Показываем все валюты, в которых были доходы
             currency_totals = today_summary.get('currency_totals', {})

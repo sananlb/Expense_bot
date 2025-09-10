@@ -185,7 +185,7 @@ Send a text or voice message:
 The amount and category will be selected based on your previous entries.
 
 <b>📁 Categories:</b>
-Customize categories for yourself - add your own, delete unnecessary ones. The system will automatically determine the category for each entry.
+Customize categories for yourself - add your own, delete unnecessary ones. AI will automatically determine the category for each entry.
 
 <b>💳 Bank card cashbacks:</b>
 Add information about cashbacks on your bank cards. All cashbacks are calculated automatically and displayed in reports. Pin the cashback message in the chat for one-click access.
@@ -206,7 +206,7 @@ Get beautiful PDF reports with charts"""
 Сумма и категория подберутся на основании ваших предыдущих записей.
 
 <b>📁 Категории:</b>
-Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. Система автоматически определит категорию для каждой записи.
+Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. ИИ автоматически определит категорию для каждой записи.
 
 <b>💳 Кешбэки по банковским картам:</b>
 Добавьте информацию о кешбеках по вашим банковским картам. Все кешбеки рассчитываются автоматически и отображаются в отчетах. Закрепите сообщение с кешбэком в чате, чтобы оно было доступно по одному клику.
@@ -221,6 +221,23 @@ Get beautiful PDF reports with charts"""
     
     # Добавляем реферальное сообщение, если есть
     text += referral_message
+
+    # Добавляем блок про семейный бюджет внизу
+    if display_lang == 'en':
+        household_footer = (
+            "\n\n"
+            "🏠 Household: switch between personal and family views. "
+            "Create a household and add members by sending them an invite link. "
+            "Everyone can see shared expenses and income, and reports show the overall dynamics."
+        )
+    else:
+        household_footer = (
+            "\n\n"
+            "🏠 Семейный бюджет: переключайтесь между личным и семейным режимом просмотра. "
+            "Создайте семью и добавляйте участников, отправив им приглашение. "
+            "Все видят общие траты и доходы, а отчёты показывают общую динамику."
+        )
+    text += household_footer
     
     # Отправляем информацию без кнопок
     await send_message_with_cleanup(message, state, text, parse_mode="HTML")
@@ -267,7 +284,7 @@ Send a text or voice message:
 "Coffee 200" or "Gas 4095 station"
 
 <b>📁 Expense categories:</b>
-Customize categories for yourself - add your own, delete unnecessary ones. The system will automatically determine the category for each expense.
+Customize categories for yourself - add your own, delete unnecessary ones. AI will automatically determine the category for each expense.
 
 <b>💳 Bank card cashbacks:</b>
 Add information about cashbacks on your bank cards. All cashbacks are calculated automatically and displayed in reports. Pin the cashback message in the chat for one-click access.
@@ -285,7 +302,7 @@ Get beautiful PDF reports with charts"""
 Сумма и категория подберутся на основании ваших предыдущих записей.
 
 <b>📁 Категории:</b>
-Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. Система автоматически определит категорию для каждой записи.
+Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. ИИ автоматически определит категорию для каждой записи.
 
 <b>💳 Кешбэки по банковским картам:</b>
 Добавьте информацию о кешбеках по вашим банковским картам. Все кешбеки рассчитываются автоматически и отображаются в отчетах. Закрепите сообщение с кешбэком в чате, чтобы оно было доступно по одному клику.
@@ -298,6 +315,24 @@ Get beautiful PDF reports with charts"""
 "Покажи траты за июль", "Сколько я заработал в этом месяце"
 Получайте красивые PDF отчеты с графиками"""
     
+    # Добавляем блок про семейный бюджет внизу
+    if lang == 'en':
+        household_footer = (
+            "\n\n"
+            "🏠 Household: switch between personal and family views. "
+            "Create a household and add members by sending them an invite link. "
+            "Everyone can see shared expenses and income, and reports show the overall dynamics."
+        )
+    else:
+        household_footer = (
+            "\n\n"
+            "🏠 Семейный бюджет: переключайтесь между личным и семейным режимом просмотра. "
+            "Создайте семью и добавляйте участников, отправив им приглашение. "
+            "Все видят общие траты и доходы, а отчёты показывают общую динамику."
+        )
+    
+    text += household_footer
+
     try:
         await callback.message.edit_text(text, parse_mode="HTML")
     except Exception:

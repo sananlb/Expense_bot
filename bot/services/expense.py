@@ -814,6 +814,93 @@ async def get_today_summary(user_id: int) -> Dict[str, Any]:
         return {'total': 0, 'count': 0, 'categories': [], 'currency': 'RUB', 'currency_totals': {}, 'single_currency': True}
 
 
+async def get_date_summary(user_id: int, target_date: date) -> Dict[str, Any]:
+    """Get expense summary for a specific date with multi-currency support"""
+    from expenses.models import Profile
+    
+    try:
+        profile = await Profile.objects.aget(telegram_id=user_id)
+        
+        @sync_to_async
+        def get_date_expenses():
+            return list(
+                Expense.objects.filter(
+                    profile=profile,
+                    expense_date=target_date
+                ).select_related('category')
+            )
+        
+        expenses = await get_date_expenses()
+        
+        # Group by currency
+        currency_totals = {}
+        for expense in expenses:
+            currency = expense.currency or 'RUB'
+            if currency not in currency_totals:
+                currency_totals[currency] = Decimal('0')
+            currency_totals[currency] += expense.amount
+        
+        # Get user's primary currency
+        user_currency = profile.currency or 'RUB'
+        
+        # Keep currencies separate
+        single_currency = len(currency_totals) == 1
+        # For single currency, use that total
+        if single_currency and user_currency in currency_totals:
+            total = float(currency_totals[user_currency])
+        else:
+            # For multiple currencies, show main currency total
+            total = float(currency_totals.get(user_currency, 0))
+        
+        # Group by category and currency
+        from bot.utils.language import get_user_language
+        user_lang = await get_user_language(user_id)
+        
+        categories_by_currency = {}
+        for expense in expenses:
+            if expense.category:
+                currency = expense.currency or 'RUB'
+                if currency not in categories_by_currency:
+                    categories_by_currency[currency] = {}
+                
+                # Get localized category name
+                from bot.utils.category_helpers import get_category_display_name
+                cat_name = get_category_display_name(expense.category, user_lang)
+                
+                if cat_name not in categories_by_currency[currency]:
+                    categories_by_currency[currency][cat_name] = Decimal('0')
+                categories_by_currency[currency][cat_name] += expense.amount
+        
+        # Format categories for each currency
+        sorted_categories = []
+        for currency in sorted(categories_by_currency.keys()):
+            for cat_name, amount in sorted(
+                categories_by_currency[currency].items(), 
+                key=lambda x: x[1], 
+                reverse=True
+            ):
+                sorted_categories.append({
+                    'name': cat_name,
+                    'amount': float(amount),
+                    'currency': currency
+                })
+        
+        return {
+            'total': total,
+            'count': len(expenses),
+            'categories': sorted_categories,
+            'currency': user_currency,
+            'currency_totals': {k: float(v) for k, v in currency_totals.items()},
+            'single_currency': single_currency
+        }
+        
+    except Profile.DoesNotExist:
+        return {'total': 0, 'count': 0, 'categories': [], 'currency': 'RUB', 'currency_totals': {}, 'single_currency': True}
+    except Exception as e:
+        logger.error(f"Error getting date summary for {target_date}: {e}")
+        return {'total': 0, 'count': 0, 'categories': [], 'currency': 'RUB', 'currency_totals': {}, 'single_currency': True}
+
+
 @sync_to_async
 def get_last_expense_by_description(telegram_id: int, description: str) -> Optional[Expense]:
     """
