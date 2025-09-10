@@ -61,7 +61,11 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
     # Получаем регулярные платежи пользователя
     payments = await get_user_recurring_payments(user_id)
     
-    text = f"<b>{get_text('recurring_payments', lang)}</b>\n\n💡 {get_text('recurring_hint', lang)}"
+    # Показываем подсказку только если нет платежей
+    if not payments:
+        text = f"<b>{get_text('recurring_payments', lang)}</b>\n\n{get_text('recurring_hint', lang)}"
+    else:
+        text = f"<b>{get_text('recurring_payments', lang)}</b>"
     
     if payments:
         # Разделяем платежи по типам
