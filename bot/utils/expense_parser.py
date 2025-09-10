@@ -347,11 +347,11 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             amount_str = match.group(1).replace(',', '.')
             try:
                 amount = Decimal(amount_str)
-                # Убираем найденную сумму из оригинального текста для получения описания
-                # Находим позицию совпадения в оригинальном тексте
+                # Убираем найденную сумму из текста без даты для получения описания
+                # Находим позицию совпадения в тексте без даты
                 match_start = match.start()
                 match_end = match.end()
-                text_without_amount = (original_text[:match_start] + ' ' + original_text[match_end:]).strip()
+                text_without_amount = (text_without_date[:match_start] + ' ' + text_without_date[match_end:]).strip()
                 break
             except (ValueError, InvalidOperation) as e:
                 logger.debug(f"Ошибка при парсинге суммы '{amount_str}': {e}")
@@ -379,8 +379,10 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                     logger.debug(f"Error getting category name: {e}")
                     pass
                     
-                # Сохраняем оригинальное описание с капитализацией первой буквы
-                description = original_text[0].upper() + original_text[1:] if len(original_text) > 1 else original_text.upper() if original_text else 'Расход'
+                # Используем текст без даты для описания
+                desc_text = text_without_date if text_without_date else original_text
+                # Сохраняем описание с капитализацией первой буквы
+                description = desc_text[0].upper() + desc_text[1:] if len(desc_text) > 1 else desc_text.upper() if desc_text else 'Расход'
                 
                 result = {
                     'amount': float(amount),
@@ -454,8 +456,8 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                 max_score = score
                 category = cat_name
     
-    # Формируем описание (текст без суммы)
-    description = text_without_amount if text_without_amount is not None else original_text
+    # Формируем описание (текст без суммы и без даты)
+    description = text_without_amount if text_without_amount is not None else text_without_date
     
     # Убираем лишние пробелы
     description = ' '.join(description.split())
@@ -550,7 +552,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         logger.info(f"Calling categorize_expense with timeout=15s...")
                         ai_result = await asyncio.wait_for(
                             ai_service.categorize_expense(
-                                text=original_text,
+                                text=text_without_date,  # Отправляем текст без даты
                                 amount=amount,
                                 currency=currency,
                                 categories=user_categories,
@@ -574,7 +576,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                             openai_service = AISelector('openai')
                             ai_result = await asyncio.wait_for(
                                 openai_service.categorize_expense(
-                                    text=original_text,
+                                    text=text_without_date,  # Отправляем текст без даты
                                     amount=amount,
                                     currency=currency,
                                     categories=user_categories,
@@ -680,8 +682,8 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
                     category = get_category_display_name(last_income.category, lang_code)
                 else:
                     category = None
-                # Используем оригинальный текст как описание
-                description = original_text
+                # Используем текст без даты как описание
+                description = text_without_date if text_without_date else original_text
                 
                 # Убираем символ + из описания если он есть
                 if description and description.startswith('+'):
@@ -751,8 +753,8 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     if not category and profile and use_ai:
         from bot.services.income_categorization import categorize_income
         
-        # Пытаемся категоризировать через AI
-        ai_result = await categorize_income(original_text, user_id, profile)
+        # Пытаемся категоризировать через AI (отправляем текст без даты)
+        ai_result = await categorize_income(text_without_date if text_without_date else original_text, user_id, profile)
         
         if ai_result:
             category = ai_result.get('category')
@@ -818,8 +820,8 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
                         category = user_cat
                         break
     
-    # Формируем описание
-    description = text_without_amount if text_without_amount else 'Доход'
+    # Формируем описание (используем текст без даты и без суммы)
+    description = text_without_amount if text_without_amount else (text_without_date if text_without_date else 'Доход')
     
     # Убираем знак "+" из описания
     if description:
