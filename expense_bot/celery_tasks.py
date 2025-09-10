@@ -280,23 +280,17 @@ def send_daily_admin_report():
             count=Count('id')
         ).order_by('type')
 
-        subscriptions_text = ""
-        total_subs = 0
+        # Подсчет подписок по типам
+        subs_month = 0
+        subs_six_months = 0
         subscription_revenue = 0
         
         for sub in new_subscriptions:
-            sub_type = {
-                'trial': 'Пробных',
-                'month': 'Месячных', 
-                'six_months': 'Полугодовых'
-            }.get(sub['type'], sub['type'])
-            subscriptions_text += f"  • {esc(sub_type)}: {esc(sub['count'])}\n"
-            total_subs += sub['count']
-            
-            # Подсчет дохода (примерные цены в звездах)
             if sub['type'] == 'month':
+                subs_month = sub['count']
                 subscription_revenue += sub['count'] * 150  # 150 звезд за месячную
             elif sub['type'] == 'six_months':
+                subs_six_months = sub['count']
                 subscription_revenue += sub['count'] * 750  # 750 звезд за полугодовую
 
         active_subscriptions = Subscription.objects.filter(
@@ -413,26 +407,6 @@ def send_daily_admin_report():
         ).count()
 
         # ===============================
-        # ТОП КАТЕГОРИИ
-        # ===============================
-        top_categories = Expense.objects.filter(
-            expense_date=yesterday
-        ).values('category__name').annotate(
-            total=Sum('amount'),
-            count=Count('id')
-        ).order_by('-total')[:5]
-
-        categories_lines = []
-        for cat in top_categories:
-            name = cat['category__name'] or 'Без категории'
-            total_val = cat['total'] or 0
-            count_val = cat['count'] or 0
-            categories_lines.append(
-                f"  • {esc(name)}: {esc(f'{total_val:,.0f}')} ₽ {esc(f'({count_val} зап.)')}"
-            )
-        categories_text = "\n".join(categories_lines)
-
-        # ===============================
         # ФОРМИРОВАНИЕ ОТЧЕТА
         # ===============================
         count_formatted = f"{(expenses_stats['count'] or 0):,}"
@@ -451,36 +425,17 @@ def send_daily_admin_report():
             f"  • Активных вчера: {esc(active_users)}\n"
             f"  • Активных за неделю: {esc(weekly_active_users)}\n"
             f"  • Новых регистраций: {esc(new_users)}\n"
-            f"  • Retention (7d): {esc(f'{retention_rate:.1f}%')}\n\n"
+            f"  • Retention \\(7d\\): {esc(f'{retention_rate:.1f}%')}\n\n"
             
-            f"💰 \*Финансы за вчера:\*\n"
-            f"  • Расходы: {esc(count_formatted)} зап., {esc(total_formatted)} ₽\n"
-        )
-
-        if expenses_stats['count'] and expenses_stats['count'] > 0:
-            avg_expense = expenses_stats['avg'] or 0
-            max_expense = expenses_stats['max_expense'] or 0
-            report += f"  • Средний чек: {esc(f'{avg_expense:,.0f}')} ₽\n"
-            report += f"  • Максимальная трата: {esc(f'{max_expense:,.0f}')} ₽\n"
-
-        if incomes_stats['count'] and incomes_stats['count'] > 0:
-            income_total = incomes_stats['total'] or 0
-            report += f"  • Доходы: {esc(incomes_stats['count'])} зап., {esc(f'{income_total:,.0f}')} ₽\n"
-
-        if subscription_revenue > 0:
-            report += f"  • Доход с подписок: {esc(subscription_revenue)} ⭐\n"
-
-        report += (
-            f"\n⭐ \*Подписки:\*\n"
+            f"⭐ \*Подписки:\*\n"
             f"  • Активных всего: {esc(active_subscriptions)}\n"
             f"  • Истекают в 3 дня: {esc(expiring_soon)}\n"
+            f"  • Куплено вчера \\(1 мес\\.\\): {esc(subs_month)}\n"
+            f"  • Куплено вчера \\(6 мес\\.\\): {esc(subs_six_months)}\n"
         )
         
-        if total_subs > 0:
-            report += f"  • Куплено вчера: {esc(total_subs)}\n"
-            report += subscriptions_text
-        else:
-            report += f"  • Куплено вчера: 0\n"
+        if subscription_revenue > 0:
+            report += f"  • Доход с подписок: {esc(subscription_revenue)} ⭐\n"
 
         # Реферальная программа
         if affiliate_stats['new_commissions']:
@@ -493,8 +448,8 @@ def send_daily_admin_report():
 
         # AI сервисы
         if ai_metrics['total_requests']:
-            avg_resp_time = ai_metrics.get('avg_response_time', 0)
-            total_tokens = ai_metrics.get('total_tokens', 0)
+            avg_resp_time = ai_metrics.get('avg_response_time', 0) or 0
+            total_tokens = ai_metrics.get('total_tokens', 0) or 0
             report += (
                 f"\n🤖 \*AI сервисы:\*\n"
                 f"  • Всего запросов: {esc(ai_metrics['total_requests'])}\n"
@@ -503,17 +458,17 @@ def send_daily_admin_report():
                 f"  • Использовано токенов: {esc(f'{total_tokens:,}')}\n"
             )
             
-            if ai_metrics['total_cost']:
-                total_cost = ai_metrics.get('total_cost', 0)
+            if ai_metrics.get('total_cost'):
+                total_cost = ai_metrics.get('total_cost', 0) or 0
                 report += f"  • Приблизительная стоимость: ${esc(f'{total_cost:.3f}')}\n"
                 
             if openai_stats['requests'] and google_stats['requests']:
                 openai_success = openai_stats.get('success_rate', 0) * 100
                 google_success = google_stats.get('success_rate', 0) * 100
                 report += (
-                    f"  • OpenAI: {esc(openai_stats['requests'])} зап., "
+                    f"  • OpenAI: {esc(openai_stats['requests'])} зап\\., "
                     f"{esc(f'{openai_success:.0f}')}% успех\n"
-                    f"  • Google: {esc(google_stats['requests'])} зап., "
+                    f"  • Google: {esc(google_stats['requests'])} зап\\., "
                     f"{esc(f'{google_success:.0f}')}% успех\n"
                 )
 
@@ -539,14 +494,11 @@ def send_daily_admin_report():
             report += f"\n🔄 \*Регулярные платежи:\* {esc(recurring_payments_processed)} обработано\n"
 
         # Статус системы
-        report += f"\n⚡ \*Статус системы:\* {system_status}\n"
+        report += f"\n⚡ \*Статус системы:\* {esc(system_status)}\n"
 
         # Ошибки
         if user_analytics['total_errors']:
             report += f"\n⚠️ \*Ошибки:\* {esc(user_analytics['total_errors'])} за день\n"
-
-        if categories_text:
-            report += f"\n📂 \*Топ\-5 категорий:\*\n{categories_text}\n"
 
         report += f"\n⏰ Отчет сформирован: {esc(datetime.now().strftime('%H:%M'))}"
 
