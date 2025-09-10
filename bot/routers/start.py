@@ -183,6 +183,7 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
 Send a text or voice message:
 "Coffee", "Gas 4050", "Bonus +40000"
 The amount and category will be selected based on your previous entries.
+You can backdate entries, e.g., "10.09 1200 groceries" or "coffee 340 10.09.2025".
 
 <b>📁 Categories:</b>
 Customize categories for yourself - add your own, delete unnecessary ones. AI will automatically determine the category for each entry.
@@ -204,6 +205,7 @@ Get beautiful PDF reports with charts"""
 Отправьте текст или голосовое сообщение:
 "Кофе", "Дизель 4050", "Премия +40000"
 Сумма и категория подберутся на основании ваших предыдущих записей.
+Можно добавлять задним числом: например, "10.09 1200 продукты" или "кофе 340 10.09.2025".
 
 <b>📁 Категории:</b>
 Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. ИИ автоматически определит категорию для каждой записи.
@@ -226,16 +228,18 @@ Get beautiful PDF reports with charts"""
     if display_lang == 'en':
         household_footer = (
             "\n\n"
-            "🏠 Household: switch between personal and family views. "
-            "Create a household and add members by sending them an invite link. "
-            "Everyone can see shared expenses and income, and reports show the overall dynamics."
+            "<b>🏠 Household:</b>\n"
+            "Track finances together with your family. "
+            "Switch between personal and family views. "
+            "Create a household and add members by sending them an invite link."
         )
     else:
         household_footer = (
             "\n\n"
-            "🏠 Семейный бюджет: переключайтесь между личным и семейным режимом просмотра. "
-            "Создайте семью и добавляйте участников, отправив им приглашение. "
-            "Все видят общие траты и доходы, а отчёты показывают общую динамику."
+            "<b>🏠 Семейный бюджет:</b>\n"
+            "Ведите общий учет с семьёй. "
+            "Переключайтесь между личным и семейным режимом просмотра. "
+            "Создайте семью и добавляйте участников, отправив им приглашение."
         )
     text += household_footer
     
@@ -282,6 +286,7 @@ async def callback_start(callback: types.CallbackQuery, state: FSMContext, lang:
 <b>💸 Adding expenses:</b>
 Send a text or voice message:
 "Coffee 200" or "Gas 4095 station"
+You can backdate entries, e.g., "10.09 1200 groceries" or "coffee 340 10.09.2025".
 
 <b>📁 Expense categories:</b>
 Customize categories for yourself - add your own, delete unnecessary ones. AI will automatically determine the category for each expense.
@@ -300,6 +305,7 @@ Get beautiful PDF reports with charts"""
 Отправьте текст или голосовое сообщение:
 "Кофе", "Дизель 4050", "Премия +40000"
 Сумма и категория подберутся на основании ваших предыдущих записей.
+Можно добавлять задним числом: например, "10.09 1200 продукты" или "кофе 340 10.09.2025".
 
 <b>📁 Категории:</b>
 Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. ИИ автоматически определит категорию для каждой записи.
@@ -319,16 +325,18 @@ Get beautiful PDF reports with charts"""
     if lang == 'en':
         household_footer = (
             "\n\n"
-            "🏠 Household: switch between personal and family views. "
-            "Create a household and add members by sending them an invite link. "
-            "Everyone can see shared expenses and income, and reports show the overall dynamics."
+            "<b>🏠 Household:</b>\n"
+            "Track finances together with your family. "
+            "Switch between personal and family views. "
+            "Create a household and add members by sending them an invite link."
         )
     else:
         household_footer = (
             "\n\n"
-            "🏠 Семейный бюджет: переключайтесь между личным и семейным режимом просмотра. "
-            "Создайте семью и добавляйте участников, отправив им приглашение. "
-            "Все видят общие траты и доходы, а отчёты показывают общую динамику."
+            "<b>🏠 Семейный бюджет:</b>\n"
+            "Ведите общий учет с семьёй. "
+            "Переключайтесь между личным и семейным режимом просмотра. "
+            "Создайте семью и добавляйте участников, отправив им приглашение."
         )
     
     text += household_footer
