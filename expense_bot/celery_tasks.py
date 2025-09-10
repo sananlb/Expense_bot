@@ -428,7 +428,7 @@ def send_daily_admin_report():
             total_val = cat['total'] or 0
             count_val = cat['count'] or 0
             categories_lines.append(
-                f"  • {esc(name)}: {esc(f'{total_val:,.0f}')} ₽ ({esc(count_val)} зап.)"
+                f"  • {esc(name)}: {esc(f'{total_val:,.0f}')} ₽ \\({esc(str(count_val))} зап\\.\\)"
             )
         categories_text = "\n".join(categories_lines)
 
