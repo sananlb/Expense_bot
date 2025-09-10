@@ -136,8 +136,14 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
             
         except Exception as e:
             # Помечаем ключ как нерабочий и логируем с его именем
-            self.mark_key_failure(key_index, e)
-            logger.error(f"[GoogleAI] Error with {key_name}: {type(e).__name__}: {str(e)[:200]}")
+            if 'key_index' in locals():
+                self.mark_key_failure(key_index, e)
+                if 'key_name' in locals():
+                    logger.error(f"[GoogleAI] Error with {key_name}: {type(e).__name__}: {str(e)[:200]}")
+                else:
+                    logger.error(f"[GoogleAI] Error with key {key_index}: {type(e).__name__}: {str(e)[:200]}")
+            else:
+                logger.error(f"[GoogleAI] Error: {type(e).__name__}: {str(e)[:200]}")
             return None
     
     async def chat_with_functions(
@@ -599,14 +605,18 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
             
             # Если функция не нужна, возвращаем обычный ответ
             # Помечаем ключ как рабочий перед возвратом успешного результата
-            self.mark_key_success(key_index)
+            if 'key_index' in locals():
+                self.mark_key_success(key_index)
             return response
             
         except Exception as e:
             # Помечаем ключ как нерабочий и логируем с его именем
             if 'key_index' in locals():
                 self.mark_key_failure(key_index, e)
-                logger.error(f"[GoogleAI Chat] Error with {key_name}: {type(e).__name__}: {str(e)[:200]}")
+                if 'key_name' in locals():
+                    logger.error(f"[GoogleAI Chat] Error with {key_name}: {type(e).__name__}: {str(e)[:200]}")
+                else:
+                    logger.error(f"[GoogleAI Chat] Error with key {key_index}: {type(e).__name__}: {str(e)[:200]}")
             else:
                 logger.error(f"[GoogleAI Chat] Error: {type(e).__name__}: {str(e)[:200]}")
             return "Извините, произошла ошибка при обработке вашего сообщения."
@@ -757,7 +767,10 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
             # Помечаем ключ как нерабочий и логируем с его именем
             if 'key_index' in locals():
                 self.mark_key_failure(key_index, e)
-                logger.error(f"[GoogleAI] Error in _call_ai_with_functions with {key_name}: {e}")
+                if 'key_name' in locals():
+                    logger.error(f"[GoogleAI] Error in _call_ai_with_functions with {key_name}: {e}")
+                else:
+                    logger.error(f"[GoogleAI] Error in _call_ai_with_functions with key {key_index}: {e}")
             else:
                 logger.error(f"[GoogleAI] Error in _call_ai_with_functions: {e}")
             return "Извините, произошла ошибка."
@@ -861,7 +874,10 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
             # Помечаем ключ как нерабочий и логируем с его именем
             if 'key_index' in locals():
                 self.mark_key_failure(key_index, e)
-                logger.error(f"[GoogleAI] Error in _call_ai_simple with {key_name}: {e}")
+                if 'key_name' in locals():
+                    logger.error(f"[GoogleAI] Error in _call_ai_simple with {key_name}: {e}")
+                else:
+                    logger.error(f"[GoogleAI] Error in _call_ai_simple with key {key_index}: {e}")
             else:
                 logger.error(f"[GoogleAI] Error in _call_ai_simple: {e}")
             return "Извините, произошла ошибка."
@@ -947,7 +963,10 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
             # Помечаем ключ как нерабочий и логируем с его именем
             if 'key_index' in locals():
                 self.mark_key_failure(key_index, e)
-                logger.error(f"[GoogleAI Chat] Error with {key_name}: {type(e).__name__}: {str(e)[:200]}")
+                if 'key_name' in locals():
+                    logger.error(f"[GoogleAI Chat] Error with {key_name}: {type(e).__name__}: {str(e)[:200]}")
+                else:
+                    logger.error(f"[GoogleAI Chat] Error with key {key_index}: {type(e).__name__}: {str(e)[:200]}")
             else:
                 logger.error(f"[GoogleAI Chat] Error: {type(e).__name__}: {str(e)[:200]}")
             return "Извините, произошла ошибка при обработке вашего сообщения."
