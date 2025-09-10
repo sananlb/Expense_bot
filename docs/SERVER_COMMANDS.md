@@ -20,7 +20,7 @@ cd /home/batman/expense_bot && docker ps | grep expense_bot
 
 ### Перезапуск контейнеров
 ```bash
-cd /home/batman/expense_bot && docker-compose restart expense_bot_celery expense_bot_celery_beat
+cd /home/batman/expense_bot && docker-compose restart celery celery-beat
 ```
 
 ## Обновление кода на сервере
@@ -39,7 +39,7 @@ docker-compose up -d
 ```bash
 cd /home/batman/expense_bot && \
 git pull origin master && \
-docker-compose restart expense_bot_app expense_bot_celery expense_bot_web
+docker-compose restart bot celery web
 ```
 
 ## Работа с Celery
@@ -99,17 +99,17 @@ print(f'Задача запущена: {result.id}')"
 
 ### Мониторинг Celery в реальном времени
 ```bash
-cd /home/batman/expense_bot && docker-compose logs -f expense_bot_celery_beat expense_bot_celery
+cd /home/batman/expense_bot && docker-compose logs -f celery-beat celery
 ```
 
 ### Мониторинг только задачи send_daily_admin_report
 ```bash
-cd /home/batman/expense_bot && docker-compose logs -f expense_bot_celery_beat expense_bot_celery | grep --line-buffered "send_daily_admin_report"
+cd /home/batman/expense_bot && docker-compose logs -f celery-beat celery | grep --line-buffered "send_daily"
 ```
 
 ### Мониторинг ошибок Celery
 ```bash
-cd /home/batman/expense_bot && docker-compose logs -f expense_bot_celery expense_bot_celery_beat | grep --line-buffered -E "(ERROR|CRITICAL|Exception)"
+cd /home/batman/expense_bot && docker-compose logs -f celery celery-beat | grep --line-buffered -E "(ERROR|CRITICAL|Exception)"
 ```
 
 ### Последние 100 строк логов Celery
@@ -211,7 +211,7 @@ echo "====================================="
 echo "Мониторинг задачи send_daily_admin_report"
 echo "Время сервера: $(date)"
 echo "====================================="
-docker-compose logs -f expense_bot_celery_beat expense_bot_celery 2>&1 | grep --line-buffered -E "(send_daily_admin_report|ERROR|succeeded|failed|received)" | while read line; do
+docker-compose logs -f celery-beat celery 2>&1 | grep --line-buffered -E "(send_daily_admin_report|ERROR|succeeded|failed|received)" | while read line; do
     echo "[$(date '+%H:%M:%S')] $line"
 done
 EOF
@@ -221,7 +221,7 @@ chmod +x monitor_10am.sh
 
 ### Простой мониторинг в одну строку
 ```bash
-cd /home/batman/expense_bot && docker-compose logs -f expense_bot_celery_beat expense_bot_celery 2>&1 | grep --line-buffered "send_daily"
+cd /home/batman/expense_bot && docker-compose logs -f celery-beat celery 2>&1 | grep --line-buffered "send_daily"
 ```
 
 ## Быстрые проверки
@@ -263,5 +263,5 @@ cd /home/batman/expense_bot && docker logs expense_bot_[имя_контейне�
 
 ### Задачи Celery не выполняются
 ```bash
-cd /home/batman/expense_bot && docker-compose restart expense_bot_celery expense_bot_celery_beat
+cd /home/batman/expense_bot && docker-compose restart celery celery-beat
 ```
