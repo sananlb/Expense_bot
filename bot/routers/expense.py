@@ -957,13 +957,14 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     ]
                 ])
                 
-                # Отправляем подтверждение
+                # Отправляем подтверждение (сообщение о доходе не должно исчезать)
                 await send_message_with_cleanup(
                     message=message,
                     state=state,
                     text=text_msg,
                     reply_markup=keyboard,
-                    parse_mode="HTML"
+                    parse_mode="HTML",
+                    keep_message=True  # Не удалять это сообщение при следующих действиях
                 )
                 
                 logger.info(f"Income created: {income.id} for user {user_id}")
@@ -2029,7 +2030,8 @@ async def show_updated_expense(message: types.Message, state: FSMContext, item_i
                     InlineKeyboardButton(text="✏️  Редактировать", callback_data=edit_callback)
                 ]
             ]),
-            parse_mode="HTML"
+            parse_mode="HTML",
+            keep_message=True  # Не удалять это сообщение при следующих действиях
         )
         
         # Очищаем состояние
