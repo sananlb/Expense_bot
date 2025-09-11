@@ -142,9 +142,12 @@ def process_referral_link(new_user_id: int, referral_code: str) -> Optional[Affi
     Returns:
         AffiliateReferral или None если ссылка невалидна
     """
+    logger.info(f"[AFFILIATE] Processing referral link for user {new_user_id} with code: {referral_code}")
+    
     # Удаляем префикс ref_ если есть
     if referral_code.startswith('ref_'):
         referral_code = referral_code[4:]
+        logger.info(f"[AFFILIATE] Cleaned referral code: {referral_code}")
     
     try:
         # Находим реферальную ссылку
@@ -152,12 +155,15 @@ def process_referral_link(new_user_id: int, referral_code: str) -> Optional[Affi
             affiliate_code=referral_code,
             is_active=True
         )
+        logger.info(f"[AFFILIATE] Found affiliate link for referrer: {affiliate_link.profile.telegram_id}")
         
         # Получаем профиль нового пользователя
         new_profile = Profile.objects.get(telegram_id=new_user_id)
+        logger.info(f"[AFFILIATE] Found profile for new user: {new_profile.telegram_id}")
         
         # Проверяем, что пользователь не приглашает сам себя
         if affiliate_link.profile.telegram_id == new_user_id:
+            logger.warning(f"[AFFILIATE] User {new_user_id} trying to refer themselves")
             return None
         
         # Проверяем, не был ли пользователь уже приглашён кем-то
@@ -166,6 +172,7 @@ def process_referral_link(new_user_id: int, referral_code: str) -> Optional[Affi
         ).first()
         
         if existing_referral:
+            logger.info(f"[AFFILIATE] User {new_user_id} already has referrer: {existing_referral.referrer.telegram_id}")
             return existing_referral
         
         # Создаём связь реферер-реферал
@@ -180,10 +187,18 @@ def process_referral_link(new_user_id: int, referral_code: str) -> Optional[Affi
                 referred=new_profile,
                 affiliate_link=affiliate_link
             )
+            logger.info(f"[AFFILIATE] Created referral: {affiliate_link.profile.telegram_id} -> {new_user_id}")
         
         return referral
         
-    except (AffiliateLink.DoesNotExist, Profile.DoesNotExist):
+    except AffiliateLink.DoesNotExist:
+        logger.warning(f"[AFFILIATE] Affiliate link not found for code: {referral_code}")
+        return None
+    except Profile.DoesNotExist:
+        logger.error(f"[AFFILIATE] Profile not found for user: {new_user_id}")
+        return None
+    except Exception as e:
+        logger.error(f"[AFFILIATE] Unexpected error in process_referral_link: {e}")
         return None
 
 
@@ -202,13 +217,19 @@ def process_referral_commission(subscription: Subscription, telegram_payment_cha
     Returns:
         AffiliateCommission или None если комиссия не начислена
     """
+    logger.info(f"[COMMISSION] Processing commission for subscription {subscription.id}, user {subscription.profile.telegram_id}")
+    
     # Проверяем, есть ли активная реферальная программа
     program = AffiliateProgram.objects.filter(is_active=True).first()
     if not program:
+        logger.info(f"[COMMISSION] No active affiliate program found")
         return None
+    
+    logger.info(f"[COMMISSION] Active program found with {program.commission_permille} permille commission")
     
     # Проверяем, что это платная подписка (не trial, не referral)
     if subscription.payment_method != 'stars' or subscription.amount == 0:
+        logger.info(f"[COMMISSION] Subscription not eligible: payment_method={subscription.payment_method}, amount={subscription.amount}")
         return None
     
     try:
@@ -217,16 +238,21 @@ def process_referral_commission(subscription: Subscription, telegram_payment_cha
             'referrer', 'referred', 'affiliate_link'
         ).get(referred=subscription.profile)
         
+        logger.info(f"[COMMISSION] Found referral: referrer={referral.referrer.telegram_id}, referred={referral.referred.telegram_id}")
+        
         # Проверяем идемпотентность по платежу (если передан идентификатор от Telegram)
         if telegram_payment_charge_id and AffiliateCommission.objects.filter(
             telegram_payment_id=telegram_payment_charge_id
         ).exists():
+            logger.warning(f"[COMMISSION] Commission already exists for payment {telegram_payment_charge_id}")
             return None
 
         # Рассчитываем комиссию
         commission_amount = program.calculate_commission(subscription.amount)
+        logger.info(f"[COMMISSION] Calculated commission: {commission_amount} stars from {subscription.amount} stars")
         
         if commission_amount <= 0:
+            logger.warning(f"[COMMISSION] Commission amount is zero or negative: {commission_amount}")
             return None
         
         with transaction.atomic():
@@ -262,10 +288,15 @@ def process_referral_commission(subscription: Subscription, telegram_payment_cha
             referral.affiliate_link.total_earned = F('total_earned') + commission_amount
             referral.affiliate_link.save()
         
+        logger.info(f"[COMMISSION] Successfully created commission {commission.id} for {commission_amount} stars")
         return commission
         
     except AffiliateReferral.DoesNotExist:
         # Пользователь не был приглашён по реферальной ссылке
+        logger.info(f"[COMMISSION] No referral found for user {subscription.profile.telegram_id}")
+        return None
+    except Exception as e:
+        logger.error(f"[COMMISSION] Unexpected error: {e}")
         return None
 
 

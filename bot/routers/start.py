@@ -110,6 +110,7 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
     # Обработка реферальной ссылки для новых пользователей
     referral_message = ""
     if is_new_user and referral_code:
+        logger.info(f"[START] Processing referral code '{referral_code}' for new user {user_id}")
         try:
             # Сначала пробуем обработать как реферальную ссылку Telegram Stars
             affiliate_referral = await process_referral_link(user_id, referral_code)

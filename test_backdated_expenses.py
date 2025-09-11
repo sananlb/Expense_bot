@@ -42,7 +42,7 @@ def test_date_extraction():
         print(f"  Статус: {status}")
 
 
-def test_expense_parsing_with_dates():
+async def test_expense_parsing_with_dates():
     """Тест парсинга расходов с датами"""
     print("\n" + "=" * 60)
     print("ТЕСТ ПАРСИНГА РАСХОДОВ С ДАТАМИ")
@@ -61,7 +61,7 @@ def test_expense_parsing_with_dates():
         print(f"\nСообщение: '{message}'")
         
         # Парсим сообщение
-        parsed = parse_expense_message(message)
+        parsed = await parse_expense_message(message)
         
         if parsed:
             print(f"  Сумма: {parsed.get('amount')}")
@@ -108,7 +108,7 @@ def demonstrate_usage():
     print("  • Дата должна быть в формате ДД.ММ.ГГГГ или ДД.ММ.ГГ или ДД.ММ")
 
 
-def test_income_with_dates():
+async def test_income_with_dates():
     """Тест парсинга доходов с датами"""
     print("\n" + "=" * 60)
     print("ТЕСТ ПАРСИНГА ДОХОДОВ С ДАТАМИ")
@@ -117,17 +117,17 @@ def test_income_with_dates():
     from bot.utils.expense_parser import parse_income_message
     
     test_incomes = [
-        "зарплата 100000 01.12.2024",
-        "15.11 премия 50000",
-        "фриланс 30000 20.12.2023",
-        "возврат налогов 13000 10.10.2024",
+        "+100000 зарплата 01.12.2024",
+        "+50000 15.11 премия",
+        "+30000 фриланс 20.12.2023",
+        "+13000 возврат налогов 10.10.2024",
     ]
     
     for message in test_incomes:
         print(f"\nСообщение: '{message}'")
         
         # Парсим как доход
-        parsed = parse_income_message(message)
+        parsed = await parse_income_message(message)
         
         if parsed:
             print(f"  Сумма: {parsed.get('amount')}")
@@ -138,15 +138,21 @@ def test_income_with_dates():
             print("  ERROR: Не удалось распарсить")
 
 
-if __name__ == "__main__":
+async def main():
+    """Основная функция для запуска тестов"""
     print("\nДЕМОНСТРАЦИЯ ФУНКЦИОНАЛА ВНЕСЕНИЯ ОПЕРАЦИЙ ЗАДНИМ ЧИСЛОМ\n")
     
     # Запускаем тесты
     test_date_extraction()
-    test_expense_parsing_with_dates()
-    test_income_with_dates()
+    await test_expense_parsing_with_dates()
+    await test_income_with_dates()
     demonstrate_usage()
     
     print("\n" + "=" * 60)
     print("ТЕСТИРОВАНИЕ ЗАВЕРШЕНО")
     print("=" * 60)
+
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(main())
