@@ -119,7 +119,6 @@ async def get_subscription_info_text(profile: Profile, lang: str = 'ru') -> str:
             
         return (
             f"{emoji} <b>{get_text('active_subscription_text', lang)}</b>\n\n"
-            f"{get_text('subscription_type', lang)}: {subscription_type}\n"
             f"{get_text('valid_until', lang)}: {active_subscription.end_date.strftime('%d.%m.%Y')}\n"
             f"{get_text('days_left', lang)}: {days_left}\n\n"
             f"{get_text('can_extend_early', lang)}"
