@@ -1207,7 +1207,6 @@ async def edit_income_category(callback: types.CallbackQuery, state: FSMContext)
     category = next((cat for cat in categories if cat.id == category_id), None)
     
     if category:
-        from bot.utils.category_helpers import get_category_display_name
         lang = await get_user_language(user_id)
         category_display_name = get_category_display_name(category, lang)
         await state.update_data(editing_income_category_id=category_id, old_income_category_name=category_display_name)

@@ -5,6 +5,7 @@
 import re
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
+from bot.utils.category_helpers import get_category_display_name
 
 # Попробуем импортировать spellchecker
 try:
@@ -481,7 +482,6 @@ def categorize_expense_with_weights(text: str, user_profile) -> Tuple[str, float
     import math
     from expenses.models import CategoryKeyword, ExpenseCategory
     from asgiref.sync import sync_to_async
-    from bot.utils.category_helpers import get_category_display_name
     
     # Исправляем опечатки
     language = detect_language(text)

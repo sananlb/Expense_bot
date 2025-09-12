@@ -8,6 +8,7 @@ from asgiref.sync import sync_to_async
 
 from expenses.models import IncomeCategory, Income, IncomeCategoryKeyword, Profile
 from .ai_categorization import categorizer as base_categorizer
+from bot.utils.category_helpers import get_category_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,6 @@ def build_user_context(profile: Profile) -> Dict[str, Any]:
     Построение контекста пользователя для AI
     """
     # Последние использованные категории
-    from bot.utils.category_helpers import get_category_display_name
     from bot.utils.language import get_user_language
     
     recent_incomes = Income.objects.filter(

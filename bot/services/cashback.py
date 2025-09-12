@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 from expenses.models import Cashback, Profile, Expense
 from asgiref.sync import sync_to_async
 from django.db.models import Sum, Q
+from bot.utils.category_helpers import get_category_display_name
 
 
 @sync_to_async
@@ -236,7 +237,6 @@ calculate_expense_cashback = sync_to_async(calculate_expense_cashback_sync)
 def format_cashback_note(cashbacks: List[Cashback], month: int, lang: str = 'ru') -> str:
     """Форматировать красивую заметку о кешбэках с группировкой по банкам"""
     from bot.utils import get_text
-    from bot.utils.category_helpers import get_category_display_name
     
     # Названия месяцев
     month_names = {

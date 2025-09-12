@@ -12,6 +12,7 @@ from django.db.models import Sum, Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from bot.utils.db_utils import get_or_create_user_profile_sync
+from bot.utils.category_helpers import get_category_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -882,7 +883,6 @@ async def get_date_summary(user_id: int, target_date: date) -> Dict[str, Any]:
                     categories_by_currency[currency] = {}
                 
                 # Get localized category name
-                from bot.utils.category_helpers import get_category_display_name
                 cat_name = get_category_display_name(expense.category, user_lang)
                 
                 if cat_name not in categories_by_currency[currency]:
