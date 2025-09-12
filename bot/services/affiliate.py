@@ -1,6 +1,7 @@
 """
 Сервис для работы с реферальной программой Telegram Stars
 """
+import logging
 import secrets
 import string
 from datetime import datetime, timedelta
@@ -20,6 +21,8 @@ from expenses.models import (
     AffiliateReferral,
     AffiliateCommission
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================
@@ -179,7 +182,8 @@ def process_referral_link(new_user_id: int, referral_code: str) -> Optional[Affi
         with transaction.atomic():
             # Увеличиваем счётчик кликов
             affiliate_link.clicks = F('clicks') + 1
-            affiliate_link.save()
+            affiliate_link.save(update_fields=['clicks'])
+            affiliate_link.refresh_from_db()  # Обновляем значения после F() выражений
             
             # Создаём реферальную связь
             referral = AffiliateReferral.objects.create(
@@ -279,14 +283,16 @@ def process_referral_commission(subscription: Subscription, telegram_payment_cha
             
             referral.total_payments = F('total_payments') + 1
             referral.total_spent = F('total_spent') + subscription.amount
-            referral.save()
+            referral.save(update_fields=['first_payment_at', 'total_payments', 'total_spent'])
+            referral.refresh_from_db()  # Обновляем значения после F() выражений
             
             # Обновляем статистику реферальной ссылки
             if was_first_payment:  # Первый успешный платёж = конверсия
                 referral.affiliate_link.conversions = F('conversions') + 1
             
             referral.affiliate_link.total_earned = F('total_earned') + commission_amount
-            referral.affiliate_link.save()
+            referral.affiliate_link.save(update_fields=['conversions', 'total_earned'] if was_first_payment else ['total_earned'])
+            referral.affiliate_link.refresh_from_db()  # Обновляем значения после F() выражений
         
         logger.info(f"[COMMISSION] Successfully created commission {commission.id} for {commission_amount} stars")
         return commission

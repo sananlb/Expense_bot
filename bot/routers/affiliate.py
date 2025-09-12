@@ -190,7 +190,7 @@ async def show_referrals(callback: CallbackQuery, state: FSMContext, lang: str =
             for ref in referrals:
                 status = "✅ Active" if ref['is_active'] else "⏳ Inactive"
                 joined = ref['joined_at'].strftime('%d.%m.%Y')
-                text += f"• User {ref['user_id'][:6]}...\n"
+                text += f"• User {str(ref['user_id'])[:6]}...\n"
                 text += f"  Joined: {joined}\n"
                 text += f"  Status: {status}\n"
                 if ref['total_payments'] > 0:
@@ -202,7 +202,7 @@ async def show_referrals(callback: CallbackQuery, state: FSMContext, lang: str =
             for ref in referrals:
                 status = "✅ Активный" if ref['is_active'] else "⏳ Неактивный"
                 joined = ref['joined_at'].strftime('%d.%m.%Y')
-                text += f"• Пользователь {ref['user_id'][:6]}...\n"
+                text += f"• Пользователь {str(ref['user_id'])[:6]}...\n"
                 text += f"  Регистрация: {joined}\n"
                 text += f"  Статус: {status}\n"
                 if ref['total_payments'] > 0:
