@@ -376,6 +376,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                 try:
                     if last_expense.category:
                         # Используем язык пользователя для отображения категории
+                        from bot.utils.category_helpers import get_category_display_name
                         lang_code = profile.language_code if profile and hasattr(profile, 'language_code') else 'ru'
                         category_name = get_category_display_name(last_expense.category, lang_code)
                 except (AttributeError, TypeError) as e:
