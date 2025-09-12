@@ -87,6 +87,7 @@ def deactivate_affiliate_program() -> bool:
 # УПРАВЛЕНИЕ РЕФЕРАЛЬНЫМИ ССЫЛКАМИ
 # ============================================
 
+@sync_to_async
 def generate_affiliate_code(length: int = 8) -> str:
     """Генерировать уникальный реферальный код"""
     characters = string.ascii_letters + string.digits
@@ -117,8 +118,12 @@ def get_or_create_affiliate_link(user_id: int, bot_username: str) -> AffiliateLi
     affiliate_link = AffiliateLink.objects.filter(profile=profile).first()
     
     if not affiliate_link:
-        # Генерируем новый код
-        code = generate_affiliate_code()
+        # Генерируем новый код синхронно внутри sync_to_async
+        characters = string.ascii_letters + string.digits
+        while True:
+            code = ''.join(secrets.choice(characters) for _ in range(8))
+            if not AffiliateLink.objects.filter(affiliate_code=code).exists():
+                break
         
         # Создаём ссылку
         telegram_link = f"https://t.me/{bot_username}?start=ref_{code}"
@@ -231,8 +236,18 @@ def process_referral_commission(subscription: Subscription, telegram_payment_cha
     
     logger.info(f"[COMMISSION] Active program found with {program.commission_permille} permille commission")
     
+    # Проверяем срок действия программы
+    if program.end_date and program.end_date < timezone.now():
+        logger.info(f"[COMMISSION] Affiliate program expired at {program.end_date}")
+        return None
+    
+    # Проверяем комиссию
+    if program.commission_permille <= 0:
+        logger.warning(f"[COMMISSION] Commission rate is zero or negative: {program.commission_permille}")
+        return None
+    
     # Проверяем, что это платная подписка (не trial, не referral)
-    if subscription.payment_method != 'stars' or subscription.amount == 0:
+    if subscription.payment_method != 'stars' or subscription.amount <= 0:
         logger.info(f"[COMMISSION] Subscription not eligible: payment_method={subscription.payment_method}, amount={subscription.amount}")
         return None
     
@@ -244,12 +259,23 @@ def process_referral_commission(subscription: Subscription, telegram_payment_cha
         
         logger.info(f"[COMMISSION] Found referral: referrer={referral.referrer.telegram_id}, referred={referral.referred.telegram_id}")
         
-        # Проверяем идемпотентность по платежу (если передан идентификатор от Telegram)
-        if telegram_payment_charge_id and AffiliateCommission.objects.filter(
-            telegram_payment_id=telegram_payment_charge_id
-        ).exists():
-            logger.warning(f"[COMMISSION] Commission already exists for payment {telegram_payment_charge_id}")
-            return None
+        # Проверяем идемпотентность по платежу
+        # Проверяем и по telegram_payment_id, и по subscription для надежности
+        existing_commission = AffiliateCommission.objects.filter(
+            subscription=subscription
+        ).first()
+        
+        if existing_commission:
+            logger.warning(f"[COMMISSION] Commission already exists for subscription {subscription.id}")
+            return existing_commission
+        
+        if telegram_payment_charge_id:
+            existing_by_payment = AffiliateCommission.objects.filter(
+                telegram_payment_id=telegram_payment_charge_id
+            ).first()
+            if existing_by_payment:
+                logger.warning(f"[COMMISSION] Commission already exists for payment {telegram_payment_charge_id}")
+                return existing_by_payment
 
         # Рассчитываем комиссию
         commission_amount = program.calculate_commission(subscription.amount)

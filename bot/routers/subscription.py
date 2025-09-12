@@ -661,20 +661,33 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
             
             # Можем отправить уведомление рефереру (опционально)
             try:
-                referrer_message = (
-                    f"💰 <b>Начислена партнёрская комиссия!</b>\n\n"
-                    f"Ваш реферал оплатил подписку.\n"
-                    f"Сумма комиссии: <b>{commission.commission_amount} ⭐</b>\n"
-                    f"Статус: На холде (21 день)\n\n"
-                    f"<i>Комиссия будет доступна после проверочного периода.</i>"
-                )
-                await message.bot.send_message(
-                    chat_id=commission.referrer.telegram_id,
-                    text=referrer_message,
-                    parse_mode='HTML'
-                )
+                # Проверяем что реферер может получать сообщения
+                referrer_profile = commission.referrer
+                if referrer_profile and referrer_profile.telegram_id:
+                    referrer_message = (
+                        f"💰 <b>Начислена партнёрская комиссия!</b>\n\n"
+                        f"Ваш реферал оплатил подписку.\n"
+                        f"Сумма комиссии: <b>{commission.commission_amount} ⭐</b>\n"
+                        f"Статус: На холде (21 день)\n\n"
+                        f"<i>Комиссия будет доступна после проверочного периода.</i>"
+                    )
+                    
+                    # Отправляем с обработкой ошибок блокировки бота
+                    try:
+                        await message.bot.send_message(
+                            chat_id=commission.referrer.telegram_id,
+                            text=referrer_message,
+                            parse_mode='HTML'
+                        )
+                        logger.info(f"Notified referrer {referrer_profile.telegram_id} about commission")
+                    except Exception as send_error:
+                        # Если бот заблокирован или пользователь недоступен
+                        if "bot was blocked" in str(send_error).lower() or "chat not found" in str(send_error).lower():
+                            logger.info(f"Referrer {referrer_profile.telegram_id} has blocked the bot or is unavailable")
+                        else:
+                            logger.warning(f"Could not notify referrer {referrer_profile.telegram_id}: {send_error}")
             except Exception as e:
-                logger.warning(f"Could not notify referrer about commission: {e}")
+                logger.error(f"Error preparing referrer notification: {e}")
     except Exception as e:
         logger.error(f"Error processing affiliate commission: {e}")
         # Не прерываем основной процесс из-за ошибки в реферальной системе
