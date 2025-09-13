@@ -57,7 +57,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
         try:
             prompt = self.get_expense_categorization_prompt(text, amount, currency, categories, user_context)
             
-            model_name = 'gemini-2.5-flash'  # Используем фиксированную модель
+            model_name = get_model('categorization', 'google')
             
             # Получаем следующий ключ для ротации
             key_result = self.get_next_key()
@@ -90,11 +90,27 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                 {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
             ]
             
-            response = await model.generate_content_async(
-                prompt,
-                generation_config=generation_config,
-                safety_settings=safety_settings
-            )
+            # Таймаут для ускорения категоризации: при превышении – fallback на OpenAI категоризацию
+            import asyncio as _asyncio
+            timeout_seconds = int(os.getenv('GOOGLE_CATEGORIZATION_TIMEOUT', os.getenv('GOOGLE_CHAT_TIMEOUT', '15')))
+            try:
+                response = await _asyncio.wait_for(
+                    model.generate_content_async(
+                        prompt,
+                        generation_config=generation_config,
+                        safety_settings=safety_settings
+                    ),
+                    timeout=timeout_seconds
+                )
+            except _asyncio.TimeoutError:
+                logger.warning(f"[GoogleAI] categorize_expense timeout after {timeout_seconds}s, falling back to OpenAI categorization")
+                try:
+                    from .openai_service import OpenAIService
+                    openai_service = OpenAIService()
+                    return await openai_service.categorize_expense(text, amount, currency, categories, user_context)
+                except Exception as e:
+                    logger.error(f"[GoogleAI] OpenAI categorization fallback failed after timeout: {e}")
+                    return None
             
             if response and response.parts:
                 text_response = response.text.strip()
@@ -206,7 +222,9 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                                 elif value.replace('.', '').isdigit():
                                     value = float(value)
                                 params[key] = value
-                    
+                    from .function_call_utils import normalize_function_call
+                    func_name, params = normalize_function_call(message, func_name, params, user_id)
+
                     # Вызываем функцию
                     if hasattr(functions, func_name):
                         try:
@@ -233,7 +251,16 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                             # Выполняем в потоке
                             import asyncio
                             result = await asyncio.to_thread(run_sync_function)
-                            logger.info(f"[GoogleAI] Function {func_name} returned: {result}")
+                            
+                            try:
+                                import json as _json
+                                _prev = _json.dumps(result, ensure_ascii=True)
+                            except Exception:
+                                _prev = str(result).encode('ascii','ignore').decode('ascii')
+                            if len(_prev) > 300:
+                                _prev = _prev[:300] + '...'
+                            logger.info(f"[GoogleAI] Function {func_name} returned: {_prev}")
+
                         except Exception as e:
                             logger.error(f"[GoogleAI] Error calling function {func_name}: {e}", exc_info=True)
                             result = {
@@ -241,39 +268,17 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                                 'message': f'Ошибка при выполнении функции: {str(e)}'
                             }
                         
-                        # Определяем функции с большим объемом данных
-                        large_data_functions = {
-                            'get_expenses_list',
-                            'get_max_expense_day', 
-                            'get_category_statistics',
-                            'get_daily_totals',
-                            'search_expenses',
-                            'get_expenses_by_amount_range',
-                            # Функции для доходов
-                            'get_incomes_list',
-                            'get_recent_incomes',
-                            'get_max_income_day',
-                            'get_income_category_statistics',
-                            'get_daily_income_totals',
-                            'search_incomes',
-                            'get_incomes_by_amount_range'
-                        }
-                        
-                        # Для функций с большим объемом данных форматируем локально
-                        if result.get('success') and func_name in large_data_functions:
-                            # Импортируем универсальный форматтер
-                            from bot.utils.expense_formatter import format_expenses_from_dict_list
-                            
-                            # Форматируем результат в зависимости от функции
-                            if func_name == 'get_expenses_list':
-                                expenses_data = result.get('expenses', [])
-                                total = result.get('total', 0)
-                                count = result.get('count', len(expenses_data))
-                                start_date = result.get('start_date', '')
-                                end_date = result.get('end_date', '')
-                                
-                                # Определяем описание периода
+                        if result.get('success'):
+                            try:
+                                from bot.services.response_formatter import format_function_result
+                                return format_function_result(func_name, result)
+                            except Exception as _fmt_err:
+                                logger.error(f"[GoogleAI] Error formatting result for {func_name}: {_fmt_err}")
+                                import json as _json
                                 try:
+                                    return _json.dumps(result, ensure_ascii=False)[:1000]
+                                except Exception:
+                                    return str(result)[:1000]
                                     from datetime import datetime
                                     start = datetime.fromisoformat(start_date)
                                     end = datetime.fromisoformat(end_date)
@@ -342,7 +347,36 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                                 
                                 return response_text
                             
-                            elif func_name == 'get_daily_totals':
+                            
+                    elif func_name == 'get_max_expense_day':
+                        # Нормализация period/month/year -> period_days
+                        import calendar as _cal
+                        period_days = params.get('period_days')
+                        if not period_days:
+                            period = str(params.get('period', '')).lower()
+                            month = params.get('month')
+                            year = params.get('year')
+                            try:
+                                if period == 'week':
+                                    period_days = 7
+                                elif period == 'year':
+                                    period_days = 365
+                                elif period == 'month':
+                                    if month and year:
+                                        period_days = _cal.monthrange(int(year), int(month))[1]
+                                    else:
+                                        period_days = 31
+                            except Exception:
+                                period_days = None
+                        new_params = {'user_id': user_id}
+                        if period_days:
+                            try:
+                                new_params['period_days'] = int(period_days)
+                            except Exception:
+                                pass
+                        params = new_params
+                    elif func_name == 'get_daily_totals':
+
                                 daily = result.get('daily_totals', {})
                                 # Итоги могут приходить как в корне, так и в result['statistics']
                                 stats = result.get('statistics', {}) if isinstance(result.get('statistics'), dict) else {}
@@ -605,7 +639,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
 Отвечай естественно, но с полной информацией."""
                             
                             # Второй вызов AI для форматирования ответа
-                            final_response = await self._call_ai_simple(result_prompt)
+                            final_response = await self._call_ai_simple(result_prompt, user_context=user_context)
                             return final_response
                         else:
                             # Ошибка выполнения функции
@@ -643,60 +677,19 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
         Вызов AI с инструкциями о функциях
         """
         try:
-            logger.info(f"[GoogleAI] _call_ai_with_functions started for message: {message[:100]}")
+            try:
+                _msg_preview = (message or '')[:100]
+                _msg_preview = _msg_preview.encode('ascii','ignore').decode('ascii')
+            except Exception:
+                _msg_preview = ''
+            logger.info(f"[GoogleAI] _call_ai_with_functions started for message: {_msg_preview}")
             
             from datetime import datetime
             today = datetime.now()
             
-            prompt = f"""Ты - помощник по учету расходов и доходов. У тебя есть доступ к функциям для анализа финансов.
-Сегодня: {today.strftime('%Y-%m-%d')} ({today.strftime('%B %Y')})
-
-ДОСТУПНЫЕ ФУНКЦИИ ДЛЯ РАСХОДОВ:
-1. get_max_expense_day() - для вопросов "В какой день я больше всего потратил?"
-2. get_period_total(period='today'|'yesterday'|'week'|'month'|'year') - для "Сколько я потратил сегодня/вчера/на этой неделе?"
-3. get_max_single_expense() - для "Какая моя самая большая трата?"
-4. get_category_statistics() - для "На что я трачу больше всего?"
-5. get_average_expenses() - для "Сколько я трачу в среднем?"
-6. get_recent_expenses(limit=10) - для "Покажи последние траты"
-7. search_expenses(query='текст') - для "Когда я покупал..."
-8. get_weekday_statistics() - для "В какие дни недели я трачу больше?"
-9. predict_month_expense() - для "Сколько я потрачу в этом месяце?"
-10. check_budget_status(budget_amount=50000) - для "Уложусь ли я в бюджет?"
-11. compare_periods() - для "Я стал тратить больше или меньше?"
-12. get_expense_trend() - для "Покажи динамику трат"
-13. get_expenses_by_amount_range(min_amount=1000) - для "Покажи траты больше 1000"
-14. get_category_total(category='продукты', period='month') - для "Сколько я трачу на продукты?"
-15. get_expenses_list(start_date='2025-08-01', end_date='2025-08-31') - для "Покажи траты за период/с даты по дату"
-16. get_daily_totals(days=30) - для "Покажи траты по дням/суммы по дням за последний месяц"
-
-ДОСТУПНЫЕ ФУНКЦИИ ДЛЯ ДОХОДОВ:
-17. get_max_income_day() - для "В какой день я больше всего заработал?"
-18. get_income_period_total(period='today'|'yesterday'|'week'|'month'|'year') - для "Сколько я заработал сегодня/вчера/на этой неделе?"
-19. get_max_single_income() - для "Какой мой самый большой доход?"
-20. get_income_category_statistics() - для "Откуда больше всего доходов?"
-21. get_average_incomes() - для "Сколько я зарабатываю в среднем?"
-22. get_recent_incomes(limit=10) - для "Покажи последние доходы"
-23. search_incomes(query='текст') - для "Когда я получал..."
-24. get_income_weekday_statistics() - для "В какие дни недели больше доходов?"
-25. predict_month_income() - для "Сколько я заработаю в этом месяце?"
-26. check_income_target(target_amount=100000) - для "Достигну ли я цели по доходам?"
-27. compare_income_periods() - для "Я стал зарабатывать больше или меньше?"
-28. get_income_trend() - для "Покажи динамику доходов"
-29. get_incomes_by_amount_range(min_amount=10000) - для "Покажи доходы больше 10000"
-30. get_income_category_total(category='зарплата', period='month') - для "Сколько я получаю зарплаты?"
-31. get_incomes_list(start_date='2025-08-01', end_date='2025-08-31') - для "Покажи доходы за период"
-32. get_daily_income_totals(days=30) - для "Покажи доходы по дням"
-
-ФУНКЦИИ ДЛЯ КОМПЛЕКСНОГО АНАЛИЗА:
-33. get_all_operations(start_date='2025-08-01', end_date='2025-08-31', limit=200) - для "Все операции", "Покажи все транзакции"
-34. get_financial_summary(period='month') - для "Финансовая сводка", "Баланс", "Итоги месяца"
-
-ВАЖНО: Если вопрос требует анализа данных, ответь ТОЛЬКО в формате:
-FUNCTION_CALL: имя_функции(параметр1=значение1, параметр2=значение2)
-
-Если вопрос не требует анализа данных (приветствие, общий вопрос), отвечай обычным текстом.
-
-Вопрос пользователя: {message}"""
+            from bot.services.prompt_builder import build_function_call_prompt
+            # Here we receive already-enhanced message; use the parameter
+            prompt = build_function_call_prompt(message, context)
 
             # Получаем следующий ключ для ротации
             key_result = self.get_next_key()
@@ -711,8 +704,9 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
             genai.configure(api_key=api_key)
             logger.debug(f"[GoogleAI] Using {key_name} for chat with functions")
             
+            model_name = get_model('chat', 'google')
             model = genai.GenerativeModel(
-                model_name='gemini-2.5-flash',
+                model_name=model_name,
                 system_instruction="You are a finance tracking assistant for both expenses and income. Analyze the user's question and determine if a function call is needed."
             )
             
@@ -732,11 +726,28 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
             logger.info(f"[GoogleAI] Calling generate_content_async with prompt length: {len(prompt)}")
             logger.info(f"[GoogleAI] Generation config: max_output_tokens={generation_config.max_output_tokens}")
             
-            response = await model.generate_content_async(
-                prompt,
-                generation_config=generation_config,
-                safety_settings=safety_settings
-            )
+            # Ограничиваем время форматирования, при таймауте пробуем OpenAI
+            import asyncio as _asyncio
+            timeout_seconds = int(os.getenv('GOOGLE_CHAT_FORMAT_TIMEOUT', os.getenv('GOOGLE_CHAT_TIMEOUT', '15')))
+            try:
+                response = await _asyncio.wait_for(
+                    model.generate_content_async(
+                        prompt,
+                        generation_config=generation_config,
+                        safety_settings=safety_settings
+                    ),
+                    timeout=timeout_seconds
+                )
+            except _asyncio.TimeoutError:
+                logger.warning(f"[GoogleAI] _call_ai_simple timeout after {timeout_seconds}s, falling back to OpenAI formatter")
+                try:
+                    from .openai_service import OpenAIService
+                    openai_service = OpenAIService()
+                    # Используем OpenAI как простой чат для форматирования текста промпта
+                    return await openai_service.chat(prompt, [], None)
+                except Exception as e:
+                    logger.error(f"[GoogleAI] OpenAI formatter fallback failed after timeout: {e}")
+                    return "Извините, сервис временно недоступен. Попробуйте еще раз."
             
             logger.info(f"[GoogleAI] generate_content_async completed")
             
@@ -786,7 +797,7 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
                 logger.error(f"[GoogleAI] Error in _call_ai_with_functions: {e}")
             return "Извините, произошла ошибка."
     
-    async def _call_ai_simple(self, prompt: str) -> str:
+    async def _call_ai_simple(self, prompt: str, user_context: Optional[Dict[str, Any]] = None) -> str:
         """
         Простой вызов AI для форматирования ответа
         """
@@ -804,8 +815,9 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
             genai.configure(api_key=api_key)
             logger.debug(f"[GoogleAI] Using {key_name} for chat with functions")
             
+            model_name = get_model('chat', 'google')
             model = genai.GenerativeModel(
-                model_name='gemini-2.5-flash',
+                model_name=model_name,
                 system_instruction="Answer in Russian with complete information. Always include dates, amounts, descriptions when available. Be natural but informative."
             )
             
@@ -878,8 +890,13 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
                                 return "Траты за указанный период не найдены."
                 except Exception as fallback_error:
                     logger.error(f"[GoogleAI] Fallback formatting failed: {fallback_error}")
-                
-                return "Извините, не удалось получить ответ от AI."
+                # Попытаемся отдать форматирование OpenAI с учётом контекста пользователя
+                try:
+                    from .openai_service import OpenAIService
+                    openai_service = OpenAIService()
+                    return await openai_service.chat(prompt, [], user_context)
+                except Exception:
+                    return "Извините, не удалось получить ответ от AI."
                 
         except Exception as e:
             # Помечаем ключ как нерабочий и логируем с его именем
@@ -891,7 +908,13 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
                     logger.error(f"[GoogleAI] Error in _call_ai_simple with key {key_index}: {e}")
             else:
                 logger.error(f"[GoogleAI] Error in _call_ai_simple: {e}")
-            return "Извините, произошла ошибка."
+            # Попытаемся отдать форматирование OpenAI с учётом контекста пользователя
+            try:
+                from .openai_service import OpenAIService
+                openai_service = OpenAIService()
+                return await openai_service.chat(prompt, [], user_context)
+            except Exception:
+                return "Извините, произошла ошибка."
     
     async def chat(
         self,

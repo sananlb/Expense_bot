@@ -2,10 +2,13 @@
 OpenAI Service для expense_bot
 """
 import logging
+import os
 import json
 import asyncio
 import threading
 import time
+import re
+from datetime import datetime
 from typing import Dict, List, Optional, Any
 import openai
 from openai import OpenAI
@@ -38,10 +41,13 @@ class OpenAIService(AIBaseService):
         """Инициализация сервиса"""
         super().__init__()
         self.use_rotation = False  # Добавляем атрибут
-        # Если нет пула клиентов, создаем единичный клиент
+        # Если нет пула клиентов, создаем единичный клиент из Django settings/ENV
         if not OPENAI_CLIENTS:
-            settings = get_provider_settings('openai')
-            api_key = settings['api_key']
+            try:
+                # Берем ключ из Django settings или переменных окружения
+                api_key = getattr(settings, 'OPENAI_API_KEY', None) or os.getenv('OPENAI_API_KEY')
+            except Exception:
+                api_key = os.getenv('OPENAI_API_KEY')
             if api_key:
                 self.fallback_client = OpenAI(api_key=api_key)
             else:
@@ -187,10 +193,92 @@ class OpenAIService(AIBaseService):
         user_context: Optional[Dict[str, Any]] = None
     ) -> str:
         """
-        Чат с OpenAI
+        Чат с OpenAI с поддержкой FUNCTION_CALL: ..., как у Gemini.
+        Сначала просим модель выбрать функцию, при отсутствии FUNCTION_CALL — обычный чат.
         """
         try:
-            # Формируем сообщения для OpenAI
+            # Попытка: выбор функции
+            try:
+                today = datetime.now()
+                from bot.services.prompt_builder import build_function_call_prompt
+                fc_prompt = build_function_call_prompt(message, context)
+
+                model_name_fc = get_model('chat', 'openai')
+                client_fc = self._get_client()
+                sel_t0 = time.time()
+                logger.info(f"[OpenAI] START function selection at {datetime.now().isoformat()}")
+                sel_resp = await asyncio.to_thread(
+                    client_fc.chat.completions.create,
+                    model=model_name_fc,
+                    messages=[
+                        {"role": "system", "content": "Ты помощник бота учета финансов. При анализе данных отвечай только в виде FUNCTION_CALL: ..."},
+                        {"role": "user", "content": fc_prompt}
+                    ],
+                    max_tokens=300,
+                    temperature=0.3,
+                )
+                sel_elapsed = time.time() - sel_t0
+                logger.info(f"[OpenAI] END function selection took {sel_elapsed:.2f}s")
+                sel_text = sel_resp.choices[0].message.content.strip() if sel_resp and sel_resp.choices else ""
+
+                if sel_text.startswith("FUNCTION_CALL:"):
+                    m = re.match(r'(\w+)\((.*)\)', sel_text.replace("FUNCTION_CALL:", "").strip())
+                    if m:
+                        func_name = m.group(1)
+                        params_str = m.group(2)
+                        # Санитация: если имя функции не ASCII (модель вернула русское имя), маппим по эвристике
+                        if any(ord(ch) > 127 for ch in (func_name or '')):
+                            low = message.lower()
+                            if ('день' in low or 'дата' in low) and ('больше' in low or 'максим' in low) and ('потрат' in low or 'траты' in low):
+                                func_name = 'get_max_expense_day'
+                        params: Dict[str, Any] = {"user_id": user_context.get('user_id') if user_context else None}
+                        if params_str:
+                            for p in params_str.split(','):
+                                if '=' in p:
+                                    k, v = p.split('=', 1)
+                                    k = k.strip()
+                                    v = v.strip().strip('\"\'')
+                                    if v.isdigit():
+                                        v = int(v)
+                                    elif v.replace('.', '').isdigit():
+                                        v = float(v)
+                                    params[k] = v
+
+                        from bot.services.function_call_utils import normalize_function_call
+                        func_name, params = normalize_function_call(message, func_name, params, user_context.get('user_id') if user_context else None)
+
+                        # Исполнение функции
+                        try:
+                            def run_sync_function():
+                                import django
+                                django.setup()
+                                from bot.services.expense_functions import ExpenseFunctions
+                                funcs = ExpenseFunctions()
+                                method = getattr(funcs, func_name)
+                                if hasattr(method, '__wrapped__'):
+                                    method = method.__wrapped__
+                                return method(**params)
+                            result = await asyncio.to_thread(run_sync_function)
+                        except Exception as e:
+                            logger.error(f"[OpenAI] Function {func_name} error: {e}")
+                            result = {'success': False, 'message': str(e)}
+
+                        if result.get('success'):
+                            try:
+                                from bot.services.response_formatter import format_function_result
+                                return format_function_result(func_name, result)
+                            except Exception:
+                                import json as _json
+                                try:
+                                    return _json.dumps(result, ensure_ascii=False)[:1000]
+                                except Exception:
+                                    return str(result)[:1000]
+                        else:
+                            return f"Ошибка: {result.get('message','Не удалось получить данные')}"
+            except Exception:
+                pass
+
+            # Обычный чат если функция не выбрана
             messages = [
                 {
                     "role": "system",
@@ -198,30 +286,17 @@ class OpenAIService(AIBaseService):
 Помогай пользователю с учетом финансов, отвечай на вопросы и давай советы."""
                 }
             ]
-            
-            # Добавляем контекст
             if context:
-                for msg in context[-10:]:  # Берем последние 10 сообщений
+                for msg in context[-10:]:
                     messages.append({
                         "role": msg['role'],
                         "content": msg['content']
                     })
-            
-            # Добавляем текущее сообщение
-            messages.append({
-                "role": "user",
-                "content": message
-            })
-            
+            messages.append({"role": "user", "content": message})
+
             model_name = get_model('chat', 'openai')
-            
-            # Получаем клиент с ротацией ключей
             client = self._get_client()
-            
-            # Засекаем время перед вызовом API
             start_time = time.time()
-            
-            # Асинхронный вызов
             response = await asyncio.to_thread(
                 client.chat.completions.create,
                 model=model_name,
@@ -230,11 +305,7 @@ class OpenAIService(AIBaseService):
                 temperature=0.7,
                 top_p=0.9
             )
-            
-            # Вычисляем время ответа
             response_time = time.time() - start_time
-            
-            # Логируем метрики в БД
             try:
                 from expenses.models import AIServiceMetrics
                 await asyncio.to_thread(
@@ -250,22 +321,14 @@ class OpenAIService(AIBaseService):
                 )
             except Exception as e:
                 logger.warning(f"Failed to log AI metrics: {e}")
-            
             logger.info(f"OpenAI chat took {response_time:.2f}s for message length {len(message)}")
-            
             result = response.choices[0].message.content.strip()
-            
-            # Отмечаем успех
             if self.use_rotation:
                 api_key = client.api_key
                 self.api_key_manager.report_success(api_key)
-            
             return result
-            
         except Exception as e:
             logger.error(f"OpenAI chat error: {e}")
-            
-            # Логируем неудачную попытку в метрики
             try:
                 from expenses.models import AIServiceMetrics
                 await asyncio.to_thread(
@@ -280,10 +343,7 @@ class OpenAIService(AIBaseService):
                 )
             except Exception as log_error:
                 logger.warning(f"Failed to log AI error metrics: {log_error}")
-            
-            # Отчитываемся об ошибке
             if self.use_rotation and 'client' in locals():
                 api_key = client.api_key
                 self.api_key_manager.report_error(api_key, e)
-            
             return "Извините, произошла ошибка при обработке вашего сообщения. Попробуйте еще раз."

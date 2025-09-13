@@ -2,7 +2,7 @@
 Обработчик трат - главная функция бота
 """
 from aiogram import Router, types, F
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -834,8 +834,30 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     
     # Проверяем, есть ли активное состояние (кроме нашего состояния ожидания суммы)
     current_state = await state.get_state()
-    if current_state and current_state != "ExpenseForm:waiting_for_amount_clarification":
-        # Пропускаем, если есть активное состояние
+
+    # Список состояний, при которых НЕ нужно обрабатывать траты
+    skip_states = [
+        "HouseholdStates:waiting_for_household_name",
+        "HouseholdStates:waiting_for_rename",
+        "RecurringForm:waiting_for_description",
+        "RecurringForm:waiting_for_amount",
+        "RecurringForm:waiting_for_day",
+        "BudgetStates:waiting_for_limit",
+        "ReferralStates:waiting_for_withdrawal_amount",
+        "CategoryForm:waiting_for_name",
+        "CategoryForm:waiting_for_icon",
+        "Top5States:waiting_for_period",
+        "SettingsStates:waiting_for_timezone",
+        "SettingsStates:waiting_for_currency"
+    ]
+
+    # Пропускаем обработку трат, если активно состояние другого роутера
+    if current_state and current_state in skip_states:
+        logger.info(f"Skipping expense handler due to active state: {current_state}")
+        return
+
+    # Также пропускаем, если есть любое состояние, кроме нашего состояния ожидания суммы
+    if current_state and current_state != "ExpenseForm:waiting_for_amount_clarification" and not current_state.startswith("ExpenseForm:"):
         logger.info(f"Skipping expense handler due to active state: {current_state}")
         return
     

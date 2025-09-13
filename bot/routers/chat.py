@@ -213,7 +213,13 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
                 logger.info(f"[Chat] Calling AI with user_id={user_id}, message={text[:50]}...")
                 
                 response = await ai_service.chat(text, context, user_context)
-                logger.info(f"[Chat] AI response received: {response[:100] if response else 'None'}...")
+                # Безопасное логирование в Windows-консолях (ASCII-only превью)
+                try:
+                    preview = (response or '')[:100]
+                    safe_preview = preview.encode('ascii', 'ignore').decode('ascii')
+                except Exception:
+                    safe_preview = 'None'
+                logger.info(f"[Chat] AI response received: {safe_preview}...")
                 
             except Exception as e:
                 logger.error(f"AI chat error with primary service: {e}")
