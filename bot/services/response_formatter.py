@@ -128,6 +128,63 @@ def format_function_result(func_name: str, result: Dict) -> str:
         subtitle = f"Найдено: {count} доходов на сумму {total:,.0f} ₽"
         return _format_incomes_list(result, title, subtitle)
 
+    if func_name == 'get_category_total':
+        category = result.get('category', '')
+        total = result.get('total', 0)
+        count = result.get('count', 0)
+        period = result.get('period', '')
+
+        if count == 0:
+            return f"За указанный период трат в категории \"{category}\" не найдено."
+
+        period_text = {
+            'week': 'за неделю',
+            'month': 'за месяц',
+            'year': 'за год',
+            'all': 'за все время'
+        }.get(period, f'за {period}')
+
+        return (
+            f"📦 Категория: {category}\n"
+            f"Период: {period_text}\n"
+            f"Трат: {count}\n"
+            f"Сумма: {total:,.0f} ₽"
+        )
+
+    if func_name == 'get_category_total_by_dates':
+        category = result.get('category', '')
+        total = result.get('total', 0)
+        count = result.get('count', 0)
+        start_date = result.get('start_date', '')
+        end_date = result.get('end_date', '')
+
+        if count == 0:
+            return f"За период с {start_date} по {end_date} трат в категории \"{category}\" не найдено."
+
+        # Определяем описание периода
+        try:
+            from datetime import datetime
+            s = datetime.fromisoformat(start_date)
+            e = datetime.fromisoformat(end_date)
+            if s.month == e.month and s.year == e.year:
+                months_ru = {
+                    1: 'январь', 2: 'февраль', 3: 'март', 4: 'апрель',
+                    5: 'май', 6: 'июнь', 7: 'июль', 8: 'август',
+                    9: 'сентябрь', 10: 'октябрь', 11: 'ноябрь', 12: 'декабрь'
+                }
+                period_desc = f"за {months_ru[s.month]} {s.year}"
+            else:
+                period_desc = f"с {start_date} по {end_date}"
+        except Exception:
+            period_desc = f"с {start_date} по {end_date}"
+
+        return (
+            f"📦 Категория: {category}\n"
+            f"Период: {period_desc}\n"
+            f"Трат: {count}\n"
+            f"Сумма: {total:,.0f} ₽"
+        )
+
     # Fallback: JSON preview (truncated)
     import json as _json
     try:
