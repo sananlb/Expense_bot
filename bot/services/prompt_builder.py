@@ -36,31 +36,32 @@ def build_function_call_prompt(message: str, context: List[Dict[str,str]]|None=N
 11. compare_periods() - для "Я стал тратить больше или меньше?"
 12. get_expense_trend() - для "Покажи динамику трат"
 13. get_expenses_by_amount_range(min_amount=1000) - для "Покажи траты больше 1000"
-14. get_category_total(category='продукты', period='month') - для "Сколько я трачу на продукты?"
-15. get_expenses_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - для "Покажи траты за период/с даты по дату"
-16. get_daily_totals(days=30) - для "Покажи траты по дням/суммы по дням за последний месяц"
+14. get_category_total(category='продукты', period='month') - ТОЛЬКО для текущего периода: "Сколько я потратил на продукты в ЭТОМ месяце?"
+15. get_category_total_by_dates(category='продукты', start_date='2025-08-01', end_date='2025-08-31') - для конкретного месяца: "Сколько я потратил в августе на продукты?"
+16. get_expenses_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - для "Покажи траты за период/с даты по дату"
+17. get_daily_totals(days=30) - для "Покажи траты по дням/суммы по дням за последний месяц"
 
 ДОСТУПНЫЕ ФУНКЦИИ ДЛЯ ДОХОДОВ:
-17. get_max_income_day() - для "В какой день я больше всего заработал?"
-18. get_income_period_total(period='today'|'yesterday'|'week'|'month'|'year') - для "Сколько я заработал сегодня/вчера/на этой неделе?"
-19. get_max_single_income() - для "Какой мой самый большой доход?"
-20. get_income_category_statistics() - для "Откуда больше всего доходов?"
-21. get_average_incomes() - для "Сколько я зарабатываю в среднем?"
-22. get_recent_incomes(limit=10) - для "Покажи последние доходы"
-23. search_incomes(query='текст') - для "Когда я получал..."
-24. get_income_weekday_statistics() - для "В какие дни недели больше доходов?"
-25. predict_month_income() - для "Сколько я заработаю в этом месяце?"
-26. check_income_target(target_amount=100000) - для "Достигну ли я цели по доходам?"
-27. compare_income_periods() - для "Я стал зарабатывать больше или меньше?"
-28. get_income_trend() - для "Покажи динамику доходов"
-29. get_incomes_by_amount_range(min_amount=10000) - для "Покажи доходы больше 10000"
-30. get_income_category_total(category='зарплата', period='month') - для "Сколько я получаю зарплаты?"
-31. get_incomes_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - для "Покажи доходы за период"
-32. get_daily_income_totals(days=30) - для "Покажи доходы по дням"
+18. get_max_income_day() - для "В какой день я больше всего заработал?"
+19. get_income_period_total(period='today'|'yesterday'|'week'|'month'|'year') - для "Сколько я заработал сегодня/вчера/на этой неделе?"
+20. get_max_single_income() - для "Какой мой самый большой доход?"
+21. get_income_category_statistics() - для "Откуда больше всего доходов?"
+22. get_average_incomes() - для "Сколько я зарабатываю в среднем?"
+23. get_recent_incomes(limit=10) - для "Покажи последние доходы"
+24. search_incomes(query='текст') - для "Когда я получал..."
+25. get_income_weekday_statistics() - для "В какие дни недели больше доходов?"
+26. predict_month_income() - для "Сколько я заработаю в этом месяце?"
+27. check_income_target(target_amount=100000) - для "Достигну ли я цели по доходам?"
+28. compare_income_periods() - для "Я стал зарабатывать больше или меньше?"
+29. get_income_trend() - для "Покажи динамику доходов"
+30. get_incomes_by_amount_range(min_amount=10000) - для "Покажи доходы больше 10000"
+31. get_income_category_total(category='зарплата', period='month') - для "Сколько я получаю зарплаты?"
+32. get_incomes_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - для "Покажи доходы за период"
+33. get_daily_income_totals(days=30) - для "Покажи доходы по дням"
 
 ФУНКЦИИ ДЛЯ КОМПЛЕКСНОГО АНАЛИЗА:
-33. get_all_operations(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD', limit=200) - для "Все операции", "Покажи все транзакции"
-34. get_financial_summary(period='month') - для "Финансовая сводка", "Баланс", "Итоги месяца"
+34. get_all_operations(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD', limit=200) - для "Все операции", "Покажи все транзакции"
+35. get_financial_summary(period='month') - для "Финансовая сводка", "Баланс", "Итоги месяца"
 
 ВАЖНО: Если вопрос требует анализа данных, ответь ТОЛЬКО в формате:
 FUNCTION_CALL: имя_функции(параметр1=значение1, параметр2=значение2)
@@ -75,8 +76,10 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
 - Не используй get_daily_totals для одиночной даты — он для сводки по нескольким дням.
 
 СПЕЦИАЛЬНЫЕ СЛУЧАИ:
-- Если вопрос вида: "сколько я потратил в <месяц> на <категория>",
-  ТО используй get_category_total_by_dates(category='категория', start_date='YYYY-MM-01', end_date='YYYY-MM-<последний день месяца>'). Год возьми из контекста или текущий год.
+- Если вопрос вида: "сколько я потратил в <месяц> на <категория>" (например: "в августе на продукты", "в сентябре на транспорт"),
+  ТО ОБЯЗАТЕЛЬНО используй get_category_total_by_dates(category='категория', start_date='YYYY-MM-01', end_date='YYYY-MM-<последний день месяца>').
+  Год возьми из контекста или текущий год. НЕ ИСПОЛЬЗУЙ get_category_total для конкретных месяцев!
+- get_category_total используй ТОЛЬКО для текущего периода (этот месяц, эта неделя) без указания конкретного месяца.
 
 {ctx_text}Вопрос пользователя: {message}"""
     return prompt
