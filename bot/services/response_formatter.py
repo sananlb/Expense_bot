@@ -32,8 +32,7 @@ def _format_category_stats(result: Dict) -> str:
     cats = result.get('categories', []) or []
     total = result.get('total', 0)
     parts: List[str] = []
-    parts.append(f"Статистика по категориям (всего: {total:,.0f} ₽)
-")
+    parts.append(f"Статистика по категориям (всего: {total:,.0f} ₽)\n")
     for c in cats[:20]:
         name = c.get('name', '')
         cat_total = c.get('total', 0)
@@ -41,10 +40,8 @@ def _format_category_stats(result: Dict) -> str:
         percent = c.get('percentage', 0)
         parts.append(f"• {name}: {cat_total:,.0f} ₽ ({count} шт., {percent:.1f}%)")
     if len(cats) > 20:
-        parts.append(f"
-... ещё {len(cats)-20} категорий")
-    return "
-".join(parts)
+        parts.append(f"\n... ещё {len(cats)-20} категорий")
+    return "\n".join(parts)
 
 
 def _format_daily_totals(result: Dict) -> str:
@@ -52,8 +49,7 @@ def _format_daily_totals(result: Dict) -> str:
     stats = result.get('statistics', {}) if isinstance(result.get('statistics'), dict) else {}
     total = result.get('total', stats.get('total', 0))
     avg = result.get('average', stats.get('average', 0))
-    lines = [f"Траты по дням (всего: {total:,.0f} ₽, среднее: {avg:,.0f} ₽/день)
-"]
+    lines = [f"Траты по дням (всего: {total:,.0f} ₽, среднее: {avg:,.0f} ₽/день)\n"]
     # latest 30 days by date desc
     for dk in sorted(daily.keys(), reverse=True)[:30]:
         entry = daily.get(dk)
@@ -65,10 +61,8 @@ def _format_daily_totals(result: Dict) -> str:
         if amount > 0:
             lines.append(f"• {dk}: {amount:,.0f} ₽")
     if len(daily) > 30:
-        lines.append(f"
-... данные за {len(daily)} дней")
-    return "
-".join(lines)
+        lines.append(f"\n... данные за {len(daily)} дней")
+    return "\n".join(lines)
 
 
 def format_function_result(func_name: str, result: Dict) -> str:
