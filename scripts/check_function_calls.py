@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python
 """
 Quick smoke check for all AI function-calling endpoints in ExpenseFunctions.

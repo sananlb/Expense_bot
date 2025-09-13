@@ -1397,8 +1397,50 @@ class ExpenseFunctions:
         """
         Получить общую сумму доходов за период (аналог get_period_total для расходов)
         """
-        # Используем существующую функцию get_income_total
-        return ExpenseFunctions.get_income_total(user_id, period)
+        # Используем синхронную версию get_income_total без двойной обертки
+        try:
+            sync_fn = getattr(ExpenseFunctions.get_income_total, '__wrapped__', None)
+            if sync_fn is not None:
+                return sync_fn(user_id, period)
+            # Fallback на прямую реализацию при отсутствии __wrapped__
+            from datetime import date, timedelta
+            from decimal import Decimal
+            from django.db.models import Sum
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
+            today = date.today()
+            if period == 'today':
+                start_date = end_date = today
+            elif period == 'week':
+                start_date = today - timedelta(days=today.weekday())
+                end_date = today
+            elif period == 'month':
+                start_date = today.replace(day=1)
+                end_date = today
+            elif period == 'year':
+                start_date = today.replace(month=1, day=1)
+                end_date = today
+            else:
+                return {'success': False, 'message': f'Unknown period: {period}'}
+            incomes = Income.objects.filter(
+                profile=profile,
+                income_date__gte=start_date,
+                income_date__lte=end_date
+            )
+            total = incomes.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            return {
+                'success': True,
+                'period': period,
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat(),
+                'total': float(total),
+                'currency': 'RUB'
+            }
+        except Exception as e:
+            logger.error(f"Error in get_income_period_total: {e}")
+            return {'success': False, 'message': str(e)}
     
     @staticmethod
     @sync_to_async  
