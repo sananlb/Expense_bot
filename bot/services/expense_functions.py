@@ -644,6 +644,57 @@ class ExpenseFunctions:
         except Exception as e:
             logger.error(f"Error in get_category_total: {e}")
             return {'success': False, 'message': str(e)}
+
+    @staticmethod
+    @sync_to_async
+    def get_category_total_by_dates(user_id: int, category: str, start_date: str, end_date: str) -> Dict[str, Any]:
+        """
+        Получить сумму трат по категории за произвольный период дат (YYYY-MM-DD .. YYYY-MM-DD)
+        """
+        try:
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
+            from datetime import datetime as _dt
+            start = _dt.fromisoformat(start_date).date()
+            end = _dt.fromisoformat(end_date).date()
+
+            # Пытаемся найти категорию пользователя по имени (с учетом emoji в name)
+            from expenses.models import ExpenseCategory
+            cat_obj = ExpenseCategory.objects.filter(
+                profile=profile,
+                name__icontains=category
+            ).first()
+
+            qs = Expense.objects.filter(
+                profile=profile,
+                expense_date__gte=start,
+                expense_date__lte=end
+            )
+            if cat_obj:
+                qs = qs.filter(category=cat_obj)
+            else:
+                # Fallback: частичное совпадение по названию категории в транзакции
+                qs = qs.filter(category__name__icontains=category)
+
+            from django.db.models import Sum, Count
+            agg = qs.aggregate(total=Sum('amount'), cnt=Count('id'))
+            total = float(agg['total'] or 0)
+            count = int(agg['cnt'] or 0)
+
+            return {
+                'success': True,
+                'category': category,
+                'start_date': start.isoformat(),
+                'end_date': end.isoformat(),
+                'total': total,
+                'count': count,
+                'currency': 'RUB'
+            }
+        except Exception as e:
+            logger.error(f"Error in get_category_total_by_dates: {e}")
+            return {'success': False, 'message': str(e)}
     
     @staticmethod
     @sync_to_async

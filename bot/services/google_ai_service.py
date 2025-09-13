@@ -269,6 +269,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                             }
                         
                         if result.get('success'):
+                            # Используем универсальный форматтер
                             try:
                                 from bot.services.response_formatter import format_function_result
                                 return format_function_result(func_name, result)
@@ -279,75 +280,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                                     return _json.dumps(result, ensure_ascii=False)[:1000]
                                 except Exception:
                                     return str(result)[:1000]
-                                    from datetime import datetime
-                                    start = datetime.fromisoformat(start_date)
-                                    end = datetime.fromisoformat(end_date)
-                                    
-                                    # Если это один месяц
-                                    if start.month == end.month and start.year == end.year:
-                                        months_ru = {
-                                            1: 'январь', 2: 'февраль', 3: 'март', 4: 'апрель',
-                                            5: 'май', 6: 'июнь', 7: 'июль', 8: 'август',
-                                            9: 'сентябрь', 10: 'октябрь', 11: 'ноябрь', 12: 'декабрь'
-                                        }
-                                        period_desc = f"за {months_ru[start.month]} {start.year}"
-                                    else:
-                                        period_desc = f"с {start_date} по {end_date}"
-                                except:
-                                    period_desc = f"с {start_date} по {end_date}"
-                                
-                                # Формируем подзаголовок с учетом лимита
-                                subtitle = f"Всего: {count} трат на сумму {total:,.0f} ₽"
-                                
-                                # Добавляем сообщение о лимите, если оно есть
-                                limit_message = result.get('limit_message', '')
-                                if limit_message:
-                                    subtitle += f"\n\n{limit_message}"
-                                
-                                return format_expenses_from_dict_list(
-                                    expenses_data,
-                                    title=f"📋 Траты {period_desc}",
-                                    subtitle=subtitle,
-                                    max_expenses=100
-                                )
-                            
-                            elif func_name == 'get_max_expense_day':
-                                date_str = result.get('date', '')
-                                total = result.get('total', 0)
-                                count = result.get('count', 0)
-                                details = result.get('details', [])
-                                
-                                # Добавляем дату ко всем деталям для правильной группировки
-                                for detail in details:
-                                    if 'date' not in detail:
-                                        detail['date'] = date_str
-                                
-                                return format_expenses_from_dict_list(
-                                    details,
-                                    title="📊 День с максимальными тратами",
-                                    subtitle=f"Дата: {date_str} | Всего: {count} трат на сумму {total:,.0f} ₽",
-                                    max_expenses=100
-                                )
-                            
-                            elif func_name == 'get_category_statistics':
-                                categories = result.get('categories', [])
-                                total = result.get('total', 0)
-                                
-                                response_text = f"Статистика по категориям (всего: {total:,.0f} ₽)\n\n"
-                                
-                                for cat in categories[:20]:  # Увеличиваем до топ-20 категорий
-                                    name = cat.get('name', '')
-                                    cat_total = cat.get('total', 0)
-                                    count = cat.get('count', 0)
-                                    percent = cat.get('percentage', 0)
-                                    response_text += f"• {name}: {cat_total:,.0f} ₽ ({count} шт., {percent:.1f}%)\n"
-                                
-                                if len(categories) > 20:
-                                    response_text += f"\n... {get_text('and_more', lang)} {len(categories) - 20} {get_text('categories', lang)}"
-                                
-                                return response_text
-                            
-                            
+
                     elif func_name == 'get_max_expense_day':
                         # Нормализация period/month/year -> period_days
                         import calendar as _cal

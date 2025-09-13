@@ -27,6 +27,7 @@ ALLOWED_PARAMS: Dict[str, set] = {
     'get_expense_trend': {'user_id', 'group_by', 'periods'},
     'get_expenses_by_amount_range': {'user_id', 'min_amount', 'max_amount', 'limit'},
     'get_category_total': {'user_id', 'category', 'period'},
+    'get_category_total_by_dates': {'user_id', 'category', 'start_date', 'end_date'},
     'get_expenses_list': {'user_id', 'start_date', 'end_date', 'limit'},
 
     # Incomes
