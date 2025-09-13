@@ -837,18 +837,44 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
 
     # Список состояний, при которых НЕ нужно обрабатывать траты
     skip_states = [
+        # Household states
         "HouseholdStates:waiting_for_household_name",
         "HouseholdStates:waiting_for_rename",
+        # Recurring states
         "RecurringForm:waiting_for_description",
         "RecurringForm:waiting_for_amount",
+        "RecurringForm:waiting_for_category",
         "RecurringForm:waiting_for_day",
-        "BudgetStates:waiting_for_limit",
+        "RecurringForm:waiting_for_edit_data",
+        # Budget states
+        "BudgetStates:select_category",
+        "BudgetStates:enter_amount",
+        "BudgetStates:confirm_delete",
+        # Referral states (если есть)
         "ReferralStates:waiting_for_withdrawal_amount",
+        # Category states
         "CategoryForm:waiting_for_name",
         "CategoryForm:waiting_for_icon",
+        "CategoryForm:waiting_for_custom_icon",
+        "CategoryForm:waiting_for_edit_choice",
+        "CategoryForm:waiting_for_new_name",
+        "CategoryForm:waiting_for_new_icon",
+        # CategoryStates (второй класс для категорий)
+        "CategoryStates:editing_name",
+        # Cashback states
+        "CashbackForm:waiting_for_category",
+        "CashbackForm:waiting_for_bank",
+        "CashbackForm:waiting_for_percent",
+        # Subscription states
+        "PromoCodeStates:waiting_for_promo",
+        # Settings states
+        "SettingsStates:language",
+        "SettingsStates:timezone",
+        "SettingsStates:currency",
+        # Top5 states (если есть)
         "Top5States:waiting_for_period",
-        "SettingsStates:waiting_for_timezone",
-        "SettingsStates:waiting_for_currency"
+        # Chat states
+        "ChatStates:active_chat"
     ]
 
     # Пропускаем обработку трат, если активно состояние другого роутера
