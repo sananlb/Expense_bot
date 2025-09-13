@@ -169,9 +169,9 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(category_router)  # Перемещаем выше expense_router
     dp.include_router(recurring_router)
     dp.include_router(cashback_router)
+    dp.include_router(household_router)     # Роутер семейного бюджета (FSM состояния) - ДОЛЖЕН БЫТЬ ДО expense_router!
     dp.include_router(expense_router)  # Команды должны быть выше FSM состояний
     dp.include_router(reports_router)  # Команды должны быть выше FSM состояний
-    dp.include_router(household_router)     # Роутер семейного бюджета (FSM состояния)
     dp.include_router(budget_router)        # Роутер бюджетов
     dp.include_router(subscription_router)  # Роутер подписок
     dp.include_router(referral_router)     # Роутер реферальной системы

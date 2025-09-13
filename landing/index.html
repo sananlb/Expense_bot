@@ -1066,6 +1066,110 @@
       opacity: 1;
       transform: translateY(0);
     }
+
+    /* Video Carousel Styles - Simplified for phone screen */
+    .phone-screen .carousel-wrapper {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: white;
+    }
+
+    .phone-screen .carousel-track {
+      display: flex;
+      transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+      height: 100%;
+    }
+
+    .phone-screen .carousel-slide {
+      min-width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      padding: 20px;
+      position: relative;
+    }
+
+    .phone-screen .slide-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--dark);
+      margin-bottom: 15px;
+      text-align: center;
+      line-height: 1.3;
+    }
+
+    .phone-screen .slide-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--light);
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .phone-screen video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #f8f9fa;
+    }
+
+    .phone-screen .video-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      height: 100%;
+      background: var(--light);
+      color: var(--gray);
+      font-size: 14px;
+      text-align: center;
+      padding: 20px;
+    }
+
+    /* Navigation Controls - Only dots */
+    .phone-screen .carousel-nav {
+      position: absolute;
+      bottom: 15px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 6px;
+      z-index: 10;
+    }
+
+    .phone-screen .nav-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.2);
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+
+    .phone-screen .nav-dot.active {
+      background: var(--primary);
+      width: 20px;
+      border-radius: 3px;
+    }
+
+    .phone-screen .nav-dot:hover {
+      background: var(--primary-light);
+    }
+
+    /* Touch feedback */
+    .phone-screen .carousel-wrapper.dragging {
+      cursor: grabbing;
+    }
+
+    .phone-screen .carousel-track.no-transition {
+      transition: none;
+    }
   </style>
 </head>
 <body>
@@ -1245,9 +1349,89 @@
         <div class="demo-phone reveal">
           <div class="phone-frame">
             <div class="phone-screen">
-              <!-- Здесь будет видео или GIF с демонстрацией -->
-              <div class="demo-content">
-                <span>[ Видео демонстрация работы бота ]</span>
+              <!-- Карусель внутри телефона -->
+              <div class="carousel-wrapper" id="carouselWrapper">
+                <div class="carousel-track" id="carouselTrack">
+                  <!-- Slide 1: AI категоризация -->
+                  <div class="carousel-slide">
+                    <h4 class="slide-title">Умная категоризация</h4>
+                    <div class="slide-content">
+                      <video id="video1" loop muted playsinline>
+                        <source src="demos/ai-categorization.mp4" type="video/mp4">
+                        <div class="video-placeholder">AI категоризация</div>
+                      </video>
+                    </div>
+                  </div>
+
+                  <!-- Slide 2: Последние траты -->
+                  <div class="carousel-slide">
+                    <h4 class="slide-title">Последние траты</h4>
+                    <div class="slide-content">
+                      <video id="video2" loop muted playsinline>
+                        <source src="demos/recent-expenses.mp4" type="video/mp4">
+                        <div class="video-placeholder">История расходов</div>
+                      </video>
+                    </div>
+                  </div>
+
+                  <!-- Slide 3: Аналитика -->
+                  <div class="carousel-slide">
+                    <h4 class="slide-title">Аналитика расходов</h4>
+                    <div class="slide-content">
+                      <video id="video3" loop muted playsinline>
+                        <source src="demos/analytics.mp4" type="video/mp4">
+                        <div class="video-placeholder">Топ категорий</div>
+                      </video>
+                    </div>
+                  </div>
+
+                  <!-- Slide 4: Кэшбэк -->
+                  <div class="carousel-slide">
+                    <h4 class="slide-title">Учет кэшбэка</h4>
+                    <div class="slide-content">
+                      <video id="video4" loop muted playsinline>
+                        <source src="demos/cashback.mp4" type="video/mp4">
+                        <div class="video-placeholder">Кэшбэк</div>
+                      </video>
+                    </div>
+                  </div>
+
+                  <!-- Slide 5: PDF отчеты -->
+                  <div class="carousel-slide">
+                    <h4 class="slide-title">PDF-отчеты</h4>
+                    <div class="slide-content">
+                      <video id="video5" loop muted playsinline>
+                        <source src="demos/pdf-reports.mp4" type="video/mp4">
+                        <div class="video-placeholder">Отчеты</div>
+                      </video>
+                    </div>
+                  </div>
+
+                  <!-- Slide 6: Семейный бюджет -->
+                  <div class="carousel-slide">
+                    <h4 class="slide-title">Семейный бюджет</h4>
+                    <div class="slide-content">
+                      <video id="video6" loop muted playsinline>
+                        <source src="demos/family-budget.mp4" type="video/mp4">
+                        <div class="video-placeholder">Совместный учет</div>
+                      </video>
+                    </div>
+                  </div>
+
+                  <!-- Slide 7: Вопросы боту -->
+                  <div class="carousel-slide">
+                    <h4 class="slide-title">Вопросы боту</h4>
+                    <div class="slide-content">
+                      <video id="video7" loop muted playsinline>
+                        <source src="demos/bot-questions.mp4" type="video/mp4">
+                        <div class="video-placeholder">Диалог с ботом</div>
+                      </video>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Navigation Dots -->
+                <div class="carousel-nav" id="carouselNav"></div>
               </div>
             </div>
           </div>
@@ -1540,6 +1724,231 @@
     });
 
     // Removed typing animation for hero title
+
+    // Video Carousel Implementation
+    class VideoCarousel {
+      constructor() {
+        this.currentSlide = 0;
+        this.totalSlides = 7;
+        this.autoPlayInterval = null;
+        this.autoPlayDelay = 5000; // 5 seconds
+        this.isPlaying = true;
+        this.isDragging = false;
+        this.startX = 0;
+        this.currentX = 0;
+        this.touchStartX = 0;
+
+        this.init();
+      }
+
+      init() {
+        this.cacheElements();
+        this.createNavDots();
+        this.setupEventListeners();
+        this.startAutoPlay();
+        this.updateSlide();
+      }
+
+      cacheElements() {
+        this.track = document.getElementById('carouselTrack');
+        this.wrapper = document.getElementById('carouselWrapper');
+        this.navContainer = document.getElementById('carouselNav');
+        this.videos = document.querySelectorAll('video');
+      }
+
+      createNavDots() {
+        if (!this.navContainer) return;
+
+        for (let i = 0; i < this.totalSlides; i++) {
+          const dot = document.createElement('div');
+          dot.className = 'nav-dot';
+          if (i === 0) dot.classList.add('active');
+          dot.addEventListener('click', () => this.goToSlide(i));
+          this.navContainer.appendChild(dot);
+        }
+        this.navDots = document.querySelectorAll('.nav-dot');
+      }
+
+      setupEventListeners() {
+        // No arrow buttons or play/pause button needed
+
+        // Touch/Swipe support
+        if (this.wrapper) {
+          this.wrapper.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: true });
+          this.wrapper.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: true });
+          this.wrapper.addEventListener('touchend', (e) => this.handleTouchEnd(e));
+
+          // Mouse drag support
+          this.wrapper.addEventListener('mousedown', (e) => this.handleMouseDown(e));
+          this.wrapper.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+          this.wrapper.addEventListener('mouseup', (e) => this.handleMouseUp(e));
+          this.wrapper.addEventListener('mouseleave', (e) => this.handleMouseUp(e));
+
+          // Pause on hover
+          this.wrapper.addEventListener('mouseenter', () => {
+            if (this.isPlaying) this.pauseAutoPlay();
+          });
+
+          this.wrapper.addEventListener('mouseleave', () => {
+            if (this.isPlaying) this.startAutoPlay();
+          });
+        }
+      }
+
+      // Touch handlers
+      handleTouchStart(e) {
+        this.touchStartX = e.touches[0].clientX;
+        this.isDragging = true;
+        if (this.track) this.track.classList.add('no-transition');
+      }
+
+      handleTouchMove(e) {
+        if (!this.isDragging || !this.track) return;
+        const touchX = e.touches[0].clientX;
+        const diff = touchX - this.touchStartX;
+        const currentTranslate = -this.currentSlide * 100;
+        this.track.style.transform = `translateX(calc(${currentTranslate}% + ${diff}px))`;
+      }
+
+      handleTouchEnd(e) {
+        if (!this.isDragging || !this.track) return;
+        this.isDragging = false;
+        this.track.classList.remove('no-transition');
+
+        const touchEndX = e.changedTouches[0].clientX;
+        const diff = this.touchStartX - touchEndX;
+
+        if (Math.abs(diff) > 50) {
+          if (diff > 0) {
+            this.nextSlide();
+          } else {
+            this.prevSlide();
+          }
+        } else {
+          this.updateSlide();
+        }
+      }
+
+      // Mouse drag handlers
+      handleMouseDown(e) {
+        e.preventDefault();
+        this.isDragging = true;
+        this.startX = e.clientX;
+        if (this.wrapper) this.wrapper.style.cursor = 'grabbing';
+        if (this.track) this.track.classList.add('no-transition');
+      }
+
+      handleMouseMove(e) {
+        if (!this.isDragging || !this.track) return;
+        e.preventDefault();
+        const diff = e.clientX - this.startX;
+        const currentTranslate = -this.currentSlide * 100;
+        this.track.style.transform = `translateX(calc(${currentTranslate}% + ${diff}px))`;
+      }
+
+      handleMouseUp(e) {
+        if (!this.isDragging) return;
+        this.isDragging = false;
+        if (this.wrapper) this.wrapper.style.cursor = 'grab';
+        if (this.track) this.track.classList.remove('no-transition');
+
+        const diff = this.startX - e.clientX;
+
+        if (Math.abs(diff) > 50) {
+          if (diff > 0) {
+            this.nextSlide();
+          } else {
+            this.prevSlide();
+          }
+        } else {
+          this.updateSlide();
+        }
+      }
+
+      prevSlide() {
+        this.currentSlide = (this.currentSlide - 1 + this.totalSlides) % this.totalSlides;
+        this.updateSlide();
+        this.resetAutoPlay();
+      }
+
+      nextSlide() {
+        this.currentSlide = (this.currentSlide + 1) % this.totalSlides;
+        this.updateSlide();
+        this.resetAutoPlay();
+      }
+
+      goToSlide(index) {
+        this.currentSlide = index;
+        this.updateSlide();
+        this.resetAutoPlay();
+      }
+
+      updateSlide() {
+        // Update track position
+        if (this.track) {
+          this.track.style.transform = `translateX(-${this.currentSlide * 100}%)`;
+        }
+
+        // Update nav dots
+        if (this.navDots) {
+          this.navDots.forEach((dot, index) => {
+            dot.classList.toggle('active', index === this.currentSlide);
+          });
+        }
+
+        // Play current video
+        if (this.videos) {
+          this.videos.forEach((video, index) => {
+            if (index === this.currentSlide) {
+              video.currentTime = 0;
+              video.play().catch(e => console.log('Video play failed:', e));
+            } else {
+              video.pause();
+            }
+          });
+        }
+      }
+
+      startAutoPlay() {
+        if (this.autoPlayInterval) clearInterval(this.autoPlayInterval);
+        this.autoPlayInterval = setInterval(() => {
+          this.nextSlide();
+        }, this.autoPlayDelay);
+      }
+
+      pauseAutoPlay() {
+        if (this.autoPlayInterval) {
+          clearInterval(this.autoPlayInterval);
+          this.autoPlayInterval = null;
+        }
+      }
+
+      resetAutoPlay() {
+        if (this.isPlaying) {
+          this.pauseAutoPlay();
+          this.startAutoPlay();
+        }
+      }
+
+      toggleAutoPlay() {
+        this.isPlaying = !this.isPlaying;
+
+        if (this.isPlaying) {
+          this.startAutoPlay();
+        } else {
+          this.pauseAutoPlay();
+        }
+      }
+    }
+
+    // Initialize carousel when DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      // Check if carousel exists on page
+      const carouselWrapper = document.getElementById('carouselWrapper');
+      if (carouselWrapper) {
+        new VideoCarousel();
+      }
+    });
   </script>
 </body>
 </html>

@@ -237,7 +237,7 @@ calculate_expense_cashback = sync_to_async(calculate_expense_cashback_sync)
 def format_cashback_note(cashbacks: List[Cashback], month: int, lang: str = 'ru') -> str:
     """Форматировать красивую заметку о кешбэках с группировкой по банкам"""
     from bot.utils import get_text
-    
+
     # Названия месяцев
     month_names = {
         1: get_text('january', lang).capitalize(),
@@ -253,8 +253,10 @@ def format_cashback_note(cashbacks: List[Cashback], month: int, lang: str = 'ru'
         11: get_text('november', lang).capitalize(),
         12: get_text('december', lang).capitalize()
     }
-    
-    text = f"💳 <b>{get_text('cashbacks_for', lang)} {month_names[month]}</b>\n\n"
+
+    # Добавляем невидимые символы для расширения сообщения
+    invisible_spacer = "⠀" * 15  # Брайлевский пробел (невидимый)
+    text = f"💳 <b>{get_text('cashbacks_for', lang)} {month_names[month]}</b>{invisible_spacer}\n\n"
     
     # Группируем кешбэки по банкам
     banks_dict = {}
