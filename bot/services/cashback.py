@@ -255,7 +255,7 @@ def format_cashback_note(cashbacks: List[Cashback], month: int, lang: str = 'ru'
     }
 
     # Добавляем невидимые символы для расширения сообщения
-    invisible_spacer = "⠀" * 15  # Брайлевский пробел (невидимый)
+    invisible_spacer = "⠀" * 30  # Брайлевский пробел (невидимый) - увеличено для ширины
     text = f"💳 <b>{get_text('cashbacks_for', lang)} {month_names[month]}</b>{invisible_spacer}\n\n"
     
     # Группируем кешбэки по банкам
@@ -266,34 +266,38 @@ def format_cashback_note(cashbacks: List[Cashback], month: int, lang: str = 'ru'
         banks_dict[cb.bank_name].append(cb)
     
     # Выводим по банкам
-    for bank_name, bank_cashbacks in banks_dict.items():
-        text += f"<b>{bank_name}</b>\n"
-        
+    for idx, (bank_name, bank_cashbacks) in enumerate(banks_dict.items()):
+        # Добавляем эмодзи банка и форматирование
+        text += f"🏦 <b>{bank_name}</b>\n"
+
         for cb in bank_cashbacks:
             # Форматируем процент без лишних нулей
             percent_str = f"{cb.cashback_percent:.1f}".rstrip('0').rstrip('.')
-            
+
             # Формат: Категория (описание) - процент%
             if cb.category:
                 # Используем мультиязычную систему для отображения категории
                 category_name = get_category_display_name(cb.category, lang)
-                text += f"• {category_name}"
+                text += f"  • {category_name}"
                 if cb.description:
-                    text += f" ({cb.description})"
+                    text += f" <i>({cb.description})</i>"
             else:
-                text += f"• {get_text('all_categories', lang)}"
+                text += f"  • {get_text('all_categories', lang)}"
                 if cb.description:
-                    text += f" ({cb.description})"
-            
-            text += f" - {percent_str}%"
-            
+                    text += f" <i>({cb.description})</i>"
+
+            # Выделяем процент жирным
+            text += f" — <b>{percent_str}%</b>"
+
             if cb.limit_amount:
                 limit_text = get_text('limit', lang)
-                text += f" ({limit_text} {cb.limit_amount:,.0f} ₽)"
-            
+                text += f"\n    💰 {limit_text}: {cb.limit_amount:,.0f} ₽"
+
             text += "\n"
-        
-        text += "\n"  # Пустая строка между банками
+
+        # Добавляем разделитель между банками, кроме последнего
+        if idx < len(banks_dict) - 1:
+            text += "\n"  # Пустая строка между банками
     
     return text.rstrip()  # Убираем лишний перенос в конце
 

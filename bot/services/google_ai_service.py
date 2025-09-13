@@ -311,6 +311,9 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                     elif func_name == 'get_daily_totals':
                         # Обработка get_daily_totals будет через универсальный форматтер
                         pass
+                    elif func_name == 'get_category_total_by_dates':
+                        # Обработка get_category_total_by_dates будет через универсальный форматтер
+                        pass
                     else:
                         logger.error(f"Function {func_name} not found")
                         return f"Извините, не могу выполнить запрос. Функция {func_name} не найдена."

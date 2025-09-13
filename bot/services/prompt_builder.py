@@ -36,7 +36,7 @@ def build_function_call_prompt(message: str, context: List[Dict[str,str]]|None=N
 11. compare_periods() - для "Я стал тратить больше или меньше?"
 12. get_expense_trend() - для "Покажи динамику трат"
 13. get_expenses_by_amount_range(min_amount=1000) - для "Покажи траты больше 1000"
-14. get_category_total(category='продукты', period='month') - ТОЛЬКО для текущего периода: "Сколько я потратил на продукты в ЭТОМ месяце?"
+14. get_category_total(category='продукты', period='month') - ТОЛЬКО для ТЕКУЩЕГО периода: "Сколько я трачу на продукты в ЭТОМ месяце/на ЭТОЙ неделе?"
 15. get_category_total_by_dates(category='продукты', start_date='2025-08-01', end_date='2025-08-31') - для конкретного месяца: "Сколько я потратил в августе на продукты?"
 16. get_expenses_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - для "Покажи траты за период/с даты по дату"
 17. get_daily_totals(days=30) - для "Покажи траты по дням/суммы по дням за последний месяц"

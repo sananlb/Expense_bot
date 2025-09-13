@@ -416,6 +416,44 @@ class GoogleAIService(GoogleKeyRotationMixin):
                     context_str,
                     user_info
                 )
+                # Если модель вернула FUNCTION_CALL: ... как текст — выполним его здесь
+                if isinstance(result, str) and result.strip().startswith('FUNCTION_CALL:'):
+                    try:
+                        call = result.replace('FUNCTION_CALL:', '').strip()
+                        import re
+                        m = re.match(r'(\w+)\((.*)\)', call)
+                        if m:
+                            func_name = m.group(1)
+                            params_str = m.group(2)
+                            params: Dict[str, Any] = {}
+                            if params_str:
+                                for p in params_str.split(','):
+                                    if '=' in p:
+                                        k, v = p.split('=', 1)
+                                        k = k.strip()
+                                        v = v.strip().strip('\"\'')
+                                        if v.isdigit():
+                                            v = int(v)
+                                        elif v.replace('.', '').isdigit():
+                                            v = float(v)
+                                        params[k] = v
+                            # Нормализация и исполнение
+                            from .function_call_utils import normalize_function_call
+                            func_name, params = normalize_function_call(message, func_name, params, user_context.get('user_id') if user_context else None)
+                            def run_sync_function():
+                                import django
+                                django.setup()
+                                from bot.services.expense_functions import ExpenseFunctions
+                                funcs = ExpenseFunctions()
+                                method = getattr(funcs, func_name)
+                                if hasattr(method, '__wrapped__'):
+                                    method = method.__wrapped__
+                                return method(**params)
+                            fn_result = await asyncio.to_thread(run_sync_function)
+                            from bot.services.response_formatter import format_function_result
+                            result = format_function_result(func_name, fn_result)
+                    except Exception as _e:
+                        logger.error(f"[GoogleAI-Adaptive] Failed to execute FUNCTION_CALL in Windows path: {_e}")
                 
                 # Вычисляем время ответа
                 response_time = time.time() - start_time

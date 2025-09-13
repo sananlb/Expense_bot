@@ -226,7 +226,12 @@ class ExpenseFunctions:
     
     @staticmethod
     @sync_to_async
-    def get_category_statistics(user_id: int, period_days: int = 30) -> Dict[str, Any]:
+    def get_category_statistics(
+        user_id: int,
+        period_days: int = 30,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Получить статистику по категориям
         
@@ -239,14 +244,24 @@ class ExpenseFunctions:
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
-            end_date = date.today()
-            start_date = end_date - timedelta(days=period_days)
+            # Определяем период: явные даты имеют приоритет
+            if start_date and end_date:
+                try:
+                    from datetime import datetime as _dt
+                    start_dt = _dt.fromisoformat(str(start_date)).date()
+                    end_dt = _dt.fromisoformat(str(end_date)).date()
+                except Exception:
+                    end_dt = date.today()
+                    start_dt = end_dt - timedelta(days=period_days)
+            else:
+                end_dt = date.today()
+                start_dt = end_dt - timedelta(days=period_days)
             
             # Получаем траты по категориям
             stats = Expense.objects.filter(
                 profile=profile,
-                expense_date__gte=start_date,
-                expense_date__lte=end_date
+                expense_date__gte=start_dt,
+                expense_date__lte=end_dt
             ).values('category__name').annotate(
                 total=Sum('amount'),
                 count=Count('id'),
@@ -274,6 +289,8 @@ class ExpenseFunctions:
             return {
                 'success': True,
                 'period_days': period_days,
+                'start_date': start_dt.isoformat(),
+                'end_date': end_dt.isoformat(),
                 'total': float(total_sum),
                 'currency': 'RUB',
                 'categories': categories
@@ -611,7 +628,7 @@ class ExpenseFunctions:
                 defaults={'language_code': 'ru'}
             )
             today = date.today()
-            
+
             # Определяем период
             if period == 'week':
                 start_date = today - timedelta(days=today.weekday())
@@ -621,17 +638,41 @@ class ExpenseFunctions:
                 start_date = today.replace(month=1, day=1)
             else:
                 start_date = today - timedelta(days=30)
-            
-            expenses = Expense.objects.filter(
+
+            from expenses.models import ExpenseCategory
+            from django.db.models import Q
+
+            # Пытаемся найти категорию пользователя по имени
+            cat_obj = ExpenseCategory.objects.filter(
                 profile=profile,
-                category__name__icontains=category,
+                name__icontains=category
+            ).first()
+
+            qs = Expense.objects.filter(
+                profile=profile,
                 expense_date__gte=start_date,
                 expense_date__lte=today
             )
-            
-            total = expenses.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
-            count = expenses.count()
-            
+
+            # Универсальное правило: ищем как по категории, так и по описанию
+            q_filter = Q()
+
+            # Если есть категория пользователя - добавляем в фильтр
+            if cat_obj:
+                q_filter |= Q(category=cat_obj)
+
+            # Также ищем по названию категории
+            q_filter |= Q(category__name__icontains=category)
+
+            # И ищем упоминание категории в описании траты
+            q_filter |= Q(description__icontains=category)
+
+            qs = qs.filter(q_filter)
+
+            from django.db.models import Sum
+            total = qs.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            count = qs.count()
+
             return {
                 'success': True,
                 'category': category,
@@ -648,53 +689,11 @@ class ExpenseFunctions:
     @staticmethod
     @sync_to_async
     def get_category_total_by_dates(user_id: int, category: str, start_date: str, end_date: str) -> Dict[str, Any]:
-        """
-        Получить сумму трат по категории за произвольный период дат (YYYY-MM-DD .. YYYY-MM-DD)
-        """
-        try:
-            profile, _ = Profile.objects.get_or_create(
-                telegram_id=user_id,
-                defaults={'language_code': 'ru'}
-            )
-            from datetime import datetime as _dt
-            start = _dt.fromisoformat(start_date).date()
-            end = _dt.fromisoformat(end_date).date()
-
-            # Пытаемся найти категорию пользователя по имени (с учетом emoji в name)
-            from expenses.models import ExpenseCategory
-            cat_obj = ExpenseCategory.objects.filter(
-                profile=profile,
-                name__icontains=category
-            ).first()
-
-            qs = Expense.objects.filter(
-                profile=profile,
-                expense_date__gte=start,
-                expense_date__lte=end
-            )
-            if cat_obj:
-                qs = qs.filter(category=cat_obj)
-            else:
-                # Fallback: частичное совпадение по названию категории в транзакции
-                qs = qs.filter(category__name__icontains=category)
-
-            from django.db.models import Sum, Count
-            agg = qs.aggregate(total=Sum('amount'), cnt=Count('id'))
-            total = float(agg['total'] or 0)
-            count = int(agg['cnt'] or 0)
-
-            return {
-                'success': True,
-                'category': category,
-                'start_date': start.isoformat(),
-                'end_date': end.isoformat(),
-                'total': total,
-                'count': count,
-                'currency': 'RUB'
-            }
-        except Exception as e:
-            logger.error(f"Error in get_category_total_by_dates: {e}")
-            return {'success': False, 'message': str(e)}
+        # Deprecated and removed per product decision. Keep stub for backward compatibility if called inadvertently.
+        return {
+            'success': False,
+            'message': 'get_category_total_by_dates is deprecated; use get_category_statistics with period_days.'
+        }
     
     @staticmethod
     @sync_to_async

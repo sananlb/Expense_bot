@@ -15,7 +15,7 @@ ALLOWED_PARAMS: Dict[str, set] = {
     'get_max_expense_day': {'user_id', 'period_days'},
     'get_period_total': {'user_id', 'period'},
     'get_max_single_expense': {'user_id', 'period_days'},
-    'get_category_statistics': {'user_id', 'period_days'},
+    'get_category_statistics': {'user_id', 'period_days', 'start_date', 'end_date'},
     'get_average_expenses': {'user_id', 'period_days'},
     'get_recent_expenses': {'user_id', 'limit'},
     'get_daily_totals': {'user_id', 'days'},
@@ -118,12 +118,32 @@ def normalize_function_call(
     params = dict(params or {})
     params['user_id'] = user_id
 
-    if func_name == 'get_category_statistics':
-        days = _norm_datespan_to_days(params)
-        if days:
-            params = {'user_id': user_id, 'period_days': days}
+    # Map deprecated function to supported one with explicit dates
+    if func_name == 'get_category_total_by_dates':
+        func_name = 'get_category_statistics'
+        ps = {}
+        if 'start_date' in params and 'end_date' in params:
+            ps = {
+                'user_id': user_id,
+                'start_date': params.get('start_date'),
+                'end_date': params.get('end_date'),
+            }
         else:
+            # Fallback to 31 days if parsing failed
+            ps = {'user_id': user_id, 'period_days': 31}
+        return func_name, ps
+
+    if func_name == 'get_category_statistics':
+        # Prefer explicit start/end dates when provided
+        if 'start_date' in params and 'end_date' in params:
             params = _sanitize_keys(params, ALLOWED_PARAMS[func_name])
+            params['user_id'] = user_id
+        else:
+            days = _norm_datespan_to_days(params)
+            if days:
+                params = {'user_id': user_id, 'period_days': days}
+            else:
+                params = _sanitize_keys(params, ALLOWED_PARAMS[func_name])
 
     elif func_name == 'get_max_expense_day':
         days = params.get('period_days')
