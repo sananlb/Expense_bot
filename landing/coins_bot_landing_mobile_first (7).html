@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Coins. Вести бюджет — просто</title>
+  <meta name="description" content="Coins Bot — учёт расходов и доходов в Telegram. Голосовой ввод, умная категоризация, топ‑5 операций, повторяющиеся операции, семейный доступ, кешбэк‑заметка и наглядные отчёты." />
+  <style>
+    /* ===== CSS Variables: фиолетовая тема ===== */
+    :root{
+      --primary:#667eea;         /* основной фиолетовый */
+      --primary-dark:#764ba2;    /* hover/градиенты */
+      --accent:#EFBF04;          /* акцент для CTA/бейджей */
+      --bg:#FAF9FF;              /* светлый фон секций */
+      --text-dark:#232326;       /* основной текст */
+      --text-light:#5E6070;      /* вторичный текст */
+      --card:#ffffff;            /* белый */
+      --shadow:0 6px 24px rgba(0,0,0,.08);
+      --shadow-sm:0 2px 10px rgba(0,0,0,.06);
+      --radius:14px;
+    }
+
+    /* ===== Base ===== */
+    html,body{height:100%}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Inter,'Helvetica Neue',Arial,sans-serif;margin:0;color:var(--text-dark);background:#fff;line-height:1.55;-webkit-font-smoothing:antialiased;}
+    img{max-width:100%;display:block;height:auto}
+    a{color:inherit}
+    .container{width:100%;max-width:1080px;margin:0 auto;padding:0 16px}
+    .visually-hidden{position:absolute!important;height:1px;width:1px;overflow:hidden;clip:rect(1px,1px,1px,1px);}
+
+    /* ===== Hero ===== */
+    .hero{position:relative;background:linear-gradient(135deg,var(--primary) 0%,var(--primary-dark) 100%);color:#fff;padding:56px 0 28px;overflow:hidden}
+    .hero .bg-orb{position:absolute;inset:-40% -40% auto auto;width:140%;height:140%;background:radial-gradient( circle at 70% 30%, rgba(255,255,255,.15), transparent 55% );pointer-events:none}
+    .brand{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+    .brand__logo{font-size:28px}
+    .brand__img{width:28px;height:28px;border-radius:8px;object-fit:cover}
+    .brand__name{font-weight:800;letter-spacing:.2px}
+    .hero__title{font-size:28px;line-height:1.2;margin:6px 0 10px}
+    .hero__subtitle{font-size:15px;opacity:.95}
+    .hero__trust{margin-top:10px;font-size:13px;opacity:.85}
+
+    .cta-row{display:flex;gap:10px;margin-top:18px}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;border-radius:999px;font-weight:700;border:0;cursor:pointer;transition:transform .15s ease, box-shadow .2s ease, background .2s ease}
+    .btn--primary{background:#fff;color:var(--primary);padding:14px 18px;box-shadow:var(--shadow-sm)}
+    .btn--primary:hover{transform:translateY(-1px);box-shadow:var(--shadow)}
+    .btn--ghost{background:transparent;color:#fff;outline:1.5px solid rgba(255,255,255,.6);padding:12px 14px}
+    .btn--ghost:hover{background:rgba(255,255,255,.08)}
+
+    .hero__demo{margin-top:18px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);backdrop-filter:blur(6px);border-radius:var(--radius);padding:16px}
+    .demo-placeholder{display:grid;place-items:center;aspect-ratio:16/9;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,.35), rgba(255,255,255,.12));color:#fff;font-weight:600}
+
+    /* ===== Sections ===== */
+    section{padding:28px 0}
+    .section__title{font-size:22px;margin:0 0 14px}
+    .section__lead{color:var(--text-light);font-size:15px;margin:0 0 10px}
+
+    /* ===== Quicklook chips ===== */
+    .chips{display:grid;grid-template-columns:1fr;gap:10px}
+    .chip{background:var(--bg);border:1px solid #ECE8F7;border-radius:12px;padding:12px 12px;display:flex;gap:10px;align-items:flex-start}
+    .chip i{font-size:18px}
+
+    /* ===== Steps ===== */
+    .steps{display:grid;grid-template-columns:1fr;gap:12px;margin-top:10px}
+    .step{background:var(--card);border:1px solid #F1EDF9;border-radius:12px;padding:14px;box-shadow:var(--shadow-sm)}
+    .step__num{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--primary);color:#fff;font-weight:800;margin-right:8px}
+
+    /* ===== Features grid ===== */
+    .features{display:grid;grid-template-columns:1fr;gap:12px}
+    .feature{background:var(--card);border:1px solid #F1EDF9;border-radius:12px;padding:14px;box-shadow:var(--shadow-sm)}
+    .feature h3{margin:0 0 6px;font-size:16px}
+    .feature p{margin:0;color:var(--text-light)}
+
+    /* ===== For Whom ===== */
+    .cards{display:grid;grid-template-columns:1fr;gap:12px}
+    .card{background:var(--bg);border:1px solid #ECE8F7;border-radius:12px;padding:14px}
+
+    /* ===== Testimonials ===== */
+    .quotes{display:grid;grid-template-columns:1fr;gap:12px}
+    .quote{background:#fff;border:1px solid #F1EDF9;border-radius:12px;padding:14px;box-shadow:var(--shadow-sm)}
+    .quote p{margin:0 0 8px}
+    .quote small{color:var(--text-light)}
+
+    /* ===== Pricing ===== */
+    .pricing{background:#fff;border:1px solid #F1EDF9;border-radius:14px;padding:14px;box-shadow:var(--shadow)}
+    .table{width:100%;border-collapse:collapse}
+    .table th,.table td{padding:12px 10px;border-bottom:1px solid #F3EFFB}
+    .table th{background:var(--bg);text-align:left}
+    .table tr:last-child td{border-bottom:0}
+    .badge{display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#000;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:800}
+
+    /* ===== FAQ ===== */
+    .faq{display:grid;grid-template-columns:1fr;gap:10px}
+    .faq-item{background:#fff;border:1px solid #F1EDF9;border-radius:12px;overflow:hidden}
+    .faq-q{padding:14px;font-weight:700;display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+    .faq-a{max-height:0;overflow:hidden;transition:max-height .25s ease;padding:0 14px;color:var(--text-light)}
+    .faq-item.active .faq-a{max-height:280px;padding:0 14px 14px}
+
+    /* ===== Footer ===== */
+    footer{padding:24px 0 98px;color:var(--text-light)}
+    .footer__grid{display:grid;grid-template-columns:1fr;gap:10px}
+
+    /* ===== Sticky CTA (mobile) ===== */
+    .cta-sticky{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid #EEE8FA;padding:10px 12px;box-shadow:0 -8px 24px rgba(0,0,0,.08);z-index:50}
+    .cta-sticky .btn{width:100%;padding:14px 18px;background:var(--primary);color:#fff}
+    .cta-sticky .btn:hover{background:var(--primary-dark)}
+    body{padding-bottom:88px}
+
+    /* ===== Larger screens (progressive enhancement) ===== */
+    @media(min-width:680px){
+      .hero{padding:72px 0 40px}
+      .hero__title{font-size:38px}
+      .hero__subtitle{font-size:18px}
+      .chips{grid-template-columns:1fr 1fr}
+      .steps{grid-template-columns:repeat(3,1fr)}
+      .features{grid-template-columns:repeat(2,1fr)}
+      .cards{grid-template-columns:repeat(3,1fr)}
+      .quotes{grid-template-columns:repeat(3,1fr)}
+      footer{padding-bottom:32px}
+      .cta-sticky{display:none}
+      body{padding-bottom:0}
+    }
+
+    @media(min-width:980px){
+      .features{grid-template-columns:repeat(3,1fr)}
+      .chips{grid-template-columns:repeat(3,1fr)}
+    }
+  </style>
+</head>
+<body>
+  <!-- ===== HERO ===== -->
+  <header class="hero">
+    <div class="bg-orb" aria-hidden="true"></div>
+    <div class="container">
+      <div class="brand">
+        <div class="brand__logo"><img src="content.jpeg" alt="Coins Bot" class="brand__img" /></div>
+        <div class="brand__name">Coins</div>
+      </div>
+      <h1 class="hero__title">Coins. Вести бюджет — просто</h1>
+      <p class="hero__subtitle">Записывайте <strong>расходы и доходы</strong> одним сообщением в Telegram: «кофе 200» или «зарплата +80 000». Голосовой ввод, AI‑категоризация и наглядные отчёты.</p>
+      <p class="hero__trust">Без привязки к банкам • Данные под вашим контролем</p>
+      <div class="cta-row">
+        <a class="btn btn--primary" href="https://t.me/showmecoinbot?start=landing" target="_blank" rel="noopener" aria-label="Запустить бота в Telegram">
+          ✈️ Запустить бота в Telegram
+        </a>
+        <a class="btn btn--ghost" href="#how" aria-label="Посмотреть как это работает">Как это работает</a>
+      </div>
+
+      <div class="hero__demo" aria-label="Демонстрация работы бота (заглушка)">
+        <div class="demo-placeholder">ДЕМО • «кофе 200» → Добавлено: 200 ₽ · Категория: Кофе</div>
+      </div>
+    </div>
+  </header>
+
+  
+
+  
+
+  <!-- ===== HOW IT WORKS ===== -->
+  <section id="how">
+    <div class="container">
+      <h2 class="section__title">Как это работает</h2>
+      <div class="steps">
+        <div class="step"><span class="step__num">1</span><strong>Напишите или продиктуйте</strong> трату/доход: «такси 540», «зарплата +80 000»</div>
+        <div class="step"><span class="step__num">2</span><strong>Бот распознаёт</strong> сумму и категорию на основании ваших предыдущих трат</div>
+        <div class="step"><span class="step__num">3</span><strong>Спросите статистику</strong>: «По какой категории я потратил больше в августе?» или «Покажи расходы 9 и 10 августа» — получите сводку</div>
+      </div>
+      <div class="steps" style="margin-top:12px">
+        <div class="step">
+          <div class="demo-placeholder">ДЕМО • «такси 540» → Категория: Транспорт</div>
+        </div>
+        <div class="step">
+          <div class="demo-placeholder">ДЕМО • Голос → Распознавание → Добавлено</div>
+        </div>
+        <div class="step">
+          <div class="demo-placeholder">ДЕМО • Двое участников → Общий отчёт семьи</div>
+        </div>
+      </div>
+      <div class="cta-row" style="margin-top:14px">
+        <a class="btn btn--primary" href="https://t.me/showmecoinbot?start=landing" target="_blank" rel="noopener">✈️ Открыть в Telegram</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FEATURES ===== -->
+  <section>
+    <div class="container">
+      <h2 class="section__title">Ключевые возможности</h2>
+      <div class="features">
+        <div class="feature"><h3>💰 Расходы и доходы</h3><p>Быстрый текстовый ввод, память по частым операциям</p></div>
+        <div class="feature"><h3>🤖 AI‑категоризация</h3><p>AI определение категории траты или дохода. Отредактируйте в 2 клика — в следующий раз зипишеться на основе ваших предпочтений</p></div>
+        
+        <div class="feature"><h3>🔁 Повторяющиеся операции </h3><p>Подписки и регулярные платежи записываются по расписанию</p></div>
+        <div class="feature"><h3>🗣️ Естественные вопросы</h3><p>«По какой категории я потратил больше в августе?» или «Покажи расходы 9 и 10 августа»</p></div>
+        <div class="feature"><h3>📈 Аналитика и PDF</h3><p>Сводки по периодам, диаграммы и месячные отчёты</p></div>
+        <div class="feature"><h3>👨‍👩‍👧‍👦 Семейный доступ </h3><p>Ведите совместный бюджет</p></div>
+        <div class="feature"><h3>💳 Кешбэк‑трекер </h3><p>Добавьте информацию по кешбекам от разных банков и закрепите сообщение, чтобы иметь доступ в один клик</p></div>
+        <div class="feature"><h3>🌍 Мультивалюта </h3><p>Удобно в поездках</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FOR WHOM ===== -->
+  <section>
+    <div class="container">
+      <h2 class="section__title">Для кого</h2>
+      <div class="cards">
+        <div class="card"><strong>Личный учёт</strong><br/><span class="section__lead">Видеть картину без таблиц и рутины</span></div>
+        <div class="card"><strong>Семья</strong><br/><span class="section__lead">Общий бюджет и прозрачность расходов </span></div>
+        <div class="card"><strong>Путешествия</strong><br/><span class="section__lead">Записывайте траты в любой валюте</span></div>
+      </div>
+    </div>
+  </section>
+
+  
+
+  <!-- ===== PRICING ===== -->
+  <section>
+    <div class="container">
+      <h2 class="section__title">Тарифы</h2>
+      <div class="pricing">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <span class="badge">7‑дневный пробный период</span>
+          <span class="section__lead">Premium: 150 ⭐/мес · <strong>600 ⭐/6 мес</strong></span>
+        </div>
+        <div style="overflow:auto">
+          <table class="table" aria-label="Сравнение тарифов">
+            <thead>
+              <tr>
+                <th>Возможности</th>
+                <th>Бесплатный</th>
+                <th>Подписка<\/th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Общие ✓✓ — сверху -->
+              <tr><td><strong>Учёт расходов и доходов (текст)</strong></td><td>✓</td><td>✓</td></tr>
+              <tr><td><strong>AI‑категоризация</strong></td><td>✓</td><td>✓</td></tr>
+              <tr><td><strong>Базовые сводки и статистика</strong></td><td>✓</td><td>✓</td></tr>
+              <tr><td><strong>Повторяющиеся операции</strong></td><td>✓</td><td>✓</td></tr>
+              <tr><td><strong>Панель «Топ‑5 быстрых операций»</strong></td><td>✓</td><td>✓</td></tr>
+              <tr><td><strong>Естественные вопросы о тратах</strong></td><td>✓</td><td>✓</td></tr>
+              <!-- Premium‑only -->
+              <tr><td>Голосовой ввод</td><td>✗</td><td>✓</td></tr>
+              <tr><td>Свои категории</td><td>✗</td><td>✓</td></tr>
+              <tr><td>Кешбэк‑трекер + закреплённая заметка</td><td>✗</td><td>✓</td></tr>
+              <tr><td>Семейный доступ</td><td>✗</td><td>✓</td></tr>
+              <tr><td>PDF‑отчёты</td><td>✗</td><td>✓</td></tr>
+              <tr><td>Мультивалюта</td><td>✗</td><td>✓</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="cta-row" style="margin-top:12px">
+          <a class="btn btn--primary" href="https://t.me/showmecoinbot?start=landing" target="_blank" rel="noopener">✈️ Запустить бота в Telegram</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FAQ ===== -->
+  <section>
+    <div class="container">
+      <h2 class="section__title">FAQ</h2>
+      <div class="faq">
+        <div class="faq-item">
+          <div class="faq-q">Это безопасно?<span>▼</span></div>
+          <div class="faq-a"><p>Да. Данные под вашим контролем, экспорт — в PDF. По умолчанию не требуется привязка к банкам.</p></div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q">Можно всей семьёй?<span>▼</span></div>
+          <div class="faq-a"><p>Да, пригласите участников по ссылке и ведите совместный бюджет.</p></div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q">Голосовые сообщения распознаются?<span>▼</span></div>
+          <div class="faq-a"><p>Да, бот обрабатывает короткие голосовые и сохраняет текст вместе с суммой и категорией.</p></div>
+        </div>
+        <div class="faq-item">
+          <div class="faq-q">Как держать кешбэки под рукой?<span>▼</span></div>
+          <div class="faq-a"><p>Добавьте информацию по кешбекам от разных банков и закрепите сообщение в чате — доступ в один клик.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== FOOTER ===== -->
+  <footer>
+    <div class="container">
+      <div class="footer__grid">
+        <div>
+          <strong>Coins Bot</strong><br/>
+          <span>© 2025 Coins Bot</span>
+        </div>
+        <div>
+          Бот: <a href="https://t.me/showmecoinbot" target="_blank" rel="noopener">@showmecoinbot</a><br/>
+          Поддержка: <a href="https://t.me/SMF_support" target="_blank" rel="noopener">@SMF_support</a><br/>
+          Email: <a href="mailto:support@coins-bot.ru">support@coins-bot.ru</a>
+        </div>
+        <div>
+          <a href="#" aria-disabled="true">Политика конфиденциальности</a> · 
+          <a href="#" aria-disabled="true">Условия использования</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ===== Sticky CTA (mobile first) ===== -->
+  <div class="cta-sticky" role="region" aria-label="Быстрый запуск">
+    <div class="container">
+      <a class="btn" href="https://t.me/showmecoinbot?start=landing" target="_blank" rel="noopener" aria-label="Запустить бота в Telegram снизу">✈️ Запустить бота в Telegram</a>
+    </div>
+  </div>
+
+  <script>
+    // FAQ accordion
+    document.querySelectorAll('.faq-item').forEach(item=>{
+      const q=item.querySelector('.faq-q');
+      q.addEventListener('click',()=>{
+        item.classList.toggle('active');
+        // Закрываем остальные
+        document.querySelectorAll('.faq-item').forEach(other=>{
+          if(other!==item) other.classList.remove('active');
+        });
+      });
+    });
+
+    // Smooth anchor scroll (progressive enhancement)
+    document.querySelectorAll('a[href^="#"]').forEach(a=>{
+      a.addEventListener('click',e=>{
+        const id=a.getAttribute('href');
+        if(id.length>1){
+          const el=document.querySelector(id);
+          if(el){ e.preventDefault(); el.scrollIntoView({behavior:'smooth',block:'start'}); }
+        }
+      });
+    });
+  </script>
+</body>
+</html>

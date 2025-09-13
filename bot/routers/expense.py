@@ -885,10 +885,11 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     is_show_request, confidence = is_show_expenses_request(text)
     if is_show_request and confidence >= 0.7:
         logger.info(f"Detected show expenses request: '{text}' (confidence: {confidence:.2f})")
-        await cancel_typing()  # Отменяем наш индикатор печатания
         from ..routers.chat import process_chat_message
-        # Передаем skip_typing=True, так как индикатор уже был запущен в handle_text_expense
+        # Сохраняем уже запущенный индикатор до отправки ответа
         await process_chat_message(message, state, text, skip_typing=True)
+        # После ответа корректно останавливаем индикатор
+        await cancel_typing()
         return
     
     # НОВОЕ: Проверка на доход перед парсингом как расход
@@ -1019,9 +1020,10 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         is_show_request, show_confidence = is_show_expenses_request(text)
         if is_show_request and show_confidence >= 0.6:
             logger.info(f"Show expenses request detected after parsing failed: '{text}'")
-            await cancel_typing()  # Отменяем индикатор печатания
             from ..routers.chat import process_chat_message
+            # Сохраняем typing до отправки ответа
             await process_chat_message(message, state, text, skip_typing=True)
+            await cancel_typing()
             return
         
         # Используем улучшенный классификатор для определения типа сообщения
@@ -1037,9 +1039,10 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         # Если классификатор определил это как чат - направляем в чат
         if message_type == 'chat':
             logger.info(f"Message classified as chat, redirecting: '{text}'")
-            await cancel_typing()  # Отменяем индикатор печатания
             from ..routers.chat import process_chat_message
+            # Сохраняем typing до отправки ответа
             await process_chat_message(message, state, text, skip_typing=True)
+            await cancel_typing()
             return
         
         # Иначе это трата (message_type == 'record')
@@ -1289,8 +1292,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         
         # Не похоже на трату - обрабатываем как чат
         logger.info(f"Expense parser returned None for text: '{text}', processing as chat")
-        await cancel_typing()
+        # Сохраняем typing до отправки ответа в чат
         await process_chat_message(message, state, text, skip_typing=True)
+        await cancel_typing()
         return
     
     # Проверяем, использовались ли данные из предыдущей траты

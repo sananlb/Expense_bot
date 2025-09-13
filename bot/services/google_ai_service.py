@@ -344,21 +344,32 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                             
                             elif func_name == 'get_daily_totals':
                                 daily = result.get('daily_totals', {})
-                                total = result.get('total', 0)
-                                average = result.get('average', 0)
-                                
+                                # Итоги могут приходить как в корне, так и в result['statistics']
+                                stats = result.get('statistics', {}) if isinstance(result.get('statistics'), dict) else {}
+                                total = result.get('total', stats.get('total', 0))
+                                average = result.get('average', stats.get('average', 0))
+
                                 response_text = f"Траты по дням (всего: {total:,.0f} ₽, среднее: {average:,.0f} ₽/день)\n\n"
-                                
+
                                 # Показываем последние 30 дней
                                 dates = sorted(daily.keys(), reverse=True)[:30]
                                 for date in dates:
-                                    amount = daily[date]
-                                    if amount > 0:
-                                        response_text += f"• {date}: {amount:,.0f} ₽\n"
-                                
+                                    entry = daily.get(date)
+                                    # daily может быть как {date: number}, так и {date: {amount, count}}
+                                    if isinstance(entry, dict):
+                                        amount_val = entry.get('amount', 0) or 0
+                                    else:
+                                        amount_val = entry or 0
+                                    try:
+                                        amount_float = float(amount_val)
+                                    except (TypeError, ValueError):
+                                        amount_float = 0.0
+                                    if amount_float > 0:
+                                        response_text += f"• {date}: {amount_float:,.0f} ₽\n"
+
                                 if len(daily) > 30:
                                     response_text += f"\n... данные за {len(daily)} дней"
-                                
+
                                 return response_text
                             
                             elif func_name == 'search_expenses':
