@@ -416,9 +416,168 @@ def format_function_result(func_name: str, result: Dict) -> str:
             f"Баланс: {net:,.0f} ₽"
         )
 
+    # Analytics query fallback formatting
+    if func_name == 'analytics_query':
+        if not result.get('success'):
+            return f"Ошибка выполнения аналитического запроса: {result.get('message','не удалось выполнить запрос')}"
+        entity = result.get('entity', 'expenses')
+        group_by = result.get('group_by', 'none')
+        items = result.get('results', []) or []
+
+        title_map = {
+            'expenses': 'Траты',
+            'incomes': 'Доходы',
+            'operations': 'Операции',
+        }
+        title = title_map.get(entity, 'Данные')
+
+        lines = [f"{title} — найдено: {len(items)}"]
+
+        if group_by == 'category':
+            for it in items[:20]:
+                name = it.get('category') or 'Без категории'
+                total = it.get('total') or it.get('sum') or it.get('amount') or 0
+                cnt = it.get('count', '')
+                avg = it.get('average')
+                parts = [f"• {name}: {float(total):,.0f} ₽"]
+                if cnt:
+                    parts.append(f"({cnt} шт.)")
+                if avg:
+                    parts.append(f", ср.: {float(avg):,.0f} ₽")
+                lines.append(' '.join(parts))
+        elif group_by == 'date':
+            for it in items[:30]:
+                d = it.get('date')
+                total = it.get('total') or it.get('sum') or it.get('amount') or 0
+                cnt = it.get('count', '')
+                suffix = f" ({cnt} шт.)" if cnt else ''
+                lines.append(f"• {d}: {float(total):,.0f} ₽{suffix}")
+        elif group_by == 'weekday':
+            for it in items:
+                wd = it.get('weekday') or ''
+                total = it.get('total') or it.get('sum') or 0
+                lines.append(f"• {wd}: {float(total):,.0f} ₽")
+        else:
+            # List mode
+            for it in items[:20]:
+                d = it.get('date', '')
+                amount = it.get('amount', 0)
+                cat = it.get('category') or 'Без категории'
+                desc = (it.get('description') or '')[:60]
+                lines.append(f"• {d} — {float(amount):,.0f} ₽ — {cat} — {desc}")
+
+        if len(items) > 20:
+            lines.append(f"... и ещё {len(items)-20} записей")
+        return "\n".join(lines)
+
+    if func_name == 'analytics_query':
+        return _format_analytics_query_result(result)
+
     # Fallback: JSON preview (truncated)
     import json as _json
     try:
         return _json.dumps(result, ensure_ascii=False)[:1000]
     except Exception:
         return str(result)[:1000]
+
+
+def _format_analytics_query_result(result: Dict) -> str:
+    """Format analytics query results."""
+    if not result.get('success'):
+        return f"❌ {result.get('message', 'Не удалось выполнить запрос')}"
+
+    entity = result.get('entity', 'unknown')
+    group_by = result.get('group_by', 'none')
+    results = result.get('results', [])
+    count = result.get('count', 0)
+
+    if count == 0:
+        entity_name = {
+            'expenses': 'трат',
+            'incomes': 'доходов',
+            'operations': 'операций'
+        }.get(entity, 'записей')
+        return f"По вашему запросу {entity_name} не найдено."
+
+    lines = []
+
+    # Single item result (like minimum expense)
+    if count == 1 and group_by == 'none':
+        item = results[0]
+        if entity == 'expenses':
+            lines.append("💰 Результат поиска:")
+            lines.append(f"Дата: {item.get('date', 'N/A')}")
+            lines.append(f"Сумма: {item.get('amount', 0):,.0f} ₽")
+            if 'category' in item:
+                lines.append(f"Категория: {item.get('category', 'Без категории')}")
+            if 'description' in item:
+                lines.append(f"Описание: {item.get('description', '')}")
+        elif entity == 'incomes':
+            lines.append("💵 Результат поиска:")
+            lines.append(f"Дата: {item.get('date', 'N/A')}")
+            lines.append(f"Сумма: {item.get('amount', 0):,.0f} ₽")
+            if 'category' in item:
+                lines.append(f"Категория: {item.get('category', 'Без категории')}")
+            if 'description' in item:
+                lines.append(f"Описание: {item.get('description', '')}")
+        return "\n".join(lines)
+
+    # List of items
+    if group_by == 'none':
+        entity_emoji = '💸' if entity == 'expenses' else '💰' if entity == 'incomes' else '📊'
+        entity_name = 'Траты' if entity == 'expenses' else 'Доходы' if entity == 'incomes' else 'Операции'
+        lines.append(f"{entity_emoji} {entity_name} (найдено: {count})\n")
+
+        for i, item in enumerate(results[:20], 1):
+            date_str = item.get('date', '')
+            amount = item.get('amount', 0)
+            category = item.get('category', '')
+            description = item.get('description', '')
+
+            line = f"{i}. {date_str}"
+            if entity == 'operations':
+                op_type = item.get('type', '')
+                sign = '-' if op_type == 'expense' else '+'
+                line += f" {sign}{amount:,.0f} ₽"
+            else:
+                line += f" • {amount:,.0f} ₽"
+
+            if category:
+                line += f" • {category}"
+            if description:
+                line += f" • {description[:30]}"
+
+            lines.append(line)
+
+        if count > 20:
+            lines.append(f"\n... и ещё {count - 20} записей")
+
+        return "\n".join(lines)
+
+    # Grouped results
+    if group_by == 'date':
+        lines.append("📅 Результаты по датам:\n")
+        for item in results[:30]:
+            date_str = item.get('date', 'N/A')
+            total = item.get('total', 0)
+            count = item.get('count', 0)
+            lines.append(f"• {date_str}: {total:,.0f} ₽ ({count} шт.)")
+
+    elif group_by == 'category':
+        lines.append("📦 Результаты по категориям:\n")
+        for item in results[:20]:
+            category = item.get('category', 'Без категории')
+            total = item.get('total', 0)
+            count = item.get('count', 0)
+            lines.append(f"• {category}: {total:,.0f} ₽ ({count} шт.)")
+
+    elif group_by == 'weekday':
+        lines.append("📅 Результаты по дням недели:\n")
+        for item in results:
+            weekday = item.get('weekday', 'N/A')
+            total = item.get('total', 0)
+            count = item.get('count', 0)
+            avg = item.get('average', 0)
+            lines.append(f"• {weekday}: {total:,.0f} ₽ (среднее: {avg:,.0f} ₽)")
+
+    return "\n".join(lines)

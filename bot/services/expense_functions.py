@@ -2268,6 +2268,33 @@ class ExpenseFunctions:
                 'message': f'Ошибка: {str(e)}'
             }
 
+    @staticmethod
+    async def analytics_query(user_id: int, spec_json: str) -> Dict[str, Any]:
+        """
+        Execute analytics query via JSON specification.
+        This is the fallback mechanism for complex queries not covered by explicit functions.
+
+        Args:
+            user_id: Telegram user ID
+            spec_json: JSON string with query specification
+
+        Returns:
+            Query results or error dict
+        """
+        from bot.services.analytics_query import execute_analytics_query
+
+        try:
+            # Execute the query using the analytics query system
+            result = await execute_analytics_query(user_id, spec_json)
+            return result
+        except Exception as e:
+            logger.error(f"Error in analytics_query: {e}", exc_info=True)
+            return {
+                'success': False,
+                'error': 'Query execution failed',
+                'message': str(e)
+            }
+
 
 # Экспортируемые функции для function calling
 expense_functions = [

@@ -222,10 +222,53 @@ class OpenAIService(AIBaseService):
                 sel_text = sel_resp.choices[0].message.content.strip() if sel_resp and sel_resp.choices else ""
 
                 if sel_text.startswith("FUNCTION_CALL:"):
-                    m = re.match(r'(\w+)\((.*)\)', sel_text.replace("FUNCTION_CALL:", "").strip())
+                    call_text = sel_text.replace("FUNCTION_CALL:", "").strip()
+                    m = re.match(r'(\w+)\((.*)\)', call_text, flags=re.DOTALL)
                     if m:
                         func_name = m.group(1)
                         params_str = m.group(2)
+                        # Special robust handling for analytics_query(spec_json=...)
+                        if func_name == 'analytics_query':
+                            spec = None
+                            # Try single-quoted first
+                            mjson = re.search(r"spec_json\s*=\s*'(.*)'\s*\)\s*$", call_text, flags=re.DOTALL)
+                            if not mjson:
+                                # Try double-quoted
+                                mjson = re.search(r' spec_json\s*=\s*"(.*)"\s*\)\s*$', call_text, flags=re.DOTALL)
+                            if mjson:
+                                spec = mjson.group(1)
+                                params = {"spec_json": spec}
+                                from bot.services.function_call_utils import normalize_function_call
+                                func_name, params = normalize_function_call(message, func_name, params, user_context.get('user_id') if user_context else None)
+                                # Execute immediately
+                                try:
+                                    def run_sync_function():
+                                        import django
+                                        django.setup()
+                                        from bot.services.expense_functions import ExpenseFunctions
+                                        funcs = ExpenseFunctions()
+                                        method = getattr(funcs, func_name)
+                                        if hasattr(method, '__wrapped__'):
+                                            method = method.__wrapped__
+                                        return method(**params)
+                                    result = await asyncio.to_thread(run_sync_function)
+                                except Exception as e:
+                                    logger.error(f"[OpenAI] Function {func_name} error: {e}")
+                                    result = {'success': False, 'message': str(e)}
+
+                                if result.get('success'):
+                                    try:
+                                        from bot.services.response_formatter import format_function_result
+                                        return format_function_result(func_name, result)
+                                    except Exception:
+                                        import json as _json
+                                        try:
+                                            return _json.dumps(result, ensure_ascii=False)[:1000]
+                                        except Exception:
+                                            return str(result)[:1000]
+                                else:
+                                    return f"Ошибка: {result.get('message','Не удалось получить данные')}"
+                            # If no spec_json matched, fall back to generic parsing below
                         # Санитация: если имя функции не ASCII (модель вернула русское имя), маппим по эвристике
                         if any(ord(ch) > 127 for ch in (func_name or '')):
                             low = message.lower()
@@ -249,7 +292,8 @@ class OpenAIService(AIBaseService):
 
                         # Исполнение функции
                         try:
-                            def run_sync_function():
+                            import inspect
+                            async def call_function():
                                 import django
                                 django.setup()
                                 from bot.services.expense_functions import ExpenseFunctions
@@ -257,8 +301,11 @@ class OpenAIService(AIBaseService):
                                 method = getattr(funcs, func_name)
                                 if hasattr(method, '__wrapped__'):
                                     method = method.__wrapped__
-                                return method(**params)
-                            result = await asyncio.to_thread(run_sync_function)
+                                if inspect.iscoroutinefunction(method):
+                                    return await method(**params)
+                                else:
+                                    return await asyncio.to_thread(lambda: method(**params))
+                            result = await call_function()
                         except Exception as e:
                             logger.error(f"[OpenAI] Function {func_name} error: {e}")
                             result = {'success': False, 'message': str(e)}

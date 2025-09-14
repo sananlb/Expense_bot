@@ -9,6 +9,7 @@ import asyncio
 import logging
 
 from bot.utils import get_text
+from bot.constants import PRIVACY_URL
 from bot.services.profile import get_or_create_profile, get_user_settings
 from bot.keyboards import main_menu_keyboard, back_close_keyboard
 from bot.services.category import create_default_categories, create_default_income_categories
@@ -70,6 +71,23 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
         await process_family_invite(message, family_token)
         return  # Прекращаем выполнение команды /start
     
+    # Проверка принятия политики конфиденциальности
+    if not profile.accepted_privacy:
+        short = get_text('short_privacy_for_acceptance', display_lang)
+        text_priv = (
+            f"<b>📄 Политика конфиденциальности</b>\n\n"
+            f"{short}\n\n"
+            f"Полный текст: <a href=\"{PRIVACY_URL}\">по ссылке</a>"
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text=get_text('btn_decline_privacy', display_lang), callback_data='privacy_decline'),
+                InlineKeyboardButton(text=get_text('btn_accept_privacy', display_lang), callback_data='privacy_accept'),
+            ]
+        ])
+        await message.answer(text_priv, reply_markup=kb, parse_mode='HTML')
+        return
+
     # Создаем базовые категории для нового пользователя
     categories_created = await create_default_categories(user_id)
     # Создаем базовые категории доходов
@@ -267,6 +285,36 @@ async def callback_menu(callback: types.CallbackQuery, state: FSMContext, lang: 
     # Сохраняем, что это главное меню
     await state.update_data(main_menu_message_id=sent_message.message_id)
     
+    await callback.answer()
+
+
+@router.callback_query(F.data == 'privacy_accept')
+async def privacy_accept(callback: types.CallbackQuery):
+    try:
+        profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
+        profile.accepted_privacy = True
+        await profile.asave()
+        await callback.answer('Согласие принято')
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        await callback.message.answer('Спасибо! Теперь вы можете начать с командой /start')
+    except Exception as e:
+        logger.error(f"privacy_accept error: {e}")
+        await callback.answer('Ошибка. Попробуйте /start', show_alert=True)
+
+
+@router.callback_query(F.data == 'privacy_decline')
+async def privacy_decline(callback: types.CallbackQuery):
+    # Определяем язык
+    try:
+        profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
+        display_lang = profile.language_code or 'ru'
+    except Exception:
+        display_lang = 'ru'
+    msg = get_text('privacy_decline_message', display_lang)
+    await callback.message.edit_text(msg)
     await callback.answer()
 
 

@@ -15,6 +15,7 @@ from dateutil.relativedelta import relativedelta
 import logging
 
 from expenses.models import Profile, Subscription, PromoCode, PromoCodeUsage, ReferralBonus
+from bot.constants import OFFER_URL
 from django.core.exceptions import ObjectDoesNotExist
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.utils import get_text
@@ -177,6 +178,39 @@ async def show_subscription_menu(callback: CallbackQuery, state: FSMContext, lan
     await callback.answer()
 
 
+async def send_stars_invoice(callback: CallbackQuery, state: FSMContext, sub_type: str):
+    """Создать и отправить инвойс в Telegram Stars для указанного типа подписки"""
+    sub_info = SUBSCRIPTION_PRICES[sub_type]
+    # Удаляем старое сообщение
+    try:
+        await callback.message.delete()
+    except (TelegramBadRequest, TelegramNotFound):
+        pass
+    invoice_msg = await callback.bot.send_invoice(
+        chat_id=callback.from_user.id,
+        title=sub_info['title'],
+        description=sub_info['description'],
+        payload=f"subscription_{sub_type}_{callback.from_user.id}",
+        currency="XTR",
+        prices=[LabeledPrice(label=sub_info['title'], amount=sub_info['stars'])],
+        start_parameter=f"sub_{sub_type}",
+        need_name=False,
+        need_phone_number=False,
+        need_email=False,
+        need_shipping_address=False,
+        is_flexible=False
+    )
+    builder = InlineKeyboardBuilder()
+    builder.button(text="← Назад", callback_data="menu_subscription")
+    back_msg = await callback.bot.send_message(
+        chat_id=callback.from_user.id,
+        text="Назад в меню подписки",
+        reply_markup=builder.as_markup()
+    )
+    await state.update_data(invoice_msg_id=invoice_msg.message_id, subscription_back_msg_id=back_msg.message_id)
+    await callback.answer()
+
+
 @router.callback_query(F.data.startswith("subscription_buy_"))
 async def process_subscription_purchase(callback: CallbackQuery, state: FSMContext):
     """Обработка покупки подписки"""
@@ -193,54 +227,57 @@ async def process_subscription_purchase(callback: CallbackQuery, state: FSMConte
         await callback.answer("Неверный тип подписки", show_alert=True)
         return
     
-    sub_info = SUBSCRIPTION_PRICES[sub_type]
-    
-    # Отвечаем на callback чтобы убрать индикатор загрузки
-    await callback.answer()
-    
-    # Удаляем старое сообщение
+    # Проверяем принятие оферты
     try:
-        await callback.message.delete()
-    except (TelegramBadRequest, TelegramNotFound):
-        pass  # Сообщение уже удалено или не найдено
-    
-    # Создаем инвойс для оплаты
-    invoice_msg = await callback.bot.send_invoice(
-        chat_id=callback.from_user.id,
-        title=sub_info['title'],
-        description=sub_info['description'],
-        payload=f"subscription_{sub_type}_{callback.from_user.id}",
-        currency="XTR",  # Telegram Stars
-        prices=[
-            LabeledPrice(
-                label=sub_info['title'],
-                amount=sub_info['stars']
-            )
-        ],
-        start_parameter=f"sub_{sub_type}",
-        need_name=False,
-        need_phone_number=False,
-        need_email=False,
-        need_shipping_address=False,
-        is_flexible=False
-    )
-    
-    # Отправляем отдельное сообщение с кнопкой "Назад"
-    builder = InlineKeyboardBuilder()
-    builder.button(text="← Назад", callback_data="menu_subscription")
-    
-    back_msg = await callback.bot.send_message(
-        chat_id=callback.from_user.id,
-        text="Назад в меню подписки",
-        reply_markup=builder.as_markup()
-    )
-    
-    # Сохраняем ID обоих сообщений для удаления после оплаты или при новой команде
-    await state.update_data(
-        invoice_msg_id=invoice_msg.message_id,
-        subscription_back_msg_id=back_msg.message_id
-    )
-    
+        profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
+        lang = profile.language_code or 'ru'
+    except Exception:
+        lang = 'ru'
+
+    if not profile.accepted_offer:
+        short = get_text('short_offer_for_acceptance', lang)
+        text = (
+            f"<b>📄 Публичная оферта</b>\n\n"
+            f"{short}\n\n"
+            f"Полный текст: <a href=\"{OFFER_URL}\">по ссылке</a>"
+        )
+        kb = InlineKeyboardBuilder()
+        kb.button(text=get_text('btn_decline_offer', lang), callback_data='offer_decline')
+        kb.button(text=get_text('btn_accept_offer', lang), callback_data=f'offer_accept_{sub_type}')
+        kb.adjust(2)
+        try:
+            await callback.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode='HTML')
+        except Exception:
+            await callback.message.answer(text, reply_markup=kb.as_markup(), parse_mode='HTML')
+        await callback.answer()
+        return
+
+    # Если оферта уже принята, сразу отправляем инвойс
+    await send_stars_invoice(callback, state, sub_type)
+
+
+@router.callback_query(F.data.startswith("offer_accept_"))
+async def offer_accept(callback: CallbackQuery, state: FSMContext):
+    """Принятие оферты и продолжение оплаты"""
+    sub_type = callback.data.split("offer_accept_")[-1]
+    try:
+        profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
+        if not profile.accepted_offer:
+            profile.accepted_offer = True
+            await profile.asave()
+    except Exception as e:
+        logger.error(f"offer_accept save error: {e}")
+    await send_stars_invoice(callback, state, sub_type)
+
+
+@router.callback_query(F.data == 'offer_decline')
+async def offer_decline(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    try:
+        profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
+        lang = profile.language_code or 'ru'
+    except Exception:
+        pass
+    await callback.message.edit_text(get_text('offer_decline_message', lang))
     await callback.answer()
 
 

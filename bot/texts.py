@@ -4,6 +4,15 @@
 
 TEXTS = {
     'ru': {
+        # Политики и оферта
+        'short_privacy_for_acceptance': 'Для использования бота необходимо принять согласие на обработку персональных данных.',
+        'btn_accept_privacy': '✅ Принимаю',
+        'btn_decline_privacy': '✖️ Не принимаю',
+        'privacy_decline_message': 'Без согласия на обработку персональных данных использование бота невозможно. Вы можете вернуться к началу командой /start.',
+        'short_offer_for_acceptance': 'Нажимая «Оплатить», вы соглашаетесь с условиями публичной оферты.',
+        'btn_accept_offer': '✅ Принимаю оферту',
+        'btn_decline_offer': '✖️ Отказаться',
+        'offer_decline_message': 'Без принятия оферты оплата невозможна. Вы можете оформить подписку позже.',
         # Семейный бюджет (домохозяйство)
         'household_default_name': 'Семейный бюджет',
         'household_intro': '🏠 <b>Семейный бюджет</b>\n\nСемейный бюджет позволяет нескольким пользователям вести общий учет доходов и расходов.\n\n• Все участники видят общие траты\n• Максимум 5 участников\n• Приглашение через ссылку',
@@ -611,6 +620,15 @@ TEXTS = {
         'recognized': '📝 Распознано: {text}',
     },
     'en': {
+        # Policies and offer
+        'short_privacy_for_acceptance': 'To use the bot, you need to accept the privacy consent.',
+        'btn_accept_privacy': '✅ Accept',
+        'btn_decline_privacy': '✖️ Decline',
+        'privacy_decline_message': 'You cannot use the bot without accepting the privacy consent. You can come back with /start.',
+        'short_offer_for_acceptance': 'By clicking “Pay”, you accept the public offer terms.',
+        'btn_accept_offer': '✅ Accept offer',
+        'btn_decline_offer': '✖️ Decline',
+        'offer_decline_message': 'Payment is not possible without accepting the offer. You can subscribe later.',
         # Household (family budget)
         'household_default_name': 'Household',
         'household_intro': '🏠 <b>Household</b>\n\nThe household lets multiple users track finances together.\n\n• All participants see shared expenses\n• Up to 5 members\n• Invitation via link',

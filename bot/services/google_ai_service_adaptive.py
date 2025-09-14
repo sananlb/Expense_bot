@@ -421,26 +421,35 @@ class GoogleAIService(GoogleKeyRotationMixin):
                     try:
                         call = result.replace('FUNCTION_CALL:', '').strip()
                         import re
-                        m = re.match(r'(\w+)\((.*)\)', call)
+                        m = re.match(r'(\w+)\((.*)\)', call, flags=re.DOTALL)
                         if m:
                             func_name = m.group(1)
-                            params_str = m.group(2)
                             params: Dict[str, Any] = {}
-                            if params_str:
-                                for p in params_str.split(','):
-                                    if '=' in p:
-                                        k, v = p.split('=', 1)
-                                        k = k.strip()
-                                        v = v.strip().strip('\"\'')
-                                        if v.isdigit():
-                                            v = int(v)
-                                        elif v.replace('.', '').isdigit():
-                                            v = float(v)
-                                        params[k] = v
+                            if func_name == 'analytics_query':
+                                # Robust spec_json extraction (handles commas inside JSON)
+                                mjson = re.search(r"spec_json\s*=\s*'(.*)'\s*\)\s*$", call, flags=re.DOTALL)
+                                if not mjson:
+                                    mjson = re.search(r' spec_json\s*=\s*"(.*)"\s*\)\s*$', call, flags=re.DOTALL)
+                                if mjson:
+                                    params['spec_json'] = mjson.group(1)
+                            else:
+                                params_str = m.group(2)
+                                if params_str:
+                                    for p in params_str.split(','):
+                                        if '=' in p:
+                                            k, v = p.split('=', 1)
+                                            k = k.strip()
+                                            v = v.strip().strip('\"\'')
+                                            if v.isdigit():
+                                                v = int(v)
+                                            elif v.replace('.', '').isdigit():
+                                                v = float(v)
+                                            params[k] = v
                             # Нормализация и исполнение
                             from .function_call_utils import normalize_function_call
                             func_name, params = normalize_function_call(message, func_name, params, user_context.get('user_id') if user_context else None)
-                            def run_sync_function():
+                            import inspect
+                            async def call_function():
                                 import django
                                 django.setup()
                                 from bot.services.expense_functions import ExpenseFunctions
@@ -448,8 +457,11 @@ class GoogleAIService(GoogleKeyRotationMixin):
                                 method = getattr(funcs, func_name)
                                 if hasattr(method, '__wrapped__'):
                                     method = method.__wrapped__
-                                return method(**params)
-                            fn_result = await asyncio.to_thread(run_sync_function)
+                                if inspect.iscoroutinefunction(method):
+                                    return await method(**params)
+                                else:
+                                    return await asyncio.to_thread(lambda: method(**params))
+                            fn_result = await call_function()
                             from bot.services.response_formatter import format_function_result
                             result = format_function_result(func_name, fn_result)
                     except Exception as _e:

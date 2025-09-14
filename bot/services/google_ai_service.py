@@ -202,13 +202,54 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                 
                 # Парсим вызов функции
                 import re
-                match = re.match(r'(\w+)\((.*)\)', function_call)
+                match = re.match(r'(\w+)\((.*)\)', function_call, flags=re.DOTALL)
                 if match:
                     func_name = match.group(1)
                     params_str = match.group(2)
                     
                     # Парсим параметры
                     params = {'user_id': user_id}
+                    # Специальная обработка analytics_query(spec_json=...)
+                    if func_name == 'analytics_query':
+                        spec = None
+                        mjson = re.search(r"spec_json\s*=\s*'(.*)'\s*\)\s*$", function_call, flags=re.DOTALL)
+                        if not mjson:
+                            mjson = re.search(r' spec_json\s*=\s*"(.*)"\s*\)\s*$', function_call, flags=re.DOTALL)
+                        if mjson:
+                            spec = mjson.group(1)
+                            params['spec_json'] = spec
+                            from .function_call_utils import normalize_function_call
+                            func_name, params = normalize_function_call(message, func_name, params, user_id)
+                            # Вызываем функцию сразу
+                            try:
+                                logger.info(f"[GoogleAI] Calling function {func_name} with params: spec_json({len(spec)} chars)")
+                                def run_sync_function():
+                                    import django
+                                    django.setup()
+                                    from bot.services.expense_functions import ExpenseFunctions
+                                    funcs = ExpenseFunctions()
+                                    method = getattr(funcs, func_name)
+                                    if hasattr(method, '__wrapped__'):
+                                        method = method.__wrapped__
+                                    return method(**params)
+                                import asyncio as _a
+                                result = await _a.to_thread(run_sync_function)
+                            except Exception as e:
+                                logger.error(f"[GoogleAI] Error calling function {func_name}: {e}", exc_info=True)
+                                result = {'success': False, 'message': str(e)}
+                            if result.get('success'):
+                                try:
+                                    from bot.services.response_formatter import format_function_result
+                                    return format_function_result(func_name, result)
+                                except Exception as _fmt_err:
+                                    logger.error(f"[GoogleAI] Error formatting result for {func_name}: {_fmt_err}")
+                                    import json as _json
+                                    try:
+                                        return _json.dumps(result, ensure_ascii=False)[:1000]
+                                    except Exception:
+                                        return str(result)[:1000]
+                            else:
+                                return f"Ошибка: {result.get('message','Не удалось получить данные')}"
                     if params_str:
                         # Простой парсинг параметров
                         for param in params_str.split(','):
@@ -230,27 +271,25 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                         try:
                             logger.info(f"[GoogleAI] Calling function {func_name} with params: {params}")
                             
-                            # Создаем синхронную функцию для выполнения в потоке
-                            def run_sync_function():
+                            import inspect
+                            import asyncio
+                            
+                            async def call_function():
                                 import django
                                 django.setup()
-                                
-                                # Импортируем функции после setup
                                 from bot.services.expense_functions import ExpenseFunctions
                                 funcs = ExpenseFunctions()
-                                
-                                # Получаем метод без декоратора (прямой вызов)
                                 method = getattr(funcs, func_name)
-                                # Если метод обернут в sync_to_async, получаем оригинальную функцию
                                 if hasattr(method, '__wrapped__'):
                                     method = method.__wrapped__
-                                
-                                # Вызываем синхронную версию
-                                return method(**params)
+                                if inspect.iscoroutinefunction(method):
+                                    return await method(**params)
+                                else:
+                                    def run_sync():
+                                        return method(**params)
+                                    return await asyncio.to_thread(run_sync)
                             
-                            # Выполняем в потоке
-                            import asyncio
-                            result = await asyncio.to_thread(run_sync_function)
+                            result = await call_function()
                             
                             try:
                                 import json as _json
@@ -313,6 +352,9 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                         pass
                     elif func_name == 'get_category_total_by_dates':
                         # Обработка get_category_total_by_dates будет через универсальный форматтер
+                        pass
+                    elif func_name == 'analytics_query':
+                        # Обработка analytics_query будет через универсальный форматтер
                         pass
                     else:
                         logger.error(f"Function {func_name} not found")

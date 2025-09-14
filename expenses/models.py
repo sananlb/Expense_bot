@@ -67,6 +67,16 @@ class Profile(models.Model):
         verbose_name='Последняя активность',
         help_text='Время последней активности пользователя'
     )
+
+    # Правовые согласия
+    accepted_privacy = models.BooleanField(
+        default=False,
+        verbose_name='Принято согласие на обработку ПДн'
+    )
+    accepted_offer = models.BooleanField(
+        default=False,
+        verbose_name='Принята публичная оферта'
+    )
     
     # Семейный бюджет (домохозяйство)
     # Пользователь может принадлежать одному домохозяйству.

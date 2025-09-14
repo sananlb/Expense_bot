@@ -152,7 +152,7 @@ Telegram Stars - это внутренняя валюта Telegram для опл
 
 **Telegram бот:** @showmecoinbot  
 **Поддержка:** @coins_support  
-**Email:** support@coins-bot.ru
+**Email:** help@tbotsupport.ru
 
 ---
 

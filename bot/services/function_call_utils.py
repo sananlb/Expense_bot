@@ -5,6 +5,7 @@ used by both Google and OpenAI services.
 from __future__ import annotations
 
 from typing import Dict, Tuple, Optional
+import json
 import re
 import calendar
 from datetime import datetime
@@ -27,7 +28,6 @@ ALLOWED_PARAMS: Dict[str, set] = {
     'get_expense_trend': {'user_id', 'group_by', 'periods'},
     'get_expenses_by_amount_range': {'user_id', 'min_amount', 'max_amount', 'limit'},
     'get_category_total': {'user_id', 'category', 'period'},
-    'get_category_total_by_dates': {'user_id', 'category', 'start_date', 'end_date'},
     'get_expenses_list': {'user_id', 'start_date', 'end_date', 'limit'},
 
     # Incomes
@@ -51,6 +51,9 @@ ALLOWED_PARAMS: Dict[str, set] = {
     # Unified / combined
     'get_all_operations': {'user_id', 'start_date', 'end_date', 'limit'},
     'get_financial_summary': {'user_id', 'period'},
+
+    # Analytics fallback
+    'analytics_query': {'user_id', 'spec_json'},
 }
 
 
@@ -117,6 +120,49 @@ def normalize_function_call(
     func_name = sanitize_func_name(message, func_name)
     params = dict(params or {})
     params['user_id'] = user_id
+
+    # Heuristic remap: user asks for MIN but model picked MAX
+    low_msg = (message or '').lower()
+    if func_name == 'get_max_single_expense' and any(s in low_msg for s in ['миним', 'маленьк', 'наименьш', 'дешев']):
+        spec = {
+            "entity": "expenses",
+            "filters": {"date": {"period": "month"}},
+            "sort": [{"by": "amount", "dir": "asc"}],
+            "limit": 1,
+            "projection": ["date", "amount", "category", "description", "currency"],
+        }
+        return 'analytics_query', {'user_id': user_id, 'spec_json': json.dumps(spec, ensure_ascii=False)}
+
+    # Heuristic remap: minimum income
+    if func_name == 'get_max_single_income' and any(s in low_msg for s in ['миним', 'маленьк', 'наименьш', 'дешев']):
+        spec = {
+            "entity": "incomes",
+            "filters": {"date": {"period": "month"}},
+            "sort": [{"by": "amount", "dir": "asc"}],
+            "limit": 1,
+            "projection": ["date", "amount", "category", "description", "currency"],
+        }
+        return 'analytics_query', {'user_id': user_id, 'spec_json': json.dumps(spec, ensure_ascii=False)}
+
+    # Heuristic remap: minimum operation (mixed expenses+incomes)
+    if any(s in low_msg for s in ['миним', 'маленьк', 'наименьш', 'дешев']) and 'операц' in low_msg and func_name in (
+        'get_all_operations', 'get_financial_summary', 'get_max_single_expense', 'get_max_single_income'
+    ):
+        spec = {
+            "entity": "operations",
+            "filters": {"date": {"period": "month"}},
+            "sort": [{"by": "amount", "dir": "asc"}],
+            "limit": 1,
+            "projection": ["date", "amount", "type", "category", "description", "currency"],
+        }
+        return 'analytics_query', {'user_id': user_id, 'spec_json': json.dumps(spec, ensure_ascii=False)}
+
+    # Handle analytics_query specially - keep spec_json as is
+    if func_name == 'analytics_query':
+        return func_name, {
+            'user_id': user_id,
+            'spec_json': params.get('spec_json', '{}')
+        }
 
     # Map deprecated function to supported one with explicit dates
     if func_name == 'get_category_total_by_dates':
