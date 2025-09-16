@@ -117,7 +117,7 @@
 
     .demo-phone {
       width: 280px;
-      height: 560px;
+      height: 620px;
       background: #1a1a1a;
       border-radius: 30px;
       padding: 10px;
@@ -668,17 +668,34 @@
           dot.classList.toggle('active', index === this.currentSlide);
         });
 
-        // Play current video
+        // Play current video and set up video end listener
         this.videos.forEach((video, index) => {
           if (index === this.currentSlide) {
             video.currentTime = 0;
             video.play().catch(e => console.log('Video play failed:', e));
+
+            // Remove old listener if exists
+            video.onended = null;
+
+            // Add listener for when video ends
+            if (this.isPlaying) {
+              video.onended = () => {
+                this.nextSlide();
+              };
+            }
           } else {
             video.pause();
+            video.onended = null;
           }
         });
 
-        // Reset and start progress bar
+        // Reset and start progress bar based on video duration
+        const currentVideo = this.videos[this.currentSlide];
+        if (currentVideo) {
+          const duration = currentVideo.duration || 5;
+          this.progressFill.style.animationDuration = `${duration}s`;
+        }
+
         this.progressFill.classList.remove('active');
         setTimeout(() => {
           this.progressFill.classList.add('active');
@@ -686,25 +703,44 @@
       }
 
       startAutoPlay() {
-        if (this.autoPlayInterval) clearInterval(this.autoPlayInterval);
-        this.autoPlayInterval = setInterval(() => {
-          this.nextSlide();
-        }, this.autoPlayDelay);
+        // No interval needed - videos will auto-advance on end
+        this.isPlaying = true;
+
+        // Set up current video to advance on end
+        const currentVideo = this.videos[this.currentSlide];
+        if (currentVideo) {
+          currentVideo.onended = () => {
+            if (this.isPlaying) {
+              this.nextSlide();
+            }
+          };
+        }
+
         this.progressFill.classList.add('active');
       }
 
       pauseAutoPlay() {
-        if (this.autoPlayInterval) {
-          clearInterval(this.autoPlayInterval);
-          this.autoPlayInterval = null;
-        }
+        this.isPlaying = false;
+
+        // Remove onended listeners from all videos
+        this.videos.forEach(video => {
+          video.onended = null;
+        });
+
         this.progressFill.style.animationPlayState = 'paused';
       }
 
       resetAutoPlay() {
         if (this.isPlaying) {
-          this.pauseAutoPlay();
-          this.startAutoPlay();
+          // Re-setup the current video's onended listener
+          const currentVideo = this.videos[this.currentSlide];
+          if (currentVideo) {
+            currentVideo.onended = () => {
+              if (this.isPlaying) {
+                this.nextSlide();
+              }
+            };
+          }
         }
       }
 
