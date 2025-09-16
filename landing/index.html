@@ -34,6 +34,8 @@
       --shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
       --shadow: 0 10px 25px rgba(0,0,0,0.1);
       --shadow-lg: 0 20px 40px rgba(0,0,0,0.15);
+      /* Равномерная тень со всех сторон */
+      --shadow-equal: 0 0 24px rgba(0,0,0,0.12);
       --radius: 16px;
       --radius-lg: 24px;
     }
@@ -368,10 +370,14 @@
       transform: perspective(1000px) rotateY(0deg);
     }
 
-    /* Убираем эффект наведения на плавающие карточки */
+    /* При наведении на большую картинку плавающие окна становятся еще прозрачнее */
     .hero-demo:hover .floating-card {
-      opacity: 1;
+      opacity: 0.2;
       transition: opacity 0.3s ease;
+    }
+    /* Точечное правило: наводим на само окно превью */
+    .demo-window:hover ~ .floating-card {
+      opacity: 0.2;
     }
 
     /* Active states: when demo is centered or pressed on mobile */
@@ -382,7 +388,25 @@
 
     .hero-demo.active-center .floating-card,
     .hero-demo.touch-active .floating-card {
-      opacity: 0.3;
+      opacity: 0.2;
+    }
+
+    /* Mobile: эффект прозрачности при центрировании и касании */
+    @media (max-width: 480px) {
+      .floating-card {
+        opacity: 1;
+        transition: opacity 0.3s ease;
+      }
+      .hero-demo.active-center .floating-card {
+        opacity: 0.2 !important;
+      }
+      .hero-demo.touch-active .floating-card {
+        opacity: 0.2 !important;
+      }
+      .hero-demo:hover .floating-card,
+      .demo-window:hover ~ .floating-card {
+        opacity: 1 !important;
+      }
     }
 
     .demo-header {
@@ -428,6 +452,18 @@
       }
     }
 
+    /* Hero section smoothing to next section */
+    .hero { position: relative; }
+    .hero::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0; bottom: -40px;
+      height: 40px;
+      background: linear-gradient(to bottom, transparent 0%, var(--light) 100%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
     /* Floating Elements */
     .floating-card {
       position: absolute;
@@ -435,10 +471,10 @@
       backdrop-filter: blur(10px);
       border-radius: 12px;
       padding: 8px;
-      box-shadow: var(--shadow-lg);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
       animation: float-card 3s infinite ease-in-out;
       transition: opacity 0.3s ease;
-      opacity: 1; /* по умолчанию непрозрачные */
+      opacity: 1; /* по умолчанию полностью непрозрачные */
       z-index: 10;
     }
 
@@ -539,33 +575,23 @@
       background: var(--white);
       border-radius: var(--radius);
       padding: 32px;
-      transition: transform 0.3s ease, box-shadow 0.3s ease;
       position: relative;
       overflow: hidden;
-      /* Добавляем тень как при клике */
-      box-shadow: var(--shadow-lg);
+      /* Постоянная равномерная тень со всех сторон */
+      box-shadow: var(--shadow-equal);
+      transition: none;
     }
 
+    /* Убираем фиолетовую полосу полностью */
     .feature-card::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 4px;
-      background: var(--gradient-1);
-      transform: scaleX(0);
-      transition: transform 0.3s ease;
+      display: none;
     }
 
-    /* Убираем анимацию по ховеру/клику для карточек */
+    /* Убираем все эффекты hover на десктопе */
     .feature-card:hover {
-      transform: none;
-      box-shadow: var(--shadow-lg);
-    }
-
-    .feature-card:hover::before {
-      transform: scaleX(0);
+      transform: none !important;
+      box-shadow: var(--shadow-lg) !important;
+      transition: none !important;
     }
 
     .feature-icon {
@@ -731,12 +757,14 @@
     /* Demo text slight left padding and centered button */
     .demo-text { padding-left: 16px; }
     .demo-text .btn { display: inline-flex; margin: 0 auto; }
-    @media (max-width: 1024px) { .demo-text { padding-left: 12px; } }
-    @media (max-width: 768px) { .demo-text { padding-left: 10px; } }
-    @media (max-width: 480px) { .demo-text { padding-left: 8px; } }
-    .demo-text { padding-left: 16px; }
     @media (max-width: 1024px) {
-      .demo-text { padding-left: 0; }
+      .demo-text { padding-left: 12px; }
+    }
+    @media (max-width: 768px) {
+      .demo-text { padding-left: 16px; }
+    }
+    @media (max-width: 480px) {
+      .demo-text { padding-left: 20px; }
     }
 
     .demo-list {
@@ -1006,9 +1034,21 @@
     /* CTA Section */
     .cta-section {
       padding: 80px 0;
-      background: linear-gradient(135deg, #7c8cff 0%, #9c5dc9 100%);
+      /* Чуть менее яркий фон CTA */
+      background: linear-gradient(135deg, #8a96ff 0%, #8b6ec7 100%);
       position: relative;
       overflow: hidden;
+    }
+    /* Плавный переход с белого/светлого на цветной фон сверху CTA */
+    .cta-top-fade {
+      position: absolute;
+      top: -40px;
+      left: 0;
+      right: 0;
+      height: 40px;
+      background: linear-gradient(to bottom, var(--light) 0%, transparent 100%);
+      pointer-events: none;
+      z-index: 1;
     }
 
     .cta-content {
@@ -1501,7 +1541,7 @@
 
       /* Hero demo adjustments */
       .hero-demo {
-        margin-top: 32px;
+        margin-top: 16px;
       }
 
       .demo-content img {
@@ -1529,6 +1569,11 @@
       .container {
         padding: 0 12px;
       }
+      /* Усиленные плавные переходы между секциями на мобильных */
+      .hero::after { height: 56px; bottom: -56px; }
+      .features::before { height: 56px; top: -56px; }
+      .features::after { height: 56px; bottom: -56px; }
+      .how-it-works::before { height: 56px; top: -56px; }
 
       .logo {
         font-size: 20px;
@@ -1620,6 +1665,7 @@
       /* Hero demo specific for mobile */
       .hero-demo {
         max-width: 100%;
+        margin-top: 8px;
       }
 
       .demo-window {
@@ -1665,24 +1711,100 @@
         font-size: 14px;
       }
 
-      /* Фокус карточек на мобилках: расстояние от центра влияет на scale */
-      .features { overflow: hidden; }
-      .features .feature-card { transform-origin: center center; }
-      /* Базовое уменьшение (чуть мягче) */
-      .features .feature-card { transform: scale(0.98) !important; }
-      /* Ближайшая к центру */
-      .features .feature-card.active-center,
-      .features .feature-card.distance-0 { transform: scale(1.02) !important; box-shadow: 0 14px 36px rgba(0,0,0,0.12); }
-      /* Соседние */
-      .features .feature-card.distance-1 { transform: scale(0.97) !important; }
-      /* Чуть дальше */
-      .features .feature-card.distance-2 { transform: scale(0.95) !important; }
-      /* 3-й и дальше — сильнее уменьшаем */
-      .features .feature-card.distance-3,
-      .features .feature-card.distance-4 { transform: scale(0.93) !important; }
-      /* Сохраняем анимацию появления без вмешательства в scale */
+      /* Плавная анимация карточек на мобильных устройствах */
+      @media (max-width: 480px) {
+        .features { overflow: hidden; }
+        .features .feature-card {
+          transform-origin: center center;
+          transition: transform 0.36s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.36s cubic-bezier(0.22, 1, 0.36, 1);
+          will-change: transform, box-shadow;
+          backface-visibility: hidden;
+          /* Базовое состояние (мягкое) */
+          transform: scale(0.99);
+          box-shadow: var(--shadow-equal);
+        }
+        /* Ближайшая к центру */
+        .features .feature-card.active-center,
+        .features .feature-card.distance-0 {
+          transform: scale(1.01);
+          box-shadow: 0 0 36px rgba(0,0,0,0.12);
+        }
+        /* Соседние */
+        .features .feature-card.distance-1 {
+          transform: scale(0.985);
+          box-shadow: var(--shadow-equal);
+        }
+        /* Чуть дальше */
+        .features .feature-card.distance-2 {
+          transform: scale(0.975);
+          box-shadow: var(--shadow-equal);
+        }
+        /* 3-й и дальше — чуть сильнее уменьшаем */
+        .features .feature-card.distance-3,
+        .features .feature-card.distance-4 {
+          transform: scale(0.965);
+          box-shadow: var(--shadow-equal);
+        }
+      }
+      /* Сохраняем анимацию появления */
       .features .feature-card.reveal { opacity: 0; }
       .features .feature-card.reveal.active { opacity: 1; }
+    }
+
+    /* На десктопе карточки всегда статичные с тенью */
+    @media (min-width: 481px) {
+      .features .feature-card,
+      .feature-card {
+        transform: none !important;
+        box-shadow: var(--shadow-equal) !important;
+        transition: none !important;
+      }
+      .features .feature-card.active-center,
+      .features .feature-card.distance-0,
+      .features .feature-card.distance-1,
+      .features .feature-card.distance-2,
+      .features .feature-card.distance-3,
+      .features .feature-card.distance-4 {
+        transform: none !important;
+        box-shadow: var(--shadow-equal) !important;
+        transition: none !important;
+      }
+      /* Убираем hover эффекты */
+      .features .feature-card:hover,
+      .feature-card:hover {
+        transform: none !important;
+        box-shadow: var(--shadow-equal) !important;
+        transition: none !important;
+      }
+    }
+
+    /* Дополнительная страховка: на больших десктопах полностью отключаем любые реакции и фиксируем тени */
+    @media (min-width: 1024px) {
+      /* Фиксируем состояние карточек и отключаем любые hover-эффекты */
+      .features .feature-card,
+      .features .feature-card:hover,
+      .features .feature-card:focus,
+      .features .feature-card:active {
+        transform: none !important;
+        box-shadow: var(--shadow-equal) !important;
+        transition: none !important;
+        background: var(--white) !important;
+        pointer-events: none !important; /* полностью отключаем hover на ПК */
+        cursor: default !important;
+      }
+      /* Полностью прячем любую фиолетовую полосу/псевдоэлемент */
+      .features .feature-card::before,
+      .features .feature-card:hover::before,
+      .features .feature-card:focus::before,
+      .features .feature-card:active::before,
+      .features .feature-card::after,
+      .features .feature-card:hover::after,
+      .features .feature-card:focus::after,
+      .features .feature-card:active::after {
+        display: none !important;
+        content: '' !important;
+        opacity: 0 !important;
+      }
     }
 
     /* Small Mobile */
@@ -2136,55 +2258,103 @@
         <h2 class="section-title">Простые и прозрачные цены</h2>
         <p class="section-subtitle">Начните бесплатно, обновитесь когда будете готовы</p>
       </div>
-      <div class="pricing-cards" style="grid-template-columns: repeat(2, 1fr); max-width: 560px; margin: 60px auto 0;">
-        <div class="pricing-card reveal">
-          <h3 class="plan-name">Бесплатный</h3>
-          <div class="plan-price" style="font-size: 24px;">0₽</div>
-          <div class="plan-period">навсегда</div>
-          <ul class="plan-features">
-            <li>Учет расходов и доходов</li>
-            <li>AI-категоризация</li>
-            <li>Базовая статистика</li>
-            <li>Топ-5 операций</li>
-            <li>Повторяющиеся операции</li>
-            <li>Мультивалюта</li>
-            <li class="disabled">Естественные вопросы</li>
-            <li class="disabled">Голосовой ввод</li>
-            <li class="disabled">Семейный доступ</li>
-            <li class="disabled">PDF-отчеты</li>
-            <li class="disabled">Свои категории</li>
-            <li class="disabled">Кешбэк-трекер</li>
-            <li class="disabled">Экспорт данных</li>
-            <li class="disabled">Приоритетная поддержка</li>
-          </ul>
-          <a href="https://t.me/showmecoinbot" target="_blank" class="btn btn-secondary" style="width: 100%">
+
+      <!-- Mobile table (shown on small screens) -->
+      <div class="pricing-mobile reveal" style="display: none;">
+        <div style="background: var(--white); border-radius: var(--radius-lg); padding: 20px; box-shadow: var(--shadow-lg); margin-top: 40px;">
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;">
+            <span style="color: #000; font-size: 14px; font-weight: 600;">Premium: 150⭐/мес • <strong>600⭐/6 мес</strong></span>
+          </div>
+
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr style="background: #f8fafc;">
+                <th style="padding: 12px 8px; text-align: left; font-size: 14px; width: 60%;">Возможности</th>
+                <th style="padding: 12px 8px; text-align: center; font-size: 14px; width: 20%;">Free</th>
+                <th style="padding: 12px 8px; text-align: center; font-size: 14px; width: 20%; color: #8b5cf6; font-weight: 600;">Premium</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Basic features -->
+              <tr><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Учет расходов и доходов</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">AI-категоризация</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Базовая статистика</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Топ-5 операций</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Повторяющиеся операции</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Мультивалюта</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <!-- Premium features -->
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Естественные вопросы</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Расширенная статистика</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Голосовой ввод</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Семейный доступ</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">PDF-отчеты</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Свои категории</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Кешбэк-трекер</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Экспорт данных</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; font-size: 14px;">Приоритетная поддержка</td><td style="text-align:center;color:#94a3b8;font-size:20px;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;">✓</td></tr>
+            </tbody>
+          </table>
+
+          <a href="https://t.me/showmecoinbot" target="_blank" class="btn btn-primary" style="width: 100%; margin-top: 24px;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
             </svg>
-            Начать бесплатно
+            Попробовать 7 дней бесплатно
           </a>
         </div>
-        <div class="pricing-card popular reveal">
-          <h3 class="plan-name">Premium</h3>
-          <div class="plan-price" style="font-size: 24px;">150⭐/мес</div>
-          <div class="plan-period">или 600⭐ за 6 месяцев</div>
-          <ul class="plan-features">
-            <li>Учет расходов и доходов</li>
-            <li>AI-категоризация</li>
-            <li>Базовая статистика</li>
-            <li>Топ-5 операций</li>
-            <li>Повторяющиеся операции</li>
-            <li>Мультивалюта</li>
-            <li>Естественные вопросы</li>
-            <li>Голосовой ввод</li>
-            <li>Семейный доступ</li>
-            <li>PDF-отчеты</li>
-            <li>Свои категории</li>
-            <li>Кешбэк-трекер</li>
-            <li>Экспорт данных</li>
-            <li>Приоритетная поддержка</li>
-          </ul>
-          <a href="https://t.me/showmecoinbot" target="_blank" class="btn btn-primary" style="width: 100%">
+      </div>
+
+      <!-- Desktop cards (shown on larger screens) -->
+      <div class="pricing-desktop" style="display: block;">
+        <div class="pricing-cards" style="grid-template-columns: repeat(2, 1fr); max-width: 560px; margin: 60px auto 0;">
+          <div class="pricing-card reveal">
+            <h3 class="plan-name">Бесплатный</h3>
+            <div class="plan-price" style="font-size: 24px;">0₽</div>
+            <div class="plan-period">навсегда</div>
+            <ul class="plan-features">
+              <li>Учет расходов и доходов</li>
+              <li>AI-категоризация</li>
+              <li>Базовая статистика</li>
+              <li>Топ-5 операций</li>
+              <li>Повторяющиеся операции</li>
+              <li>Мультивалюта</li>
+              <li class="disabled">Естественные вопросы</li>
+              <li class="disabled">Расширенная статистика</li>
+              <li class="disabled">Голосовой ввод</li>
+              <li class="disabled">Семейный доступ</li>
+              <li class="disabled">PDF-отчеты</li>
+              <li class="disabled">Свои категории</li>
+              <li class="disabled">Кешбэк-трекер</li>
+              <li class="disabled">Экспорт данных</li>
+              <li class="disabled">Приоритетная поддержка</li>
+            </ul>
+          </div>
+          <div class="pricing-card popular reveal">
+            <h3 class="plan-name">Premium</h3>
+            <div class="plan-price" style="font-size: 24px;">150⭐/мес</div>
+            <div class="plan-period">или 600⭐ за 6 месяцев</div>
+            <ul class="plan-features">
+              <li>Учет расходов и доходов</li>
+              <li>AI-категоризация</li>
+              <li>Базовая статистика</li>
+              <li>Топ-5 операций</li>
+              <li>Повторяющиеся операции</li>
+              <li>Мультивалюта</li>
+              <li>Естественные вопросы</li>
+              <li>Расширенная статистика</li>
+              <li>Голосовой ввод</li>
+              <li>Семейный доступ</li>
+              <li>PDF-отчеты</li>
+              <li>Свои категории</li>
+              <li>Кешбэк-трекер</li>
+              <li>Экспорт данных</li>
+              <li>Приоритетная поддержка</li>
+            </ul>
+          </div>
+        </div>
+        <!-- Общая кнопка для десктоп версии -->
+        <div style="display: flex; justify-content: center; margin-top: 40px;">
+          <a href="https://t.me/showmecoinbot" target="_blank" class="btn btn-primary" style="padding: 16px 48px; font-size: 18px;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
             </svg>
@@ -2254,6 +2424,7 @@
 
   <!-- CTA Section -->
   <section class="cta-section">
+    <div class="cta-top-fade" aria-hidden="true"></div>
     <div class="container">
       <div class="cta-content reveal">
         <h2 class="cta-title">Начните контролировать финансы уже сегодня</h2>
@@ -2318,7 +2489,27 @@
   </footer>
 
   <script>
-    // Navbar scroll effect with white section detection
+    // Responsive pricing table toggle
+    function updatePricingDisplay() {
+      const pricingMobile = document.querySelector('.pricing-mobile');
+      const pricingDesktop = document.querySelector('.pricing-desktop');
+
+      if (pricingMobile && pricingDesktop) {
+        if (window.innerWidth <= 768) {
+          pricingMobile.style.display = 'block';
+          pricingDesktop.style.display = 'none';
+        } else {
+          pricingMobile.style.display = 'none';
+          pricingDesktop.style.display = 'block';
+        }
+      }
+    }
+
+    // Call on load and resize
+    updatePricingDisplay();
+    window.addEventListener('resize', updatePricingDisplay);
+
+    // Navbar scroll effect with white section detection (delayed switch)
     window.addEventListener('scroll', function() {
       const navbar = document.getElementById('navbar');
       const scrollY = window.scrollY;
@@ -2330,26 +2521,32 @@
         navbar.classList.remove('scrolled');
       }
 
-      // Check if navbar is over a white section
+      // Probe a bit below the navbar to avoid early lightening
       const navbarRect = navbar.getBoundingClientRect();
-      const navbarMiddle = navbarRect.top + navbarRect.height / 2;
+      const probeY = navbarRect.bottom + 20; // 20px ниже низа навбара
+      const triggerOffset = 80; // задержка срабатывания ~80px внутри белой секции
 
-      // Get all white sections (features, demo-section, pricing, faq)
+      // Sections with light backgrounds
       const whiteSections = document.querySelectorAll('.features, .demo-section, .pricing, .faq');
+      const hero = document.querySelector('.hero');
       let isOverWhite = false;
 
       whiteSections.forEach(section => {
         const rect = section.getBoundingClientRect();
-        if (rect.top <= navbarMiddle && rect.bottom >= navbarMiddle) {
+        if (rect.top <= (probeY - triggerOffset) && rect.bottom >= (probeY - triggerOffset)) {
           isOverWhite = true;
         }
       });
 
-      if (isOverWhite) {
-        navbar.classList.add('on-white');
-      } else {
-        navbar.classList.remove('on-white');
+      // Не переключаемся, пока герой заметно перекрывает область под навбаром
+      if (hero) {
+        const heroRect = hero.getBoundingClientRect();
+        if (heroRect.bottom > (probeY + 10)) {
+          isOverWhite = false;
+        }
       }
+
+      navbar.classList.toggle('on-white', isOverWhite);
     });
 
     // Smooth scrolling for anchor links
@@ -2428,15 +2625,26 @@
     });
 
     // Remove parallax effect - hero section scrolls normally
-    // Optionally add fade effect only
+    // Fade effect when hero section is almost out of view
     window.addEventListener('scroll', () => {
       const scrolled = window.pageYOffset;
       const heroContent = document.querySelector('.hero-content');
+      const heroSection = document.querySelector('.hero');
 
-      if (heroContent && scrolled < 400) {
-        // Only fade effect, no transform
-        const opacity = Math.max(0.3, 1 - (scrolled / 800));
-        heroContent.style.opacity = opacity;
+      if (heroContent && heroSection) {
+        const heroHeight = heroSection.offsetHeight;
+        const fadeStart = heroHeight * 0.6; // Start fading when 60% of hero is scrolled
+
+        if (scrolled < fadeStart) {
+          heroContent.style.opacity = 1;
+        } else if (scrolled >= fadeStart && scrolled < heroHeight) {
+          // Fade from 100% to 30% opacity
+          const fadeProgress = (scrolled - fadeStart) / (heroHeight - fadeStart);
+          const opacity = Math.max(0.3, 1 - (fadeProgress * 0.7));
+          heroContent.style.opacity = opacity;
+        } else {
+          heroContent.style.opacity = 0.3;
+        }
       }
     });
 
@@ -2706,48 +2914,83 @@
       // Mobile-only: highlight the feature card closest to screen center
       const featuresSection = document.querySelector('.features');
       const isPhone = () => window.matchMedia('(max-width: 480px)').matches;
+
+      // Используем requestAnimationFrame для плавности
+      let ticking = false;
+      let lastBestIndex = -1;
+      function requestTick() {
+        if (!ticking) {
+          requestAnimationFrame(updateFeatureCardsActive);
+          ticking = true;
+        }
+      }
+
       function updateFeatureCardsActive() {
         const cardsNode = document.querySelectorAll('.features .feature-card');
-        if (!featuresSection || cardsNode.length === 0) return;
-        const cards = Array.from(cardsNode);
-        // Clear previous classes always
-        const clearClasses = (el) => {
-          el.classList.remove('active-center','distance-0','distance-1','distance-2','distance-3','distance-4');
-        };
-        if (!isPhone()) {
-          cards.forEach(clearClasses);
+        if (!featuresSection || cardsNode.length === 0) {
+          ticking = false;
           return;
         }
+
+        const cards = Array.from(cardsNode);
+        const clearClasses = (el) => {
+          el.classList.remove('active-center','distance-1','distance-2','distance-3');
+        };
+
+        if (!isPhone()) {
+          cards.forEach(clearClasses);
+          ticking = false;
+          return;
+        }
+
+        // Находим карточку в центре viewport
         const viewportCenter = window.innerHeight / 2;
-        let bestIndex = 0;
+        let bestIndex = -1;
         let bestDist = Infinity;
+
         cards.forEach((card, idx) => {
-          const r = card.getBoundingClientRect();
-          const cardCenter = r.top + r.height / 2;
+          const rect = card.getBoundingClientRect();
+          const cardCenter = rect.top + rect.height / 2;
           const dist = Math.abs(cardCenter - viewportCenter);
+
           if (dist < bestDist) {
             bestDist = dist;
             bestIndex = idx;
           }
         });
+
+        // Если целевая карточка не изменилась — ничего не делаем (гистерезис)
+        if (bestIndex === lastBestIndex) {
+          ticking = false;
+          return;
+        }
+        lastBestIndex = bestIndex;
+
+        // Применяем классы
         cards.forEach((card, idx) => {
           clearClasses(card);
-          const d = Math.abs(idx - bestIndex);
-          if (d === 0) {
-            card.classList.add('active-center','distance-0');
-          } else if (d === 1) {
+          const distance = Math.abs(idx - bestIndex);
+
+          if (distance === 0) {
+            card.classList.add('active-center');
+          } else if (distance === 1) {
             card.classList.add('distance-1');
-          } else if (d === 2) {
+          } else if (distance === 2) {
             card.classList.add('distance-2');
-          } else if (d >= 3) {
+          } else {
             card.classList.add('distance-3');
           }
         });
+
+        ticking = false;
       }
 
-      window.addEventListener('scroll', updateFeatureCardsActive, { passive: true });
-      window.addEventListener('resize', updateFeatureCardsActive);
-      updateFeatureCardsActive();
+      // Оптимизированные слушатели
+      window.addEventListener('scroll', requestTick, { passive: true });
+      window.addEventListener('resize', requestTick);
+
+      // Начальная инициализация
+      requestAnimationFrame(updateFeatureCardsActive);
     });
   </script>
 </body>
