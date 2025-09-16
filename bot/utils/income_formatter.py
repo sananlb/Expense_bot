@@ -202,8 +202,8 @@ def format_incomes_from_dict_list(
         date_str = income.get('date', '')
         grouped_by_date[date_str].append(income)
 
-    # Сортируем даты в обратном порядке (новые первыми)
-    sorted_dates = sorted(grouped_by_date.keys(), reverse=True)
+    # Сортируем даты в возрастающем порядке (старые даты вверху)
+    sorted_dates = sorted(grouped_by_date.keys())
 
     today = date.today()
     months_ru = {

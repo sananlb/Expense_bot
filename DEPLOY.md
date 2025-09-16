@@ -132,3 +132,28 @@ docker exec expense_bot_db pg_dump -U expense_user expense_bot > backup_$(date +
 ```bash
 docker exec -i expense_bot_db psql -U expense_user expense_bot < backup_20250809.sql
 ```
+
+## Быстрое восстановление БД из дампа (PostgreSQL)
+
+Если у вас есть дамп `.sql`/`.dump`:
+
+```bash
+cd ~/expense_bot
+# Пересоздаём базу
+docker exec -i expense_bot_db psql -U expense_user -d postgres -c "DROP DATABASE IF EXISTS expense_bot;"
+docker exec -i expense_bot_db psql -U expense_user -d postgres -c "CREATE DATABASE expense_bot OWNER expense_user;"
+
+# (Опционально) создаём роль, если её требует дамп
+docker exec -i expense_bot_db psql -U expense_user -d postgres -c "CREATE ROLE batman;" || true
+
+# Заливаем дамп
+docker exec -i expense_bot_db psql -U expense_user -d expense_bot < /path/to/dump.sql
+
+# Миграции
+docker-compose -f docker-compose.prod.yml run --rm web python manage.py migrate --noinput
+
+# Поднимаем сервисы
+docker-compose -f docker-compose.prod.yml up -d web bot celery celery-beat
+```
+
+Альтернатива: `scripts/restore_database.sh` — автоматизирует шаги (бэкап → восстановление → миграции → старт).

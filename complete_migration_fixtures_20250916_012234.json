@@ -1,0 +1,3578 @@
+[
+  {
+    "model": "expenses.profile",
+    "pk": 12,
+    "fields": {
+      "telegram_id": 881292737,
+      "language_code": "ru",
+      "timezone": "Europe/Moscow",
+      "currency": "RUB",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.775166",
+      "updated_at": "2025-09-09 15:25:35.963285",
+      "beta_access_key": null,
+      "is_beta_tester": false,
+      "referral_code": null,
+      "last_activity": null,
+      "household": 1,
+      "accepted_privacy": false,
+      "accepted_offer": false,
+      "referrer": null
+    }
+  },
+  {
+    "model": "expenses.profile",
+    "pk": 13,
+    "fields": {
+      "telegram_id": 8025454878,
+      "language_code": "ru",
+      "timezone": "UTC",
+      "currency": "RUB",
+      "is_active": true,
+      "created_at": "2025-08-11 22:15:52.793226",
+      "updated_at": "2025-08-11 22:15:52.793226",
+      "beta_access_key": null,
+      "is_beta_tester": false,
+      "referral_code": null,
+      "last_activity": null,
+      "household": null,
+      "accepted_privacy": false,
+      "accepted_offer": false,
+      "referrer": null
+    }
+  },
+  {
+    "model": "expenses.profile",
+    "pk": 16,
+    "fields": {
+      "telegram_id": 349848835,
+      "language_code": "ru",
+      "timezone": "UTC",
+      "currency": "RUB",
+      "is_active": true,
+      "created_at": "2025-08-17 21:19:41.122045",
+      "updated_at": "2025-08-17 21:19:41.122045",
+      "beta_access_key": null,
+      "is_beta_tester": false,
+      "referral_code": null,
+      "last_activity": null,
+      "household": null,
+      "accepted_privacy": false,
+      "accepted_offer": false,
+      "referrer": null
+    }
+  },
+  {
+    "model": "expenses.profile",
+    "pk": 17,
+    "fields": {
+      "telegram_id": 369945067,
+      "language_code": "ru",
+      "timezone": "UTC",
+      "currency": "RUB",
+      "is_active": true,
+      "created_at": "2025-08-26 18:28:54.509850",
+      "updated_at": "2025-08-26 18:28:54.509850",
+      "beta_access_key": null,
+      "is_beta_tester": false,
+      "referral_code": null,
+      "last_activity": null,
+      "household": null,
+      "accepted_privacy": false,
+      "accepted_offer": false,
+      "referrer": null
+    }
+  },
+  {
+    "model": "expenses.profile",
+    "pk": 18,
+    "fields": {
+      "telegram_id": 123456789,
+      "language_code": "ru",
+      "timezone": "UTC",
+      "currency": "RUB",
+      "is_active": true,
+      "created_at": "2025-09-04 09:57:48.587825",
+      "updated_at": "2025-09-04 09:57:48.587825",
+      "beta_access_key": null,
+      "is_beta_tester": false,
+      "referral_code": null,
+      "last_activity": null,
+      "household": null,
+      "accepted_privacy": false,
+      "accepted_offer": false,
+      "referrer": null
+    }
+  },
+  {
+    "model": "expenses.profile",
+    "pk": 24,
+    "fields": {
+      "telegram_id": 7967547829,
+      "language_code": "ru",
+      "timezone": "Europe/Moscow",
+      "currency": "RUB",
+      "is_active": true,
+      "created_at": "2025-09-09 09:50:19.753043",
+      "updated_at": "2025-09-09 09:50:41.102243",
+      "beta_access_key": null,
+      "is_beta_tester": false,
+      "referral_code": null,
+      "last_activity": null,
+      "household": 1,
+      "accepted_privacy": false,
+      "accepted_offer": false,
+      "referrer": null
+    }
+  },
+  {
+    "model": "expenses.profile",
+    "pk": 25,
+    "fields": {
+      "telegram_id": 999999999,
+      "language_code": "ru",
+      "timezone": "UTC",
+      "currency": "RUB",
+      "is_active": true,
+      "created_at": "2025-08-11 11:11:15.030847",
+      "updated_at": "2025-09-10 11:11:15.030847",
+      "beta_access_key": null,
+      "is_beta_tester": false,
+      "referral_code": null,
+      "last_activity": null,
+      "household": null,
+      "accepted_privacy": false,
+      "accepted_offer": false,
+      "referrer": null
+    }
+  },
+  {
+    "model": "expenses.profile",
+    "pk": 26,
+    "fields": {
+      "telegram_id": 555001,
+      "language_code": "ru",
+      "timezone": "UTC",
+      "currency": "RUB",
+      "is_active": true,
+      "created_at": "2025-09-13 19:19:36.813414",
+      "updated_at": "2025-09-13 19:19:36.813414",
+      "beta_access_key": null,
+      "is_beta_tester": false,
+      "referral_code": null,
+      "last_activity": null,
+      "household": null,
+      "accepted_privacy": false,
+      "accepted_offer": false,
+      "referrer": null
+    }
+  },
+  {
+    "model": "expenses.household",
+    "pk": 1,
+    "fields": {
+      "created_at": "2025-09-09 09:43:26.567627",
+      "name": "Family2",
+      "creator": 12,
+      "is_active": true,
+      "max_members": 5
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 123,
+    "fields": {
+      "profile": 12,
+      "name": "🥕 Продукты",
+      "icon": "🥕",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-15 11:11:38.048253",
+      "name_ru": "Продукты",
+      "name_en": "Products",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 124,
+    "fields": {
+      "profile": 12,
+      "name": "🍽️ Кафе и рестораны",
+      "icon": "🍽️",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-07 11:26:20.883493",
+      "name_ru": "Кафе и рестораны",
+      "name_en": "Cafes and Restaurants",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 125,
+    "fields": {
+      "profile": 12,
+      "name": "⛽ АЗС",
+      "icon": "⛽",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-09 15:25:35.979678",
+      "name_ru": "АЗС",
+      "name_en": "Gas Stations",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 126,
+    "fields": {
+      "profile": 12,
+      "name": "🚇 Транспорт",
+      "icon": "🚇",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-09 15:25:35.985849",
+      "name_ru": "Транспорт",
+      "name_en": "Transport",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 127,
+    "fields": {
+      "profile": 12,
+      "name": "🚗 Автомобиль",
+      "icon": "🚗",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-09 15:25:35.993841",
+      "name_ru": "Автомобиль",
+      "name_en": "Car",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 128,
+    "fields": {
+      "profile": 12,
+      "name": "🏠 Жилье",
+      "icon": "🏠",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-09 15:25:35.998106",
+      "name_ru": "Жилье",
+      "name_en": "Housing",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 129,
+    "fields": {
+      "profile": 12,
+      "name": "💊 Аптеки",
+      "icon": "💊",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-09 15:25:36.002058",
+      "name_ru": "Аптеки",
+      "name_en": "Pharmacies",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 130,
+    "fields": {
+      "profile": 12,
+      "name": "🏥 Медицина",
+      "icon": "🏥",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-09 15:25:36.010455",
+      "name_ru": "Медицина",
+      "name_en": "Medicine",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 131,
+    "fields": {
+      "profile": 12,
+      "name": "💄 Красотища",
+      "icon": "💄",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-06 09:40:12.819477",
+      "name_ru": "Красотища",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": false
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 133,
+    "fields": {
+      "profile": 12,
+      "name": "👔 Одежда и обувь",
+      "icon": "👔",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-09 15:25:36.018202",
+      "name_ru": "Одежда и обувь",
+      "name_en": "Clothes and Shoes",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 134,
+    "fields": {
+      "profile": 12,
+      "name": "🎭 Развлечения",
+      "icon": "🎭",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-09 15:25:36.026009",
+      "name_ru": "Развлечения",
+      "name_en": "Entertainment",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 136,
+    "fields": {
+      "profile": 12,
+      "name": "🎁 Подарки",
+      "icon": "🎁",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-09 15:25:36.034464",
+      "name_ru": "Подарки",
+      "name_en": "Gifts",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 137,
+    "fields": {
+      "profile": 12,
+      "name": "✈️ Путешествия",
+      "icon": "✈️",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-06 09:40:12.819477",
+      "name_ru": "Путешествия",
+      "name_en": "Travel",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 138,
+    "fields": {
+      "profile": 12,
+      "name": "👪 Родственники",
+      "icon": "👪",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-09 15:25:36.034464",
+      "name_ru": "Родственники",
+      "name_en": "Relatives",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 139,
+    "fields": {
+      "profile": 12,
+      "name": "📱 Коммунальные услуги и подписки",
+      "icon": "📱",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-09 15:25:36.043659",
+      "name_ru": "Коммунальные услуги и подписки",
+      "name_en": "Utilities and Subscriptions",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 140,
+    "fields": {
+      "profile": 12,
+      "name": "📦 Прочие расходы",
+      "icon": "📦",
+      "is_active": true,
+      "created_at": "2025-08-11 21:20:46.786224",
+      "updated_at": "2025-09-09 15:25:36.050556",
+      "name_ru": "Прочие расходы",
+      "name_en": "Other Expenses",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 147,
+    "fields": {
+      "profile": 12,
+      "name": "🦤 Delivery club",
+      "icon": "💰",
+      "is_active": true,
+      "created_at": "2025-09-01 20:10:58.262696",
+      "updated_at": "2025-09-06 09:40:12.819477",
+      "name_ru": null,
+      "name_en": "🦤 Delivery club",
+      "original_language": "en",
+      "is_translatable": false
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 152,
+    "fields": {
+      "profile": 12,
+      "name": "🛒 Супермаркеты",
+      "icon": "🛒",
+      "is_active": true,
+      "created_at": "2025-09-05 21:16:12.650647",
+      "updated_at": "2025-09-06 09:40:12.824773",
+      "name_ru": "Супермаркеты",
+      "name_en": "Supermarkets",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 154,
+    "fields": {
+      "profile": 12,
+      "name": "🍽️ Рестораны и кафе",
+      "icon": "☕",
+      "is_active": true,
+      "created_at": "2025-09-05 21:16:12.664778",
+      "updated_at": "2025-09-06 09:40:12.824773",
+      "name_ru": "Рестораны и кафе",
+      "name_en": "Restaurants and Cafes",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 156,
+    "fields": {
+      "profile": 12,
+      "name": "🚕 Такси",
+      "icon": "🚕",
+      "is_active": true,
+      "created_at": "2025-09-05 21:16:12.674619",
+      "updated_at": "2025-09-06 09:40:12.824773",
+      "name_ru": "Такси",
+      "name_en": "Taxi",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 157,
+    "fields": {
+      "profile": 12,
+      "name": "🚌 Общественный",
+      "icon": "🚌",
+      "is_active": true,
+      "created_at": "2025-09-05 21:16:12.679152",
+      "updated_at": "2025-09-15 11:17:15.714754",
+      "name_ru": "Общественный",
+      "name_en": "Public Transport",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 162,
+    "fields": {
+      "profile": 12,
+      "name": "🏃 Спорт",
+      "icon": "🏃",
+      "is_active": true,
+      "created_at": "2025-09-05 21:16:12.702433",
+      "updated_at": "2025-09-06 09:40:12.824773",
+      "name_ru": "Спорт",
+      "name_en": "Sports",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 163,
+    "fields": {
+      "profile": 12,
+      "name": "🏀 Спортивные товары",
+      "icon": "🏃",
+      "is_active": true,
+      "created_at": "2025-09-05 21:16:12.702433",
+      "updated_at": "2025-09-06 09:40:12.824773",
+      "name_ru": "Спортивные товары",
+      "name_en": "Sports Goods",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 165,
+    "fields": {
+      "profile": 12,
+      "name": "🌹 Цветы",
+      "icon": "🌹",
+      "is_active": true,
+      "created_at": "2025-09-05 21:16:12.719229",
+      "updated_at": "2025-09-06 09:40:12.824773",
+      "name_ru": "Цветы",
+      "name_en": "Flowers",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 167,
+    "fields": {
+      "profile": 12,
+      "name": "📚 Образование",
+      "icon": "📚",
+      "is_active": true,
+      "created_at": "2025-09-05 21:16:12.728204",
+      "updated_at": "2025-09-09 15:25:36.059448",
+      "name_ru": "Образование",
+      "name_en": "Education",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 171,
+    "fields": {
+      "profile": 24,
+      "name": "💰 Прочие расходы",
+      "icon": "💰",
+      "is_active": true,
+      "created_at": "2025-09-09 14:47:13.499943",
+      "updated_at": "2025-09-09 14:47:13.499943",
+      "name_ru": "Прочие расходы",
+      "name_en": "Other Expenses",
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 172,
+    "fields": {
+      "profile": 26,
+      "name": "Продукты",
+      "icon": "🛒",
+      "is_active": true,
+      "created_at": "2025-09-13 19:19:36.820583",
+      "updated_at": "2025-09-13 19:19:36.820583",
+      "name_ru": null,
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expensecategory",
+    "pk": 173,
+    "fields": {
+      "profile": 26,
+      "name": "Транспорт",
+      "icon": "🚌",
+      "is_active": true,
+      "created_at": "2025-09-13 19:19:36.820583",
+      "updated_at": "2025-09-13 19:19:36.820583",
+      "name_ru": null,
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": true
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 56,
+    "fields": {
+      "profile": 12,
+      "category": 134,
+      "amount": "150",
+      "currency": "RUB",
+      "description": "Улюлю",
+      "expense_date": "2025-08-12",
+      "expense_time": "00:21:05.502741",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-11 21:21:05.502741",
+      "updated_at": "2025-08-11 21:21:05.502741",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 57,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "78",
+      "currency": "RUB",
+      "description": "Хлеб",
+      "expense_date": "2025-08-12",
+      "expense_time": "00:21:17.166620",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-11 21:21:17.166620",
+      "updated_at": "2025-08-11 21:21:17.166620",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 58,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "98",
+      "currency": "RUB",
+      "description": "Молоко",
+      "expense_date": "2025-08-12",
+      "expense_time": "03:08:51.323471",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-12 00:08:51.323471",
+      "updated_at": "2025-08-12 00:08:51.323471",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 61,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "80",
+      "currency": "RUB",
+      "description": "Сникерс",
+      "expense_date": "2025-08-13",
+      "expense_time": "01:06:05.241305",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-12 22:06:05.241305",
+      "updated_at": "2025-08-12 22:06:05.241305",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 62,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "78",
+      "currency": "RUB",
+      "description": "хлеб",
+      "expense_date": "2025-08-13",
+      "expense_time": "01:09:23.809310",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-12 22:09:23.809310",
+      "updated_at": "2025-08-12 22:09:45.705078",
+      "cashback_excluded": true,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 63,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "75",
+      "currency": "RUB",
+      "description": "Колбаса",
+      "expense_date": "2025-08-13",
+      "expense_time": "01:14:49.994944",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-12 22:14:49.994944",
+      "updated_at": "2025-08-12 22:14:56.065162",
+      "cashback_excluded": true,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 64,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "78",
+      "currency": "RUB",
+      "description": "Хлеб",
+      "expense_date": "2025-08-13",
+      "expense_time": "01:18:54.174069",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-12 22:18:54.175072",
+      "updated_at": "2025-08-12 22:19:02.344128",
+      "cashback_excluded": true,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 65,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "78",
+      "currency": "RUB",
+      "description": "Хлеб",
+      "expense_date": "2025-08-13",
+      "expense_time": "01:24:34.727758",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-12 22:24:34.728743",
+      "updated_at": "2025-08-12 22:24:52.196162",
+      "cashback_excluded": true,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 68,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "78",
+      "currency": "RUB",
+      "description": "Хлеб",
+      "expense_date": "2025-08-16",
+      "expense_time": "21:04:01.248468",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-16 18:04:01.249696",
+      "updated_at": "2025-08-16 18:04:01.249696",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 69,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "500",
+      "currency": "RUB",
+      "description": "Фисташки",
+      "expense_date": "2025-08-16",
+      "expense_time": "21:04:25.637687",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-16 18:04:25.637687",
+      "updated_at": "2025-08-16 18:04:25.637687",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 70,
+    "fields": {
+      "profile": 12,
+      "category": 140,
+      "amount": "13",
+      "currency": "RUB",
+      "description": "Трудяля",
+      "expense_date": "2025-08-17",
+      "expense_time": "16:10:51.741002",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-17 13:10:51.741002",
+      "updated_at": "2025-08-17 13:10:51.741002",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 71,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "320",
+      "currency": "RUB",
+      "description": "Колбаса",
+      "expense_date": "2025-08-17",
+      "expense_time": "18:52:54.810499",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-17 15:52:54.811089",
+      "updated_at": "2025-08-17 15:52:54.811089",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 72,
+    "fields": {
+      "profile": 12,
+      "category": 126,
+      "amount": "5000",
+      "currency": "RUB",
+      "description": "Велосипед",
+      "expense_date": "2025-08-17",
+      "expense_time": "19:35:01.845571",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-17 16:35:01.845571",
+      "updated_at": "2025-08-17 16:35:01.845571",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 73,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "1200",
+      "currency": "RUB",
+      "description": "Магнит",
+      "expense_date": "2025-08-26",
+      "expense_time": "14:31:34.291973",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-26 11:31:34.291973",
+      "updated_at": "2025-08-26 11:31:34.291973",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 74,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "420",
+      "currency": "RUB",
+      "description": "Шаурма",
+      "expense_date": "2025-08-26",
+      "expense_time": "14:40:52.205345",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-26 11:40:52.205345",
+      "updated_at": "2025-08-26 11:40:52.205345",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 75,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "420",
+      "currency": "RUB",
+      "description": "шаурма",
+      "expense_date": "2025-08-26",
+      "expense_time": "14:50:24.565836",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-26 11:50:24.567344",
+      "updated_at": "2025-08-26 11:50:24.567344",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 76,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "400",
+      "currency": "RUB",
+      "description": "Колбаса",
+      "expense_date": "2025-08-26",
+      "expense_time": "14:50:39.007529",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-26 11:50:39.007529",
+      "updated_at": "2025-08-26 11:50:39.007529",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 77,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "500",
+      "currency": "RUB",
+      "description": "Курица",
+      "expense_date": "2025-08-26",
+      "expense_time": "14:51:01.047507",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-26 11:51:01.047507",
+      "updated_at": "2025-08-26 11:51:01.047507",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 78,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "59.9",
+      "currency": "RUB",
+      "description": "Мороженное",
+      "expense_date": "2025-08-26",
+      "expense_time": "15:00:03.976423",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-26 12:00:03.976423",
+      "updated_at": "2025-08-26 12:00:37.438362",
+      "cashback_excluded": true,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 79,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "60",
+      "currency": "RUB",
+      "description": "Мороженое",
+      "expense_date": "2025-08-26",
+      "expense_time": "15:01:15.034187",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-26 12:01:15.034187",
+      "updated_at": "2025-08-26 12:01:15.034187",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 80,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "734",
+      "currency": "RUB",
+      "description": "Суп и пицца",
+      "expense_date": "2025-08-26",
+      "expense_time": "17:42:29.159319",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-26 14:42:29.159319",
+      "updated_at": "2025-08-26 14:42:29.159319",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 81,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "433",
+      "currency": "RUB",
+      "description": "Кофе",
+      "expense_date": "2025-08-26",
+      "expense_time": "21:47:41.886036",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-08-26 18:47:41.886036",
+      "updated_at": "2025-08-26 18:47:41.886036",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 82,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "75",
+      "currency": "RUB",
+      "description": "Йогурт",
+      "expense_date": "2025-09-02",
+      "expense_time": "22:14:44.324491",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-02 19:14:44.325543",
+      "updated_at": "2025-09-02 19:14:44.325543",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 83,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "750",
+      "currency": "RUB",
+      "description": "Пицца",
+      "expense_date": "2025-09-03",
+      "expense_time": "00:36:46.713581",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-02 21:36:46.714582",
+      "updated_at": "2025-09-02 21:36:46.714582",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 84,
+    "fields": {
+      "profile": 12,
+      "category": 140,
+      "amount": "250",
+      "currency": "RUB",
+      "description": "Круасан",
+      "expense_date": "2025-09-03",
+      "expense_time": "13:36:19.027294",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-03 10:36:19.027294",
+      "updated_at": "2025-09-03 10:36:19.027294",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 85,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "250",
+      "currency": "RUB",
+      "description": "Круасан",
+      "expense_date": "2025-09-03",
+      "expense_time": "13:37:09.014972",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-03 10:37:09.014972",
+      "updated_at": "2025-09-03 10:37:09.014972",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 86,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "250",
+      "currency": "RUB",
+      "description": "Круасан",
+      "expense_date": "2025-09-03",
+      "expense_time": "13:51:40.440846",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-03 10:51:40.440846",
+      "updated_at": "2025-09-03 10:51:40.441351",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 87,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "75",
+      "currency": "RUB",
+      "description": "Мороженое",
+      "expense_date": "2025-09-03",
+      "expense_time": "13:54:36.102151",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-03 10:54:36.102151",
+      "updated_at": "2025-09-03 10:54:43.964578",
+      "cashback_excluded": true,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 88,
+    "fields": {
+      "profile": 12,
+      "category": 140,
+      "amount": "1200",
+      "currency": "RUB",
+      "description": "Долг +",
+      "expense_date": "2025-09-03",
+      "expense_time": "13:55:05.815024",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-03 10:55:05.815529",
+      "updated_at": "2025-09-03 10:55:05.815529",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 89,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "400",
+      "currency": "RUB",
+      "description": "Печеньки",
+      "expense_date": "2025-09-03",
+      "expense_time": "15:52:45.062170",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-03 12:52:45.062170",
+      "updated_at": "2025-09-03 12:52:45.062170",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 90,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "433",
+      "currency": "RUB",
+      "description": "Кофе",
+      "expense_date": "2025-09-03",
+      "expense_time": "19:37:07.585720",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-03 16:37:07.586690",
+      "updated_at": "2025-09-03 16:37:07.586690",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 91,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "433",
+      "currency": "RUB",
+      "description": "Кофе",
+      "expense_date": "2025-09-03",
+      "expense_time": "19:39:00.916182",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-03 16:39:00.916182",
+      "updated_at": "2025-09-03 16:39:12.701051",
+      "cashback_excluded": true,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 93,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "1000",
+      "currency": "RUB",
+      "description": "Тестовая трата",
+      "expense_date": "2025-09-05",
+      "expense_time": "15:59:43.421615",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-05 12:59:43.421615",
+      "updated_at": "2025-09-05 12:59:43.428294",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 96,
+    "fields": {
+      "profile": 12,
+      "category": 125,
+      "amount": "4000",
+      "currency": "RUB",
+      "description": "Дизель",
+      "expense_date": "2025-09-07",
+      "expense_time": "14:14:03.883121",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 11:14:03.883121",
+      "updated_at": "2025-09-07 11:14:03.883121",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 97,
+    "fields": {
+      "profile": 12,
+      "category": 136,
+      "amount": "4000",
+      "currency": "RUB",
+      "description": "Цветы",
+      "expense_date": "2025-09-07",
+      "expense_time": "14:21:32.341073",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 11:21:32.341073",
+      "updated_at": "2025-09-07 11:21:32.341073",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 98,
+    "fields": {
+      "profile": 12,
+      "category": 140,
+      "amount": "500",
+      "currency": "RUB",
+      "description": "Пожертвование",
+      "expense_date": "2025-09-07",
+      "expense_time": "14:21:56.390041",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 11:21:56.390041",
+      "updated_at": "2025-09-07 11:21:56.390041",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 99,
+    "fields": {
+      "profile": 12,
+      "category": 134,
+      "amount": "600",
+      "currency": "RUB",
+      "description": "Кино",
+      "expense_date": "2025-09-07",
+      "expense_time": "14:22:02.481492",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 11:22:02.489728",
+      "updated_at": "2025-09-07 11:22:02.489728",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 100,
+    "fields": {
+      "profile": 12,
+      "category": 126,
+      "amount": "300",
+      "currency": "RUB",
+      "description": "Такси",
+      "expense_date": "2025-09-07",
+      "expense_time": "14:22:14.066653",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 11:22:14.066653",
+      "updated_at": "2025-09-07 11:22:14.066653",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 101,
+    "fields": {
+      "profile": 12,
+      "category": 127,
+      "amount": "1400",
+      "currency": "RUB",
+      "description": "Мойка авто",
+      "expense_date": "2025-09-07",
+      "expense_time": "14:22:29.913400",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 11:22:29.913400",
+      "updated_at": "2025-09-07 11:22:29.913400",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 102,
+    "fields": {
+      "profile": 12,
+      "category": null,
+      "amount": "500",
+      "currency": "RUB",
+      "description": "Мтс",
+      "expense_date": "2025-09-07",
+      "expense_time": "14:26:45.965331",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 11:26:45.965331",
+      "updated_at": "2025-09-07 11:26:45.965331",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 103,
+    "fields": {
+      "profile": 12,
+      "category": 130,
+      "amount": "300",
+      "currency": "RUB",
+      "description": "Аспирин табл",
+      "expense_date": "2025-09-07",
+      "expense_time": "14:27:05.043935",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 11:27:05.044474",
+      "updated_at": "2025-09-07 11:27:05.044474",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 104,
+    "fields": {
+      "profile": 12,
+      "category": 126,
+      "amount": "49",
+      "currency": "RUB",
+      "description": "Маршрутка",
+      "expense_date": "2025-09-07",
+      "expense_time": "14:27:23.907748",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 11:27:23.907748",
+      "updated_at": "2025-09-07 11:27:23.907748",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 105,
+    "fields": {
+      "profile": 12,
+      "category": 126,
+      "amount": "45",
+      "currency": "RUB",
+      "description": "Маршрутка",
+      "expense_date": "2025-09-07",
+      "expense_time": "14:32:56.747765",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 11:32:56.747765",
+      "updated_at": "2025-09-07 11:32:56.747765",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 106,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "420",
+      "currency": "RUB",
+      "description": "шаурма",
+      "expense_date": "2025-09-07",
+      "expense_time": "15:25:35.269048",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 12:25:35.269048",
+      "updated_at": "2025-09-07 12:25:35.269048",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 107,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "250",
+      "currency": "RUB",
+      "description": "Круасан",
+      "expense_date": "2025-09-07",
+      "expense_time": "15:45:08.563382",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 12:45:08.563382",
+      "updated_at": "2025-09-07 12:45:08.563382",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 108,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "433",
+      "currency": "RUB",
+      "description": "Кофе",
+      "expense_date": "2025-09-07",
+      "expense_time": "15:45:19.330848",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 12:45:19.330848",
+      "updated_at": "2025-09-07 12:45:19.330848",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 109,
+    "fields": {
+      "profile": 12,
+      "category": 147,
+      "amount": "430",
+      "currency": "RUB",
+      "description": "Поел",
+      "expense_date": "2025-09-07",
+      "expense_time": "16:47:27.604814",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 13:47:27.604814",
+      "updated_at": "2025-09-07 13:47:46.634647",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 110,
+    "fields": {
+      "profile": 12,
+      "category": null,
+      "amount": "3500",
+      "currency": "RUB",
+      "description": "Зал",
+      "expense_date": "2025-09-07",
+      "expense_time": "16:53:11.286947",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 13:53:11.286947",
+      "updated_at": "2025-09-07 13:53:11.286947",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 111,
+    "fields": {
+      "profile": 12,
+      "category": 139,
+      "amount": "200",
+      "currency": "USD",
+      "description": "Claude",
+      "expense_date": "2025-09-08",
+      "expense_time": "00:24:59.482583",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-07 21:24:59.482583",
+      "updated_at": "2025-09-07 21:24:59.482583",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 112,
+    "fields": {
+      "profile": 12,
+      "category": 140,
+      "amount": "450",
+      "currency": "RUB",
+      "description": "Отправил претензию",
+      "expense_date": "2025-09-08",
+      "expense_time": "13:07:09.187246",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-08 10:07:09.187246",
+      "updated_at": "2025-09-08 10:07:39.117064",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 113,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "120",
+      "currency": "RUB",
+      "description": "Шоколадочка",
+      "expense_date": "2025-09-08",
+      "expense_time": "15:50:36.454645",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-08 12:50:36.454645",
+      "updated_at": "2025-09-08 12:50:52.720368",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 114,
+    "fields": {
+      "profile": 12,
+      "category": 126,
+      "amount": "5",
+      "currency": "RUB",
+      "description": "Add cashback percent category sport",
+      "expense_date": "2025-09-08",
+      "expense_time": "16:27:56.233096",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-08 13:27:56.233602",
+      "updated_at": "2025-09-08 13:27:56.233602",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 115,
+    "fields": {
+      "profile": 12,
+      "category": 156,
+      "amount": "9",
+      "currency": "RUB",
+      "description": "Cashback percent category Taxi",
+      "expense_date": "2025-09-08",
+      "expense_time": "16:29:06.087264",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-08 13:29:06.087264",
+      "updated_at": "2025-09-08 13:29:06.087264",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 116,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "193",
+      "currency": "RUB",
+      "description": "Мороженое",
+      "expense_date": "2025-09-08",
+      "expense_time": "21:34:57.528312",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-08 18:34:57.528312",
+      "updated_at": "2025-09-08 18:34:57.539260",
+      "cashback_excluded": false,
+      "cashback_amount": "9.65"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 117,
+    "fields": {
+      "profile": 24,
+      "category": 171,
+      "amount": "150",
+      "currency": "RUB",
+      "description": "Пенал",
+      "expense_date": "2025-09-09",
+      "expense_time": "17:47:13.508859",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-09 14:47:13.508859",
+      "updated_at": "2025-09-09 14:47:13.508859",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 118,
+    "fields": {
+      "profile": 12,
+      "category": 128,
+      "amount": "6500",
+      "currency": "RUB",
+      "description": "Стул кухонный",
+      "expense_date": "2025-09-09",
+      "expense_time": "21:19:47.824582",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-09 18:19:47.824582",
+      "updated_at": "2025-09-09 18:19:47.834496",
+      "cashback_excluded": false,
+      "cashback_amount": "65"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 119,
+    "fields": {
+      "profile": 12,
+      "category": 133,
+      "amount": "8.09",
+      "currency": "RUB",
+      "description": "Сумка 1150",
+      "expense_date": "2025-09-10",
+      "expense_time": "13:17:04.022180",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-10 10:17:04.023179",
+      "updated_at": "2025-09-10 10:17:04.033945",
+      "cashback_excluded": false,
+      "cashback_amount": "0.08"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 120,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "450",
+      "currency": "RUB",
+      "description": "Суп 09.09",
+      "expense_date": "2025-09-09",
+      "expense_time": "12:00:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-10 10:27:43.099840",
+      "updated_at": "2025-09-10 10:27:43.106171",
+      "cashback_excluded": false,
+      "cashback_amount": "22.5"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 121,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "340",
+      "currency": "RUB",
+      "description": "Кофе",
+      "expense_date": "2025-09-09",
+      "expense_time": "12:00:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-10 10:40:28.966272",
+      "updated_at": "2025-09-10 10:40:28.977218",
+      "cashback_excluded": false,
+      "cashback_amount": "17"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 122,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "340",
+      "currency": "RUB",
+      "description": "Кофе",
+      "expense_date": "2025-09-09",
+      "expense_time": "12:00:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-10 10:59:51.027781",
+      "updated_at": "2025-09-10 10:59:51.048730",
+      "cashback_excluded": false,
+      "cashback_amount": "17"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 123,
+    "fields": {
+      "profile": 12,
+      "category": 124,
+      "amount": "440",
+      "currency": "RUB",
+      "description": "Кофе вчера",
+      "expense_date": "2025-09-10",
+      "expense_time": "14:16:30.152146",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-10 11:16:30.152146",
+      "updated_at": "2025-09-10 11:16:30.170631",
+      "cashback_excluded": false,
+      "cashback_amount": "22"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 124,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "300",
+      "currency": "RUB",
+      "description": "Селёдка",
+      "expense_date": "2025-09-08",
+      "expense_time": "12:00:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-10 11:20:15.050224",
+      "updated_at": "2025-09-10 11:20:15.058589",
+      "cashback_excluded": false,
+      "cashback_amount": "21"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 125,
+    "fields": {
+      "profile": 12,
+      "category": 123,
+      "amount": "310",
+      "currency": "RUB",
+      "description": "Селёдка",
+      "expense_date": "2025-09-08",
+      "expense_time": "12:00:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-10 11:23:04.764896",
+      "updated_at": "2025-09-10 11:23:04.776225",
+      "cashback_excluded": false,
+      "cashback_amount": "21.7"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 136,
+    "fields": {
+      "profile": 26,
+      "category": 172,
+      "amount": "100",
+      "currency": "RUB",
+      "description": "Трата 0",
+      "expense_date": "2025-09-13",
+      "expense_time": "12:00:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.029527",
+      "updated_at": "2025-09-13 19:37:11.029527",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 137,
+    "fields": {
+      "profile": 26,
+      "category": 173,
+      "amount": "110",
+      "currency": "RUB",
+      "description": "Трата 1",
+      "expense_date": "2025-09-12",
+      "expense_time": "12:07:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.029527",
+      "updated_at": "2025-09-13 19:37:11.029527",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 138,
+    "fields": {
+      "profile": 26,
+      "category": 172,
+      "amount": "120",
+      "currency": "RUB",
+      "description": "Трата 2",
+      "expense_date": "2025-09-11",
+      "expense_time": "12:14:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.038040",
+      "updated_at": "2025-09-13 19:37:11.038040",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 139,
+    "fields": {
+      "profile": 26,
+      "category": 173,
+      "amount": "130",
+      "currency": "RUB",
+      "description": "Трата 3",
+      "expense_date": "2025-09-10",
+      "expense_time": "12:21:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.046533",
+      "updated_at": "2025-09-13 19:37:11.046533",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 140,
+    "fields": {
+      "profile": 26,
+      "category": 172,
+      "amount": "140",
+      "currency": "RUB",
+      "description": "Трата 4",
+      "expense_date": "2025-09-09",
+      "expense_time": "12:28:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.046533",
+      "updated_at": "2025-09-13 19:37:11.046533",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 141,
+    "fields": {
+      "profile": 26,
+      "category": 173,
+      "amount": "150",
+      "currency": "RUB",
+      "description": "Трата 5",
+      "expense_date": "2025-09-08",
+      "expense_time": "12:35:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.046533",
+      "updated_at": "2025-09-13 19:37:11.046533",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 142,
+    "fields": {
+      "profile": 26,
+      "category": 172,
+      "amount": "160",
+      "currency": "RUB",
+      "description": "Трата 6",
+      "expense_date": "2025-09-07",
+      "expense_time": "12:42:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.063131",
+      "updated_at": "2025-09-13 19:37:11.063131",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 143,
+    "fields": {
+      "profile": 26,
+      "category": 173,
+      "amount": "170",
+      "currency": "RUB",
+      "description": "Трата 7",
+      "expense_date": "2025-09-06",
+      "expense_time": "12:49:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.063131",
+      "updated_at": "2025-09-13 19:37:11.063131",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 144,
+    "fields": {
+      "profile": 26,
+      "category": 172,
+      "amount": "180",
+      "currency": "RUB",
+      "description": "Трата 8",
+      "expense_date": "2025-09-05",
+      "expense_time": "12:56:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.063131",
+      "updated_at": "2025-09-13 19:37:11.063131",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.expense",
+    "pk": 145,
+    "fields": {
+      "profile": 26,
+      "category": 173,
+      "amount": "190",
+      "currency": "RUB",
+      "description": "Трата 9",
+      "expense_date": "2025-09-04",
+      "expense_time": "12:03:00",
+      "receipt_photo": "",
+      "ai_categorized": false,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.063131",
+      "updated_at": "2025-09-13 19:37:11.063131",
+      "cashback_excluded": false,
+      "cashback_amount": "0"
+    }
+  },
+  {
+    "model": "expenses.usersettings",
+    "pk": 10,
+    "fields": {
+      "profile": 12,
+      "budget_alerts_enabled": true,
+      "cashback_enabled": true,
+      "view_scope": "household",
+      "created_at": "2025-08-11 21:20:46.780190",
+      "updated_at": "2025-09-10 06:35:08.265907"
+    }
+  },
+  {
+    "model": "expenses.usersettings",
+    "pk": 11,
+    "fields": {
+      "profile": 24,
+      "budget_alerts_enabled": true,
+      "cashback_enabled": true,
+      "view_scope": "personal",
+      "created_at": "2025-09-09 09:50:19.766513",
+      "updated_at": "2025-09-09 09:50:19.767421"
+    }
+  },
+  {
+    "model": "expenses.subscription",
+    "pk": 17,
+    "fields": {
+      "profile": 12,
+      "type": "month",
+      "payment_method": "stars",
+      "amount": 0,
+      "telegram_payment_charge_id": null,
+      "start_date": "2025-09-05 19:22:02.582368",
+      "end_date": "2025-10-05 19:22:00",
+      "is_active": true,
+      "notification_sent": false,
+      "created_at": "2025-09-05 19:22:02.588607",
+      "updated_at": "2025-09-05 19:33:05.538370"
+    }
+  },
+  {
+    "model": "expenses.subscription",
+    "pk": 19,
+    "fields": {
+      "profile": 12,
+      "type": "month",
+      "payment_method": "stars",
+      "amount": 0,
+      "telegram_payment_charge_id": null,
+      "start_date": "2025-09-05 19:30:40.404185",
+      "end_date": "2025-10-05 19:30:37",
+      "is_active": true,
+      "notification_sent": false,
+      "created_at": "2025-09-05 19:30:40.480367",
+      "updated_at": "2025-09-05 19:33:05.538370"
+    }
+  },
+  {
+    "model": "expenses.subscription",
+    "pk": 20,
+    "fields": {
+      "profile": 12,
+      "type": "month",
+      "payment_method": "stars",
+      "amount": 0,
+      "telegram_payment_charge_id": null,
+      "start_date": "2025-09-05 19:31:06.079264",
+      "end_date": "2025-09-07 19:31:03",
+      "is_active": true,
+      "notification_sent": false,
+      "created_at": "2025-09-05 19:31:06.089320",
+      "updated_at": "2025-09-05 19:33:28.461529"
+    }
+  },
+  {
+    "model": "expenses.recurringpayment",
+    "pk": 1,
+    "fields": {
+      "profile": 12,
+      "operation_type": "expense",
+      "expense_category": 128,
+      "income_category": null,
+      "amount": "50000",
+      "currency": "RUB",
+      "description": "квартирка",
+      "day_of_month": 24,
+      "is_active": true,
+      "last_processed": null,
+      "created_at": "2025-09-03 20:34:10.110746",
+      "updated_at": "2025-09-04 09:07:48.835668"
+    }
+  },
+  {
+    "model": "expenses.recurringpayment",
+    "pk": 2,
+    "fields": {
+      "profile": 12,
+      "operation_type": "income",
+      "expense_category": null,
+      "income_category": 2,
+      "amount": "40000",
+      "currency": "RUB",
+      "description": "Премия",
+      "day_of_month": 21,
+      "is_active": true,
+      "last_processed": null,
+      "created_at": "2025-09-03 20:35:36.723759",
+      "updated_at": "2025-09-04 13:58:37.092187"
+    }
+  },
+  {
+    "model": "expenses.categorykeyword",
+    "pk": 23,
+    "fields": {
+      "category": 147,
+      "keyword": "delivery",
+      "language": "en",
+      "usage_count": 0,
+      "normalized_weight": 1.0,
+      "created_at": "2025-09-01 20:10:59.997704"
+    }
+  },
+  {
+    "model": "expenses.categorykeyword",
+    "pk": 24,
+    "fields": {
+      "category": 147,
+      "keyword": "club",
+      "language": "en",
+      "usage_count": 0,
+      "normalized_weight": 1.0,
+      "created_at": "2025-09-01 20:11:00.006741"
+    }
+  },
+  {
+    "model": "expenses.categorykeyword",
+    "pk": 25,
+    "fields": {
+      "category": 137,
+      "keyword": "стрижка",
+      "language": "ru",
+      "usage_count": 0,
+      "normalized_weight": 1.0,
+      "created_at": "2025-09-05 13:06:06.413294"
+    }
+  },
+  {
+    "model": "expenses.categorykeyword",
+    "pk": 26,
+    "fields": {
+      "category": 147,
+      "keyword": "поел",
+      "language": "ru",
+      "usage_count": 0,
+      "normalized_weight": 1.0,
+      "created_at": "2025-09-07 13:47:46.704998"
+    }
+  },
+  {
+    "model": "expenses.cashback",
+    "pk": 8,
+    "fields": {
+      "bank_name": "Альфа",
+      "cashback_percent": 5,
+      "month": 8,
+      "limit_amount": null,
+      "created_at": "2025-08-12 22:07:32.005251",
+      "updated_at": "2025-08-12 22:07:32.005251",
+      "profile_id": 12,
+      "description": "",
+      "category_id": 123
+    }
+  },
+  {
+    "model": "expenses.cashback",
+    "pk": 17,
+    "fields": {
+      "bank_name": "Альфа",
+      "cashback_percent": 1,
+      "month": 9,
+      "limit_amount": null,
+      "created_at": "2025-09-01 20:06:39.493215",
+      "updated_at": "2025-09-01 20:06:39.493215",
+      "profile_id": 12,
+      "description": "",
+      "category_id": null
+    }
+  },
+  {
+    "model": "expenses.cashback",
+    "pk": 18,
+    "fields": {
+      "bank_name": "Альфа",
+      "cashback_percent": 7,
+      "month": 9,
+      "limit_amount": null,
+      "created_at": "2025-09-01 20:08:35.805804",
+      "updated_at": "2025-09-01 20:08:35.805804",
+      "profile_id": 12,
+      "description": "",
+      "category_id": 131
+    }
+  },
+  {
+    "model": "expenses.cashback",
+    "pk": 19,
+    "fields": {
+      "bank_name": "Альфа",
+      "cashback_percent": 7,
+      "month": 9,
+      "limit_amount": null,
+      "created_at": "2025-09-01 20:08:53.776658",
+      "updated_at": "2025-09-01 20:08:53.776658",
+      "profile_id": 12,
+      "description": "",
+      "category_id": 130
+    }
+  },
+  {
+    "model": "expenses.cashback",
+    "pk": 20,
+    "fields": {
+      "bank_name": "Альфа",
+      "cashback_percent": 7,
+      "month": 9,
+      "limit_amount": null,
+      "created_at": "2025-09-01 20:09:12.402331",
+      "updated_at": "2025-09-01 20:09:12.402331",
+      "profile_id": 12,
+      "description": "Запчасти",
+      "category_id": 127
+    }
+  },
+  {
+    "model": "expenses.cashback",
+    "pk": 21,
+    "fields": {
+      "bank_name": "Альфа",
+      "cashback_percent": 7,
+      "month": 9,
+      "limit_amount": null,
+      "created_at": "2025-09-01 20:13:20.149153",
+      "updated_at": "2025-09-01 20:13:20.149153",
+      "profile_id": 12,
+      "description": "",
+      "category_id": 147
+    }
+  },
+  {
+    "model": "expenses.cashback",
+    "pk": 22,
+    "fields": {
+      "bank_name": "Яндекс",
+      "cashback_percent": 5,
+      "month": 9,
+      "limit_amount": null,
+      "created_at": "2025-09-01 20:21:35.248505",
+      "updated_at": "2025-09-01 20:21:35.248505",
+      "profile_id": 12,
+      "description": "",
+      "category_id": 124
+    }
+  },
+  {
+    "model": "expenses.cashback",
+    "pk": 23,
+    "fields": {
+      "bank_name": "Яндекс",
+      "cashback_percent": 10,
+      "month": 9,
+      "limit_amount": null,
+      "created_at": "2025-09-01 20:21:59.378912",
+      "updated_at": "2025-09-01 20:21:59.378912",
+      "profile_id": 12,
+      "description": "",
+      "category_id": 129
+    }
+  },
+  {
+    "model": "expenses.cashback",
+    "pk": 26,
+    "fields": {
+      "bank_name": "Т-Банк",
+      "cashback_percent": 5,
+      "month": 9,
+      "limit_amount": null,
+      "created_at": "2025-09-01 20:24:14.942390",
+      "updated_at": "2025-09-01 20:24:14.942390",
+      "profile_id": 12,
+      "description": "",
+      "category_id": 134
+    }
+  },
+  {
+    "model": "expenses.cashback",
+    "pk": 27,
+    "fields": {
+      "bank_name": "Т-Банк",
+      "cashback_percent": 3,
+      "month": 9,
+      "limit_amount": null,
+      "created_at": "2025-09-01 20:24:35.507392",
+      "updated_at": "2025-09-01 20:24:35.507392",
+      "profile_id": 12,
+      "description": "",
+      "category_id": 125
+    }
+  },
+  {
+    "model": "expenses.cashback",
+    "pk": 31,
+    "fields": {
+      "bank_name": "ВТБ",
+      "cashback_percent": 10,
+      "month": 9,
+      "limit_amount": null,
+      "created_at": "2025-09-05 21:18:18.785446",
+      "updated_at": "2025-09-05 21:18:34.437583",
+      "profile_id": 12,
+      "description": "",
+      "category_id": 136
+    }
+  },
+  {
+    "model": "expenses.cashback",
+    "pk": 32,
+    "fields": {
+      "bank_name": "Т-Банк",
+      "cashback_percent": 5,
+      "month": 9,
+      "limit_amount": null,
+      "created_at": "2025-09-05 21:18:34.428450",
+      "updated_at": "2025-09-05 21:18:34.428450",
+      "profile_id": 12,
+      "description": "",
+      "category_id": 136
+    }
+  },
+  {
+    "model": "expenses.familyinvite",
+    "pk": 1,
+    "fields": {
+      "token": "2jHXWvIZEdGcqsIMIMYnBUc3fNebRvlw2a17swyrH3Y",
+      "created_at": "2025-09-09 09:49:42.993631",
+      "expires_at": "2025-09-11 09:49:42.992634",
+      "is_active": 0,
+      "household_id": 1,
+      "inviter_id": 12,
+      "used_at": "2025-09-09 09:50:41.111015",
+      "used_by_id": 24
+    }
+  },
+  {
+    "model": "expenses.familyinvite",
+    "pk": 2,
+    "fields": {
+      "token": "fG0eW3sK8nhWfwScVOQ2deHEW4Gz3s2JbG8RTF1MSDU",
+      "created_at": "2025-09-09 09:51:14.682710",
+      "expires_at": "2025-09-11 09:51:14.682710",
+      "is_active": 1,
+      "household_id": 1,
+      "inviter_id": 24,
+      "used_at": null,
+      "used_by_id": null
+    }
+  },
+  {
+    "model": "expenses.familyinvite",
+    "pk": 3,
+    "fields": {
+      "token": "01S9waxkJTq0X1gqbKG-DnDeo8yD2Wf25uZbok7xQI4",
+      "created_at": "2025-09-09 10:30:25.581456",
+      "expires_at": "2025-09-11 10:30:25.581456",
+      "is_active": 0,
+      "household_id": 1,
+      "inviter_id": 12,
+      "used_at": null,
+      "used_by_id": null
+    }
+  },
+  {
+    "model": "expenses.familyinvite",
+    "pk": 4,
+    "fields": {
+      "token": "dwA20wuhJVq8ZkuLbMZVxI5J0e8iLSaDt0nao53wr7U",
+      "created_at": "2025-09-09 10:50:16.359260",
+      "expires_at": "2025-09-11 10:50:16.358757",
+      "is_active": 0,
+      "household_id": 1,
+      "inviter_id": 12,
+      "used_at": null,
+      "used_by_id": null
+    }
+  },
+  {
+    "model": "expenses.familyinvite",
+    "pk": 5,
+    "fields": {
+      "token": "ZT70K9ng8KlUGzgxf-h33VDaoFplGGx3dwFD_BMQocQ",
+      "created_at": "2025-09-09 10:50:25.751800",
+      "expires_at": "2025-09-11 10:50:25.751800",
+      "is_active": 1,
+      "household_id": 1,
+      "inviter_id": 12,
+      "used_at": null,
+      "used_by_id": null
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 1,
+    "fields": {
+      "name": "💼 Зарплата",
+      "icon": "💼",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.794762",
+      "updated_at": "2025-09-06 11:57:04.125201",
+      "profile_id": 12,
+      "name_ru": "Зарплата",
+      "name_en": "Salary",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 2,
+    "fields": {
+      "name": "🎁 Премии",
+      "icon": "🎁",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.794762",
+      "updated_at": "2025-09-06 11:57:04.125201",
+      "profile_id": 12,
+      "name_ru": "Премии",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 6,
+    "fields": {
+      "name": "🏠 Аренда недвижимости",
+      "icon": "🏠",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.794762",
+      "updated_at": "2025-09-06 11:57:04.125201",
+      "profile_id": 12,
+      "name_ru": "Аренда недвижимости",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 7,
+    "fields": {
+      "name": "💸 Возвраты и компенсации",
+      "icon": "💸",
+      "is_active": 0,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.794762",
+      "updated_at": "2025-09-06 11:57:04.130338",
+      "profile_id": 12,
+      "name_ru": "Возвраты и компенсации",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 8,
+    "fields": {
+      "name": "💳 Кешбэк",
+      "icon": "💳",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.794762",
+      "updated_at": "2025-09-06 11:57:04.130338",
+      "profile_id": 12,
+      "name_ru": "Кешбэк",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 9,
+    "fields": {
+      "name": "🎉 Подарки",
+      "icon": "🎉",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.794762",
+      "updated_at": "2025-09-06 11:57:04.130338",
+      "profile_id": 12,
+      "name_ru": "Подарки",
+      "name_en": "Gifts",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 10,
+    "fields": {
+      "name": "💰 Прочие доходы",
+      "icon": "💰",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.794762",
+      "updated_at": "2025-09-06 11:57:04.130338",
+      "profile_id": 12,
+      "name_ru": "Прочие доходы",
+      "name_en": "Other Income",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 11,
+    "fields": {
+      "name": "💼 Зарплата",
+      "icon": "💼",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131351",
+      "profile_id": 13,
+      "name_ru": "Зарплата",
+      "name_en": "Salary",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 12,
+    "fields": {
+      "name": "🎁 Премии и бонусы",
+      "icon": "🎁",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131351",
+      "profile_id": 13,
+      "name_ru": "Премии и бонусы",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 13,
+    "fields": {
+      "name": "💻 Фриланс",
+      "icon": "💻",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131351",
+      "profile_id": 13,
+      "name_ru": "Фриланс",
+      "name_en": "Freelance",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 14,
+    "fields": {
+      "name": "📈 Инвестиции",
+      "icon": "📈",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 13,
+      "name_ru": "Инвестиции",
+      "name_en": "Investments",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 15,
+    "fields": {
+      "name": "🏦 Проценты по вкладам",
+      "icon": "🏦",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 13,
+      "name_ru": "Проценты по вкладам",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 16,
+    "fields": {
+      "name": "🏠 Аренда недвижимости",
+      "icon": "🏠",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 13,
+      "name_ru": "Аренда недвижимости",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 17,
+    "fields": {
+      "name": "💸 Возвраты и компенсации",
+      "icon": "💸",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 13,
+      "name_ru": "Возвраты и компенсации",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 18,
+    "fields": {
+      "name": "💳 Кешбэк",
+      "icon": "💳",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 13,
+      "name_ru": "Кешбэк",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 19,
+    "fields": {
+      "name": "🎉 Подарки",
+      "icon": "🎉",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 13,
+      "name_ru": "Подарки",
+      "name_en": "Gifts",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 20,
+    "fields": {
+      "name": "💰 Прочие доходы",
+      "icon": "💰",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 13,
+      "name_ru": "Прочие доходы",
+      "name_en": "Other Income",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 21,
+    "fields": {
+      "name": "💼 Зарплата",
+      "icon": "💼",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 16,
+      "name_ru": "Зарплата",
+      "name_en": "Salary",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 22,
+    "fields": {
+      "name": "🎁 Премии и бонусы",
+      "icon": "🎁",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 16,
+      "name_ru": "Премии и бонусы",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 23,
+    "fields": {
+      "name": "💻 Фриланс",
+      "icon": "💻",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 16,
+      "name_ru": "Фриланс",
+      "name_en": "Freelance",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 24,
+    "fields": {
+      "name": "📈 Инвестиции",
+      "icon": "📈",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 16,
+      "name_ru": "Инвестиции",
+      "name_en": "Investments",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 25,
+    "fields": {
+      "name": "🏦 Проценты по вкладам",
+      "icon": "🏦",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 16,
+      "name_ru": "Проценты по вкладам",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 26,
+    "fields": {
+      "name": "🏠 Аренда недвижимости",
+      "icon": "🏠",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 16,
+      "name_ru": "Аренда недвижимости",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 27,
+    "fields": {
+      "name": "💸 Возвраты и компенсации",
+      "icon": "💸",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 16,
+      "name_ru": "Возвраты и компенсации",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 28,
+    "fields": {
+      "name": "💳 Кешбэк",
+      "icon": "💳",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.797994",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 16,
+      "name_ru": "Кешбэк",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 29,
+    "fields": {
+      "name": "🎉 Подарки",
+      "icon": "🎉",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.800002",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 16,
+      "name_ru": "Подарки",
+      "name_en": "Gifts",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 30,
+    "fields": {
+      "name": "💰 Прочие доходы",
+      "icon": "💰",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.800002",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 16,
+      "name_ru": "Прочие доходы",
+      "name_en": "Other Income",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 31,
+    "fields": {
+      "name": "💼 Зарплата",
+      "icon": "💼",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.800002",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 17,
+      "name_ru": "Зарплата",
+      "name_en": "Salary",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 32,
+    "fields": {
+      "name": "🎁 Премии и бонусы",
+      "icon": "🎁",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.800002",
+      "updated_at": "2025-09-06 11:57:04.131941",
+      "profile_id": 17,
+      "name_ru": "Премии и бонусы",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 33,
+    "fields": {
+      "name": "💻 Фриланс",
+      "icon": "💻",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.800002",
+      "updated_at": "2025-09-06 11:57:04.134951",
+      "profile_id": 17,
+      "name_ru": "Фриланс",
+      "name_en": "Freelance",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 34,
+    "fields": {
+      "name": "📈 Инвестиции",
+      "icon": "📈",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.800002",
+      "updated_at": "2025-09-06 11:57:04.134951",
+      "profile_id": 17,
+      "name_ru": "Инвестиции",
+      "name_en": "Investments",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 35,
+    "fields": {
+      "name": "🏦 Проценты по вкладам",
+      "icon": "🏦",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.800002",
+      "updated_at": "2025-09-06 11:57:04.134951",
+      "profile_id": 17,
+      "name_ru": "Проценты по вкладам",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 36,
+    "fields": {
+      "name": "🏠 Аренда недвижимости",
+      "icon": "🏠",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.800002",
+      "updated_at": "2025-09-06 11:57:04.134951",
+      "profile_id": 17,
+      "name_ru": "Аренда недвижимости",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 37,
+    "fields": {
+      "name": "💸 Возвраты и компенсации",
+      "icon": "💸",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.800002",
+      "updated_at": "2025-09-06 11:57:04.134951",
+      "profile_id": 17,
+      "name_ru": "Возвраты и компенсации",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 38,
+    "fields": {
+      "name": "💳 Кешбэк",
+      "icon": "💳",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.800002",
+      "updated_at": "2025-09-06 11:57:04.134951",
+      "profile_id": 17,
+      "name_ru": "Кешбэк",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 39,
+    "fields": {
+      "name": "🎉 Подарки",
+      "icon": "🎉",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.800002",
+      "updated_at": "2025-09-06 11:57:04.134951",
+      "profile_id": 17,
+      "name_ru": "Подарки",
+      "name_en": "Gifts",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 40,
+    "fields": {
+      "name": "💰 Прочие доходы",
+      "icon": "💰",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-03 08:00:08.800002",
+      "updated_at": "2025-09-06 11:57:04.134951",
+      "profile_id": 17,
+      "name_ru": "Прочие доходы",
+      "name_en": "Other Income",
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 41,
+    "fields": {
+      "name": "⚽ Долги",
+      "icon": "💵",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-04 19:41:16.868217",
+      "updated_at": "2025-09-06 11:57:04.134951",
+      "profile_id": 12,
+      "name_ru": "⚽ Долги",
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 0
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 42,
+    "fields": {
+      "name": "Зарплата",
+      "icon": "💵",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-13 19:19:36.820583",
+      "updated_at": "2025-09-13 19:19:36.820583",
+      "profile_id": 26,
+      "name_ru": null,
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.incomecategory",
+    "pk": 43,
+    "fields": {
+      "name": "Прочее",
+      "icon": "💵",
+      "is_active": 1,
+      "is_default": 0,
+      "created_at": "2025-09-13 19:19:36.836268",
+      "updated_at": "2025-09-13 19:19:36.836268",
+      "profile_id": 26,
+      "name_ru": null,
+      "name_en": null,
+      "original_language": "ru",
+      "is_translatable": 1
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 1,
+    "fields": {
+      "amount": 12000,
+      "currency": "RUB",
+      "description": "Долг",
+      "income_date": "2025-09-03",
+      "income_time": "13:18:31.748404",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": 0.5,
+      "created_at": "2025-09-03 10:18:31.748404",
+      "updated_at": "2025-09-03 10:18:31.748404",
+      "category_id": null,
+      "profile_id": 12
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 2,
+    "fields": {
+      "amount": 1200,
+      "currency": "RUB",
+      "description": "Долг",
+      "income_date": "2025-09-03",
+      "income_time": "13:19:11.549812",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": 0.5,
+      "created_at": "2025-09-03 10:19:11.549812",
+      "updated_at": "2025-09-03 10:19:11.549812",
+      "category_id": null,
+      "profile_id": 12
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 3,
+    "fields": {
+      "amount": 1200,
+      "currency": "RUB",
+      "description": "Возврат долга",
+      "income_date": "2025-09-03",
+      "income_time": "13:22:38.823897",
+      "income_type": "refund",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": 0.8,
+      "created_at": "2025-09-03 10:22:38.824900",
+      "updated_at": "2025-09-03 10:22:38.824900",
+      "category_id": null,
+      "profile_id": 12
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 4,
+    "fields": {
+      "amount": 3000,
+      "currency": "RUB",
+      "description": "Зп",
+      "income_date": "2025-09-03",
+      "income_time": "13:35:40.089736",
+      "income_type": "salary",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": 0.8,
+      "created_at": "2025-09-03 10:35:40.090740",
+      "updated_at": "2025-09-03 10:35:40.090740",
+      "category_id": 1,
+      "profile_id": 12
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 5,
+    "fields": {
+      "amount": 1200,
+      "currency": "RUB",
+      "description": "Долг +",
+      "income_date": "2025-09-03",
+      "income_time": "13:57:35.635217",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": 0.5,
+      "created_at": "2025-09-03 10:57:35.635217",
+      "updated_at": "2025-09-03 10:57:35.635217",
+      "category_id": null,
+      "profile_id": 12
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 6,
+    "fields": {
+      "amount": 37000,
+      "currency": "RUB",
+      "description": "Вернул стекло",
+      "income_date": "2025-09-03",
+      "income_time": "15:53:05.368392",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": 0.5,
+      "created_at": "2025-09-03 12:53:05.368392",
+      "updated_at": "2025-09-03 12:53:05.368392",
+      "category_id": null,
+      "profile_id": 12
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 10,
+    "fields": {
+      "amount": 40000,
+      "currency": "RUB",
+      "description": "Премия",
+      "income_date": "2025-09-03",
+      "income_time": "19:19:00.386781",
+      "income_type": "bonus",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": 0.8,
+      "created_at": "2025-09-03 16:19:00.388243",
+      "updated_at": "2025-09-03 16:19:00.388243",
+      "category_id": 10,
+      "profile_id": 12
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 11,
+    "fields": {
+      "amount": 40000,
+      "currency": "RUB",
+      "description": "премия",
+      "income_date": "2025-09-03",
+      "income_time": "12:00:00",
+      "income_type": "bonus",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": 0.5,
+      "created_at": "2025-09-03 16:23:31.844967",
+      "updated_at": "2025-09-03 16:23:31.844967",
+      "category_id": 10,
+      "profile_id": 12
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 12,
+    "fields": {
+      "amount": 5000,
+      "currency": "RUB",
+      "description": "Доход",
+      "income_date": "2025-09-05",
+      "income_time": "16:35:17.440259",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": 0.7,
+      "created_at": "2025-09-05 13:35:17.441259",
+      "updated_at": "2025-09-05 13:35:17.441259",
+      "category_id": 10,
+      "profile_id": 12
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 13,
+    "fields": {
+      "amount": 2000,
+      "currency": "RUB",
+      "description": "Подгон",
+      "income_date": "2025-09-05",
+      "income_time": "16:35:39.942445",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": 0.9,
+      "created_at": "2025-09-05 13:35:39.943053",
+      "updated_at": "2025-09-05 13:35:39.943053",
+      "category_id": 9,
+      "profile_id": 12
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 14,
+    "fields": {
+      "amount": 200,
+      "currency": "RUB",
+      "description": "Долг",
+      "income_date": "2025-09-07",
+      "income_time": "14:23:06.497479",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": 0.95,
+      "created_at": "2025-09-07 11:23:06.497479",
+      "updated_at": "2025-09-07 11:23:06.497479",
+      "category_id": 41,
+      "profile_id": 12
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 15,
+    "fields": {
+      "amount": 500,
+      "currency": "RUB",
+      "description": "Премия",
+      "income_date": "2025-09-09",
+      "income_time": "12:00:00",
+      "income_type": "bonus",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": 0.8,
+      "created_at": "2025-09-10 09:55:25.234758",
+      "updated_at": "2025-09-10 09:55:25.234758",
+      "category_id": 10,
+      "profile_id": 12
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 16,
+    "fields": {
+      "amount": 400,
+      "currency": "RUB",
+      "description": "Долг",
+      "income_date": "2025-09-09",
+      "income_time": "12:00:00",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": 0.99,
+      "created_at": "2025-09-10 11:24:34.364703",
+      "updated_at": "2025-09-10 11:24:34.364703",
+      "category_id": 41,
+      "profile_id": 12
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 17,
+    "fields": {
+      "amount": 400,
+      "currency": "RUB",
+      "description": "Долг",
+      "income_date": "2025-09-08",
+      "income_time": "12:00:00",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": 1,
+      "created_at": "2025-09-10 11:31:10.335074",
+      "updated_at": "2025-09-10 11:31:10.335074",
+      "category_id": 41,
+      "profile_id": 12
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 24,
+    "fields": {
+      "amount": 1000,
+      "currency": "RUB",
+      "description": "Доход 0",
+      "income_date": "2025-09-13",
+      "income_time": "10:00:00",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.082431",
+      "updated_at": "2025-09-13 19:37:11.082431",
+      "category_id": 42,
+      "profile_id": 26
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 25,
+    "fields": {
+      "amount": 1250,
+      "currency": "RUB",
+      "description": "Доход 1",
+      "income_date": "2025-09-11",
+      "income_time": "10:11:00",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.085868",
+      "updated_at": "2025-09-13 19:37:11.085868",
+      "category_id": 43,
+      "profile_id": 26
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 26,
+    "fields": {
+      "amount": 1500,
+      "currency": "RUB",
+      "description": "Доход 2",
+      "income_date": "2025-09-09",
+      "income_time": "10:22:00",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.085868",
+      "updated_at": "2025-09-13 19:37:11.085868",
+      "category_id": 42,
+      "profile_id": 26
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 27,
+    "fields": {
+      "amount": 1750,
+      "currency": "RUB",
+      "description": "Доход 3",
+      "income_date": "2025-09-07",
+      "income_time": "10:33:00",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.096056",
+      "updated_at": "2025-09-13 19:37:11.096056",
+      "category_id": 43,
+      "profile_id": 26
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 28,
+    "fields": {
+      "amount": 2000,
+      "currency": "RUB",
+      "description": "Доход 4",
+      "income_date": "2025-09-05",
+      "income_time": "10:44:00",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.096056",
+      "updated_at": "2025-09-13 19:37:11.096056",
+      "category_id": 42,
+      "profile_id": 26
+    }
+  },
+  {
+    "model": "expenses.income",
+    "pk": 29,
+    "fields": {
+      "amount": 2250,
+      "currency": "RUB",
+      "description": "Доход 5",
+      "income_date": "2025-09-03",
+      "income_time": "10:55:00",
+      "income_type": "other",
+      "is_recurring": 0,
+      "recurrence_day": null,
+      "ai_categorized": 0,
+      "ai_confidence": null,
+      "created_at": "2025-09-13 19:37:11.102086",
+      "updated_at": "2025-09-13 19:37:11.102086",
+      "category_id": 43,
+      "profile_id": 26
+    }
+  }
+]

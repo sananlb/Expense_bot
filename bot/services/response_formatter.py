@@ -43,8 +43,8 @@ def _format_operations_list(result: Dict, title: str, subtitle: str) -> str:
         date_str = op.get('date', '2024-01-01')
         grouped_ops[date_str].append(op)
 
-    # Сортируем даты в убывающем порядке
-    sorted_dates = sorted(grouped_ops.keys(), reverse=True)
+    # Сортируем даты в возрастающем порядке (старые даты вверху)
+    sorted_dates = sorted(grouped_ops.keys())
 
     # Форматируем результат
     result_parts = []

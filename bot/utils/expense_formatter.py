@@ -223,8 +223,8 @@ def format_expenses_from_dict_list(
 
         grouped_expenses[expense_date].append(exp_data)
 
-    # Сортируем даты в убывающем порядке
-    sorted_dates = sorted(grouped_expenses.keys(), reverse=True)
+    # Сортируем даты в возрастающем порядке (старые даты вверху)
+    sorted_dates = sorted(grouped_expenses.keys())
 
     # Форматируем результат
     result_parts = []

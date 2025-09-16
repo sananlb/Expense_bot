@@ -88,6 +88,17 @@
     .table tr:last-child td{border-bottom:0}
     .badge{display:inline-flex;align-items:center;gap:6px;background:var(--accent);color:#000;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:800}
 
+    /* Mobile table styles */
+    .table-mobile{width:100%;border-collapse:collapse;font-size:14px}
+    .table-mobile th,.table-mobile td{padding:10px 6px;border-bottom:1px solid #F3EFFB}
+    .table-mobile th{background:var(--bg);text-align:left;font-size:13px;font-weight:700}
+    .table-mobile td{vertical-align:middle}
+    .table-mobile tr:last-child td{border-bottom:0}
+
+    /* Show/hide tables based on screen size */
+    .pricing-mobile{display:block}
+    .pricing-desktop{display:none}
+
     /* ===== FAQ ===== */
     .faq{display:grid;grid-template-columns:1fr;gap:10px}
     .faq-item{background:#fff;border:1px solid #F1EDF9;border-radius:12px;overflow:hidden}
@@ -118,6 +129,9 @@
       footer{padding-bottom:32px}
       .cta-sticky{display:none}
       body{padding-bottom:0}
+      /* Switch tables on larger screens */
+      .pricing-mobile{display:none}
+      .pricing-desktop{display:block}
     }
 
     @media(min-width:980px){
@@ -218,11 +232,43 @@
     <div class="container">
       <h2 class="section__title">Тарифы</h2>
       <div class="pricing">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
           <span class="badge">7‑дневный пробный период</span>
           <span class="section__lead">Premium: 150 ⭐/мес · <strong>600 ⭐/6 мес</strong></span>
         </div>
-        <div style="overflow:auto">
+
+        <!-- Мобильная таблица с иконками -->
+        <div class="pricing-mobile">
+          <table class="table-mobile" aria-label="Сравнение тарифов мобильная версия">
+            <thead>
+              <tr>
+                <th style="width:60%">Возможности</th>
+                <th style="width:20%;text-align:center">Free</th>
+                <th style="width:20%;text-align:center;background:var(--primary);color:#fff">Pro</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Базовые функции -->
+              <tr><td>Учёт расходов и доходов</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td></tr>
+              <tr><td>AI‑категоризация</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td></tr>
+              <tr><td>Статистика и сводки</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td></tr>
+              <tr><td>Повторяющиеся операции</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td></tr>
+              <tr><td>Топ‑5 операций</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td></tr>
+              <tr><td>Вопросы о тратах</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td></tr>
+              <!-- Premium функции -->
+              <tr style="background:var(--bg)"><td><strong>📊 Расширенная статистика</strong></td><td style="text-align:center;color:#ef4444;font-size:20px">✗</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td></tr>
+              <tr style="background:var(--bg)"><td><strong>🎤 Голосовой ввод</strong></td><td style="text-align:center;color:#ef4444;font-size:20px">✗</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td></tr>
+              <tr style="background:var(--bg)"><td><strong>📁 Свои категории</strong></td><td style="text-align:center;color:#ef4444;font-size:20px">✗</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td></tr>
+              <tr style="background:var(--bg)"><td><strong>💳 Кешбэк‑трекер</strong></td><td style="text-align:center;color:#ef4444;font-size:20px">✗</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td></tr>
+              <tr style="background:var(--bg)"><td><strong>👨‍👩‍👧 Семейный доступ</strong></td><td style="text-align:center;color:#ef4444;font-size:20px">✗</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td></tr>
+              <tr style="background:var(--bg)"><td><strong>📄 PDF‑отчёты</strong></td><td style="text-align:center;color:#ef4444;font-size:20px">✗</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td></tr>
+              <tr style="background:var(--bg)"><td><strong>💱 Мультивалюта</strong></td><td style="text-align:center;color:#ef4444;font-size:20px">✗</td><td style="text-align:center;color:#10b981;font-size:20px">✓</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Десктопная таблица (оригинальная) -->
+        <div class="pricing-desktop" style="overflow:auto">
           <table class="table" aria-label="Сравнение тарифов">
             <thead>
               <tr>
@@ -240,6 +286,7 @@
               <tr><td><strong>Панель «Топ‑5 быстрых операций»</strong></td><td>✓</td><td>✓</td></tr>
               <tr><td><strong>Естественные вопросы о тратах</strong></td><td>✓</td><td>✓</td></tr>
               <!-- Premium‑only -->
+              <tr><td>Расширенная статистика</td><td>✗</td><td>✓</td></tr>
               <tr><td>Голосовой ввод</td><td>✗</td><td>✓</td></tr>
               <tr><td>Свои категории</td><td>✗</td><td>✓</td></tr>
               <tr><td>Кешбэк‑трекер + закреплённая заметка</td><td>✗</td><td>✓</td></tr>
@@ -249,6 +296,7 @@
             </tbody>
           </table>
         </div>
+
         <div class="cta-row" style="margin-top:12px">
           <a class="btn btn--primary" href="https://t.me/showmecoinbot?start=landing" target="_blank" rel="noopener">✈️ Запустить бота в Telegram</a>
         </div>

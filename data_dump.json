@@ -1,0 +1,708 @@
+[
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$600000$oEZ6SgyTCgig42h3bIFj1f$COFZA9vb5PEiobRGSSmp6B7kM4HA6kr5Q+NaTgfqkW0=",
+    "last_login": "2025-09-05T12:41:33.590Z",
+    "is_superuser": true,
+    "username": "admin",
+    "first_name": "",
+    "last_name": "",
+    "email": "admin@expensebot.com",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2025-08-04T14:18:31.879Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "jv1hhjw7s2matg63blbsuvzfqfw0fn22",
+  "fields": {
+    "session_data": ".eJxVjDsOwyAQRO9CHSFYPvamTO8zID5LcBKBZOwqyt1jSy6SaqR5b-bNnN_W4rZOi5sTuzLJLr9d8PFJ9QDp4eu98djqusyBHwo_aedTS_S6ne7fQfG97GsvMlmFgxYkwp5Gwoh2sEohpAASjTUmEJKIY4oerIgUSSJmyKB1Yp8vvcc3Uw:1uuVkz:GLzxLRPADRu5Q4jl-5QutokkH68Agtzwcx4M_Izqs4M",
+    "expire_date": "2025-09-19T12:41:33.601Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "pxtve4iqkg3cewa6cusulp1fuevd8wtg",
+  "fields": {
+    "session_data": ".eJxVjDsOwyAQRO9CHSFYPvamTO8zID5LcBKBZOwqyt1jSy6SaqR5b-bNnN_W4rZOi5sTuzLJLr9d8PFJ9QDp4eu98djqusyBHwo_aedTS_S6ne7fQfG97GsvMlmFgxYkwp5Gwoh2sEohpAASjTUmEJKIY4oerIgUSSJmyKB1Yp8vvcc3Uw:1uiw5S:GchjXaXmJMlP4bVkRF8p_5GIweiMCIAcy-jKaGoYUxY",
+    "expire_date": "2025-08-18T14:22:50.831Z"
+  }
+},
+{
+  "model": "django_celery_beat.crontabschedule",
+  "pk": 1,
+  "fields": {
+    "minute": "0",
+    "hour": "10",
+    "day_of_month": "*",
+    "month_of_year": "*",
+    "day_of_week": "*",
+    "timezone": "Europe/Moscow"
+  }
+},
+{
+  "model": "django_celery_beat.crontabschedule",
+  "pk": 2,
+  "fields": {
+    "minute": "0",
+    "hour": "12",
+    "day_of_month": "*",
+    "month_of_year": "*",
+    "day_of_week": "*",
+    "timezone": "Europe/Moscow"
+  }
+},
+{
+  "model": "django_celery_beat.crontabschedule",
+  "pk": 3,
+  "fields": {
+    "minute": "0",
+    "hour": "20",
+    "day_of_month": "*",
+    "month_of_year": "*",
+    "day_of_week": "*",
+    "timezone": "Europe/Moscow"
+  }
+},
+{
+  "model": "django_celery_beat.crontabschedule",
+  "pk": 4,
+  "fields": {
+    "minute": "*/30",
+    "hour": "*",
+    "day_of_month": "*",
+    "month_of_year": "*",
+    "day_of_week": "*",
+    "timezone": "Europe/Moscow"
+  }
+},
+{
+  "model": "django_celery_beat.crontabschedule",
+  "pk": 5,
+  "fields": {
+    "minute": "0",
+    "hour": "3",
+    "day_of_month": "*",
+    "month_of_year": "*",
+    "day_of_week": "0",
+    "timezone": "Europe/Moscow"
+  }
+},
+{
+  "model": "django_celery_beat.crontabschedule",
+  "pk": 6,
+  "fields": {
+    "minute": "0",
+    "hour": "5",
+    "day_of_month": "*",
+    "month_of_year": "*",
+    "day_of_week": "*",
+    "timezone": "Europe/Moscow"
+  }
+},
+{
+  "model": "django_celery_beat.crontabschedule",
+  "pk": 7,
+  "fields": {
+    "minute": "*/15",
+    "hour": "*",
+    "day_of_month": "*",
+    "month_of_year": "*",
+    "day_of_week": "*",
+    "timezone": "Europe/Moscow"
+  }
+},
+{
+  "model": "django_celery_beat.crontabschedule",
+  "pk": 8,
+  "fields": {
+    "minute": "0",
+    "hour": "2",
+    "day_of_month": "*",
+    "month_of_year": "*",
+    "day_of_week": "*",
+    "timezone": "Europe/Moscow"
+  }
+},
+{
+  "model": "django_celery_beat.crontabschedule",
+  "pk": 9,
+  "fields": {
+    "minute": "0",
+    "hour": "4",
+    "day_of_month": "*",
+    "month_of_year": "*",
+    "day_of_week": "*",
+    "timezone": "Europe/Moscow"
+  }
+},
+{
+  "model": "django_celery_beat.periodictasks",
+  "pk": 1,
+  "fields": {
+    "last_update": "2025-09-15T21:08:41.470Z"
+  }
+},
+{
+  "model": "django_celery_beat.periodictask",
+  "pk": 1,
+  "fields": {
+    "name": "send-daily-admin-report",
+    "task": "expense_bot.celery_tasks.send_daily_admin_report",
+    "interval": null,
+    "crontab": 1,
+    "solar": null,
+    "clocked": null,
+    "args": "[]",
+    "kwargs": "{}",
+    "queue": "reports",
+    "exchange": null,
+    "routing_key": null,
+    "headers": "{}",
+    "priority": null,
+    "expires": null,
+    "expire_seconds": null,
+    "one_off": false,
+    "start_time": null,
+    "enabled": true,
+    "last_run_at": null,
+    "total_run_count": 0,
+    "date_changed": "2025-09-15T21:08:41.417Z",
+    "description": ""
+  }
+},
+{
+  "model": "django_celery_beat.periodictask",
+  "pk": 2,
+  "fields": {
+    "name": "process-recurring-payments",
+    "task": "expense_bot.celery_tasks.process_recurring_payments",
+    "interval": null,
+    "crontab": 2,
+    "solar": null,
+    "clocked": null,
+    "args": "[]",
+    "kwargs": "{}",
+    "queue": "recurring",
+    "exchange": null,
+    "routing_key": null,
+    "headers": "{}",
+    "priority": null,
+    "expires": null,
+    "expire_seconds": null,
+    "one_off": false,
+    "start_time": null,
+    "enabled": true,
+    "last_run_at": "2025-09-10T09:00:00.037Z",
+    "total_run_count": 1,
+    "date_changed": "2025-09-15T21:08:41.425Z",
+    "description": ""
+  }
+},
+{
+  "model": "django_celery_beat.periodictask",
+  "pk": 3,
+  "fields": {
+    "name": "send-monthly-reports",
+    "task": "expense_bot.celery_tasks.send_monthly_reports",
+    "interval": null,
+    "crontab": 3,
+    "solar": null,
+    "clocked": null,
+    "args": "[]",
+    "kwargs": "{}",
+    "queue": "reports",
+    "exchange": null,
+    "routing_key": null,
+    "headers": "{}",
+    "priority": null,
+    "expires": null,
+    "expire_seconds": null,
+    "one_off": false,
+    "start_time": null,
+    "enabled": true,
+    "last_run_at": null,
+    "total_run_count": 0,
+    "date_changed": "2025-09-15T21:08:41.433Z",
+    "description": ""
+  }
+},
+{
+  "model": "django_celery_beat.periodictask",
+  "pk": 4,
+  "fields": {
+    "name": "check-budget-limits",
+    "task": "expense_bot.celery_tasks.check_budget_limits",
+    "interval": null,
+    "crontab": 4,
+    "solar": null,
+    "clocked": null,
+    "args": "[]",
+    "kwargs": "{}",
+    "queue": "notifications",
+    "exchange": null,
+    "routing_key": null,
+    "headers": "{}",
+    "priority": null,
+    "expires": null,
+    "expire_seconds": null,
+    "one_off": false,
+    "start_time": null,
+    "enabled": true,
+    "last_run_at": "2025-09-10T09:00:00.006Z",
+    "total_run_count": 1,
+    "date_changed": "2025-09-15T21:08:41.441Z",
+    "description": ""
+  }
+},
+{
+  "model": "django_celery_beat.periodictask",
+  "pk": 5,
+  "fields": {
+    "name": "cleanup-old-expenses",
+    "task": "expense_bot.celery_tasks.cleanup_old_expenses",
+    "interval": null,
+    "crontab": 5,
+    "solar": null,
+    "clocked": null,
+    "args": "[]",
+    "kwargs": "{}",
+    "queue": "maintenance",
+    "exchange": null,
+    "routing_key": null,
+    "headers": "{}",
+    "priority": null,
+    "expires": null,
+    "expire_seconds": null,
+    "one_off": false,
+    "start_time": null,
+    "enabled": true,
+    "last_run_at": null,
+    "total_run_count": 0,
+    "date_changed": "2025-09-15T21:08:41.449Z",
+    "description": ""
+  }
+},
+{
+  "model": "django_celery_beat.periodictask",
+  "pk": 6,
+  "fields": {
+    "name": "update-top5-keyboards",
+    "task": "expense_bot.celery_tasks.update_top5_keyboards",
+    "interval": null,
+    "crontab": 6,
+    "solar": null,
+    "clocked": null,
+    "args": "[]",
+    "kwargs": "{}",
+    "queue": "reports",
+    "exchange": null,
+    "routing_key": null,
+    "headers": "{}",
+    "priority": null,
+    "expires": null,
+    "expire_seconds": null,
+    "one_off": false,
+    "start_time": null,
+    "enabled": true,
+    "last_run_at": null,
+    "total_run_count": 0,
+    "date_changed": "2025-09-15T21:08:41.456Z",
+    "description": ""
+  }
+},
+{
+  "model": "django_celery_beat.periodictask",
+  "pk": 7,
+  "fields": {
+    "name": "system-health-check",
+    "task": "expense_bot.celery_tasks.system_health_check",
+    "interval": null,
+    "crontab": 7,
+    "solar": null,
+    "clocked": null,
+    "args": "[]",
+    "kwargs": "{}",
+    "queue": "monitoring",
+    "exchange": null,
+    "routing_key": null,
+    "headers": "{}",
+    "priority": null,
+    "expires": null,
+    "expire_seconds": null,
+    "one_off": false,
+    "start_time": null,
+    "enabled": true,
+    "last_run_at": "2025-09-10T09:15:00.000Z",
+    "total_run_count": 2,
+    "date_changed": "2025-09-15T21:08:41.464Z",
+    "description": ""
+  }
+},
+{
+  "model": "django_celery_beat.periodictask",
+  "pk": 8,
+  "fields": {
+    "name": "collect-daily-analytics",
+    "task": "expense_bot.celery_tasks.collect_daily_analytics",
+    "interval": null,
+    "crontab": 8,
+    "solar": null,
+    "clocked": null,
+    "args": "[]",
+    "kwargs": "{}",
+    "queue": "analytics",
+    "exchange": null,
+    "routing_key": null,
+    "headers": "{}",
+    "priority": null,
+    "expires": null,
+    "expire_seconds": null,
+    "one_off": false,
+    "start_time": null,
+    "enabled": true,
+    "last_run_at": null,
+    "total_run_count": 0,
+    "date_changed": "2025-09-15T21:08:41.470Z",
+    "description": ""
+  }
+},
+{
+  "model": "django_celery_beat.periodictask",
+  "pk": 9,
+  "fields": {
+    "name": "celery.backend_cleanup",
+    "task": "celery.backend_cleanup",
+    "interval": null,
+    "crontab": 9,
+    "solar": null,
+    "clocked": null,
+    "args": "[]",
+    "kwargs": "{}",
+    "queue": null,
+    "exchange": null,
+    "routing_key": null,
+    "headers": "{}",
+    "priority": null,
+    "expires": null,
+    "expire_seconds": 43200,
+    "one_off": false,
+    "start_time": null,
+    "enabled": true,
+    "last_run_at": null,
+    "total_run_count": 0,
+    "date_changed": "2025-09-10T08:48:20.151Z",
+    "description": ""
+  }
+},
+{
+  "model": "django_celery_beat.periodictask",
+  "pk": 10,
+  "fields": {
+    "name": "process-held-affiliate-commissions",
+    "task": "expense_bot.celery_tasks.process_held_affiliate_commissions",
+    "interval": null,
+    "crontab": 8,
+    "solar": null,
+    "clocked": null,
+    "args": "[]",
+    "kwargs": "{}",
+    "queue": "maintenance",
+    "exchange": null,
+    "routing_key": null,
+    "headers": "{}",
+    "priority": null,
+    "expires": null,
+    "expire_seconds": null,
+    "one_off": false,
+    "start_time": null,
+    "enabled": true,
+    "last_run_at": null,
+    "total_run_count": 0,
+    "date_changed": "2025-09-10T08:48:20.214Z",
+    "description": ""
+  }
+},
+{
+  "model": "expenses.profile",
+  "pk": 12,
+  "fields": {
+    "telegram_id": 881292737,
+    "language_code": "ru",
+    "timezone": "Europe/Moscow",
+    "currency": "RUB",
+    "is_active": true,
+    "created_at": "2025-08-11T21:20:46.775Z",
+    "updated_at": "2025-09-09T15:25:35.963Z",
+    "is_beta_tester": false,
+    "beta_access_key": null,
+    "referrer": null,
+    "referral_code": null,
+    "last_activity": null,
+    "accepted_privacy": false,
+    "accepted_offer": false,
+    "household": 1
+  }
+},
+{
+  "model": "expenses.profile",
+  "pk": 13,
+  "fields": {
+    "telegram_id": 8025454878,
+    "language_code": "ru",
+    "timezone": "UTC",
+    "currency": "RUB",
+    "is_active": true,
+    "created_at": "2025-08-11T22:15:52.793Z",
+    "updated_at": "2025-08-11T22:15:52.793Z",
+    "is_beta_tester": false,
+    "beta_access_key": null,
+    "referrer": null,
+    "referral_code": null,
+    "last_activity": null,
+    "accepted_privacy": false,
+    "accepted_offer": false,
+    "household": null
+  }
+},
+{
+  "model": "expenses.profile",
+  "pk": 16,
+  "fields": {
+    "telegram_id": 349848835,
+    "language_code": "ru",
+    "timezone": "UTC",
+    "currency": "RUB",
+    "is_active": true,
+    "created_at": "2025-08-17T21:19:41.122Z",
+    "updated_at": "2025-08-17T21:19:41.122Z",
+    "is_beta_tester": false,
+    "beta_access_key": null,
+    "referrer": null,
+    "referral_code": null,
+    "last_activity": null,
+    "accepted_privacy": false,
+    "accepted_offer": false,
+    "household": null
+  }
+},
+{
+  "model": "expenses.profile",
+  "pk": 17,
+  "fields": {
+    "telegram_id": 369945067,
+    "language_code": "ru",
+    "timezone": "UTC",
+    "currency": "RUB",
+    "is_active": true,
+    "created_at": "2025-08-26T18:28:54.509Z",
+    "updated_at": "2025-08-26T18:28:54.509Z",
+    "is_beta_tester": false,
+    "beta_access_key": null,
+    "referrer": null,
+    "referral_code": null,
+    "last_activity": null,
+    "accepted_privacy": false,
+    "accepted_offer": false,
+    "household": null
+  }
+},
+{
+  "model": "expenses.profile",
+  "pk": 18,
+  "fields": {
+    "telegram_id": 123456789,
+    "language_code": "ru",
+    "timezone": "UTC",
+    "currency": "RUB",
+    "is_active": true,
+    "created_at": "2025-09-04T09:57:48.587Z",
+    "updated_at": "2025-09-04T09:57:48.587Z",
+    "is_beta_tester": false,
+    "beta_access_key": null,
+    "referrer": null,
+    "referral_code": null,
+    "last_activity": null,
+    "accepted_privacy": false,
+    "accepted_offer": false,
+    "household": null
+  }
+},
+{
+  "model": "expenses.profile",
+  "pk": 24,
+  "fields": {
+    "telegram_id": 7967547829,
+    "language_code": "ru",
+    "timezone": "Europe/Moscow",
+    "currency": "RUB",
+    "is_active": true,
+    "created_at": "2025-09-09T09:50:19.753Z",
+    "updated_at": "2025-09-09T09:50:41.102Z",
+    "is_beta_tester": false,
+    "beta_access_key": null,
+    "referrer": null,
+    "referral_code": null,
+    "last_activity": null,
+    "accepted_privacy": false,
+    "accepted_offer": false,
+    "household": 1
+  }
+},
+{
+  "model": "expenses.profile",
+  "pk": 25,
+  "fields": {
+    "telegram_id": 999999999,
+    "language_code": "ru",
+    "timezone": "UTC",
+    "currency": "RUB",
+    "is_active": true,
+    "created_at": "2025-08-11T11:11:15.030Z",
+    "updated_at": "2025-09-10T11:11:15.030Z",
+    "is_beta_tester": false,
+    "beta_access_key": null,
+    "referrer": null,
+    "referral_code": null,
+    "last_activity": null,
+    "accepted_privacy": false,
+    "accepted_offer": false,
+    "household": null
+  }
+},
+{
+  "model": "expenses.profile",
+  "pk": 26,
+  "fields": {
+    "telegram_id": 555001,
+    "language_code": "ru",
+    "timezone": "UTC",
+    "currency": "RUB",
+    "is_active": true,
+    "created_at": "2025-09-13T19:19:36.813Z",
+    "updated_at": "2025-09-13T19:19:36.813Z",
+    "is_beta_tester": false,
+    "beta_access_key": null,
+    "referrer": null,
+    "referral_code": null,
+    "last_activity": null,
+    "accepted_privacy": false,
+    "accepted_offer": false,
+    "household": null
+  }
+},
+{
+  "model": "expenses.household",
+  "pk": 1,
+  "fields": {
+    "created_at": "2025-09-09T09:43:26.567Z",
+    "name": "Family2",
+    "creator": 12,
+    "max_members": 5,
+    "is_active": true
+  }
+},
+{
+  "model": "expenses.familyinvite",
+  "pk": 1,
+  "fields": {
+    "inviter": 12,
+    "household": 1,
+    "token": "2jHXWvIZEdGcqsIMIMYnBUc3fNebRvlw2a17swyrH3Y",
+    "created_at": "2025-09-09T09:49:42.993Z",
+    "expires_at": "2025-09-11T09:49:42.992Z",
+    "is_active": false,
+    "used_by": 24,
+    "used_at": "2025-09-09T09:50:41.111Z"
+  }
+},
+{
+  "model": "expenses.familyinvite",
+  "pk": 2,
+  "fields": {
+    "inviter": 24,
+    "household": 1,
+    "token": "fG0eW3sK8nhWfwScVOQ2deHEW4Gz3s2JbG8RTF1MSDU",
+    "created_at": "2025-09-09T09:51:14.682Z",
+    "expires_at": "2025-09-11T09:51:14.682Z",
+    "is_active": true,
+    "used_by": null,
+    "used_at": null
+  }
+},
+{
+  "model": "expenses.familyinvite",
+  "pk": 3,
+  "fields": {
+    "inviter": 12,
+    "household": 1,
+    "token": "01S9waxkJTq0X1gqbKG-DnDeo8yD2Wf25uZbok7xQI4",
+    "created_at": "2025-09-09T10:30:25.581Z",
+    "expires_at": "2025-09-11T10:30:25.581Z",
+    "is_active": false,
+    "used_by": null,
+    "used_at": null
+  }
+},
+{
+  "model": "expenses.familyinvite",
+  "pk": 4,
+  "fields": {
+    "inviter": 12,
+    "household": 1,
+    "token": "dwA20wuhJVq8ZkuLbMZVxI5J0e8iLSaDt0nao53wr7U",
+    "created_at": "2025-09-09T10:50:16.359Z",
+    "expires_at": "2025-09-11T10:50:16.358Z",
+    "is_active": false,
+    "used_by": null,
+    "used_at": null
+  }
+},
+{
+  "model": "expenses.familyinvite",
+  "pk": 5,
+  "fields": {
+    "inviter": 12,
+    "household": 1,
+    "token": "ZT70K9ng8KlUGzgxf-h33VDaoFplGGx3dwFD_BMQocQ",
+    "created_at": "2025-09-09T10:50:25.751Z",
+    "expires_at": "2025-09-11T10:50:25.751Z",
+    "is_active": true,
+    "used_by": null,
+    "used_at": null
+  }
+},
+{
+  "model": "expenses.usersettings",
+  "pk": 10,
+  "fields": {
+    "profile": 12,
+    "budget_alerts_enabled": true,
+    "cashback_enabled": true,
+    "view_scope": "household",
+    "created_at": "2025-08-11T21:20:46.780Z",
+    "updated_at": "2025-09-10T06:35:08.265Z"
+  }
+},
+{
+  "model": "expenses.usersettings",
+  "pk": 11,
+  "fields": {
+    "profile": 24,
+    "budget_alerts_enabled": true,
+    "cashback_enabled": true,
+    "view_scope": "personal",
+    "created_at": "2025-09-09T09:50:19.766Z",
+    "updated_at": "2025-09-09T09:50:19.767Z"
+  }
+},
+{
+  "model": "expenses.expensecategory",
+  "pk": 123,
+  "fields": {
+    "profile": 12,
+    "name": 

@@ -175,12 +175,31 @@ def _extract_category_and_bank(text: str) -> Tuple[Optional[str], Optional[str]]
     bank_tokens_idx = [i for i, t in enumerate(tokens) if "банк" in t.lower()]
     if bank_tokens_idx:
         start_bank = bank_tokens_idx[0]
+        # По умолчанию категория — всё до вхождения "банк"
         category_tokens = tokens[:start_bank]
-        bank_tokens = []
-        for t in tokens[start_bank:]:
+        bank_tokens: List[str] = []
+
+        token_at = tokens[start_bank]
+        token_at_l = token_at.lower()
+
+        # Если встречаем паттерн "<Имя> банк" — включаем предыдущее слово в название банка
+        # Пример: "Альфа банк" -> ["Альфа", "банк"]
+        # Также корректно обработает слитные варианты типа "альфа-банк" или "тинькофф-банк".
+        if token_at_l == "банк" and start_bank > 0:
+            # Переназначаем категорию, исключив предыдущее слово — оно часть банка
+            category_tokens = tokens[:start_bank - 1]
+            bank_tokens.append(tokens[start_bank - 1])
+            bank_tokens.append(tokens[start_bank])
+        else:
+            # Случай "альфа-банк", "тинькоффбанк" и т.п. — берём токен начиная с него
+            bank_tokens.append(tokens[start_bank])
+
+        # Добавляем последующие токены, пока не встретили числа или знак процента
+        for t in tokens[start_bank + 1:]:
             if re.fullmatch(r"\d+[\.,]?\d*", t) or t == '%':
                 break
             bank_tokens.append(t)
+
         category_name = " ".join(category_tokens).strip()
         bank_name = " ".join(bank_tokens).strip()
         return (category_name if category_name else None, bank_name if bank_name else None)
