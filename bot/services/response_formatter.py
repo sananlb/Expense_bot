@@ -28,6 +28,87 @@ def _format_incomes_list(result: Dict, title: str, subtitle: str) -> str:
     )
 
 
+def _format_operations_list(result: Dict, title: str, subtitle: str) -> str:
+    """Форматирует список операций (расходы и доходы) в стиле дневника"""
+    from datetime import datetime, date
+    from collections import defaultdict
+
+    operations = result.get('operations', [])
+    if not operations:
+        return f"<b>{title}</b>\n\nОпераций не найдено"
+
+    # Группируем по датам
+    grouped_ops = defaultdict(list)
+    for op in operations[:100]:  # Ограничиваем количество
+        date_str = op.get('date', '2024-01-01')
+        grouped_ops[date_str].append(op)
+
+    # Сортируем даты в убывающем порядке
+    sorted_dates = sorted(grouped_ops.keys(), reverse=True)
+
+    # Форматируем результат
+    result_parts = []
+    result_parts.append(f"<b>{title}</b>")
+    if subtitle:
+        result_parts.append(f"<i>{subtitle}</i>")
+
+    today = date.today()
+    months_ru = {
+        1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
+        5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
+        9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
+    }
+
+    for date_str in sorted_dates:
+        # Парсим дату для красивого вывода
+        try:
+            op_date = datetime.fromisoformat(date_str).date()
+            if op_date == today:
+                formatted_date = "Сегодня"
+            else:
+                day = op_date.day
+                month_name = months_ru.get(op_date.month, op_date.strftime('%B'))
+                formatted_date = f"{day} {month_name}"
+        except:
+            formatted_date = date_str
+
+        result_parts.append(f"\n<b>📅 {formatted_date}</b>")
+
+        # Операции за день
+        day_expenses = 0
+        day_incomes = 0
+
+        for op in grouped_ops[date_str]:
+            time_str = op.get('time', '00:00')
+            description = op.get('description', 'Без описания')
+            amount = op.get('amount', 0)
+            op_type = op.get('type', 'expense')
+
+            # Форматируем сумму
+            amount_str = f"{abs(amount):,.0f}".replace(',', ' ')
+
+            if op_type == 'income':
+                result_parts.append(f"  {time_str} — <b>{description}</b> <b>+{amount_str} ₽</b>")
+                day_incomes += abs(amount)
+            else:
+                result_parts.append(f"  {time_str} — {description} {amount_str} ₽")
+                day_expenses += abs(amount)
+
+        # Итоги за день
+        if day_expenses > 0:
+            exp_str = f"{day_expenses:,.0f}".replace(',', ' ')
+            result_parts.append(f"  💸 <b>Расходы:</b> {exp_str} ₽")
+        if day_incomes > 0:
+            inc_str = f"{day_incomes:,.0f}".replace(',', ' ')
+            result_parts.append(f"  💰 <b>Доходы:</b> +{inc_str} ₽")
+
+    # Предупреждение о лимите
+    if len(operations) > 100:
+        result_parts.append(f"\n⚠️ <i>Показано первые 100 операций</i>")
+
+    return "\n".join(result_parts)
+
+
 def _format_category_stats(result: Dict) -> str:
     cats = result.get('categories', []) or []
     total = result.get('total', 0)
@@ -391,16 +472,14 @@ def format_function_result(func_name: str, result: Dict) -> str:
 
     if func_name == 'get_all_operations':
         ops = result.get('operations', [])
+        total_expense = result.get('total_expense', 0)
+        total_income = result.get('total_income', 0)
         count = result.get('count', len(ops))
         start = result.get('start_date', '')
         end = result.get('end_date', '')
-        lines = [f"Все операции {start}{(' — ' + end) if end and end != start else ''} (показано: {count})"]
-        for op in ops[:50]:
-            sign = '+' if op.get('type') == 'income' else '-'
-            lines.append(f"• {op.get('date','')} {sign}{abs(op.get('amount',0)):,.0f} ₽ — {op.get('description','')}")
-        if len(ops) > 50:
-            lines.append(f"... и ещё {len(ops)-50} операций")
-        return "\n".join(lines)
+        title = f"📊 Операции {start}{(' — ' + end) if end and end != start else ''}"
+        subtitle = f"Найдено: {count} операций (расходы: {total_expense:,.0f} ₽, доходы: {total_income:,.0f} ₽)"
+        return _format_operations_list({'operations': ops}, title, subtitle)
 
     if func_name == 'get_financial_summary':
         period = result.get('period', '')

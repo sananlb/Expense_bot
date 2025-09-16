@@ -1258,39 +1258,7 @@ async def process_description_text(message: types.Message, state: FSMContext):
     await state.set_state(CashbackForm.waiting_for_percent)
 
 
-@router.message(CashbackForm.waiting_for_percent)
-async def process_percent_text(message: types.Message, state: FSMContext):
-    """Обработка ввода процента и сохранение кешбэка"""
-    try:
-        # Убираем символ % если есть
-        percent_text = message.text.strip().replace('%', '').replace(',', '.')
-        percent = float(percent_text)
-        
-        if percent <= 0 or percent > 100:
-            await send_message_with_cleanup(message, state, "❌ Процент должен быть от 0 до 100")
-            return
-        
-        # Сохраняем кешбэк без лимита и месяца
-        data = await state.get_data()
-        user_id = message.from_user.id
-        current_month = date.today().month
-        
-        cashback = await add_cashback(
-            user_id=user_id,
-            category_id=data['category_id'],
-            bank_name=data['bank_name'],
-            cashback_percent=percent,
-            month=current_month,
-            limit_amount=None,
-            description=data.get('description', '')
-        )
-        
-        await state.clear()
-        # Сразу показываем меню кешбэков
-        await show_cashback_menu(message, state)
-        
-    except ValueError:
-        await send_message_with_cleanup(message, state, "❌ Введите корректный процент (например: 5 или 5.5)")
+# Removed duplicate handler for CashbackForm.waiting_for_percent (legacy)
 
 
 @router.message(CashbackForm.waiting_for_limit)

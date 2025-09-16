@@ -170,92 +170,83 @@ def format_incomes_from_dict_list(
 ) -> str:
     """
     Форматирует список доходов из словарей (результат функций)
-    
+
     Args:
         incomes_data: Список словарей с данными о доходах
         title: Заголовок
         subtitle: Подзаголовок с общей информацией
         max_incomes: Максимальное количество для показа
-    
+
     Returns:
-        Отформатированная строка
+        Отформатированная строка в HTML формате
     """
     if not incomes_data:
-        return f"{title or '💰 Доходы'}\n\nДоходов не найдено"
-    
+        return f"<b>{title or '💰 Доходы'}</b>\n\nДоходов не найдено"
+
+    from collections import defaultdict
+
     # Ограничиваем количество
     total_count = len(incomes_data)
     is_limited = total_count > max_incomes
     incomes_to_show = incomes_data[:max_incomes]
-    
-    text = f"{title or '💰 Доходы'}\n"
+
+    # Начинаем формировать результат
+    result_parts = []
+    result_parts.append(f"<b>{title or '💰 Доходы'}</b>")
     if subtitle:
-        text += f"\n{subtitle}\n"
-    text += "\n"
-    
+        result_parts.append(f"<i>{subtitle}</i>")
+
     # Группируем по датам
-    grouped_by_date = {}
+    grouped_by_date = defaultdict(list)
     for income in incomes_to_show:
         date_str = income.get('date', '')
-        if date_str not in grouped_by_date:
-            grouped_by_date[date_str] = []
         grouped_by_date[date_str].append(income)
-    
+
     # Сортируем даты в обратном порядке (новые первыми)
     sorted_dates = sorted(grouped_by_date.keys(), reverse=True)
-    
+
     today = date.today()
-    
+    months_ru = {
+        1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
+        5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
+        9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
+    }
+
     for date_str in sorted_dates:
         # Парсим дату для красивого вывода
         try:
             income_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-            
+
             if income_date == today:
                 formatted_date = "Сегодня"
-            elif income_date == today.replace(day=today.day - 1) if today.day > 1 else None:
-                formatted_date = "Вчера"
             else:
-                months_ru = {
-                    1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
-                    5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
-                    9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
-                }
-                formatted_date = f"{income_date.day} {months_ru.get(income_date.month, income_date.strftime('%B'))}"
+                day = income_date.day
+                month_name = months_ru.get(income_date.month, income_date.strftime('%B'))
+                formatted_date = f"{day} {month_name}"
         except:
             formatted_date = date_str
-        
-        text += f"\n<b>📅 {formatted_date}</b>\n"
-        
+
+        result_parts.append(f"\n<b>📅 {formatted_date}</b>")
+
         day_total = 0
         for income in grouped_by_date[date_str]:
+            time_str = income.get('time', '00:00')
             amount = income.get('amount', 0)
             description = income.get('description', 'Доход')
-            category = income.get('category', '')
-            
-            if len(description) > 30:
-                description = description[:27] + "..."
-            
+
+            # Форматируем сумму
             amount_str = f"{amount:,.0f}".replace(',', ' ')
-            
-            # Форматируем строку дохода
-            text += f"  +{description} {amount_str} ₽"
-            if category and category != 'Без категории':
-                text += f" ({category})"
-            text += "\n"
-            
+
+            # Доходы делаем жирными (как в дневнике)
+            result_parts.append(f"  {time_str} — <b>{description}</b> <b>+{amount_str} ₽</b>")
             day_total += amount
-        
+
         # Итог за день
-        if len(grouped_by_date[date_str]) > 1:
-            text += f"  💰 <b>Итого за день: +{day_total:,.0f} ₽</b>\n"
-    
-    # Общий итог
-    grand_total = sum(income.get('amount', 0) for income in incomes_to_show)
-    text += f"\n<b>💎 Всего: +{grand_total:,.0f} ₽</b>"
-    
+        day_total_str = f"{day_total:,.0f}".replace(',', ' ')
+        result_parts.append(f"  💰 <b>Итого:</b> +{day_total_str} ₽")
+
     # Если было ограничение
     if is_limited:
-        text += f"\n\n<i>💡 Показано {max_incomes} из {total_count} записей</i>"
-    
-    return text
+        result_parts.append(f"\n⚠️ <i>Показано первые {max_incomes} доходов</i>")
+
+    return "\n".join(result_parts)

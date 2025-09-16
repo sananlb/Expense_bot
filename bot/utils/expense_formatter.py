@@ -191,80 +191,104 @@ def format_expenses_from_dict_list(
 ) -> str:
     """
     Универсальная функция для форматирования списка трат из словарей в стиле дневника.
-    
+
     Args:
         expenses_data: Список словарей с данными трат
         title: Заголовок списка
         subtitle: Подзаголовок (например, "Всего: 100 трат на сумму 50000 ₽")
         max_expenses: Максимальное количество трат для показа
         show_warning: Показывать ли предупреждение о лимите
-    
+
     Returns:
-        Отформатированная строка в стиле дневника (без HTML тегов)
+        Отформатированная строка в стиле дневника с HTML форматированием
     """
     if title is None:
         title = get_text('expense_list_title', lang)
-    
+
     if not expenses_data:
-        return f"{title}\n\n{get_text('no_expenses_found', lang)}"
-    
-    from datetime import datetime
-    from types import SimpleNamespace
-    import re
-    
-    # Преобразуем словари в объекты-заглушки
-    expense_objects = []
+        return f"<b>{title}</b>\n\n{get_text('no_expenses_found', lang)}"
+
+    from datetime import datetime, date
+    from collections import defaultdict
+
+    # Группируем по датам
+    grouped_expenses = defaultdict(list)
     for exp_data in expenses_data[:max_expenses]:
-        expense_obj = SimpleNamespace()
-        
         # Парсим дату
         date_str = exp_data.get('date', '2024-01-01')
         try:
-            expense_obj.expense_date = datetime.fromisoformat(date_str).date()
+            expense_date = datetime.fromisoformat(date_str).date()
         except:
-            expense_obj.expense_date = datetime.now().date()
-        
-        # Парсим время
-        time_str = exp_data.get('time', '')
-        if time_str:
-            try:
-                expense_obj.expense_time = datetime.strptime(time_str, '%H:%M').time()
-            except:
-                expense_obj.expense_time = None
-        else:
-            expense_obj.expense_time = None
-        
-        expense_obj.created_at = datetime.now()
-        expense_obj.description = exp_data.get('description', 'Без описания')
-        expense_obj.amount = exp_data.get('amount', 0)
-        expense_obj.currency = exp_data.get('currency', 'RUB')
-        
-        expense_objects.append(expense_obj)
-    
-    # Форматируем с помощью стандартного форматтера
-    if show_warning is None:
-        show_warning = len(expenses_data) > max_expenses
-    
-    result = format_expenses_diary_style(
-        expense_objects,
-        max_expenses=max_expenses,
-        show_warning=show_warning
-    )
-    
-    # Заменяем заголовок
-    full_title = f"{title}"
+            expense_date = datetime.now().date()
+
+        grouped_expenses[expense_date].append(exp_data)
+
+    # Сортируем даты в убывающем порядке
+    sorted_dates = sorted(grouped_expenses.keys(), reverse=True)
+
+    # Форматируем результат
+    result_parts = []
+
+    # Добавляем заголовок и подзаголовок
+    result_parts.append(f"<b>{title}</b>")
     if subtitle:
-        full_title += f"\n<i>{subtitle}</i>"
-    
-    result = result.replace(
-        get_text('diary_title', lang),
-        f"<b>{full_title}</b>"
-    )
-    
-    # Убираем HTML теги для чистого текста
-    result = re.sub(r'<[^>]+>', '', result)
-    
-    return result
+        result_parts.append(f"<i>{subtitle}</i>")
+
+    # Форматируем расходы по дням
+    today = date.today()
+    months_ru = {
+        1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
+        5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
+        9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
+    }
+
+    for expense_date in sorted_dates:
+        # Форматируем дату
+        if expense_date == today:
+            date_str = "Сегодня"
+        else:
+            day = expense_date.day
+            month_name = months_ru.get(expense_date.month, expense_date.strftime('%B'))
+            date_str = f"{day} {month_name}"
+
+        result_parts.append(f"\n<b>📅 {date_str}</b>")
+
+        # Расходы за день
+        day_expenses = grouped_expenses[expense_date]
+        day_total = 0
+
+        for exp_data in day_expenses:
+            time_str = exp_data.get('time', '')
+            if not time_str:
+                time_str = '00:00'
+
+            description = exp_data.get('description', 'Без описания')
+            amount = exp_data.get('amount', 0)
+            currency = exp_data.get('currency', 'RUB')
+
+            # Форматируем сумму
+            amount_str = f"{amount:,.0f}".replace(',', ' ')
+            if currency == 'RUB':
+                amount_str += ' ₽'
+            elif currency == 'USD':
+                amount_str += ' $'
+            elif currency == 'EUR':
+                amount_str += ' €'
+            else:
+                amount_str += f" {currency}"
+
+            result_parts.append(f"  {time_str} — {description} {amount_str}")
+            day_total += amount
+
+        # Добавляем итог за день
+        day_total_str = f"{day_total:,.0f}".replace(',', ' ')
+        result_parts.append(f"  💸 <b>Итого:</b> {day_total_str} ₽")
+
+    # Предупреждение о лимите
+    if show_warning or len(expenses_data) > max_expenses:
+        result_parts.append(f"\n⚠️ <i>Показано первые {max_expenses} трат</i>")
+
+    return "\n".join(result_parts)
 
 
 def is_list_expenses_request(text: str) -> bool:
