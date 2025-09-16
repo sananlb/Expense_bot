@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>Видео-демо Coins Bot</title>
 
   <style>
@@ -314,6 +314,34 @@
       }
     }
 
+    /* Specific rules for Samsung devices and small screens */
+    @media (max-width: 390px) {
+      .demo-phone {
+        width: 180px;
+        height: 390px; /* Maintains 2340:1080 ratio */
+      }
+
+      .carousel-wrapper {
+        height: 450px;
+      }
+
+      video {
+        object-fit: contain !important; /* Prevent video cropping */
+      }
+    }
+
+    @media (max-width: 360px) {
+      .demo-phone {
+        width: 160px;
+        height: 346px; /* Maintains 2340:1080 ratio */
+      }
+
+      .carousel-wrapper {
+        height: 400px;
+        padding: 20px 10px;
+      }
+    }
+
     /* Touch feedback */
     .carousel-wrapper.dragging {
       cursor: grabbing;
@@ -340,7 +368,7 @@
           <div class="video-container">
             <div class="demo-phone">
               <div class="phone-screen">
-                <video id="video1" loop muted playsinline>
+                <video id="video1" autoplay loop muted playsinline>
                   <source src="demos/ai-categorization.mp4" type="video/mp4">
                 </video>
               </div>
@@ -360,7 +388,7 @@
           <div class="video-container">
             <div class="demo-phone">
               <div class="phone-screen">
-                <video id="video2" loop muted playsinline>
+                <video id="video2" autoplay loop muted playsinline>
                   <source src="demos/recent-expenses.mp4" type="video/mp4">
                 </video>
               </div>
@@ -380,7 +408,7 @@
           <div class="video-container">
             <div class="demo-phone">
               <div class="phone-screen">
-                <video id="video3" loop muted playsinline>
+                <video id="video3" autoplay loop muted playsinline>
                   <source src="demos/analytics.mp4" type="video/mp4">
                 </video>
               </div>
@@ -400,7 +428,7 @@
           <div class="video-container">
             <div class="demo-phone">
               <div class="phone-screen">
-                <video id="video4" loop muted playsinline>
+                <video id="video4" autoplay loop muted playsinline>
                   <source src="demos/cashback.mp4" type="video/mp4">
                 </video>
               </div>
@@ -420,7 +448,7 @@
           <div class="video-container">
             <div class="demo-phone">
               <div class="phone-screen">
-                <video id="video5" loop muted playsinline>
+                <video id="video5" autoplay loop muted playsinline>
                   <source src="demos/pdf-reports.mp4" type="video/mp4">
                 </video>
               </div>
@@ -442,7 +470,7 @@
           <div class="video-container">
             <div class="demo-phone">
               <div class="phone-screen">
-                <video id="video7" loop muted playsinline>
+                <video id="video7" autoplay loop muted playsinline>
                   <source src="demos/bot-questions.mp4" type="video/mp4">
                 </video>
               </div>
