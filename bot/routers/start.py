@@ -9,7 +9,7 @@ import asyncio
 import logging
 
 from bot.utils import get_text
-from bot.constants import PRIVACY_URL
+from bot.constants import get_privacy_url_for
 from bot.services.profile import get_or_create_profile, get_user_settings
 from bot.keyboards import main_menu_keyboard, back_close_keyboard
 from bot.services.category import create_default_categories, create_default_income_categories
@@ -74,10 +74,11 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
     # Проверка принятия политики конфиденциальности
     if not profile.accepted_privacy:
         short = get_text('short_privacy_for_acceptance', display_lang)
+        policy_url = get_privacy_url_for(display_lang)
         text_priv = (
             f"<b>📄 Политика конфиденциальности</b>\n\n"
             f"{short}\n\n"
-            f"Полный текст: <a href=\"{PRIVACY_URL}\">по ссылке</a>"
+            f"Полный текст: <a href=\"{policy_url}\">по ссылке</a>"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [

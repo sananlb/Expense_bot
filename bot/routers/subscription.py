@@ -15,7 +15,7 @@ from dateutil.relativedelta import relativedelta
 import logging
 
 from expenses.models import Profile, Subscription, PromoCode, PromoCodeUsage, ReferralBonus
-from bot.constants import OFFER_URL
+from bot.constants import get_offer_url_for
 from django.core.exceptions import ObjectDoesNotExist
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.utils import get_text
@@ -236,10 +236,11 @@ async def process_subscription_purchase(callback: CallbackQuery, state: FSMConte
 
     if not profile.accepted_offer:
         short = get_text('short_offer_for_acceptance', lang)
+        offer_url = get_offer_url_for(lang)
         text = (
             f"<b>📄 Публичная оферта</b>\n\n"
             f"{short}\n\n"
-            f"Полный текст: <a href=\"{OFFER_URL}\">по ссылке</a>"
+            f"Полный текст: <a href=\"{offer_url}\">по ссылке</a>"
         )
         kb = InlineKeyboardBuilder()
         kb.button(text=get_text('btn_decline_offer', lang), callback_data='offer_decline')

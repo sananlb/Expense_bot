@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" data-lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Coins Bot — Умный учет расходов в Telegram</title>
-  <meta name="description" content="Управляйте финансами голосом и текстом. AI-категоризация, семейный бюджет, PDF-отчеты. Начните бесплатно!">
+  <title data-i18n-meta-title>Coins Bot — Умный учет расходов в Telegram</title>
+  <meta name="description" content="Управляйте финансами голосом и текстом. AI-категоризация, семейный бюджет, PDF-отчеты. Начните бесплатно!" data-i18n-meta-desc>
 
   <!-- Favicon -->
   <link rel="icon" type="image/jpeg" href="photo_2025-09-13_10-57-55.jpg">
@@ -215,6 +215,9 @@
       gap: 32px;
       align-items: center;
     }
+    .lang-switch { display: inline-flex; gap: 8px; align-items: center; margin-left: 8px; padding-left: 12px; border-left: 1px solid #e2e8f0; font-size: 14px; }
+    .lang-switch a { color: #334155; text-decoration: none; font-weight: 600; }
+    .lang-switch a.active { color: var(--primary); }
 
     .nav-links a {
       color: var(--dark);
@@ -1985,15 +1988,20 @@
           <span>Coins</span>
         </div>
         <div class="nav-links">
-          <a href="#features">Возможности</a>
-          <a href="#how">Как работает</a>
-          <a href="#pricing">Тарифы</a>
-          <a href="#faq">FAQ</a>
+          <a href="#features" data-i18n="nav_features">Возможности</a>
+          <a href="#how" data-i18n="nav_how">Как работает</a>
+          <a href="#pricing" data-i18n="nav_pricing">Тарифы</a>
+          <a href="#faq" data-i18n="nav_faq">FAQ</a>
+          <span class="lang-switch">
+            <a href="#" id="lang-ru" class="active">RU</a>
+            <span>|</span>
+            <a href="#" id="lang-en">EN</a>
+          </span>
           <a href="https://t.me/showmecoinbot" target="_blank" class="btn btn-primary">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
             </svg>
-            Запустить бота
+            <span data-i18n="btn_launch">Запустить бота</span>
           </a>
         </div>
         <div class="mobile-menu-toggle">
@@ -2005,15 +2013,20 @@
     </div>
     <!-- Mobile Menu -->
     <div class="mobile-menu" id="mobileMenu">
-      <a href="#features">Возможности</a>
-      <a href="#how">Как работает</a>
-      <a href="#pricing">Тарифы</a>
-      <a href="#faq">FAQ</a>
+      <a href="#features" data-i18n="nav_features">Возможности</a>
+      <a href="#how" data-i18n="nav_how">Как работает</a>
+      <a href="#pricing" data-i18n="nav_pricing">Тарифы</a>
+      <a href="#faq" data-i18n="nav_faq">FAQ</a>
+      <div class="lang-switch" id="mobile-lang-switch" style="margin: 8px 0 12px;">
+        <a href="#" id="lang-ru-m" class="active">RU</a>
+        <span>|</span>
+        <a href="#" id="lang-en-m">EN</a>
+      </div>
       <a href="https://t.me/showmecoinbot" target="_blank" class="btn btn-primary">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
         </svg>
-        Запустить бота
+        <span data-i18n="btn_launch">Запустить бота</span>
       </a>
     </div>
   </nav>
@@ -2023,27 +2036,27 @@
     <div class="container">
       <div class="hero-content">
         <div class="hero-text reveal">
-          <h1>Вести бюджет — просто</h1>
-          <p>Скажите "кофе 200" или "зарплата +80000". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.</p>
+          <h1 data-i18n="hero_title">Вести бюджет — просто</h1>
+          <p data-i18n="hero_subtitle">Скажите "кофе 200" или "зарплата +80000". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.</p>
           <div class="hero-buttons">
             <a href="https://t.me/showmecoinbot?start=landing" target="_blank" class="btn btn-primary">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
               </svg>
-              Запустить бота
+              <span data-i18n="btn_launch">Запустить бота</span>
             </a>
             <a href="#demo" class="btn btn-secondary">
-              Посмотреть демо
+              <span data-i18n="btn_demo">Посмотреть демо</span>
             </a>
           </div>
           <div class="trust-badges">
             <div class="badge">
               <div class="badge-icon">✓</div>
-              <span>Бесплатный старт</span>
+              <span data-i18n="trust_free">Бесплатный старт</span>
             </div>
             <div class="badge">
               <div class="badge-icon">✓</div>
-              <span>Без привязки к банкам</span>
+              <span data-i18n="trust_no_banks">Без привязки к банкам</span>
             </div>
           </div>
         </div>
@@ -2068,40 +2081,40 @@
   <section class="features" id="features">
     <div class="container">
       <div class="section-header reveal">
-        <span class="section-tag">Возможности</span>
-        <h2 class="section-title">Всё для контроля финансов</h2>
-        <p class="section-subtitle">Мощные инструменты в простом интерфейсе</p>
+        <span class="section-tag" data-i18n="features_tag">Возможности</span>
+        <h2 class="section-title" data-i18n="features_title">Всё для контроля финансов</h2>
+        <p class="section-subtitle" data-i18n="features_subtitle">Мощные инструменты в простом интерфейсе</p>
       </div>
       <div class="features-grid">
         <div class="feature-card reveal">
           <div class="feature-icon">🎙️</div>
-          <h3 class="feature-title">Голосовой ввод</h3>
-          <p class="feature-desc">Продиктуйте траты голосом — бот распознает и сохранит автоматически</p>
+          <h3 class="feature-title" data-i18n="feat_voice">Голосовой ввод</h3>
+          <p class="feature-desc" data-i18n="feat_voice_desc">Продиктуйте траты голосом — бот распознает и сохранит автоматически</p>
         </div>
         <div class="feature-card reveal">
           <div class="feature-icon">🤖</div>
-          <h3 class="feature-title">AI-категоризация</h3>
-          <p class="feature-desc">Умное определение категорий на основе ваших предыдущих трат</p>
+          <h3 class="feature-title" data-i18n="feat_ai_categorization">AI-категоризация</h3>
+          <p class="feature-desc" data-i18n="feat_ai_desc">Умное определение категорий на основе ваших предыдущих трат</p>
         </div>
         <div class="feature-card reveal">
           <div class="feature-icon">👨‍👩‍👧‍👦</div>
-          <h3 class="feature-title">Семейный бюджет</h3>
-          <p class="feature-desc">Ведите общий учет с близкими, контролируйте расходы вместе</p>
+          <h3 class="feature-title" data-i18n="feat_family">Семейный бюджет</h3>
+          <p class="feature-desc" data-i18n="feat_family_desc">Ведите общий учет с близкими, контролируйте расходы вместе</p>
         </div>
         <div class="feature-card reveal">
           <div class="feature-icon">🔁</div>
-          <h3 class="feature-title">Подписки</h3>
-          <p class="feature-desc">Автоматическая запись повторяющихся платежей по расписанию</p>
+          <h3 class="feature-title" data-i18n="feat_subscriptions">Подписки</h3>
+          <p class="feature-desc" data-i18n="feat_subscriptions_desc">Автоматическая запись повторяющихся платежей по расписанию</p>
         </div>
         <div class="feature-card reveal">
           <div class="feature-icon">📊</div>
-          <h3 class="feature-title">PDF-отчеты</h3>
-          <p class="feature-desc">Детальная аналитика с графиками и диаграммами каждый месяц</p>
+          <h3 class="feature-title" data-i18n="slide_pdf">PDF-отчеты</h3>
+          <p class="feature-desc" data-i18n="feat_pdf_desc">Детальная аналитика с графиками и диаграммами каждый месяц</p>
         </div>
         <div class="feature-card reveal">
           <div class="feature-icon">💳</div>
-          <h3 class="feature-title">Кешбэк-трекер</h3>
-          <p class="feature-desc">Отслеживайте кешбэки от разных банков в одном месте</p>
+          <h3 class="feature-title" data-i18n="feat_cashback">Кешбэк-трекер</h3>
+          <p class="feature-desc" data-i18n="feat_cashback_desc">Отслеживайте кешбэки от разных банков в одном месте</p>
         </div>
       </div>
     </div>
@@ -2111,25 +2124,25 @@
   <section class="how-it-works" id="how">
     <div class="container">
       <div class="section-header reveal">
-        <span class="section-tag">Процесс</span>
-        <h2 class="section-title">Как это работает</h2>
-        <p class="section-subtitle">Начните вести учет за 30 секунд</p>
+        <span class="section-tag" data-i18n="how_tag">Процесс</span>
+        <h2 class="section-title" data-i18n="how_title">Как это работает</h2>
+        <p class="section-subtitle" data-i18n="how_subtitle">Начните вести учет за 30 секунд</p>
       </div>
       <div class="steps-container">
         <div class="step reveal">
           <div class="step-number">1</div>
-          <h3 class="step-title">Откройте бота</h3>
-          <p class="step-desc">Перейдите в Telegram и найдите @showmecoinbot или нажмите на кнопку запуска</p>
+          <h3 class="step-title" data-i18n="how_step1_title">Откройте бота</h3>
+          <p class="step-desc" data-i18n="how_step1_desc">Перейдите в Telegram и найдите @showmecoinbot или нажмите на кнопку запуска</p>
         </div>
         <div class="step reveal">
           <div class="step-number">2</div>
-          <h3 class="step-title">Добавьте операцию</h3>
-          <p class="step-desc">Напишите или продиктуйте "такси 540" или "зарплата +80000"</p>
+          <h3 class="step-title" data-i18n="how_step2_title">Добавьте операцию</h3>
+          <p class="step-desc" data-i18n="how_step2_desc">Напишите или продиктуйте "такси 540" или "зарплата +80000"</p>
         </div>
         <div class="step reveal">
           <div class="step-number">3</div>
-          <h3 class="step-title">Получите аналитику</h3>
-          <p class="step-desc">Просматривайте дневник, статистику трат и доходов по категориям</p>
+          <h3 class="step-title" data-i18n="how_step3_title">Получите аналитику</h3>
+          <p class="step-desc" data-i18n="how_step3_desc">Просматривайте дневник, статистику трат и доходов по категориям</p>
         </div>
       </div>
     </div>
@@ -2140,13 +2153,13 @@
     <div class="container">
       <div class="demo-container">
         <div class="demo-text reveal">
-          <h2>Посмотрите бота в действии</h2>
-          <p>Реальные примеры использования от наших пользователей</p>
+          <h2 data-i18n="demo_title">Посмотрите бота в действии</h2>
+          <p data-i18n="demo_subtitle">Реальные примеры использования от наших пользователей</p>
           <ul class="demo-list">
-            <li>Быстрая запись трат одним сообщением</li>
-            <li>Голосовые команды для hands-free режима</li>
-            <li>Умные вопросы о статистике</li>
-            <li>Мгновенные отчеты и графики</li>
+            <li data-i18n="demo_li1">Быстрая запись трат одним сообщением</li>
+            <li data-i18n="demo_li2">Голосовые команды для hands-free режима</li>
+            <li data-i18n="demo_li3">Умные вопросы о статистике</li>
+            <li data-i18n="demo_li4">Мгновенные отчеты и графики</li>
           </ul>
           <a href="https://t.me/showmecoinbot" target="_blank" class="btn btn-primary">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -2163,55 +2176,55 @@
                 <div class="carousel-track" id="carouselTrack">
                   <!-- Slide 1: AI категоризация -->
                   <div class="carousel-slide">
-                    <h4 class="slide-title">Умная категоризация</h4>
+                    <h4 class="slide-title" data-i18n="slide_ai">Умная категоризация</h4>
                     <div class="slide-content">
                       <video id="video1" loop muted playsinline>
                         <source src="demos/ai-categorization.mp4" type="video/mp4">
-                        <div class="video-placeholder">AI категоризация</div>
+                        <div class="video-placeholder" data-i18n="slide_ai_ph">AI категоризация</div>
                       </video>
                     </div>
                   </div>
 
                   <!-- Slide 2: Последние траты -->
                   <div class="carousel-slide">
-                    <h4 class="slide-title">Последние траты</h4>
+                    <h4 class="slide-title" data-i18n="slide_recent">Последние траты</h4>
                     <div class="slide-content">
                       <video id="video2" loop muted playsinline>
                         <source src="demos/recent-expenses.mp4" type="video/mp4">
-                        <div class="video-placeholder">История расходов</div>
+                        <div class="video-placeholder" data-i18n="slide_recent_ph">История расходов</div>
                       </video>
                     </div>
                   </div>
 
                   <!-- Slide 3: Аналитика -->
                   <div class="carousel-slide">
-                    <h4 class="slide-title">Аналитика расходов</h4>
+                    <h4 class="slide-title" data-i18n="slide_analytics">Аналитика расходов</h4>
                     <div class="slide-content">
                       <video id="video3" loop muted playsinline>
                         <source src="demos/analytics.mp4" type="video/mp4">
-                        <div class="video-placeholder">Топ категорий</div>
+                        <div class="video-placeholder" data-i18n="slide_analytics_ph">Топ категорий</div>
                       </video>
                     </div>
                   </div>
 
                   <!-- Slide 4: Кэшбэк -->
                   <div class="carousel-slide">
-                    <h4 class="slide-title">Учет кэшбэка</h4>
+                    <h4 class="slide-title" data-i18n="slide_cashback">Учет кэшбэка</h4>
                     <div class="slide-content">
                       <video id="video4" loop muted playsinline>
                         <source src="demos/cashback.mp4" type="video/mp4">
-                        <div class="video-placeholder">Кэшбэк</div>
+                        <div class="video-placeholder" data-i18n="slide_cashback_ph">Кэшбэк</div>
                       </video>
                     </div>
                   </div>
 
                   <!-- Slide 5: PDF отчеты -->
                   <div class="carousel-slide">
-                    <h4 class="slide-title">PDF-отчеты</h4>
+                    <h4 class="slide-title" data-i18n="slide_pdf">PDF-отчеты</h4>
                     <div class="slide-content">
                       <video id="video5" loop muted playsinline>
                         <source src="demos/pdf-reports.mp4" type="video/mp4">
-                        <div class="video-placeholder">Отчеты</div>
+                        <div class="video-placeholder" data-i18n="slide_pdf_ph">Отчеты</div>
                       </video>
                     </div>
                   </div>
@@ -2220,11 +2233,11 @@
 
                   <!-- Slide 7: Вопросы боту -->
                   <div class="carousel-slide">
-                    <h4 class="slide-title">Вопросы боту</h4>
+                    <h4 class="slide-title" data-i18n="slide_questions">Вопросы боту</h4>
                     <div class="slide-content">
                       <video id="video7" loop muted playsinline>
                         <source src="demos/bot-questions.mp4" type="video/mp4">
-                        <div class="video-placeholder">Диалог с ботом</div>
+                        <div class="video-placeholder" data-i18n="slide_questions_ph">Диалог с ботом</div>
                       </video>
                     </div>
                   </div>
@@ -2245,9 +2258,9 @@
   <section class="pricing" id="pricing">
     <div class="container">
       <div class="section-header reveal">
-        <span class="section-tag">Тарифы</span>
-        <h2 class="section-title">Простые и прозрачные цены</h2>
-        <p class="section-subtitle">Начните бесплатно, обновитесь когда будете готовы</p>
+        <span class="section-tag" data-i18n="pricing_tag">Тарифы</span>
+        <h2 class="section-title" data-i18n="pricing_title">Простые и прозрачные цены</h2>
+        <p class="section-subtitle" data-i18n="pricing_subtitle">Начните бесплатно, обновитесь когда будете готовы</p>
       </div>
 
       <!-- Mobile table (shown on small screens) -->
@@ -2260,9 +2273,9 @@
           <table style="width: 100%; border-collapse: collapse;">
             <thead>
               <tr style="background: #f8fafc;">
-                <th style="padding: 12px 8px; text-align: left; font-size: 14px; width: 60%;">Возможности</th>
-                <th style="padding: 12px 8px; text-align: center; font-size: 14px; width: 20%;">Free</th>
-                <th style="padding: 12px 8px; text-align: center; font-size: 14px; width: 20%; color: #8b5cf6; font-weight: 600;">Premium</th>
+                <th style="padding: 12px 8px; text-align: left; font-size: 14px; width: 60%;" data-i18n="pricing_features">Возможности</th>
+                <th style="padding: 12px 8px; text-align: center; font-size: 14px; width: 20%;" data-i18n="pricing_free">Free</th>
+                <th style="padding: 12px 8px; text-align: center; font-size: 14px; width: 20%; color: #8b5cf6; font-weight: 600;" data-i18n="pricing_premium">Premium</th>
               </tr>
             </thead>
             <tbody>
@@ -2274,15 +2287,15 @@
               <tr><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Повторяющиеся операции</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
               <tr><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Мультивалюта</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
               <!-- Premium features -->
-              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Естественные вопросы</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
-              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Расширенная статистика</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
-              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Голосовой ввод</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
-              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Семейный доступ</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
-              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">PDF-отчеты</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
-              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Свои категории</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
-              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Кешбэк-трекер</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
-              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;">Экспорт данных</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
-              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; font-size: 14px;">Приоритетная поддержка</td><td style="text-align:center;color:#94a3b8;font-size:20px;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;" data-i18n="feat_natural_q">Естественные вопросы</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;" data-i18n="feat_adv_stats">Расширенная статистика</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;" data-i18n="feat_voice">Голосовой ввод</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;" data-i18n="feat_family">Семейный доступ</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;" data-i18n="slide_pdf">PDF-отчеты</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;" data-i18n="feat_custom_categories">Свои категории</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;" data-i18n="feat_cashback">Кешбэк-трекер</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; border-bottom: 1px solid #f1f5f9; font-size: 14px;" data-i18n="feat_export">Экспорт данных</td><td style="text-align:center;color:#94a3b8;font-size:20px;border-bottom: 1px solid #f1f5f9;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;border-bottom: 1px solid #f1f5f9;">✓</td></tr>
+              <tr style="background: #fafbfc;"><td style="padding: 10px 8px; font-size: 14px;" data-i18n="feat_priority_support">Приоритетная поддержка</td><td style="text-align:center;color:#94a3b8;font-size:20px;">✗</td><td style="text-align:center;color:#10b981;font-size:20px;">✓</td></tr>
             </tbody>
           </table>
 
@@ -2290,7 +2303,7 @@
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
             </svg>
-            Попробовать 7 дней бесплатно
+            <span data-i18n="pricing_try7">Попробовать 7 дней бесплатно</span>
           </a>
         </div>
       </div>
@@ -2299,47 +2312,47 @@
       <div class="pricing-desktop" style="display: block;">
         <div class="pricing-cards" style="grid-template-columns: repeat(2, 1fr); max-width: 560px; margin: 60px auto 0;">
           <div class="pricing-card reveal">
-            <h3 class="plan-name">Бесплатный</h3>
+            <h3 class="plan-name" data-i18n="plan_free">Бесплатный</h3>
             <div class="plan-price" style="font-size: 24px;">0₽</div>
-            <div class="plan-period">навсегда</div>
+            <div class="plan-period" data-i18n="plan_forever">навсегда</div>
             <ul class="plan-features">
-              <li>Учет расходов и доходов</li>
-              <li>AI-категоризация</li>
-              <li>Базовая статистика</li>
-              <li>Топ-5 операций</li>
-              <li>Повторяющиеся операции</li>
-              <li>Мультивалюта</li>
-              <li class="disabled">Естественные вопросы</li>
-              <li class="disabled">Расширенная статистика</li>
-              <li class="disabled">Голосовой ввод</li>
-              <li class="disabled">Семейный доступ</li>
-              <li class="disabled">PDF-отчеты</li>
-              <li class="disabled">Свои категории</li>
-              <li class="disabled">Кешбэк-трекер</li>
-              <li class="disabled">Экспорт данных</li>
-              <li class="disabled">Приоритетная поддержка</li>
+              <li data-i18n="feat_basic_tracking">Учет расходов и доходов</li>
+              <li data-i18n="feat_ai_categorization">AI-категоризация</li>
+              <li data-i18n="feat_basic_stats">Базовая статистика</li>
+              <li data-i18n="feat_top5">Топ-5 операций</li>
+              <li data-i18n="feat_recurring">Повторяющиеся операции</li>
+              <li data-i18n="feat_multicurrency">Мультивалюта</li>
+              <li class="disabled" data-i18n="feat_natural_q">Естественные вопросы</li>
+              <li class="disabled" data-i18n="feat_adv_stats">Расширенная статистика</li>
+              <li class="disabled" data-i18n="feat_voice">Голосовой ввод</li>
+              <li class="disabled" data-i18n="feat_family">Семейный доступ</li>
+              <li class="disabled" data-i18n="slide_pdf">PDF-отчеты</li>
+              <li class="disabled" data-i18n="feat_custom_categories">Свои категории</li>
+              <li class="disabled" data-i18n="feat_cashback">Кешбэк-трекер</li>
+              <li class="disabled" data-i18n="feat_export">Экспорт данных</li>
+              <li class="disabled" data-i18n="feat_priority_support">Приоритетная поддержка</li>
             </ul>
           </div>
           <div class="pricing-card popular reveal">
             <h3 class="plan-name">Premium</h3>
-            <div class="plan-price" style="font-size: 24px;">150⭐/мес</div>
-            <div class="plan-period">или 600⭐ за 6 месяцев</div>
+            <div class="plan-price" style="font-size: 24px;" data-i18n="plan_price_premium">150⭐/мес</div>
+            <div class="plan-period" data-i18n="plan_period_premium">или 600⭐ за 6 месяцев</div>
             <ul class="plan-features">
-              <li>Учет расходов и доходов</li>
-              <li>AI-категоризация</li>
-              <li>Базовая статистика</li>
-              <li>Топ-5 операций</li>
-              <li>Повторяющиеся операции</li>
-              <li>Мультивалюта</li>
-              <li>Естественные вопросы</li>
-              <li>Расширенная статистика</li>
-              <li>Голосовой ввод</li>
-              <li>Семейный доступ</li>
-              <li>PDF-отчеты</li>
-              <li>Свои категории</li>
-              <li>Кешбэк-трекер</li>
-              <li>Экспорт данных</li>
-              <li>Приоритетная поддержка</li>
+              <li data-i18n="feat_basic_tracking">Учет расходов и доходов</li>
+              <li data-i18n="feat_ai_categorization">AI-категоризация</li>
+              <li data-i18n="feat_basic_stats">Базовая статистика</li>
+              <li data-i18n="feat_top5">Топ-5 операций</li>
+              <li data-i18n="feat_recurring">Повторяющиеся операции</li>
+              <li data-i18n="feat_multicurrency">Мультивалюта</li>
+              <li data-i18n="feat_natural_q">Естественные вопросы</li>
+              <li data-i18n="feat_adv_stats">Расширенная статистика</li>
+              <li data-i18n="feat_voice">Голосовой ввод</li>
+              <li data-i18n="feat_family">Семейный доступ</li>
+              <li data-i18n="slide_pdf">PDF-отчеты</li>
+              <li data-i18n="feat_custom_categories">Свои категории</li>
+              <li data-i18n="feat_cashback">Кешбэк-трекер</li>
+              <li data-i18n="feat_export">Экспорт данных</li>
+              <li data-i18n="feat_priority_support">Приоритетная поддержка</li>
             </ul>
           </div>
         </div>
@@ -2356,56 +2369,302 @@
     </div>
   </section>
 
+  <script>
+    (function() {
+      const dict = {
+        ru: {
+          meta_title: 'Coins Bot — Умный учет расходов в Telegram',
+          meta_desc: 'Управляйте финансами голосом и текстом. AI-категоризация, PDF-отчеты. Начните бесплатно!',
+          nav_features: 'Возможности',
+          nav_how: 'Как работает',
+          nav_pricing: 'Тарифы',
+          nav_faq: 'FAQ',
+          btn_launch: 'Запустить бота',
+          btn_demo: 'Посмотреть демо',
+          hero_title: 'Вести бюджет — просто',
+          hero_subtitle: 'Скажите "кофе 200" или "зарплата +80000". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.',
+          trust_free: 'Бесплатный старт',
+          trust_no_banks: 'Без привязки к банкам',
+          demo_title: 'Посмотрите бота в действии',
+          demo_subtitle: 'Реальные примеры использования от наших пользователей',
+          demo_li1: 'Быстрая запись трат одним сообщением',
+          demo_li2: 'Голосовые команды для hands-free режима',
+          demo_li3: 'Умные вопросы о статистике',
+          demo_li4: 'Мгновенные отчеты и графики',
+          slide_ai: 'Умная категоризация',
+          slide_ai_ph: 'AI категоризация',
+          slide_recent: 'Последние траты',
+          slide_recent_ph: 'История расходов',
+          slide_analytics: 'Аналитика расходов',
+          slide_analytics_ph: 'Топ категорий',
+          slide_cashback: 'Учет кэшбэка',
+          slide_cashback_ph: 'Кэшбэк',
+          slide_pdf: 'PDF-отчеты',
+          slide_pdf_ph: 'Отчеты',
+          slide_questions: 'Вопросы боту',
+          slide_questions_ph: 'Диалог с ботом',
+          pricing_tag: 'Тарифы',
+          pricing_title: 'Простые и прозрачные цены',
+          pricing_subtitle: 'Начните бесплатно, обновитесь когда будете готовы',
+          pricing_badge: 'Premium: 150⭐/мес • <strong>600⭐/6 мес</strong>',
+          pricing_features: 'Возможности',
+          pricing_free: 'Free',
+          pricing_premium: 'Premium',
+          feat_basic_tracking: 'Учет расходов и доходов',
+          feat_ai_categorization: 'AI-категоризация',
+          feat_basic_stats: 'Базовая статистика',
+          feat_top5: 'Топ‑5 операций',
+          feat_recurring: 'Повторяющиеся операции',
+          feat_multicurrency: 'Мультивалюта',
+          feat_natural_q: 'Естественные вопросы',
+          feat_adv_stats: 'Расширенная статистика',
+          feat_voice: 'Голосовой ввод',
+          feat_voice_desc: 'Продиктуйте траты голосом — бот распознает и сохранит автоматически',
+          features_tag: 'Возможности',
+          features_title: 'Всё для контроля финансов',
+          features_subtitle: 'Мощные инструменты в простом интерфейсе',
+          feat_ai_desc: 'Умное определение категорий на основе ваших предыдущих трат',
+          feat_family: 'Семейный доступ',
+          feat_family_desc: 'Ведите общий учет с близкими, контролируйте расходы вместе',
+          feat_subscriptions: 'Подписки',
+          feat_subscriptions_desc: 'Автоматическая запись повторяющихся платежей по расписанию',
+          feat_pdf_desc: 'Детальная аналитика с графиками и диаграммами каждый месяц',
+          feat_cashback: 'Кешбэк-трекер',
+          feat_cashback_desc: 'Отслеживайте кешбэки от разных банков в одном месте',
+          how_tag: 'Процесс',
+          how_title: 'Как это работает',
+          how_subtitle: 'Начните вести учет за 30 секунд',
+          how_step1_title: 'Откройте бота',
+          how_step1_desc: 'Перейдите в Telegram и найдите @showmecoinbot или нажмите на кнопку запуска',
+          how_step2_title: 'Добавьте операцию',
+          how_step2_desc: 'Напишите или продиктуйте "такси 540" или "зарплата +80000"',
+          how_step3_title: 'Получите аналитику',
+          how_step3_desc: 'Просматривайте дневник, статистику трат и доходов по категориям',
+          pricing_try7: 'Попробовать 7 дней бесплатно',
+          plan_free: 'Бесплатный',
+          plan_forever: 'навсегда',
+          plan_price_premium: '150⭐/мес',
+          plan_period_premium: 'или 600⭐ за 6 месяцев',
+          feat_custom_categories: 'Свои категории',
+          feat_export: 'Экспорт данных',
+          feat_priority_support: 'Приоритетная поддержка',
+          cta_title: 'Начните контролировать финансы уже сегодня',
+          cta_subtitle: 'Простой и удобный способ вести учет расходов прямо в Telegram — без дополнительных регистраций и создания аккаунта',
+          cta_btn: 'Запустить бота бесплатно',
+          footer_about: 'Простой и удобный учет финансов прямо в Telegram. Без сложных приложений и привязки к банкам.',
+          footer_company: 'Компания',
+          footer_about_link: 'О нас',
+          footer_privacy: 'Политика конфиденциальности',
+          footer_offer: 'Публичная оферта',
+          footer_copy: '© 2025 Coins Bot. Все права защищены.',
+        },
+        en: {
+          meta_title: 'Coins Bot — Smart expense tracking in Telegram',
+          meta_desc: 'Track your finances with voice and text. AI categorization, PDF reports. Start free!',
+          nav_features: 'Features',
+          nav_how: 'How it works',
+          nav_pricing: 'Pricing',
+          nav_faq: 'FAQ',
+          btn_launch: 'Launch the bot',
+          btn_demo: 'Watch demo',
+          hero_title: 'Simple money management',
+          hero_subtitle: 'Say “coffee 200” or “salary +80000”. AI recognizes, categorizes, and builds reports. No banks, no complex apps.',
+          trust_free: 'Free to start',
+          trust_no_banks: 'No bank linking required',
+          demo_title: 'See the bot in action',
+          demo_subtitle: 'Real examples from our users',
+          demo_li1: 'Log expenses quickly in one message',
+          demo_li2: 'Voice commands for hands‑free mode',
+          demo_li3: 'Smart questions about your stats',
+          demo_li4: 'Instant reports and charts',
+          slide_ai: 'Smart categorization',
+          slide_ai_ph: 'AI categorization',
+          slide_recent: 'Recent expenses',
+          slide_recent_ph: 'Expense history',
+          slide_analytics: 'Spending analytics',
+          slide_analytics_ph: 'Top categories',
+          slide_cashback: 'Cashback tracking',
+          slide_cashback_ph: 'Cashback',
+          slide_pdf: 'PDF reports',
+          slide_pdf_ph: 'Reports',
+          slide_questions: 'Ask the bot',
+          slide_questions_ph: 'Chat with the bot',
+          pricing_tag: 'Pricing',
+          pricing_title: 'Simple and transparent pricing',
+          pricing_subtitle: 'Start free, upgrade when ready',
+          pricing_badge: 'Premium: 150⭐/mo • <strong>600⭐/6 mo</strong>',
+          pricing_features: 'Features',
+          pricing_free: 'Free',
+          pricing_premium: 'Premium',
+          feat_basic_tracking: 'Expense & income tracking',
+          feat_ai_categorization: 'AI categorization',
+          feat_basic_stats: 'Basic statistics',
+          feat_top5: 'Top‑5 operations',
+          feat_recurring: 'Recurring operations',
+          feat_multicurrency: 'Multi‑currency',
+          feat_natural_q: 'Natural‑language questions',
+          feat_adv_stats: 'Advanced analytics',
+          feat_voice: 'Voice input',
+          feat_voice_desc: 'Dictate expenses by voice — the bot recognizes and saves automatically',
+          features_tag: 'Features',
+          features_title: 'Everything to control your finances',
+          features_subtitle: 'Powerful tools in a simple interface',
+          feat_ai_desc: 'Smart category detection based on your history',
+          feat_family: 'Family access',
+          feat_family_desc: 'Track together with your close ones and control spending as a group',
+          feat_subscriptions: 'Subscriptions',
+          feat_subscriptions_desc: 'Automatically log recurring payments on schedule',
+          feat_pdf_desc: 'Detailed analytics with charts every month',
+          feat_cashback: 'Cashback tracker',
+          feat_cashback_desc: 'Track cashbacks from different banks in one place',
+          how_tag: 'Process',
+          how_title: 'How it works',
+          how_subtitle: 'Start in 30 seconds',
+          how_step1_title: 'Open the bot',
+          how_step1_desc: 'Go to Telegram, find @showmecoinbot or click the launch button',
+          how_step2_title: 'Add an entry',
+          how_step2_desc: 'Type or say “taxi 540” or “salary +80000”',
+          how_step3_title: 'Get analytics',
+          how_step3_desc: 'View diary, spending and income stats by categories',
+          pricing_try7: 'Try 7 days free',
+          plan_free: 'Free',
+          plan_forever: 'forever',
+          plan_price_premium: '150⭐/mo',
+          plan_period_premium: 'or 600⭐ for 6 months',
+          feat_custom_categories: 'Custom categories',
+          feat_export: 'Data export',
+          feat_priority_support: 'Priority support',
+          cta_title: 'Start managing your finances today',
+          cta_subtitle: 'A simple and convenient way to track expenses right in Telegram — no extra registration or accounts',
+          cta_btn: 'Launch the bot for free',
+          footer_about: 'Simple and convenient finance tracking in Telegram. No complex apps or bank linking.',
+          footer_company: 'Company',
+          footer_about_link: 'About',
+          footer_privacy: 'Privacy Policy',
+          footer_offer: 'Public Offer',
+          footer_copy: '© 2025 Coins Bot. All rights reserved.',
+          faq_title: 'Frequently Asked Questions',
+          faq_subtitle: 'Everything you need to know to start',
+          faq_q1: 'Is it safe? Where is my data stored?',
+          faq_a1: 'Absolutely safe. We do not require access to bank accounts. All data is fully anonymized and stored on secure, encrypted servers.',
+          faq_q2: 'How does family access work?',
+          faq_a2: 'Create a family group and invite members via a special link. Everyone keeps their own records, while you see an overall view and can plan together.',
+          faq_q3: 'Can I track in multiple currencies?',
+          faq_a3: 'Yes, multi‑currency is available to all users. Record expenses in any currency — the bot keeps separate stats per currency without automatic conversion.',
+          faq_q4: 'How do I cancel a subscription?',
+          faq_a4: 'Subscriptions are not auto‑renewed — no accidental charges! One day before the end you’ll get a reminder to renew. Premium access remains until the end of the paid period, then switches to Free. Your data stays intact.'
+        }
+      };
+
+      function applyLang(lang) {
+        const d = dict[lang] || dict.ru;
+        document.documentElement.setAttribute('data-lang', lang);
+        const titleEl = document.querySelector('[data-i18n-meta-title]');
+        if (titleEl) titleEl.textContent = d.meta_title;
+        const descEl = document.querySelector('[data-i18n-meta-desc]');
+        if (descEl) descEl.setAttribute('content', d.meta_desc);
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+          const key = el.getAttribute('data-i18n');
+          if (d[key] !== undefined) {
+            if (key === 'pricing_badge') el.innerHTML = d[key];
+            else el.textContent = d[key];
+          }
+        });
+        const ruEl = document.getElementById('lang-ru');
+        const enEl = document.getElementById('lang-en');
+        const ruElm = document.getElementById('lang-ru-m');
+        const enElm = document.getElementById('lang-en-m');
+        const setActive = (isRu) => {
+          if (ruEl && enEl) {
+            if (isRu) { ruEl.classList.add('active'); enEl.classList.remove('active'); }
+            else { enEl.classList.add('active'); ruEl.classList.remove('active'); }
+          }
+          if (ruElm && enElm) {
+            if (isRu) { ruElm.classList.add('active'); enElm.classList.remove('active'); }
+            else { enElm.classList.add('active'); ruElm.classList.remove('active'); }
+          }
+        };
+        setActive(lang === 'ru');
+        // Update footer policy/offer links per language
+        const priv = document.getElementById('footer-privacy-link');
+        const off = document.getElementById('footer-offer-link');
+        if (priv) priv.setAttribute('href', lang === 'ru' ? 'privacy.html' : 'privacy_en.html');
+        if (off) off.setAttribute('href', lang === 'ru' ? 'offer.html' : 'offer_en.html');
+        localStorage.setItem('coins_lang', lang);
+      }
+
+      function detectLang() {
+        const saved = localStorage.getItem('coins_lang');
+        if (saved) return saved;
+        const nav = (navigator.language || 'en').toLowerCase();
+        return nav.startsWith('ru') ? 'ru' : 'en';
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const initial = detectLang();
+        applyLang(initial);
+        const ruBtn = document.getElementById('lang-ru');
+        const enBtn = document.getElementById('lang-en');
+        if (ruBtn) ruBtn.addEventListener('click', (e) => { e.preventDefault(); applyLang('ru'); });
+        if (enBtn) enBtn.addEventListener('click', (e) => { e.preventDefault(); applyLang('en'); });
+        const ruBtnM = document.getElementById('lang-ru-m');
+        const enBtnM = document.getElementById('lang-en-m');
+        if (ruBtnM) ruBtnM.addEventListener('click', (e) => { e.preventDefault(); applyLang('ru'); });
+        if (enBtnM) enBtnM.addEventListener('click', (e) => { e.preventDefault(); applyLang('en'); });
+      });
+    })();
+  </script>
+
   <!-- FAQ -->
   <section class="faq" id="faq">
     <div class="container">
       <div class="section-header reveal">
-        <span class="section-tag">FAQ</span>
-        <h2 class="section-title">Частые вопросы</h2>
-        <p class="section-subtitle">Всё что нужно знать перед началом</p>
+        <span class="section-tag" data-i18n="nav_faq">FAQ</span>
+        <h2 class="section-title" data-i18n="faq_title">Частые вопросы</h2>
+        <p class="section-subtitle" data-i18n="faq_subtitle">Всё что нужно знать перед началом</p>
       </div>
       <div class="faq-container">
         <div class="faq-item reveal">
           <div class="faq-question">
-            Это безопасно? Где хранятся мои данные?
+            <span data-i18n="faq_q1">Это безопасно? Где хранятся мои данные?</span>
             <div class="faq-icon">▼</div>
           </div>
           <div class="faq-answer">
             <div class="faq-answer-content">
-              Абсолютно безопасно. Мы не требуем доступ к банковским счетам. Все данные полностью обезличены и хранятся на защищенных серверах с шифрованием.
+              <span data-i18n="faq_a1">Абсолютно безопасно. Мы не требуем доступ к банковским счетам. Все данные полностью обезличены и хранятся на защищенных серверах с шифрованием.</span>
             </div>
           </div>
         </div>
         <div class="faq-item reveal">
           <div class="faq-question">
-            Как работает семейный доступ?
+            <span data-i18n="faq_q2">Как работает семейный доступ?</span>
             <div class="faq-icon">▼</div>
           </div>
           <div class="faq-answer">
             <div class="faq-answer-content">
-              Создайте семейную группу и пригласите участников по специальной ссылке. Каждый ведет свой учет, но вы видите общую статистику и можете планировать бюджет вместе.
+              <span data-i18n="faq_a2">Создайте семейную группу и пригласите участников по специальной ссылке. Каждый ведет свой учет, но вы видите общую статистику и можете планировать бюджет вместе.</span>
             </div>
           </div>
         </div>
         <div class="faq-item reveal">
           <div class="faq-question">
-            Можно ли вести учет в разных валютах?
+            <span data-i18n="faq_q3">Можно ли вести учет в разных валютах?</span>
             <div class="faq-icon">▼</div>
           </div>
           <div class="faq-answer">
             <div class="faq-answer-content">
-              Да, мультивалютность доступна всем пользователям. Вы можете записывать траты в любой валюте — бот ведет отдельную статистику по каждой валюте, сохраняя точность учета без автоматической конвертации.
+              <span data-i18n="faq_a3">Да, мультивалютность доступна всем пользователям. Вы можете записывать траты в любой валюте — бот ведет отдельную статистику по каждой валюте, сохраняя точность учета без автоматической конвертации.</span>
             </div>
           </div>
         </div>
         <div class="faq-item reveal">
           <div class="faq-question">
-            Как отменить подписку?
+            <span data-i18n="faq_q4">Как отменить подписку?</span>
             <div class="faq-icon">▼</div>
           </div>
           <div class="faq-answer">
             <div class="faq-answer-content">
-              Подписка не продлевается автоматически — никаких случайных платежей! За 1 день до окончания подписки вам придет напоминание о необходимости продления. Доступ к Premium функциям сохраняется до конца оплаченного периода, после чего автоматически переключается на бесплатную версию. Все ваши данные сохраняются.
+              <span data-i18n="faq_a4">Подписка не продлевается автоматически — никаких случайных платежей! За 1 день до окончания подписки вам придет напоминание о необходимости продления. Доступ к Premium функциям сохраняется до конца оплаченного периода, после чего автоматически переключается на бесплатную версию. Все ваши данные сохраняются.</span>
             </div>
           </div>
         </div>
@@ -2418,13 +2677,13 @@
     <div class="cta-top-fade" aria-hidden="true"></div>
     <div class="container">
       <div class="cta-content reveal">
-        <h2 class="cta-title">Начните контролировать финансы уже сегодня</h2>
-        <p class="cta-subtitle">Простой и удобный способ вести учет расходов прямо в Telegram — без дополнительных регистраций и создания аккаунта</p>
+        <h2 class="cta-title" data-i18n="cta_title">Начните контролировать финансы уже сегодня</h2>
+        <p class="cta-subtitle" data-i18n="cta_subtitle">Простой и удобный способ вести учет расходов прямо в Telegram — без дополнительных регистраций и создания аккаунта</p>
         <a href="https://t.me/showmecoinbot?start=landing" target="_blank" class="btn btn-primary" style="background: white; color: var(--primary);">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
           </svg>
-          Запустить бота бесплатно
+          <span data-i18n="cta_btn">Запустить бота бесплатно</span>
         </a>
       </div>
     </div>
@@ -2436,7 +2695,7 @@
       <div class="footer-content">
         <div class="footer-column">
           <h3>Coins Bot</h3>
-          <p>Простой и удобный учет финансов прямо в Telegram. Без сложных приложений и привязки к банкам.</p>
+          <p data-i18n="footer_about">Простой и удобный учет финансов прямо в Telegram. Без сложных приложений и привязки к банкам.</p>
           <div class="social-links">
             <a href="https://t.me/showmecoinbot" target="_blank" class="social-link">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -2463,18 +2722,16 @@
           </ul>
         </div>
         <div class="footer-column">
-          <h3>Компания</h3>
+          <h3 data-i18n="footer_company">Компания</h3>
           <ul class="footer-links">
-            <li><a href="#">О нас</a></li>
-            <li><a href="privacy.html" target="_blank">Политика конфиденциальности</a></li>
-            <li><a href="offer.html" target="_blank">Публичная оферта</a></li>
+            <li><a href="#" data-i18n="footer_about_link">О нас</a></li>
+            <li><a id="footer-privacy-link" href="privacy.html" target="_blank" data-i18n="footer_privacy">Политика конфиденциальности</a></li>
+            <li><a id="footer-offer-link" href="offer.html" target="_blank" data-i18n="footer_offer">Публичная оферта</a></li>
           </ul>
         </div>
       </div>
       <div class="footer-bottom">
-        <div class="footer-copy">
-          © 2025 Coins Bot. Все права защищены.
-        </div>
+        <div class="footer-copy" data-i18n="footer_copy">© 2025 Coins Bot. Все права защищены.</div>
       </div>
     </div>
   </footer>

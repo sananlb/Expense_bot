@@ -9,14 +9,34 @@ import os
 # 3) Значение по умолчанию (заглушка)
 
 # Используем адреса лендинга (если заданы), иначе — Telegraph, иначе — заглушку
-PRIVACY_URL = (
+PRIVACY_URL_RU = (
     os.getenv('PRIVACY_URL')
     or os.getenv('TELEGRAPH_PRIVACY_URL')
     or 'https://example.com/privacy.html'
 )
+PRIVACY_URL_EN = (
+    os.getenv('PRIVACY_URL_EN')
+    or os.getenv('TELEGRAPH_PRIVACY_URL_EN')
+    or 'https://example.com/privacy_en.html'
+)
 
-OFFER_URL = (
+OFFER_URL_RU = (
     os.getenv('OFFER_URL')
     or os.getenv('TELEGRAPH_OFFER_URL')
     or 'https://example.com/offer.html'
 )
+OFFER_URL_EN = (
+    os.getenv('OFFER_URL_EN')
+    or os.getenv('TELEGRAPH_OFFER_URL_EN')
+    or 'https://example.com/offer_en.html'
+)
+
+def get_privacy_url_for(lang: str | None) -> str:
+    """Вернёт ссылку на политику с учётом языка пользователя."""
+    l = (lang or 'en').lower()
+    return PRIVACY_URL_RU if l.startswith('ru') else PRIVACY_URL_EN
+
+def get_offer_url_for(lang: str | None) -> str:
+    """Вернёт ссылку на оферту с учётом языка пользователя."""
+    l = (lang or 'en').lower()
+    return OFFER_URL_RU if l.startswith('ru') else OFFER_URL_EN
