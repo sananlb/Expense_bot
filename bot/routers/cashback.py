@@ -29,6 +29,35 @@ router = Router(name="cashback")
 
 
 
+from ..services.cashback_free_text import _normalize_bank_name as _normalize_bank_alias
+
+async def _canonicalize_bank_for_user(user_id: int, raw_name: str) -> str:
+    """Приводим название банка к канону с учетом алиасов и уже существующих у пользователя названий."""
+    name = _normalize_bank_alias(raw_name or "").strip()
+    try:
+        existing = await get_user_cashbacks(user_id, month=None)
+        existing_banks = {cb.bank_name for cb in existing}
+    except Exception:
+        existing_banks = set()
+
+    def simple_norm(s: str) -> str:
+        import re
+        s = (s or "").lower()
+        s = s.replace('ё', 'е').replace('э', 'е')
+        s = re.sub(r"банк\b", "", s)
+        s = re.sub(r"[^\wа-яА-Я]", "", s)
+        return s
+
+    key = simple_norm(name)
+    norm_map = {simple_norm(b): b for b in existing_banks if b}
+
+    if key in norm_map:
+        return norm_map[key]
+    for k, original in norm_map.items():
+        if key and (key == k or key in k or k in key):
+            return original
+    return name
+
 async def send_cashback_menu_direct(bot, chat_id: int, state: FSMContext, month: int = None):
     """Отправить меню кешбека напрямую без message объекта"""
     from datetime import date
@@ -427,8 +456,8 @@ async def process_cashback_category(callback: types.CallbackQuery, state: FSMCon
     # Показываем варианты выбора банка только для RU; для других языков просим ввести вручную
     if (lang or '').lower().startswith('ru'):
         banks = [
-            "Т-Банк", "Альфа", "ВТБ", "Сбер",
-            "Райффайзен", "Яндекс", "Озон"
+            "Т-Банк", "Альфа-Банк", "ВТБ", "Сбер",
+            "Райффайзенбанк", "Яндекс", "Озон"
         ]
         keyboard_buttons = []
         for i in range(0, len(banks), 2):
@@ -461,8 +490,8 @@ async def process_cashback_category(callback: types.CallbackQuery, state: FSMCon
 async def process_cashback_bank(callback: types.CallbackQuery, state: FSMContext, lang: str):
     """Обработка выбора банка"""
     bank = callback.data.replace("cashback_bank_", "")
-    
-    await state.update_data(bank_name=bank)
+    bank_canon = await _canonicalize_bank_for_user(callback.from_user.id, bank)
+    await state.update_data(bank_name=bank_canon)
     
     # Запрашиваем процент и описание
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -496,6 +525,7 @@ async def process_bank_text(message: types.Message, state: FSMContext):
         await message.answer(error_msg)
         return
     
+    bank_name = await _canonicalize_bank_for_user(message.from_user.id, bank_name)
     await state.update_data(bank_name=bank_name)
     
     # Запрашиваем процент и описание
@@ -523,17 +553,20 @@ async def process_bank_text(message: types.Message, state: FSMContext):
 async def process_percent_text(message: types.Message, state: FSMContext):
     """Обработка ввода описания и процента кешбэка"""
     import re
-    
+
+    # Получаем язык пользователя
+    lang = await get_user_language(message.from_user.id)
+
     text = message.text.strip()
-    
+
     # Паттерн для извлечения процента - ищем число в любом месте строки
     # Если только число - это процент без описания
     # Если есть текст и число - текст это описание, число это процент
-    
+
     # Сначала проверяем, это только число (процент)?
     only_percent_pattern = r'^(\d+(?:[.,]\d+)?)\s*%?$'
     match = re.match(only_percent_pattern, text)
-    
+
     if match:
         # Только процент, без описания
         percent_str = match.group(1).replace(',', '.')
@@ -542,7 +575,7 @@ async def process_percent_text(message: types.Message, state: FSMContext):
         # Ищем число в конце строки (описание + процент)
         percent_at_end = r'^(.*?)\s+(\d+(?:[.,]\d+)?)\s*%?$'
         match = re.match(percent_at_end, text)
-        
+
         if match:
             description = match.group(1).strip()
             percent_str = match.group(2).replace(',', '.')
@@ -569,7 +602,7 @@ async def process_percent_text(message: types.Message, state: FSMContext):
     data = await state.get_data()
     user_id = message.from_user.id
     current_month = date.today().month
-    bank_name = data.get('bank_name', '')
+    bank_name = await _canonicalize_bank_for_user(user_id, data.get('bank_name', ''))
     
     # Сразу сохраняем кешбэк с описанием
     try:
@@ -667,8 +700,8 @@ async def edit_cashback_selected(callback: types.CallbackQuery, state: FSMContex
     else:
         # Для русского языка показываем российские банки
         banks = [
-            "Т-Банк", "Альфа", "ВТБ", "Сбер", 
-            "Райффайзен", "Яндекс", "Озон"
+            "Т-Банк", "Альфа-Банк", "ВТБ", "Сбер", 
+            "Райффайзенбанк", "Яндекс", "Озон"
         ]
         
         for i in range(0, len(banks), 2):
@@ -699,8 +732,8 @@ async def edit_cashback_selected(callback: types.CallbackQuery, state: FSMContex
 async def process_edit_bank(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Обработка выбора нового банка"""
     bank = callback.data.replace("edit_bank_", "")
-    
-    await state.update_data(new_bank=bank)
+    bank_canon = await _canonicalize_bank_for_user(callback.from_user.id, bank)
+    await state.update_data(new_bank=bank_canon)
     await show_edit_percent_prompt(callback, state, lang)
     await callback.answer()
 
@@ -724,6 +757,7 @@ async def process_edit_bank_text(message: types.Message, state: FSMContext, lang
         await message.answer(error_msg)
         return
     
+    bank_name = await _canonicalize_bank_for_user(message.from_user.id, bank_name)
     await state.update_data(new_bank=bank_name)
     await show_edit_percent_prompt(message, state, lang)
 
@@ -831,10 +865,12 @@ async def process_edit_percent(message: types.Message, state: FSMContext):
     
     # Обновляем кешбэк
     try:
+        # Нормализуем банк на случай изменения
+        new_bank = await _canonicalize_bank_for_user(user_id, data.get('new_bank', data['current_bank']))
         cashback = await update_cashback(
             user_id=user_id,
             cashback_id=data['editing_cashback_id'],
-            bank_name=data.get('new_bank', data['current_bank']),
+            bank_name=new_bank,
             cashback_percent=percent,
             description=description
         )
@@ -927,10 +963,12 @@ async def process_cashback_percent_button(callback: types.CallbackQuery, state: 
     current_month = date.today().month
     
     try:
+        # Нормализуем банк перед сохранением (кнопка процента)
+        bank_canon = await _canonicalize_bank_for_user(user_id, data['bank_name'])
         cashback = await add_cashback(
             user_id=user_id,
             category_id=data['category_id'],
-            bank_name=data['bank_name'],
+            bank_name=bank_canon,
             cashback_percent=float(percent),
             month=current_month,
             limit_amount=None,  # Без лимита
@@ -1018,10 +1056,11 @@ async def process_cashback_month(callback: types.CallbackQuery, state: FSMContex
     
     # Сохраняем кешбэк
     try:
+        bank_canon = await _canonicalize_bank_for_user(user_id, data['bank_name'])
         cashback = await add_cashback(
             user_id=user_id,
             category_id=data['category_id'],
-            bank_name=data['bank_name'],
+            bank_name=bank_canon,
             cashback_percent=data['cashback_percent'],
             month=month,
             limit_amount=data.get('limit_amount'),
