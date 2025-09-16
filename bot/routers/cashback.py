@@ -32,31 +32,8 @@ router = Router(name="cashback")
 from ..services.cashback_free_text import _normalize_bank_name as _normalize_bank_alias
 
 async def _canonicalize_bank_for_user(user_id: int, raw_name: str) -> str:
-    """Приводим название банка к канону с учетом алиасов и уже существующих у пользователя названий."""
-    name = _normalize_bank_alias(raw_name or "").strip()
-    try:
-        existing = await get_user_cashbacks(user_id, month=None)
-        existing_banks = {cb.bank_name for cb in existing}
-    except Exception:
-        existing_banks = set()
-
-    def simple_norm(s: str) -> str:
-        import re
-        s = (s or "").lower()
-        s = s.replace('ё', 'е').replace('э', 'е')
-        s = re.sub(r"банк\b", "", s)
-        s = re.sub(r"[^\wа-яА-Я]", "", s)
-        return s
-
-    key = simple_norm(name)
-    norm_map = {simple_norm(b): b for b in existing_banks if b}
-
-    if key in norm_map:
-        return norm_map[key]
-    for k, original in norm_map.items():
-        if key and (key == k or key in k or k in key):
-            return original
-    return name
+    """Приводим название банка к канону по словарю алиасов, без подмены на старые варианты."""
+    return _normalize_bank_alias(raw_name or "").strip()
 
 async def send_cashback_menu_direct(bot, chat_id: int, state: FSMContext, month: int = None):
     """Отправить меню кешбека напрямую без message объекта"""
