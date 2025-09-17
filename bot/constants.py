@@ -12,23 +12,23 @@ import os
 PRIVACY_URL_RU = (
     os.getenv('PRIVACY_URL')
     or os.getenv('TELEGRAPH_PRIVACY_URL')
-    or 'https://expensebot.duckdns.org/privacy.html'
+    or 'https://www.coins-bot.ru/privacy.html'
 )
 PRIVACY_URL_EN = (
     os.getenv('PRIVACY_URL_EN')
     or os.getenv('TELEGRAPH_PRIVACY_URL_EN')
-    or 'https://expensebot.duckdns.org/privacy_en.html'
+    or 'https://www.coins-bot.ru/privacy_en.html'
 )
 
 OFFER_URL_RU = (
     os.getenv('OFFER_URL')
     or os.getenv('TELEGRAPH_OFFER_URL')
-    or 'https://expensebot.duckdns.org/offer.html'
+    or 'https://www.coins-bot.ru/offer.html'
 )
 OFFER_URL_EN = (
     os.getenv('OFFER_URL_EN')
     or os.getenv('TELEGRAPH_OFFER_URL_EN')
-    or 'https://expensebot.duckdns.org/offer_en.html'
+    or 'https://www.coins-bot.ru/offer_en.html'
 )
 
 def get_privacy_url_for(lang: str | None) -> str:

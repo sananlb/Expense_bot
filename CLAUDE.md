@@ -189,7 +189,8 @@ git stash pop  # восстанавливаем локальные измене�
 
 ## Server Configuration
 - Server IP: 80.66.87.178
-- Domain: expensebot.duckdns.org
+- Bot Domain: expensebot.duckdns.org
+- Landing Domain: www.coins-bot.ru
 - Server path: /home/batman/expense_bot
 - Server OS: Ubuntu 22.04.5 LTS
 - SSL: Let's Encrypt certificate (expires 2025-11-07)
@@ -245,6 +246,23 @@ docker image prune -f
 - Certbot auto-renewal for SSL
 - Cron job for nginx restoration after reboot
 - Docker containers auto-restart policy: unless-stopped
+
+## Legal Documents URLs
+**Landing page domain:** www.coins-bot.ru
+
+### Russian:
+- **Политика конфиденциальности**: https://www.coins-bot.ru/privacy.html
+- **Публичная оферта**: https://www.coins-bot.ru/offer.html
+
+### English:
+- **Privacy Policy**: https://www.coins-bot.ru/privacy_en.html
+- **Terms of Service**: https://www.coins-bot.ru/offer_en.html
+
+**Local files location:** `/Users/aleksejnalbantov/Desktop/expense_bot/landing/`
+- privacy.html (RU)
+- privacy_en.html (EN)
+- offer.html (RU)
+- offer_en.html (EN)
 
 ## Recent Changes
 - Added grocery store keywords (КБ, Красное белое, ВВ) to product category
