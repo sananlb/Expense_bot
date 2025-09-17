@@ -241,7 +241,7 @@
       position: relative;
       overflow: hidden;
       margin-bottom: 0;
-      background: linear-gradient(135deg, rgba(203, 213, 225, 0.05) 0%, rgba(148, 163, 184, 0.03) 100%);
+      background: linear-gradient(135deg, rgba(203, 213, 225, 0.03) 0%, rgba(148, 163, 184, 0.02) 100%);
     }
 
 
@@ -1140,51 +1140,26 @@
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    .faq-item.active {
-      border-color: var(--primary);
-      box-shadow: var(--shadow);
-    }
+    /* FAQ items always expanded - no active state */
 
     .faq-question {
-      padding: 24px;
-      cursor: pointer;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      padding: 24px 24px 12px 24px;
+      cursor: default;
+      display: block;
       font-weight: 600;
       color: var(--dark);
-      transition: all 0.3s ease;
-    }
-
-    .faq-question:hover {
-      color: var(--primary);
     }
 
     .faq-icon {
-      width: 24px;
-      height: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: transform 0.3s ease;
-    }
-
-    .faq-item.active .faq-icon {
-      transform: rotate(180deg);
+      display: none;
     }
 
     .faq-answer {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.3s ease;
-    }
-
-    .faq-item.active .faq-answer {
-      max-height: 300px;
+      display: block;
     }
 
     .faq-answer-content {
-      padding: 0 24px 24px;
+      padding: 12px 24px 24px;
       color: #475569;
       line-height: 1.6;
     }
@@ -1192,8 +1167,8 @@
     /* CTA Section */
     .cta-section {
       padding: 80px 0;
-      /* Прозрачный цветной фон CTA */
-      background: linear-gradient(135deg, rgba(124, 136, 232, 0.85) 0%, rgba(125, 98, 184, 0.85) 100%);
+      /* Яркий насыщенный фон CTA */
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
       position: relative;
       overflow: hidden;
     }
@@ -2258,7 +2233,7 @@
           <ul class="demo-list">
             <li data-i18n="demo_li1">Быстрая запись трат одним сообщением</li>
             <li data-i18n="demo_li2">Голосовые команды для hands-free режима</li>
-            <li data-i18n="demo_li3">Умные вопросы о статистике</li>
+            <li data-i18n="demo_li3">Вопросы о статистике естественным языком</li>
             <li data-i18n="demo_li4">Мгновенные отчеты и графики</li>
           </ul>
           <a href="https://t.me/showmecoinbot" target="_blank" class="btn btn-primary">
@@ -2491,11 +2466,11 @@
           trust_free: 'Бесплатный старт',
           trust_no_banks: 'Без привязки к банкам',
           demo_title: 'Посмотрите бота в действии',
-          demo_subtitle: 'Реальные примеры использования от наших пользователей',
+          demo_subtitle: 'Реальные примеры использования',
           demo_li1: 'Быстрая запись трат одним сообщением',
           demo_li2: 'Голосовые команды для hands-free режима',
-          demo_li3: 'Умные вопросы о статистике',
-          demo_li4: 'Мгновенные отчеты и графики',
+          demo_li3: 'Вопросы о статистике естественным языком',
+          demo_li4: 'Информативные отчеты и графики',
           slide_ai: 'Умная категоризация',
           slide_ai_ph: 'AI категоризация',
           slide_recent: 'Последние траты',
@@ -2587,11 +2562,11 @@
           trust_free: 'Free to start',
           trust_no_banks: 'No bank linking required',
           demo_title: 'See the bot in action',
-          demo_subtitle: 'Real examples from our users',
+          demo_subtitle: 'Real usage examples',
           demo_li1: 'Log expenses quickly in one message',
           demo_li2: 'Voice commands for hands‑free mode',
-          demo_li3: 'Smart questions about your stats',
-          demo_li4: 'Instant reports and charts',
+          demo_li3: 'Natural language questions about your statistics',
+          demo_li4: 'Informative reports and charts',
           slide_ai: 'Smart categorization',
           slide_ai_ph: 'AI categorization',
           slide_recent: 'Recent expenses',
@@ -2742,7 +2717,6 @@
         <div class="faq-item reveal">
           <div class="faq-question">
             <span data-i18n="faq_q1">Это безопасно? Где хранятся мои данные?</span>
-            <div class="faq-icon">▼</div>
           </div>
           <div class="faq-answer">
             <div class="faq-answer-content">
@@ -2753,7 +2727,6 @@
         <div class="faq-item reveal">
           <div class="faq-question">
             <span data-i18n="faq_q2">Как работает семейный доступ?</span>
-            <div class="faq-icon">▼</div>
           </div>
           <div class="faq-answer">
             <div class="faq-answer-content">
@@ -2764,7 +2737,6 @@
         <div class="faq-item reveal">
           <div class="faq-question">
             <span data-i18n="faq_q3">Можно ли вести учет в разных валютах?</span>
-            <div class="faq-icon">▼</div>
           </div>
           <div class="faq-answer">
             <div class="faq-answer-content">
@@ -2775,7 +2747,6 @@
         <div class="faq-item reveal">
           <div class="faq-question">
             <span data-i18n="faq_q4">Как отменить подписку?</span>
-            <div class="faq-icon">▼</div>
           </div>
           <div class="faq-answer">
             <div class="faq-answer-content">
@@ -2925,23 +2896,7 @@
       });
     });
 
-    // FAQ Accordion
-    document.querySelectorAll('.faq-question').forEach(question => {
-      question.addEventListener('click', () => {
-        const faqItem = question.parentElement;
-        const wasActive = faqItem.classList.contains('active');
-
-        // Close all FAQ items
-        document.querySelectorAll('.faq-item').forEach(item => {
-          item.classList.remove('active');
-        });
-
-        // Open clicked item if it wasn't active
-        if (!wasActive) {
-          faqItem.classList.add('active');
-        }
-      });
-    });
+    // FAQ items are always expanded - no accordion functionality
 
     // Scroll Reveal Animation
     const revealElements = document.querySelectorAll('.reveal');
@@ -3171,6 +3126,39 @@
       }
 
       // Phone frame inherits hover behavior like hero demo
+      // Mobile: activate phone rotation when centered in viewport
+      const demoPhone = document.querySelector('.demo-phone');
+      const phoneContainer = document.querySelector('.phone-container');
+      const isMobileOrTablet = () => window.matchMedia('(max-width: 768px)').matches;
+
+      function updatePhoneRotation() {
+        if (!demoPhone || !phoneContainer) return;
+
+        // On desktop, rotation is handled by hover
+        if (!isMobileOrTablet()) {
+          phoneContainer.style.transform = '';
+          return;
+        }
+
+        const rect = demoPhone.getBoundingClientRect();
+        const viewportCenter = window.innerHeight / 2;
+        const phoneCenter = rect.top + rect.height / 2;
+        const distance = Math.abs(phoneCenter - viewportCenter);
+        const threshold = Math.min(150, rect.height * 0.3); // trigger when close to center
+
+        if (distance <= threshold) {
+          // Phone is centered - rotate to face user
+          phoneContainer.style.transform = 'perspective(1000px) rotateY(0deg) rotateZ(0deg)';
+        } else {
+          // Phone is not centered - show at angle
+          phoneContainer.style.transform = 'perspective(1000px) rotateY(-8deg) rotateZ(1deg)';
+        }
+      }
+
+      // Listen to scroll and resize events for phone rotation
+      window.addEventListener('scroll', updatePhoneRotation, { passive: true });
+      window.addEventListener('resize', updatePhoneRotation);
+      updatePhoneRotation();
 
       // Mobile-only: highlight the feature card closest to screen center
       const featuresSection = document.querySelector('.features');
