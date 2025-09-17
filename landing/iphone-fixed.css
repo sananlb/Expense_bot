@@ -1,0 +1,245 @@
+/* iPhone 15 Pro CSS - Fixed Version */
+.css-iphone {
+  position: relative;
+  width: 330px;
+  height: 700px;
+  margin: 0 auto;
+  transform: perspective(1200px) rotateY(-5deg);
+  transition: transform 0.3s ease;
+}
+
+.css-iphone:hover {
+  transform: perspective(1200px) rotateY(0deg) scale(1.02);
+}
+
+/* Device Frame */
+.device-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  border-radius: 45px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.1),
+    0 10px 40px rgba(0,0,0,0.3),
+    0 20px 60px rgba(0,0,0,0.2);
+  padding: 12px;
+}
+
+/* Side Buttons */
+.device-buttons {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.action-button {
+  position: absolute;
+  top: 150px;
+  left: -2px;
+  width: 3px;
+  height: 30px;
+  background: #2d2d2d;
+  border-radius: 2px 0 0 2px;
+}
+
+.volume-up,
+.volume-down {
+  position: absolute;
+  left: -2px;
+  width: 3px;
+  height: 60px;
+  background: #2d2d2d;
+  border-radius: 2px 0 0 2px;
+}
+
+.volume-up {
+  top: 200px;
+}
+
+.volume-down {
+  top: 270px;
+}
+
+.power-button {
+  position: absolute;
+  top: 200px;
+  right: -2px;
+  width: 3px;
+  height: 80px;
+  background: #2d2d2d;
+  border-radius: 0 2px 2px 0;
+}
+
+/* Black Bezel */
+.device-bezel {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  border-radius: 35px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Dynamic Island */
+.dynamic-island {
+  position: absolute;
+  top: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90px;
+  height: 28px;
+  background: #000;
+  border-radius: 20px;
+  z-index: 100;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+}
+
+/* Screen */
+.device-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+/* Phone Screen for carousel */
+.phone-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+/* Carousel */
+.carousel-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+.carousel-track {
+  display: flex;
+  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  height: 100%;
+}
+
+.carousel-slide {
+  min-width: 100%;
+  height: 100%;
+  background: #000;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.carousel-slide video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+/* Navigation dots */
+.nav-dots {
+  position: absolute;
+  bottom: 15px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  z-index: 50;
+  padding: 8px 12px;
+  background: rgba(0,0,0,0.5);
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+}
+
+.nav-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.3);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.nav-dot.active {
+  background: #fff;
+  width: 24px;
+  border-radius: 4px;
+}
+
+/* Slide Header */
+.slide-header-external {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.slide-title-external {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--dark);
+  margin-bottom: 8px;
+}
+
+.slide-subtitle-external {
+  font-size: 16px;
+  color: #64748b;
+  font-weight: 400;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .css-iphone {
+    width: 280px;
+    height: 600px;
+    transform: none;
+  }
+
+  .css-iphone:hover {
+    transform: none;
+  }
+
+  .device-frame {
+    border-radius: 35px;
+    padding: 10px;
+  }
+
+  .device-bezel {
+    border-radius: 28px;
+  }
+
+  .dynamic-island {
+    width: 75px;
+    height: 24px;
+    top: 12px;
+  }
+
+  .slide-title-external {
+    font-size: 20px;
+  }
+
+  .slide-subtitle-external {
+    font-size: 14px;
+  }
+}
