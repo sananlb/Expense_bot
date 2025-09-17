@@ -16,7 +16,7 @@ from bot.services.category import create_default_categories, create_default_inco
 from bot.utils.message_utils import send_message_with_cleanup, delete_message_with_effect
 from bot.utils.commands import update_user_commands
 from bot.services.affiliate import process_referral_link  # Новая реферальная система Telegram Stars
-from expenses.models import Subscription, Profile, ReferralBonus
+from expenses.models import Subscription, Profile
 from django.utils import timezone
 from datetime import timedelta
 
@@ -136,27 +136,15 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
             
             if affiliate_referral:
                 # Успешно обработана ссылка Telegram Stars
+                # ВАЖНО: НЕ привязываем к старой системе, если пользователь в новой!
                 if display_lang == 'en':
                     referral_message = "\n\n⭐ You joined via an affiliate link! Your friend will receive commission from your purchases."
                 else:
                     referral_message = "\n\n⭐ Вы перешли по партнёрской ссылке! Ваш друг будет получать комиссию с ваших покупок."
-                
+
                 logger.info(f"New user {user_id} registered via Telegram Stars affiliate link from {affiliate_referral.referrer.telegram_id}")
-            else:
-                # Если не удалось обработать как Telegram Stars, пробуем старую систему
-                # Находим реферера по коду (старая система с бонусными днями)
-                referrer = await Profile.objects.filter(referral_code=referral_code).afirst()
-                if referrer and referrer.telegram_id != user_id:
-                    # Привязываем реферера (старая система)
-                    profile.referrer = referrer
-                    await profile.asave()
-                    
-                    if display_lang == 'en':
-                        referral_message = "\n\n🎁 You joined via a referral link! After paying for your first subscription, your friend will receive a bonus."
-                    else:
-                        referral_message = "\n\n🎁 Вы перешли по реферальной ссылке! После оплаты первой подписки ваш друг получит бонус."
-                    
-                    logger.info(f"New user {user_id} registered with referral code from {referrer.telegram_id}")
+                # Старая система с бонусными днями ПОЛНОСТЬЮ УДАЛЕНА
+                # Используется только новая система Telegram Stars
         except Exception as e:
             logger.error(f"Error processing referral code: {e}")
     
@@ -290,7 +278,7 @@ async def callback_menu(callback: types.CallbackQuery, state: FSMContext, lang: 
 
 
 @router.callback_query(F.data == 'privacy_accept')
-async def privacy_accept(callback: types.CallbackQuery):
+async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
     try:
         profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
         profile.accepted_privacy = True
@@ -300,7 +288,22 @@ async def privacy_accept(callback: types.CallbackQuery):
             await callback.message.delete()
         except Exception:
             pass
-        await callback.message.answer('Спасибо! Теперь вы можете начать с командой /start')
+
+        # Вызываем команду /start после принятия политики
+        # Создаем фейковое сообщение для вызова обработчика /start
+        from aiogram.types import Message, User, Chat
+        fake_message = Message(
+            message_id=0,
+            date=callback.message.date,
+            chat=callback.message.chat,
+            from_user=callback.from_user,
+            text='/start'
+        )
+
+        # Вызываем обработчик команды /start
+        from aiogram.types import CommandObject
+        await cmd_start(fake_message, state, CommandObject(command='start'), lang=profile.language_code or 'ru')
+
     except Exception as e:
         logger.error(f"privacy_accept error: {e}")
         await callback.answer('Ошибка. Попробуйте /start', show_alert=True)

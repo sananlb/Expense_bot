@@ -42,25 +42,9 @@ class Profile(models.Model):
         help_text='Ключ доступа для бета-тестирования'
     )
     
-    # Реферальная программа
-    referrer = models.ForeignKey(
-        'self',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='referrals',
-        verbose_name='Реферер',
-        help_text='Кто привел этого пользователя'
-    )
-    referral_code = models.CharField(
-        max_length=20,
-        unique=True,
-        null=True,
-        blank=True,
-        db_index=True,
-        verbose_name='Реферальный код',
-        help_text='Уникальный реферальный код пользователя'
-    )
+    # Реферальная программа - УДАЛЕНО
+    # Используется новая система Telegram Stars через модели:
+    # AffiliateLink, AffiliateReferral, AffiliateCommission
     last_activity = models.DateTimeField(
         null=True,
         blank=True,
@@ -101,16 +85,7 @@ class Profile(models.Model):
     def __str__(self):
         return f"User {self.telegram_id}"
     
-    def generate_referral_code(self):
-        """Генерация уникального реферального кода"""
-        if not self.referral_code:
-            while True:
-                code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-                if not Profile.objects.filter(referral_code=code).exists():
-                    self.referral_code = code
-                    self.save()
-                    break
-        return self.referral_code
+    # Метод generate_referral_code удален - используется новая система Telegram Stars
     
     @property
     def referrals_count(self):
@@ -824,46 +799,7 @@ class PromoCodeUsage(models.Model):
         return f"{self.promocode.code} - {self.profile}"
 
 
-class ReferralBonus(models.Model):
-    """Реферальные бонусы"""
-    referrer = models.ForeignKey(
-        Profile,
-        on_delete=models.CASCADE,
-        related_name='referral_bonuses_given',
-        verbose_name='Реферер'
-    )
-    referred = models.ForeignKey(
-        Profile,
-        on_delete=models.CASCADE,
-        related_name='referral_bonuses_received',
-        verbose_name='Приглашенный'
-    )
-    bonus_days = models.IntegerField(
-        default=30,
-        verbose_name='Бонусные дни'
-    )
-    subscription = models.ForeignKey(
-        'Subscription',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        verbose_name='Подписка',
-        help_text='Подписка, за которую начислен бонус'
-    )
-    is_activated = models.BooleanField(
-        default=False,
-        verbose_name='Активирован'
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    activated_at = models.DateTimeField(null=True, blank=True)
-    
-    class Meta:
-        db_table = 'referral_bonuses'
-        verbose_name = 'Реферальный бонус'
-        verbose_name_plural = 'Реферальные бонусы'
-    
-    def __str__(self):
-        return f"{self.referrer} -> {self.referred} ({self.bonus_days} дней)"
+# Модель ReferralBonus удалена - используется новая система Telegram Stars
 
 
 class IncomeCategory(models.Model):

@@ -9,7 +9,7 @@ from django.utils.safestring import mark_safe
 from .models import (
     Profile, UserSettings, ExpenseCategory, Expense, Budget,
     Cashback, RecurringPayment, Subscription, PromoCode,
-    PromoCodeUsage, ReferralBonus, Income, IncomeCategory,
+    PromoCodeUsage, Income, IncomeCategory,
     AffiliateProgram, AffiliateLink, AffiliateReferral, AffiliateCommission
 )
 from dateutil.relativedelta import relativedelta
@@ -56,8 +56,8 @@ class ProfileAdmin(admin.ModelAdmin):
                     'is_beta_tester', 'referrals_count_display', 'language_code', 
                     'currency', 'is_active', 'created_at']
     list_filter = ['is_active', 'is_beta_tester', 'language_code', 'currency', 'created_at']
-    search_fields = ['telegram_id', 'referral_code', 'beta_access_key']
-    readonly_fields = ['created_at', 'updated_at', 'referral_code', 
+    search_fields = ['telegram_id', 'beta_access_key']
+    readonly_fields = ['created_at', 'updated_at',
                        'referrals_count', 'active_referrals_count']
     inlines = [SubscriptionInline]
     
@@ -146,7 +146,7 @@ class ProfileAdmin(admin.ModelAdmin):
     
     referrals_count_display.short_description = 'Рефералы'
     
-    actions = ['make_beta_tester', 'remove_beta_tester', 'generate_referral_codes', 
+    actions = ['make_beta_tester', 'remove_beta_tester',
                'add_month_subscription', 'add_six_months_subscription']
     
     def make_beta_tester(self, request, queryset):
@@ -163,16 +163,8 @@ class ProfileAdmin(admin.ModelAdmin):
     
     remove_beta_tester.short_description = 'Убрать из бета-тестеров'
     
-    def generate_referral_codes(self, request, queryset):
-        """Сгенерировать реферальные коды"""
-        count = 0
-        for profile in queryset:
-            if not profile.referral_code:
-                profile.generate_referral_code()
-                count += 1
-        self.message_user(request, f'Сгенерировано {count} реферальных кодов.')
-    
-    generate_referral_codes.short_description = 'Сгенерировать реферальные коды'
+    # generate_referral_codes удален - используется новая система Telegram Stars
+    # Реферальные ссылки создаются автоматически при первом обращении
     
     def add_month_subscription(self, request, queryset):
         """Добавить месячную подписку"""
@@ -501,35 +493,8 @@ class PromoCodeUsageAdmin(admin.ModelAdmin):
         return False
 
 
-@admin.register(ReferralBonus)
-class ReferralBonusAdmin(admin.ModelAdmin):
-    list_display = ['referrer_link', 'referred_link', 'bonus_days',
-                    'is_activated', 'created_at']
-    list_filter = ['is_activated', 'created_at', 'activated_at']
-    search_fields = ['referrer__username', 'referrer__telegram_id',
-                     'referred__username', 'referred__telegram_id']
-    readonly_fields = ['referrer', 'referred', 'subscription',
-                       'created_at', 'activated_at']
-    
-    def referrer_link(self, obj):
-        """Ссылка на реферера"""
-        return format_html(
-            '<a href="{}">{}</a>',
-            reverse('admin:expenses_profile_change', args=[obj.referrer.id]),
-            obj.referrer
-        )
-    
-    referrer_link.short_description = 'Реферер'
-    
-    def referred_link(self, obj):
-        """Ссылка на приглашенного"""
-        return format_html(
-            '<a href="{}">{}</a>',
-            reverse('admin:expenses_profile_change', args=[obj.referred.id]),
-            obj.referred
-        )
-    
-    referred_link.short_description = 'Приглашенный'
+# ReferralBonusAdmin удален - используется новая система Telegram Stars
+# См. AffiliateProgram, AffiliateLink, AffiliateReferral, AffiliateCommission
 
 
 @admin.register(IncomeCategory)

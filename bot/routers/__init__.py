@@ -12,7 +12,6 @@ from .chat import router as chat_router
 from .subscription import router as subscription_router
 from .referral import router as referral_router
 from .budget import router as budget_router
-from .affiliate import router as affiliate_router
 from .top5 import router as top5_router
 from .household import router as household_router
 # from .pdf_report import router as pdf_report_router  # Временно отключено из-за проблем с playwright
@@ -31,7 +30,6 @@ __all__ = [
     "subscription_router",
     "referral_router",
     "budget_router",
-    "affiliate_router",
     "top5_router",
     "household_router",
     # "pdf_report_router"  # Временно отключено

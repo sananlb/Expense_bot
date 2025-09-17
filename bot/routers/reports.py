@@ -158,18 +158,41 @@ async def show_expenses_summary(
             try:
                 profile = Profile.objects.get(telegram_id=uid)
                 settings = profile.settings if hasattr(profile, 'settings') else UserSettings.objects.create(profile=profile)
-                return bool(profile.household) and getattr(settings, 'view_scope', 'personal') == 'household'
+
+                # Если нет семьи, всегда личный режим
+                if not profile.household:
+                    return False
+
+                # Проверяем, есть ли другие члены семьи
+                has_other_members = Profile.objects.filter(
+                    household=profile.household
+                ).exclude(telegram_id=uid).exists()
+
+                # Если нет других членов семьи, автоматически переключаем на личный режим
+                if not has_other_members:
+                    if settings.view_scope == 'household':
+                        settings.view_scope = 'personal'
+                        settings.save()
+                    return False
+
+                return getattr(settings, 'view_scope', 'personal') == 'household'
             except Profile.DoesNotExist:
                 return False
         
         household_mode = await sync_to_async(get_household_mode)(user_id)
 
-        # Определяем, есть ли у пользователя семья (для показа переключателя)
+        # Определяем, есть ли у пользователя семья с другими активными членами (для показа переключателя)
         @sync_to_async
         def has_household(uid):
             from expenses.models import Profile
             try:
-                return Profile.objects.filter(telegram_id=uid, household__isnull=False).exists()
+                profile = Profile.objects.filter(telegram_id=uid, household__isnull=False).first()
+                if not profile or not profile.household:
+                    return False
+                # Проверяем, есть ли другие активные члены семьи (кроме текущего пользователя)
+                return Profile.objects.filter(
+                    household=profile.household
+                ).exclude(telegram_id=uid).exists()
             except Exception:
                 return False
         

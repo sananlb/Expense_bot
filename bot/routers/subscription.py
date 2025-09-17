@@ -14,7 +14,7 @@ from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 import logging
 
-from expenses.models import Profile, Subscription, PromoCode, PromoCodeUsage, ReferralBonus
+from expenses.models import Profile, Subscription, PromoCode, PromoCodeUsage
 from bot.constants import get_offer_url_for
 from django.core.exceptions import ObjectDoesNotExist
 from bot.utils.message_utils import send_message_with_cleanup
@@ -69,7 +69,7 @@ def get_subscription_keyboard(is_beta_tester: bool = False, lang: str = 'ru'):
         # Добавляем кнопку партнёрской программы
         builder.button(
             text="💼 Партнёрская программа" if lang == 'ru' else "💼 Affiliate Program",
-            callback_data="show_affiliate"
+            callback_data="menu_referral"
         )
     
     builder.button(
@@ -753,67 +753,8 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     else:
         discount_text = ""
     
-    # Проверяем реферальную программу
-    # Если это первая платная подписка и есть реферер, начисляем бонус
-    if profile.referrer and sub_type in ['month', 'six_months']:
-        # Проверяем, была ли уже платная подписка
-        previous_paid_subs = await profile.subscriptions.filter(
-            type__in=['month', 'six_months'],
-            id__lt=subscription.id  # Все подписки до текущей
-        ).acount()
-        
-        if previous_paid_subs == 0:
-            # Это первая платная подписка - начисляем бонус рефереру
-            referrer = profile.referrer
-            
-            # Создаем запись о бонусе
-            bonus = await ReferralBonus.objects.acreate(
-                referrer=referrer,
-                referred=profile,
-                bonus_days=30,
-                subscription=subscription,
-                is_activated=False
-            )
-            
-            # Ищем активную подписку реферера
-            referrer_active_sub = await referrer.subscriptions.filter(
-                is_active=True,
-                end_date__gt=timezone.now()
-            ).order_by('-end_date').afirst()
-            
-            if referrer_active_sub:
-                # Продлеваем существующую подписку на 30 дней
-                referrer_active_sub.end_date = referrer_active_sub.end_date + timedelta(days=30)
-                await referrer_active_sub.asave()
-            else:
-                # Создаем новую подписку только если нет активной
-                await Subscription.objects.acreate(
-                    profile=referrer,
-                    type='month',
-                    payment_method='referral',
-                    amount=0,  # Бесплатно за реферала
-                    start_date=timezone.now(),
-                    end_date=timezone.now() + timedelta(days=30),
-                    is_active=True
-                )
-            
-            # Активируем бонус
-            bonus.is_activated = True
-            bonus.activated_at = timezone.now()
-            await bonus.asave()
-            
-            # Уведомляем реферера
-            try:
-                await message.bot.send_message(
-                    referrer.telegram_id,
-                    "🎉 <b>Поздравляем!</b>\n\n"
-                    "Ваш друг оформил подписку по вашей реферальной ссылке!\n"
-                    "Вы получили <b>30 дней</b> бесплатной подписки.\n\n"
-                    "Спасибо за то, что рекомендуете нас!",
-                    parse_mode="HTML"
-                )
-            except Exception as e:
-                logger.error(f"Failed to notify referrer {referrer.telegram_id}: {e}")
+    # Старая система с бонусными днями ПОЛНОСТЬЮ УДАЛЕНА
+    # Используется только новая система Telegram Stars (обработана выше)
     
     # Отправляем подтверждение с улучшенным оформлением
     await message.answer(
@@ -832,11 +773,4 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     )
 
 
-@router.callback_query(F.data == "show_affiliate")
-async def show_affiliate_from_subscription(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Показать информацию о партнёрской программе из меню подписки"""
-    from bot.routers.affiliate import cmd_affiliate
-    
-    # Вызываем команду affiliate, передавая message от callback
-    await cmd_affiliate(callback.message, state, lang)
-    await callback.answer()
+# Удален обработчик show_affiliate - теперь используется menu_referral

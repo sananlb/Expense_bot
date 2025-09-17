@@ -403,12 +403,18 @@ def get_referrer_stats(user_id: int) -> Dict[str, Any]:
         )
         
         # Получаем количество рефералов
-        referrals = AffiliateReferral.objects.filter(
+        # Сначала получаем всех рефералов с аннотацией количества платежей
+        referrals_qs = AffiliateReferral.objects.filter(
             referrer=profile
-        ).aggregate(
-            total=Count('id'),
-            active=Count('id', filter=Q(total_payments__gt=0))
+        ).annotate(
+            payments_count=Count('commissions')
         )
+
+        # Теперь считаем общее количество и активных (с платежами)
+        referrals = {
+            'total': referrals_qs.count(),
+            'active': referrals_qs.filter(payments_count__gt=0).count()
+        }
         
         # Рассчитываем конверсию в платящих
         referrals_count = referrals['total'] or 0
