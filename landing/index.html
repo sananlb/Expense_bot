@@ -30,7 +30,7 @@
       --gradient-1: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
       --gradient-2: linear-gradient(135deg, #ec4899 0%, #f43f5e 100%);
       --gradient-3: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-      --gradient-hero: linear-gradient(180deg, rgba(99,102,241,0.03) 0%, rgba(139,92,246,0.03) 100%);
+      --gradient-hero: linear-gradient(180deg, rgba(99,102,241,0.02) 0%, rgba(139,92,246,0.02) 100%);
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
       --shadow: 0 4px 6px rgba(0,0,0,0.04), 0 2px 4px rgba(0,0,0,0.06);
       --shadow-lg: 0 10px 15px rgba(0,0,0,0.04), 0 4px 6px rgba(0,0,0,0.08);
@@ -54,7 +54,11 @@
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       color: var(--dark);
-      background: linear-gradient(180deg, #ffffff 0%, #f7f8fa 50%, #f0f2f5 100%);
+      background: linear-gradient(180deg,
+        rgba(255, 255, 255, 1) 0%,
+        rgba(248, 251, 254, 1) 30%,
+        rgba(244, 248, 253, 1) 70%,
+        rgba(238, 244, 250, 1) 100%);
       min-height: 100vh;
       line-height: 1.6;
       overflow-x: hidden;
@@ -237,7 +241,7 @@
       position: relative;
       overflow: hidden;
       margin-bottom: 0;
-      background: linear-gradient(135deg, rgba(203, 213, 225, 0.1) 0%, rgba(148, 163, 184, 0.05) 100%);
+      background: linear-gradient(135deg, rgba(203, 213, 225, 0.05) 0%, rgba(148, 163, 184, 0.03) 100%);
     }
 
 
@@ -292,7 +296,9 @@
     .btn-primary {
       background: var(--gradient-1);
       color: var(--white);
-      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.25);
+      box-shadow:
+        0 4px 14px rgba(99, 102, 241, 0.3),
+        0 0 20px rgba(99, 102, 241, 0.15);
     }
 
     /* Special style for nav button - same as main button */
@@ -311,7 +317,9 @@
 
     .btn-primary:hover {
       transform: translateY(-2px);
-      box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
+      box-shadow:
+        0 8px 24px rgba(99, 102, 241, 0.4),
+        0 0 30px rgba(99, 102, 241, 0.25);
     }
 
     .btn-secondary {
@@ -504,7 +512,7 @@
     /* Features Section - светлый фон */
     .features {
       padding: 80px 0;
-      background: linear-gradient(180deg, #f8fafc 0%, #f1f3f5 100%);
+      background: linear-gradient(180deg, #f6f8fb 0%, #f0f2f6 100%);
       position: relative;
     }
 
@@ -548,19 +556,23 @@
 
     .features-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 32px;
     }
 
     .feature-card {
-      background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, #fafbfc 100%);
+      background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(250,251,252,0.95) 100%);
       border-radius: var(--radius);
-      padding: 32px;
+      padding: 28px;
       position: relative;
       overflow: hidden;
-      /* Усиленная мягкая тень для выразительности */
-      box-shadow: 0 4px 12px rgba(0,0,0,0.06), 0 2px 6px rgba(0,0,0,0.04);
-      border: 1px solid rgba(0,0,0,0.02);
+      /* Более выраженная тень для глубины */
+      box-shadow:
+        0 10px 30px rgba(0,0,0,0.12),
+        0 4px 12px rgba(0,0,0,0.08),
+        0 2px 4px rgba(0,0,0,0.04);
+      border: 1px solid rgba(255,255,255,0.5);
+      backdrop-filter: blur(16px) saturate(130%);
       transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     }
 
@@ -569,42 +581,50 @@
       display: none;
     }
 
-    /* Мягкий hover эффект с усиленной тенью */
+    /* Убираем hover эффект всплывания */
     .feature-card:hover {
-      transform: translateY(-6px);
-      box-shadow: 0 16px 32px rgba(0,0,0,0.08), 0 6px 12px rgba(0,0,0,0.05);
+      transform: translateY(0);
+      box-shadow:
+        0 10px 30px rgba(0,0,0,0.12),
+        0 4px 12px rgba(0,0,0,0.08),
+        0 2px 4px rgba(0,0,0,0.04);
+      backdrop-filter: blur(20px) saturate(150%);
     }
 
     .feature-icon {
-      width: 56px;
-      height: 56px;
+      width: 52px;
+      height: 52px;
       background: var(--gradient-1);
-      border-radius: 12px;
+      border-radius: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
+      font-size: 22px;
       margin-bottom: 20px;
-      box-shadow: 0 6px 16px rgba(99, 102, 241, 0.2);
+      box-shadow:
+        0 6px 16px rgba(99, 102, 241, 0.35),
+        0 0 16px rgba(99, 102, 241, 0.2);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .feature-title {
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 700;
-      margin-bottom: 12px;
+      margin-bottom: 10px;
       color: var(--dark);
     }
 
     .feature-desc {
       color: #475569;
       line-height: 1.6;
+      font-size: 15px;
     }
 
-    /* How It Works - прозрачный фон как у Hero */
+    /* How It Works - едва заметный серо-голубой оттенок */
     .how-it-works {
       padding: 80px 0;
       position: relative;
-      background: transparent;
+      background: linear-gradient(180deg, rgba(230, 240, 250, 0.4) 0%, rgba(220, 235, 248, 0.35) 100%);
       margin-top: 0;
     }
 
@@ -670,7 +690,7 @@
     /* Demo Section - белый фон */
     .demo-section {
       padding: 80px 0;
-      background: linear-gradient(180deg, #ffffff 0%, #fafbfc 100%);
+      background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
       position: relative;
       margin-top: 0;
     }
@@ -764,7 +784,11 @@
       font-weight: 600;
       color: var(--dark);
       margin: 0 0 6px 0;
-      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      text-shadow:
+        0 4px 8px rgba(0, 0, 0, 0.15),
+        0 2px 4px rgba(0, 0, 0, 0.12),
+        0 1px 2px rgba(0, 0, 0, 0.08);
+      letter-spacing: -0.01em;
     }
 
     .phone-description {
@@ -772,7 +796,10 @@
       color: #64748b;
       margin: 0;
       line-height: 1.4;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+      text-shadow:
+        0 3px 6px rgba(0, 0, 0, 0.12),
+        0 1px 3px rgba(0, 0, 0, 0.08);
+      letter-spacing: 0.01em;
     }
 
     .demo-phone {
@@ -785,13 +812,66 @@
 
     .phone-frame {
       position: relative;
-      background: linear-gradient(135deg, #8e8e93, #636366);
-      border-radius: 32px;
-      padding: 3px;
+      /* Brushed titanium texture with PVD coating effect */
+      background:
+        repeating-linear-gradient(
+          90deg,
+          rgba(150, 150, 155, 0.15) 0px,
+          transparent 0.5px,
+          transparent 1px,
+          rgba(150, 150, 155, 0.15) 1.5px
+        ),
+        linear-gradient(135deg,
+          #c8c8ca 0%,
+          #b8b8ba 20%,
+          #a8a8aa 40%,
+          #b5b5b7 60%,
+          #c0c0c2 80%,
+          #b0b0b2 100%
+        );
+      border-radius: 28px;
+      padding: 8px;
+      /* Contoured edges with chamfer effect */
       box-shadow:
-        0 25px 60px rgba(0, 0, 0, 0.4),
-        0 15px 30px rgba(0, 0, 0, 0.25),
-        inset 0 1px 2px rgba(255, 255, 255, 0.2);
+        /* Outer shadows for depth */
+        0 20px 40px rgba(0, 0, 0, 0.3),
+        0 10px 20px rgba(0, 0, 0, 0.2),
+        0 4px 8px rgba(0, 0, 0, 0.15),
+        /* Edge highlight for chamfered effect */
+        inset 0 1px 0 rgba(255, 255, 255, 0.5),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+        /* Brushed metal texture shadows */
+        inset 0 0 0 0.5px rgba(255, 255, 255, 0.1),
+        inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+      position: relative;
+      overflow: visible;
+    }
+
+    /* Metallic sheen overlay for premium titanium look */
+    .phone-frame::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(
+        105deg,
+        transparent 40%,
+        rgba(255, 255, 255, 0.1) 45%,
+        rgba(255, 255, 255, 0.2) 50%,
+        rgba(255, 255, 255, 0.1) 55%,
+        transparent 60%
+      );
+      border-radius: 28px;
+      pointer-events: none;
+      z-index: 1;
+      animation: metallicSheen 8s ease-in-out infinite;
+    }
+
+    @keyframes metallicSheen {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 0.6; }
     }
 
     /* Hover trigger only on phone edge */
@@ -810,88 +890,90 @@
       transform: perspective(1000px) rotateY(0deg) rotateZ(0deg);
     }
 
-    /* Volume buttons */
-    .phone-frame::after {
-      content: '';
-      position: absolute;
-      left: -2px;
-      top: 80px;
-      width: 3px;
-      height: 25px;
-      background: linear-gradient(145deg, #8e8e93, #636366);
-      border-radius: 2px 0 0 2px;
-      box-shadow:
-        -1px 0 2px rgba(0, 0, 0, 0.2),
-        inset 1px 0 1px rgba(255, 255, 255, 0.1);
-    }
 
-    /* Power button */
+    /* Power button - precision machined titanium */
     .power-button {
       position: absolute;
       right: -2px;
-      top: 100px;
-      width: 3px;
-      height: 50px;
-      background: linear-gradient(145deg, #8e8e93, #636366);
+      top: 90px;
+      width: 4px;
+      height: 65px;
+      background:
+        linear-gradient(90deg,
+          #a8a8aa 0%,
+          #b5b5b7 30%,
+          #c0c0c2 70%,
+          #a8a8aa 100%
+        );
       border-radius: 0 2px 2px 0;
       box-shadow:
-        1px 0 2px rgba(0, 0, 0, 0.2),
-        inset -1px 0 1px rgba(255, 255, 255, 0.1);
+        1px 0 3px rgba(0, 0, 0, 0.3),
+        inset -1px 0 1px rgba(255, 255, 255, 0.3),
+        inset 1px 0 1px rgba(0, 0, 0, 0.2),
+        inset 0 1px 0.5px rgba(255, 255, 255, 0.4),
+        inset 0 -1px 0.5px rgba(0, 0, 0, 0.3);
     }
 
-    /* Mute switch */
+    /* Убрано - заменено на Action Button */
     .mute-switch {
-      position: absolute;
-      left: -2px;
-      top: 50px;
-      width: 3px;
-      height: 20px;
-      background: linear-gradient(145deg, #8e8e93, #636366);
-      border-radius: 2px 0 0 2px;
-      box-shadow:
-        -1px 0 2px rgba(0, 0, 0, 0.2),
-        inset 1px 0 1px rgba(255, 255, 255, 0.1);
+      display: none;
     }
 
-    /* Volume up button */
+    /* Volume up button - longer with outline */
     .volume-up {
       position: absolute;
-      left: -2px;
-      top: 110px;
-      width: 3px;
-      height: 35px;
-      background: linear-gradient(145deg, #8e8e93, #636366);
-      border-radius: 2px 0 0 2px;
+      left: -3px;
+      top: 75px;
+      width: 5px;
+      height: 42px;
+      background:
+        linear-gradient(180deg,
+          #b0b0b2 0%,
+          #b8b8ba 45%,
+          #b8b8ba 55%,
+          #b0b0b2 100%
+        );
+      border-radius: 2.5px 0 0 2.5px;
+      border: 0.5px solid rgba(0, 0, 0, 0.15);
       box-shadow:
-        -1px 0 2px rgba(0, 0, 0, 0.2),
-        inset 1px 0 1px rgba(255, 255, 255, 0.1);
+        -1.5px 0 3px rgba(0, 0, 0, 0.25),
+        inset 0.5px 0 0.5px rgba(255, 255, 255, 0.2);
     }
 
-    /* Volume down button */
+    /* Volume down button - longer with outline */
     .volume-down {
       position: absolute;
-      left: -2px;
-      top: 150px;
-      width: 3px;
-      height: 35px;
-      background: linear-gradient(145deg, #8e8e93, #636366);
-      border-radius: 2px 0 0 2px;
+      left: -3px;
+      top: 125px;
+      width: 5px;
+      height: 42px;
+      background:
+        linear-gradient(180deg,
+          #b0b0b2 0%,
+          #b8b8ba 45%,
+          #b8b8ba 55%,
+          #b0b0b2 100%
+        );
+      border-radius: 2.5px 0 0 2.5px;
+      border: 0.5px solid rgba(0, 0, 0, 0.15);
       box-shadow:
-        -1px 0 2px rgba(0, 0, 0, 0.2),
-        inset 1px 0 1px rgba(255, 255, 255, 0.1);
+        -1.5px 0 3px rgba(0, 0, 0, 0.25),
+        inset 0.5px 0 0.5px rgba(255, 255, 255, 0.2);
     }
+
 
     .phone-screen {
       background: #000;
-      border-radius: 29px;
+      border-radius: 26.5px;
       aspect-ratio: 9/18;
       overflow: hidden;
       position: relative;
-      border: 8px solid #000;
+      border: 7px solid #1c1c1e;
       box-shadow:
-        inset 0 0 0 1px rgba(255, 255, 255, 0.05),
-        inset 0 0 10px rgba(0, 0, 0, 0.6);
+        inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+        inset 0 0 8px rgba(0, 0, 0, 0.7);
     }
+
 
     .carousel-wrapper {
       width: 100%;
@@ -941,11 +1023,11 @@
       50% { transform: scale(1.05); }
     }
 
-    /* Pricing - прозрачный фон как у Hero */
+    /* Pricing - едва заметный серо-голубой оттенок */
     .pricing {
       padding: 80px 0;
       position: relative;
-      background: transparent;
+      background: linear-gradient(180deg, rgba(225, 237, 250, 0.45) 0%, rgba(215, 230, 245, 0.4) 100%);
       margin-top: 0;
     }
 
@@ -1037,7 +1119,7 @@
     .faq {
       padding: 80px 0;
       position: relative;
-      background: linear-gradient(180deg, #f8fafc 0%, #f1f3f5 100%);
+      background: linear-gradient(180deg, #f6f8fb 0%, #f0f2f6 100%);
       margin-top: 0;
     }
 
@@ -1110,8 +1192,8 @@
     /* CTA Section */
     .cta-section {
       padding: 80px 0;
-      /* Чуть менее яркий фон CTA */
-      background: linear-gradient(135deg, #8a96ff 0%, #8b6ec7 100%);
+      /* Прозрачный цветной фон CTA */
+      background: linear-gradient(135deg, rgba(124, 136, 232, 0.85) 0%, rgba(125, 98, 184, 0.85) 100%);
       position: relative;
       overflow: hidden;
     }
@@ -1819,46 +1901,13 @@
       .feature-card {
         /* Разрешаем hover эффекты */
       }
-      .features .feature-card.active-center,
-      .features .feature-card.distance-0,
-      .features .feature-card.distance-1,
-      .features .feature-card.distance-2,
-      .features .feature-card.distance-3,
-      .features .feature-card.distance-4 {
-        transform: none !important;
-        box-shadow: var(--shadow-equal) !important;
-        transition: none !important;
-      }
+      /* Убираем блокировки теней - разрешаем нормальную работу hover */
       /* Hover эффекты работают нормально */
     }
 
-    /* Дополнительная страховка: на больших десктопах полностью отключаем любые реакции и фиксируем тени */
+    /* На больших десктопах разрешаем нормальную работу hover эффектов */
     @media (min-width: 1024px) {
-      /* Фиксируем состояние карточек и отключаем любые hover-эффекты */
-      .features .feature-card,
-      .features .feature-card:hover,
-      .features .feature-card:focus,
-      .features .feature-card:active {
-        transform: none !important;
-        box-shadow: var(--shadow-equal) !important;
-        transition: none !important;
-        background: var(--white) !important;
-        pointer-events: none !important; /* полностью отключаем hover на ПК */
-        cursor: default !important;
-      }
-      /* Полностью прячем любую фиолетовую полосу/псевдоэлемент */
-      .features .feature-card::before,
-      .features .feature-card:hover::before,
-      .features .feature-card:focus::before,
-      .features .feature-card:active::before,
-      .features .feature-card::after,
-      .features .feature-card:hover::after,
-      .features .feature-card:focus::after,
-      .features .feature-card:active::after {
-        display: none !important;
-        content: '' !important;
-        opacity: 0 !important;
-      }
+      /* Убираем все блокировки - позволяем карточкам работать с нашими новыми стилями */
     }
 
     /* Small Mobile */
@@ -2223,7 +2272,7 @@
           <div class="phone-container">
             <div class="phone-titles" id="phoneTitles">
               <h3 class="phone-title" id="phoneTitle">Умная категоризация</h3>
-              <p class="phone-description" id="phoneDescription">AI автоматически определяет категории трат</p>
+              <p class="phone-description" id="phoneDescription">AI автоматически определяет категории</p>
             </div>
             <div class="phone-hover-trigger"></div>
             <div class="phone-frame">
@@ -3015,7 +3064,7 @@
         ];
 
         this.slideDescriptions = [
-          'AI автоматически определяет категории трат',
+          'AI автоматически определяет категории',
           'История всех расходов и доходов',
           'Статистика и графики по категориям',
           'Отслеживание кэшбэка от банков',
