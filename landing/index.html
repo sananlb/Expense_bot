@@ -3116,47 +3116,42 @@
       changeVideoSource(index) {
         if (!this.video || !this.videoSources[index]) return;
 
-        // Создаем новый video элемент для плавного перехода
-        const newVideo = document.createElement('video');
-        newVideo.src = this.videoSources[index];
-        newVideo.muted = true;
-        newVideo.autoplay = true;
-        newVideo.playsInline = true;
-        newVideo.setAttribute('webkit-playsinline', '');
-        newVideo.preload = 'auto';
+        // Предзагружаем следующее видео заранее
+        const nextIndex = (index + 1) % this.totalSlides;
+        this.preloadVideo(nextIndex);
 
-        // Копируем стили со старого видео
-        newVideo.style.width = '100%';
-        newVideo.style.height = '100%';
-        newVideo.style.objectFit = 'cover';
-        newVideo.style.borderRadius = '12px';
-        newVideo.id = 'mainVideo';
+        // Сохраняем текущее положение экрана
+        const phoneScreen = document.querySelector('.phone-screen');
 
-        // Когда новое видео готово к воспроизведению
-        newVideo.addEventListener('canplaythrough', () => {
-          // Заменяем старое видео новым
-          const phoneScreen = document.querySelector('.phone-screen');
-          if (phoneScreen && this.video) {
-            this.video.pause();
-            phoneScreen.replaceChild(newVideo, this.video);
-            this.video = newVideo;
+        // Создаем временный постер из последнего кадра текущего видео
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = this.video.videoWidth;
+        canvas.height = this.video.videoHeight;
+        ctx.drawImage(this.video, 0, 0);
+        const posterUrl = canvas.toDataURL();
 
-            // Запускаем воспроизведение
-            newVideo.play().catch(e => {
-              console.log('Play failed, retrying:', e);
-              setTimeout(() => {
-                newVideo.play().catch(err => console.log('Play retry failed:', err));
-              }, 100);
-            });
+        // Устанавливаем постер чтобы избежать черного экрана
+        this.video.poster = posterUrl;
 
-            // Предзагружаем следующее видео
-            const nextIndex = (index + 1) % this.totalSlides;
-            this.preloadVideo(nextIndex);
-          }
+        // Пауза и смена источника
+        this.video.pause();
+        this.video.src = this.videoSources[index];
+
+        // Ждем когда видео будет готово к воспроизведению
+        this.video.addEventListener('loadeddata', () => {
+          // Убираем постер и запускаем видео
+          this.video.poster = '';
+          this.video.play().catch(e => {
+            console.log('Play failed, retrying:', e);
+            setTimeout(() => {
+              this.video.play().catch(err => console.log('Play retry failed:', err));
+            }, 100);
+          });
         }, { once: true });
 
-        // Начинаем загрузку
-        newVideo.load();
+        // Начинаем загрузку нового видео
+        this.video.load();
       }
 
       preloadVideo(index) {
