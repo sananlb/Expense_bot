@@ -205,13 +205,14 @@
       font-weight: 600;
       font-size: 24px;
       pointer-events: none;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.15);
     }
 
     .logo img {
       width: 48px;
       height: 48px;
       border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.1);
       pointer-events: auto;
     }
 
@@ -693,6 +694,8 @@
       background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
       position: relative;
       margin-top: 0;
+      min-height: 600px;
+      overflow: hidden;
     }
 
     /* Demo section gradient transitions from top - removed */
@@ -704,6 +707,7 @@
       grid-template-columns: 1fr 1fr;
       gap: 60px;
       align-items: center;
+      min-height: 500px;
     }
 
     .demo-text h2 {
@@ -847,32 +851,8 @@
       overflow: visible;
     }
 
-    /* Metallic sheen overlay for premium titanium look */
-    .phone-frame::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: linear-gradient(
-        105deg,
-        transparent 40%,
-        rgba(255, 255, 255, 0.1) 45%,
-        rgba(255, 255, 255, 0.2) 50%,
-        rgba(255, 255, 255, 0.1) 55%,
-        transparent 60%
-      );
-      border-radius: 28px;
-      pointer-events: none;
-      z-index: 1;
-      animation: metallicSheen 8s ease-in-out infinite;
-    }
+    /* Removed metallic sheen overlay */
 
-    @keyframes metallicSheen {
-      0%, 100% { opacity: 0.3; }
-      50% { opacity: 0.6; }
-    }
 
     /* Hover trigger only on phone edge */
     .phone-hover-trigger {
@@ -970,8 +950,45 @@
       position: relative;
       border: 7px solid #1c1c1e;
       box-shadow:
-        inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
         inset 0 0 8px rgba(0, 0, 0, 0.7);
+      width: 100%;
+      height: auto;
+      cursor: grab;
+      user-select: none;
+    }
+
+    .phone-screen:active {
+      cursor: grabbing;
+    }
+
+    /* Carousel navigation dots */
+    .carousel-dots {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 8px;
+      z-index: 10;
+    }
+
+    .carousel-dots .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .carousel-dots .dot.active {
+      width: 20px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    .carousel-dots .dot:hover {
+      background: rgba(255, 255, 255, 0.6);
     }
 
 
@@ -981,13 +998,16 @@
       position: absolute;
       top: 0;
       left: 0;
+      overflow: hidden;
+      min-height: 100%;
     }
 
     .carousel-track {
       width: 100%;
       height: 100%;
       display: flex;
-      transition: transform 0.5s ease;
+      transition: transform 0.3s ease-out;
+      will-change: transform;
     }
 
     .carousel-slide {
@@ -995,6 +1015,7 @@
       height: 100%;
       flex-shrink: 0;
       position: relative;
+      overflow: hidden;
     }
 
     .slide-content {
@@ -1011,9 +1032,14 @@
       height: 100%;
       object-fit: cover;
       border-radius: 0;
-      position: absolute;
-      top: 0;
-      left: 0;
+      display: block;
+    }
+
+    #mainVideo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
 
     /* Removed demo badge */
@@ -1134,20 +1160,26 @@
       background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, #fafbfc 100%);
       border: 1px solid rgba(0,0,0,0.04);
       border-radius: var(--radius);
-      margin-bottom: 16px;
+      margin-bottom: 14px;
       overflow: hidden;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.05);
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .faq-item:hover {
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
+      transform: translateY(-2px);
     }
 
     /* FAQ items always expanded - no active state */
 
     .faq-question {
-      padding: 24px 24px 12px 24px;
+      padding: 20px 20px 10px 20px;
       cursor: default;
       display: block;
       font-weight: 600;
       color: var(--dark);
+      font-size: 17px;
     }
 
     .faq-icon {
@@ -1159,9 +1191,10 @@
     }
 
     .faq-answer-content {
-      padding: 12px 24px 24px;
+      padding: 10px 20px 20px;
       color: #475569;
       line-height: 1.6;
+      font-size: 15px;
     }
 
     /* CTA Section */
@@ -1585,11 +1618,12 @@
       }
 
       .faq-question {
-        padding: 20px;
-        font-size: 15px;
+        padding: 18px;
+        font-size: 16px;
       }
 
       .faq-answer-content {
+        padding: 8px 18px 18px;
         font-size: 14px;
       }
 
@@ -1721,12 +1755,12 @@
       }
 
       .floating-card-2 {
-        bottom: 8%;
+        bottom: 12%;
         left: -4px; /* смещаем чуть левее на мобилках */
       }
 
       .hero {
-        padding: 84px 0 40px;
+        padding: 84px 0 60px;
       }
 
       .hero-text h1 {
@@ -2162,11 +2196,6 @@
       </div>
       <div class="features-grid">
         <div class="feature-card reveal">
-          <div class="feature-icon">🎙️</div>
-          <h3 class="feature-title" data-i18n="feat_voice">Голосовой ввод</h3>
-          <p class="feature-desc" data-i18n="feat_voice_desc">Продиктуйте траты голосом — бот распознает и сохранит автоматически</p>
-        </div>
-        <div class="feature-card reveal">
           <div class="feature-icon">🤖</div>
           <h3 class="feature-title" data-i18n="feat_ai_categorization">AI-категоризация</h3>
           <p class="feature-desc" data-i18n="feat_ai_desc">Умное определение категорий на основе ваших предыдущих трат</p>
@@ -2175,6 +2204,11 @@
           <div class="feature-icon">🏠</div>
           <h3 class="feature-title" data-i18n="feat_family">Семейный бюджет</h3>
           <p class="feature-desc" data-i18n="feat_family_desc">Ведите общий учет с близкими, контролируйте расходы вместе</p>
+        </div>
+        <div class="feature-card reveal">
+          <div class="feature-icon">🎙️</div>
+          <h3 class="feature-title" data-i18n="feat_voice">Голосовой ввод</h3>
+          <p class="feature-desc" data-i18n="feat_voice_desc">Продиктуйте траты голосом — бот распознает и сохранит автоматически</p>
         </div>
         <div class="feature-card reveal">
           <div class="feature-icon">🔁</div>
@@ -2258,74 +2292,18 @@
             <div class="volume-down"></div>
 
             <div class="phone-screen">
-              <!-- Карусель внутри телефона -->
-              <div class="carousel-wrapper" id="carouselWrapper">
-                <div class="carousel-track" id="carouselTrack">
-                  <!-- Slide 1: AI категоризация -->
-                  <div class="carousel-slide">
-                    <div class="slide-content">
-                      <video id="video1" muted playsinline>
-                        <source src="demos/ai-categorization.mp4" type="video/mp4">
-                        <div class="video-placeholder" data-i18n="slide_ai_ph">AI категоризация</div>
-                      </video>
-                    </div>
-                  </div>
+              <!-- Одно видео с динамическим источником -->
+              <video id="mainVideo" muted playsinline webkit-playsinline preload="auto" src="demos/ai-categorization.mp4">
+              </video>
 
-                  <!-- Slide 2: Последние траты -->
-                  <div class="carousel-slide">
-                    <div class="slide-content">
-                      <video id="video2" muted playsinline>
-                        <source src="demos/recent-expenses.mp4" type="video/mp4">
-                        <div class="video-placeholder" data-i18n="slide_recent_ph">История расходов</div>
-                      </video>
-                    </div>
-                  </div>
-
-                  <!-- Slide 3: Аналитика -->
-                  <div class="carousel-slide">
-                    <div class="slide-content">
-                      <video id="video3" muted playsinline>
-                        <source src="demos/analytics.mp4" type="video/mp4">
-                        <div class="video-placeholder" data-i18n="slide_analytics_ph">Топ категорий</div>
-                      </video>
-                    </div>
-                  </div>
-
-                  <!-- Slide 4: Кэшбэк -->
-                  <div class="carousel-slide">
-                    <div class="slide-content">
-                      <video id="video4" muted playsinline>
-                        <source src="demos/cashback.mp4" type="video/mp4">
-                        <div class="video-placeholder" data-i18n="slide_cashback_ph">Кэшбэк</div>
-                      </video>
-                    </div>
-                  </div>
-
-                  <!-- Slide 5: PDF отчеты -->
-                  <div class="carousel-slide">
-                    <div class="slide-content">
-                      <video id="video5" muted playsinline>
-                        <source src="demos/pdf-reports.mp4" type="video/mp4">
-                        <div class="video-placeholder" data-i18n="slide_pdf_ph">Отчеты</div>
-                      </video>
-                    </div>
-                  </div>
-
-                  
-
-                  <!-- Slide 7: Вопросы боту -->
-                  <div class="carousel-slide">
-                    <div class="slide-content">
-                      <video id="video7" muted playsinline>
-                        <source src="demos/bot-questions.mp4" type="video/mp4">
-                        <div class="video-placeholder" data-i18n="slide_questions_ph">Диалог с ботом</div>
-                      </video>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Navigation Dots -->
-                <div class="carousel-nav" id="carouselNav"></div>
+              <!-- Navigation dots -->
+              <div class="carousel-dots">
+                <span class="dot active" data-slide="0"></span>
+                <span class="dot" data-slide="1"></span>
+                <span class="dot" data-slide="2"></span>
+                <span class="dot" data-slide="3"></span>
+                <span class="dot" data-slide="4"></span>
+                <span class="dot" data-slide="5"></span>
               </div>
             </div>
           </div>
@@ -3009,6 +2987,14 @@
       constructor() {
         this.currentSlide = 0;
         this.totalSlides = 6;
+        this.videoSources = [
+          'demos/ai-categorization.mp4',
+          'demos/recent-expenses.mp4',
+          'demos/analytics.mp4',
+          'demos/cashback.mp4',
+          'demos/pdf-reports.mp4',
+          'demos/bot-questions.mp4'
+        ];
         this.slideTitles = [
           'Умная категоризация',
           'Последние траты',
@@ -3017,7 +3003,6 @@
           'PDF-отчеты',
           'Вопросы боту'
         ];
-
         this.slideDescriptions = [
           'AI автоматически определяет категории',
           'История всех расходов и доходов',
@@ -3026,102 +3011,239 @@
           'Детальные отчеты для скачивания',
           'Умный помощник отвечает на вопросы'
         ];
-
         this.init();
       }
 
       init() {
-        this.cacheElements();
-        this.setupVideoSequence();
-        this.updateSlide();
-      }
-
-      cacheElements() {
-        this.track = document.getElementById('carouselTrack');
-        this.wrapper = document.getElementById('carouselWrapper');
-        this.navContainer = document.getElementById('carouselNav');
-        this.videos = document.querySelectorAll('video');
+        this.video = document.getElementById('mainVideo');
         this.phoneTitle = document.getElementById('phoneTitle');
         this.phoneDescription = document.getElementById('phoneDescription');
+
+        console.log('VideoCarousel initialized, video element:', this.video);
+
+        if (this.video) {
+          // Wait for first video to be ready before playing
+          this.video.addEventListener('loadedmetadata', () => {
+            console.log('First video metadata loaded');
+            this.video.play().catch(e => console.log('Initial play failed:', e));
+          }, { once: true });
+
+          this.video.addEventListener('ended', () => this.nextSlide());
+
+          // Add swipe support
+          this.addSwipeSupport();
+
+          // Ensure first video is loaded
+          this.video.load();
+        } else {
+          console.error('Video element not found!');
+        }
+
+        this.updateTitles();
       }
 
-      setupVideoSequence() {
-        if (!this.videos) return;
+      addSwipeSupport() {
+        const phoneScreen = document.querySelector('.phone-screen');
+        if (!phoneScreen) return;
 
-        // Setup video end event listeners
-        this.videos.forEach((video, index) => {
-          video.addEventListener('ended', () => {
-            // Move to next video when current one ends
-            this.nextSlide();
-          });
+        let startX = 0;
+        let startY = 0;
+        let endX = 0;
+        let endY = 0;
+
+        phoneScreen.addEventListener('touchstart', (e) => {
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+        }, { passive: true });
+
+        phoneScreen.addEventListener('touchmove', (e) => {
+          endX = e.touches[0].clientX;
+          endY = e.touches[0].clientY;
+        }, { passive: true });
+
+        phoneScreen.addEventListener('touchend', () => {
+          const diffX = endX - startX;
+          const diffY = endY - startY;
+          const threshold = 50; // Minimum swipe distance
+
+          // Check if horizontal swipe is stronger than vertical
+          if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > threshold) {
+            if (diffX > 0) {
+              // Swipe right
+              this.handleSwipe('right');
+            } else {
+              // Swipe left
+              this.handleSwipe('left');
+            }
+          }
         });
 
-        // Start first video
-        if (this.videos[0]) {
-          this.videos[0].currentTime = 0;
-          this.videos[0].play().catch(e => console.log('Video play failed:', e));
-        }
+        // Also add mouse support for desktop testing
+        let mouseDown = false;
+        let mouseStartX = 0;
+
+        phoneScreen.addEventListener('mousedown', (e) => {
+          // Don't handle if clicking on dots
+          if (e.target.classList.contains('dot')) return;
+
+          mouseDown = true;
+          mouseStartX = e.clientX;
+          e.preventDefault();
+        });
+
+        phoneScreen.addEventListener('mousemove', (e) => {
+          if (mouseDown) {
+            endX = e.clientX;
+          }
+        });
+
+        phoneScreen.addEventListener('mouseup', () => {
+          if (mouseDown) {
+            mouseDown = false;
+            const diffX = endX - mouseStartX;
+            const threshold = 50;
+
+            if (Math.abs(diffX) > threshold) {
+              if (diffX > 0) {
+                this.handleSwipe('right');
+              } else {
+                this.handleSwipe('left');
+              }
+            }
+          }
+        });
+
+        phoneScreen.addEventListener('mouseleave', () => {
+          mouseDown = false;
+        });
+
+        // Add dot click support
+        const dots = document.querySelectorAll('.carousel-dots .dot');
+        dots.forEach(dot => {
+          dot.addEventListener('click', (e) => {
+            const slideIndex = parseInt(e.target.dataset.slide);
+            this.goToSlide(slideIndex);
+          });
+        });
       }
 
-      // Removed touch and mouse event listeners
-
-
-      nextSlide() {
-        // Loop back to first slide after the last one
-        this.currentSlide = (this.currentSlide + 1) % this.totalSlides;
-        this.updateSlide();
-
-        // Play the new current video
-        const currentVideo = this.videos[this.currentSlide];
-        if (currentVideo) {
-          currentVideo.currentTime = 0;
-          currentVideo.play().catch(e => console.log('Video play failed:', e));
-        }
-      }
-
-      updateSlide() {
-        // Update track position
-        if (this.track) {
-          this.track.style.transform = `translateX(-${this.currentSlide * 100}%)`;
-        }
-
-        // Update title and description
+      updateTitles() {
         if (this.phoneTitle && this.slideTitles[this.currentSlide]) {
           this.phoneTitle.textContent = this.slideTitles[this.currentSlide];
         }
         if (this.phoneDescription && this.slideDescriptions[this.currentSlide]) {
           this.phoneDescription.textContent = this.slideDescriptions[this.currentSlide];
         }
+      }
 
-        // Pause all videos except current
-        if (this.videos) {
-          this.videos.forEach((video, index) => {
-            if (index !== this.currentSlide) {
-              video.pause();
-              video.currentTime = 0;
-            }
-          });
+      updateDots() {
+        const dots = document.querySelectorAll('.carousel-dots .dot');
+        dots.forEach((dot, index) => {
+          if (index === this.currentSlide) {
+            dot.classList.add('active');
+          } else {
+            dot.classList.remove('active');
+          }
+        });
+      }
+
+      goToSlide(index) {
+        if (index < 0 || index >= this.totalSlides || index === this.currentSlide) return;
+
+        // Update current slide
+        this.currentSlide = index;
+
+        // Update titles and dots
+        this.updateTitles();
+        this.updateDots();
+
+        // Temporarily disable rotation during video change
+        window.rotationPaused = true;
+
+        // Change video source
+        this.changeVideoSource(this.currentSlide);
+
+        // Re-enable rotation after a short delay
+        setTimeout(() => {
+          window.rotationPaused = false;
+        }, 600);
+      }
+
+      changeVideoSource(index) {
+        if (!this.video || !this.videoSources[index]) return;
+
+        // Pause current video
+        this.video.pause();
+
+        // Small delay to smooth transition
+        setTimeout(() => {
+          // Change source
+          this.video.src = this.videoSources[index];
+
+          // Load and play new video
+          this.video.load();
+          this.video.play().catch(e => console.log('Play failed:', e));
+        }, 50);
+      }
+
+      handleSwipe(direction) {
+        if (direction === 'left') {
+          this.nextSlide();
+        } else if (direction === 'right') {
+          this.prevSlide();
         }
       }
 
-      // Removed autoplay timer methods - videos advance on end
+      prevSlide() {
+        // Move to previous slide
+        this.currentSlide = (this.currentSlide - 1 + this.totalSlides) % this.totalSlides;
 
-      toggleAutoPlay() {
-        this.isPlaying = !this.isPlaying;
+        // Update titles and dots
+        this.updateTitles();
+        this.updateDots();
 
-        if (this.isPlaying) {
-          this.startAutoPlay();
-        } else {
-          this.pauseAutoPlay();
-        }
+        // Temporarily disable rotation during video change
+        window.rotationPaused = true;
+
+        // Change video source
+        this.changeVideoSource(this.currentSlide);
+
+        // Re-enable rotation after a short delay
+        setTimeout(() => {
+          window.rotationPaused = false;
+        }, 600);
       }
+
+      nextSlide() {
+        // Move to next slide
+        this.currentSlide = (this.currentSlide + 1) % this.totalSlides;
+
+        // Update titles and dots
+        this.updateTitles();
+        this.updateDots();
+
+        // Temporarily disable rotation during video change
+        window.rotationPaused = true;
+
+        // Change video source
+        this.changeVideoSource(this.currentSlide);
+
+        // Re-enable rotation after a short delay
+        setTimeout(() => {
+          window.rotationPaused = false;
+        }, 600);
+      }
+
+      // Removed updateSlide method - no longer needed
+
+      // Simple single video carousel
     }
 
     // Initialize carousel when DOM is ready
     document.addEventListener('DOMContentLoaded', () => {
-      // Check if carousel exists on page
-      const carouselWrapper = document.getElementById('carouselWrapper');
-      if (carouselWrapper) {
+      // Check if video exists on page
+      const mainVideo = document.getElementById('mainVideo');
+      if (mainVideo) {
         new VideoCarousel();
       }
 
@@ -3131,8 +3253,12 @@
       const phoneContainer = document.querySelector('.phone-container');
       const isMobileOrTablet = () => window.matchMedia('(max-width: 768px)').matches;
 
+      let phoneRotationTicking = false;
       function updatePhoneRotation() {
         if (!demoPhone || !phoneContainer) return;
+
+        // Skip if rotation is paused during video change
+        if (window.rotationPaused) return;
 
         // On desktop, rotation is handled by hover
         if (!isMobileOrTablet()) {
@@ -3155,8 +3281,18 @@
         }
       }
 
-      // Listen to scroll and resize events for phone rotation
-      window.addEventListener('scroll', updatePhoneRotation, { passive: true });
+      function requestPhoneRotationTick() {
+        if (!phoneRotationTicking) {
+          requestAnimationFrame(() => {
+            updatePhoneRotation();
+            phoneRotationTicking = false;
+          });
+          phoneRotationTicking = true;
+        }
+      }
+
+      // Listen to scroll and resize events for phone rotation with throttling
+      window.addEventListener('scroll', requestPhoneRotationTick, { passive: true });
       window.addEventListener('resize', updatePhoneRotation);
       updatePhoneRotation();
 
