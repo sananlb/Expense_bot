@@ -3002,15 +3002,16 @@
         console.log('VideoCarousel initialized, video element:', this.video);
 
         if (this.video) {
-          // Set poster frame to avoid black screen
-          this.video.poster = '';
+          // Set initial video source
+          this.video.src = this.videoSources[0];
 
           // Wait for first video to be ready before playing
           this.video.addEventListener('loadeddata', () => {
-            console.log('First video data loaded');
-            this.video.play().catch(e => console.log('Initial play failed:', e));
-          }, { once: true });
+            console.log('Video data loaded');
+            this.video.play().catch(e => console.log('Play failed:', e));
+          });
 
+          // ВАЖНО: обработчик окончания видео для автоматического переключения
           this.video.addEventListener('ended', () => {
             console.log('Video ended, moving to next');
             this.nextSlide();
@@ -3116,42 +3117,26 @@
       changeVideoSource(index) {
         if (!this.video || !this.videoSources[index]) return;
 
-        // Предзагружаем следующее видео заранее
-        const nextIndex = (index + 1) % this.totalSlides;
-        this.preloadVideo(nextIndex);
-
-        // Сохраняем текущее положение экрана
-        const phoneScreen = document.querySelector('.phone-screen');
-
-        // Создаем временный постер из последнего кадра текущего видео
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        canvas.width = this.video.videoWidth;
-        canvas.height = this.video.videoHeight;
-        ctx.drawImage(this.video, 0, 0);
-        const posterUrl = canvas.toDataURL();
-
-        // Устанавливаем постер чтобы избежать черного экрана
-        this.video.poster = posterUrl;
-
-        // Пауза и смена источника
+        // Простой и надежный подход
         this.video.pause();
+
+        // Меняем источник
         this.video.src = this.videoSources[index];
 
-        // Ждем когда видео будет готово к воспроизведению
-        this.video.addEventListener('loadeddata', () => {
-          // Убираем постер и запускаем видео
-          this.video.poster = '';
-          this.video.play().catch(e => {
-            console.log('Play failed, retrying:', e);
+        // Загружаем и воспроизводим
+        this.video.load();
+
+        // Как только видео готово - играем
+        const playPromise = this.video.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(e => {
+            console.log('Autoplay prevented, retrying:', e);
+            // Повторная попытка через небольшую задержку
             setTimeout(() => {
               this.video.play().catch(err => console.log('Play retry failed:', err));
             }, 100);
           });
-        }, { once: true });
-
-        // Начинаем загрузку нового видео
-        this.video.load();
+        }
       }
 
       preloadVideo(index) {
@@ -3178,16 +3163,8 @@
         // Update titles
         this.updateTitles();
 
-        // Temporarily disable rotation during video change
-        window.rotationPaused = true;
-
         // Change video source
         this.changeVideoSource(this.currentSlide);
-
-        // Re-enable rotation after a short delay
-        setTimeout(() => {
-          window.rotationPaused = false;
-        }, 600);
       }
 
       nextSlide() {
@@ -3197,16 +3174,8 @@
         // Update titles
         this.updateTitles();
 
-        // Temporarily disable rotation during video change
-        window.rotationPaused = true;
-
         // Change video source
         this.changeVideoSource(this.currentSlide);
-
-        // Re-enable rotation after a short delay
-        setTimeout(() => {
-          window.rotationPaused = false;
-        }, 600);
       }
 
       // Removed updateSlide method - no longer needed
