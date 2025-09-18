@@ -3098,24 +3098,23 @@
       changeVideoSource(index) {
         if (!this.video || !this.videoSources[index]) return;
 
-        // Store current time to avoid jumps
-        const wasPlaying = !this.video.paused;
+        // Pause current video briefly
+        this.video.pause();
 
-        // Directly change source without pause
+        // Directly change source
         this.video.src = this.videoSources[index];
 
-        // Load and immediately attempt to play
+        // Load new video
         this.video.load();
 
-        // Play without waiting for full load
-        if (wasPlaying) {
-          this.video.play().catch(e => {
-            // If autoplay fails, try again after a small delay
-            setTimeout(() => {
-              this.video.play().catch(err => console.log('Play retry failed:', err));
-            }, 100);
-          });
-        }
+        // Always play the new video after loading
+        this.video.play().catch(e => {
+          console.log('Play failed, retrying:', e);
+          // If autoplay fails, try again after a small delay
+          setTimeout(() => {
+            this.video.play().catch(err => console.log('Play retry failed:', err));
+          }, 100);
+        });
       }
 
       handleSwipe(direction) {
