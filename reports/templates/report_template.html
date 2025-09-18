@@ -248,7 +248,7 @@
                 <p class="summary-value">{{ total_count }}</p>
             </div>
             <div class="summary-card">
-                <p class="summary-label">Кешбек за месяц</p>
+                <p class="summary-label">Кешбэк за месяц</p>
                 <p class="summary-value cashback-value">{{ total_cashback }} ₽</p>
             </div>
         </div>
@@ -273,7 +273,7 @@
                         </div>
                         <div class="category-right">
                             <div class="category-amount">{{ "{:,.0f}".format(cat.amount) }} ₽</div>
-                            <div class="category-cashback">+{{ "{:,.0f}".format(cat.cashback) }} ₽ кешбек</div>
+                            <div class="category-cashback">+{{ "{:,.0f}".format(cat.cashback) }} ₽ кешбэк</div>
                         </div>
                     </div>
                     {% endfor %}
@@ -343,7 +343,7 @@
                     backgroundColor: '#667eea',
                     borderRadius: 6
                 }, {
-                    label: 'Кешбек',
+                    label: 'Кешбэк',
                     data: dailyData.cashback,
                     backgroundColor: '#10b981',
                     borderRadius: 6

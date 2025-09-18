@@ -589,10 +589,10 @@
             });
         }
         
-        // Добавляем кешбек как отдельный dataset
+        // Добавляем кешбэк как отдельный dataset
         if (dailyData.cashback && dailyData.cashback.some(v => v !== 0)) {
             categoryDatasets.push({
-                label: 'Кешбек',
+                label: 'Кешбэк',
                 data: dailyData.cashback.map(v => -Math.abs(v)), // Отрицательные значения для отображения вниз
                 backgroundColor: '#10b981',
                 borderWidth: 0

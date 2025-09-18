@@ -27,6 +27,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Epilogue:wght@500;600;700&display=swap" rel="stylesheet">
 
   <style>
     /* Variables */
@@ -52,6 +53,9 @@
       --shadow-equal: 0 2px 8px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06);
       --radius: 20px;
       --radius-lg: 28px;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-display: 'Epilogue', 'Inter', sans-serif;
+      --hero-subtitle-color: rgba(15, 23, 42, 0.72);
     }
 
     /* Reset & Base */
@@ -66,7 +70,7 @@
     }
 
     body {
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: var(--font-body);
       color: var(--dark);
       background: linear-gradient(180deg,
         rgba(255, 255, 255, 1) 0%,
@@ -269,19 +273,24 @@
     }
 
     .hero-text h1 {
+      font-family: var(--font-display);
       font-size: 40px;
-      font-weight: 700;
+      font-weight: 600;
       line-height: 1.15;
       margin-bottom: 24px;
       color: var(--dark);
-      letter-spacing: -0.025em;
+      letter-spacing: -0.02em;
+      max-width: 18ch;
     }
 
     .hero-text p {
+      font-family: var(--font-body);
       font-size: 20px;
-      color: #475569;
+      color: var(--hero-subtitle-color);
       margin-bottom: 32px;
       line-height: 1.6;
+      letter-spacing: -0.005em;
+      max-width: 600px;
     }
 
     .hero-buttons {
@@ -1415,6 +1424,10 @@
         font-size: 42px;
       }
 
+      .hero-text p {
+        max-width: 560px;
+      }
+
       .hero-buttons {
         justify-content: center;
       }
@@ -1449,11 +1462,13 @@
       .hero-text h1 {
         font-size: 28px;
         line-height: 1.2;
+        max-width: 100%;
       }
 
       .hero-text p {
         font-size: 16px;
         line-height: 1.5;
+        max-width: 100%;
       }
 
       .hero-buttons {
@@ -1752,10 +1767,12 @@
 
       .hero-text h1 {
         font-size: 24px;
+        letter-spacing: -0.015em;
       }
 
       .hero-text p {
         font-size: 15px;
+        line-height: 1.5;
       }
 
       /* Опускаем бейджи чуть ниже на мобилках */
@@ -1914,6 +1931,7 @@
         align-items: center;
         gap: 10px;
       }
+
       .hero-text h1 {
         font-size: 22px;
       }
@@ -2432,8 +2450,8 @@
           slide_recent_ph: 'История расходов',
           slide_analytics: 'Аналитика расходов',
           slide_analytics_ph: 'Топ категорий',
-          slide_cashback: 'Учет кэшбэка',
-          slide_cashback_ph: 'Кэшбэк',
+          slide_cashback: 'Учет кешбэка',
+          slide_cashback_ph: 'Кешбэк',
           slide_pdf: 'PDF-отчеты',
           slide_pdf_ph: 'Отчеты',
           slide_questions: 'Вопросы боту',

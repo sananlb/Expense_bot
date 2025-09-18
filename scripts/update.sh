@@ -20,6 +20,14 @@ fi
 echo "📥 Загрузка обновлений из GitHub..."
 git pull
 
+# Обновляем лендинг если есть изменения
+if [ -f scripts/update_landing.sh ]; then
+    if git diff HEAD~1 HEAD --name-only | grep -q "landing/"; then
+        echo "🌐 Обнаружены изменения в лендинге, обновляю www.coins-bot.ru..."
+        bash scripts/update_landing.sh
+    fi
+fi
+
 # Восстанавливаем .env из бэкапа
 if [ -f .env.backup ]; then
     cp .env.backup .env

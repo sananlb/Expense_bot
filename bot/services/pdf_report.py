@@ -625,7 +625,7 @@ class PDFReportService:
                 'total_income': 'Всего доходов',
                 'balance': 'Баланс месяца',
                 'expense_count': 'Количество трат',
-                'monthly_cashback': 'Кешбек за месяц',
+                'monthly_cashback': 'Кешбэк за месяц',
                 'expenses_by_category': 'Расходы по категориям',
                 'daily_expenses': 'Динамика расходов по дням',
                 'income_by_category': 'Доходы по категориям',
