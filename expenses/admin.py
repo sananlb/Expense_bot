@@ -73,8 +73,7 @@ class ProfileAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Реферальная программа', {
-            'fields': ('referrer', 'referral_code', 'referrals_count', 
-                       'active_referrals_count'),
+            'fields': ('referrals_count', 'active_referrals_count'),
             'classes': ('collapse',)
         }),
         ('Статус', {
@@ -87,7 +86,7 @@ class ProfileAdmin(admin.ModelAdmin):
         return qs.annotate(
             total_expenses=Sum('expenses__amount'),
             expenses_count=Count('expenses'),
-            _referrals_count=Count('referrals')
+            _referrals_count=Count('referred_users')
         )
     
     def subscription_status(self, obj):
