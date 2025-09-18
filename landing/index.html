@@ -278,20 +278,29 @@
       font-weight: 400;
       line-height: 1.15;
       margin-bottom: 32px;
-      color: var(--dark);
       letter-spacing: -0.04em;
       max-width: 100%;
       white-space: nowrap;
       position: relative;
-      background: linear-gradient(135deg, #1e293b 0%, #64748b 50%, #0f172a 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: var(--dark);
     }
 
     .hero-text h1 span {
       position: relative;
       display: inline-block;
+      background: linear-gradient(135deg, #0f172a 0%, #475569 100%);
+      background-clip: text;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    /* Fallback для браузеров без поддержки градиента */
+    @supports not (background-clip: text) {
+      .hero-text h1 span {
+        background: none;
+        -webkit-text-fill-color: var(--dark);
+        color: var(--dark);
+      }
     }
 
     .hero-text h1 span::after {
