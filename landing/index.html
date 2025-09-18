@@ -274,13 +274,18 @@
 
     .hero-text h1 {
       font-family: var(--font-display);
-      font-size: 40px;
-      font-weight: 600;
-      line-height: 1.15;
-      margin-bottom: 24px;
+      font-size: 48px;
+      font-weight: 500;
+      line-height: 1.1;
+      margin-bottom: 28px;
       color: var(--dark);
-      letter-spacing: -0.02em;
-      max-width: 18ch;
+      letter-spacing: -0.035em;
+      max-width: 100%;
+      white-space: nowrap;
+      background: linear-gradient(135deg, var(--dark) 0%, #334155 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     .hero-text p {
@@ -1421,7 +1426,8 @@
       }
 
       .hero-text h1 {
-        font-size: 42px;
+        font-size: 44px;
+        white-space: normal;
       }
 
       .hero-text p {
@@ -1460,9 +1466,10 @@
       }
 
       .hero-text h1 {
-        font-size: 28px;
+        font-size: 32px;
         line-height: 1.2;
         max-width: 100%;
+        white-space: normal;
       }
 
       .hero-text p {
@@ -1766,8 +1773,9 @@
       }
 
       .hero-text h1 {
-        font-size: 24px;
-        letter-spacing: -0.015em;
+        font-size: 26px;
+        letter-spacing: -0.025em;
+        white-space: normal;
       }
 
       .hero-text p {
@@ -1934,6 +1942,7 @@
 
       .hero-text h1 {
         font-size: 22px;
+        white-space: normal;
       }
 
       .section-title {
