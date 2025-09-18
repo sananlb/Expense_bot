@@ -961,35 +961,6 @@
       cursor: grabbing;
     }
 
-    /* Carousel navigation dots */
-    .carousel-dots {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 8px;
-      z-index: 10;
-    }
-
-    .carousel-dots .dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.3);
-      cursor: pointer;
-      transition: all 0.3s ease;
-    }
-
-    .carousel-dots .dot.active {
-      width: 20px;
-      border-radius: 3px;
-      background: rgba(255, 255, 255, 0.8);
-    }
-
-    .carousel-dots .dot:hover {
-      background: rgba(255, 255, 255, 0.6);
-    }
 
 
     .carousel-wrapper {
@@ -2295,16 +2266,6 @@
               <!-- Одно видео с динамическим источником -->
               <video id="mainVideo" muted playsinline webkit-playsinline preload="auto" src="demos/ai-categorization.mp4">
               </video>
-
-              <!-- Navigation dots -->
-              <div class="carousel-dots">
-                <span class="dot active" data-slide="0"></span>
-                <span class="dot" data-slide="1"></span>
-                <span class="dot" data-slide="2"></span>
-                <span class="dot" data-slide="3"></span>
-                <span class="dot" data-slide="4"></span>
-                <span class="dot" data-slide="5"></span>
-              </div>
             </div>
           </div>
         </div>
@@ -3022,13 +2983,19 @@
         console.log('VideoCarousel initialized, video element:', this.video);
 
         if (this.video) {
+          // Set poster frame to avoid black screen
+          this.video.poster = '';
+
           // Wait for first video to be ready before playing
-          this.video.addEventListener('loadedmetadata', () => {
-            console.log('First video metadata loaded');
+          this.video.addEventListener('loadeddata', () => {
+            console.log('First video data loaded');
             this.video.play().catch(e => console.log('Initial play failed:', e));
           }, { once: true });
 
-          this.video.addEventListener('ended', () => this.nextSlide());
+          this.video.addEventListener('ended', () => {
+            console.log('Video ended, moving to next');
+            this.nextSlide();
+          });
 
           // Add swipe support
           this.addSwipeSupport();
@@ -3116,15 +3083,6 @@
         phoneScreen.addEventListener('mouseleave', () => {
           mouseDown = false;
         });
-
-        // Add dot click support
-        const dots = document.querySelectorAll('.carousel-dots .dot');
-        dots.forEach(dot => {
-          dot.addEventListener('click', (e) => {
-            const slideIndex = parseInt(e.target.dataset.slide);
-            this.goToSlide(slideIndex);
-          });
-        });
       }
 
       updateTitles() {
@@ -3136,54 +3094,26 @@
         }
       }
 
-      updateDots() {
-        const dots = document.querySelectorAll('.carousel-dots .dot');
-        dots.forEach((dot, index) => {
-          if (index === this.currentSlide) {
-            dot.classList.add('active');
-          } else {
-            dot.classList.remove('active');
-          }
-        });
-      }
-
-      goToSlide(index) {
-        if (index < 0 || index >= this.totalSlides || index === this.currentSlide) return;
-
-        // Update current slide
-        this.currentSlide = index;
-
-        // Update titles and dots
-        this.updateTitles();
-        this.updateDots();
-
-        // Temporarily disable rotation during video change
-        window.rotationPaused = true;
-
-        // Change video source
-        this.changeVideoSource(this.currentSlide);
-
-        // Re-enable rotation after a short delay
-        setTimeout(() => {
-          window.rotationPaused = false;
-        }, 600);
-      }
-
       changeVideoSource(index) {
         if (!this.video || !this.videoSources[index]) return;
 
         // Pause current video
         this.video.pause();
 
-        // Small delay to smooth transition
-        setTimeout(() => {
+        // Very small delay to allow proper cleanup
+        requestAnimationFrame(() => {
           // Change source
           this.video.src = this.videoSources[index];
 
           // Load and play new video
           this.video.load();
-          this.video.play().catch(e => console.log('Play failed:', e));
-        }, 50);
+
+          // Wait for video to be ready
+          const playPromise = this.video.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(e => console.log('Play failed:', e));
+          }
+        });
       }
 
       handleSwipe(direction) {
@@ -3198,9 +3128,8 @@
         // Move to previous slide
         this.currentSlide = (this.currentSlide - 1 + this.totalSlides) % this.totalSlides;
 
-        // Update titles and dots
+        // Update titles
         this.updateTitles();
-        this.updateDots();
 
         // Temporarily disable rotation during video change
         window.rotationPaused = true;
@@ -3218,9 +3147,8 @@
         // Move to next slide
         this.currentSlide = (this.currentSlide + 1) % this.totalSlides;
 
-        // Update titles and dots
+        // Update titles
         this.updateTitles();
-        this.updateDots();
 
         // Temporarily disable rotation during video change
         window.rotationPaused = true;
