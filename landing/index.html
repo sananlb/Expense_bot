@@ -944,6 +944,7 @@
 
     .phone-screen {
       background: #000;
+      background-image: linear-gradient(135deg, #1a1a1a 0%, #000 100%);
       border-radius: 26.5px;
       aspect-ratio: 9/18;
       overflow: hidden;
@@ -2264,7 +2265,7 @@
 
             <div class="phone-screen">
               <!-- Одно видео с динамическим источником -->
-              <video id="mainVideo" muted playsinline webkit-playsinline preload="auto" src="demos/ai-categorization.mp4">
+              <video id="mainVideo" muted playsinline webkit-playsinline preload="metadata" src="demos/ai-categorization.mp4">
               </video>
             </div>
           </div>
@@ -3097,23 +3098,24 @@
       changeVideoSource(index) {
         if (!this.video || !this.videoSources[index]) return;
 
-        // Pause current video
-        this.video.pause();
+        // Store current time to avoid jumps
+        const wasPlaying = !this.video.paused;
 
-        // Very small delay to allow proper cleanup
-        requestAnimationFrame(() => {
-          // Change source
-          this.video.src = this.videoSources[index];
+        // Directly change source without pause
+        this.video.src = this.videoSources[index];
 
-          // Load and play new video
-          this.video.load();
+        // Load and immediately attempt to play
+        this.video.load();
 
-          // Wait for video to be ready
-          const playPromise = this.video.play();
-          if (playPromise !== undefined) {
-            playPromise.catch(e => console.log('Play failed:', e));
-          }
-        });
+        // Play without waiting for full load
+        if (wasPlaying) {
+          this.video.play().catch(e => {
+            // If autoplay fails, try again after a small delay
+            setTimeout(() => {
+              this.video.play().catch(err => console.log('Play retry failed:', err));
+            }, 100);
+          });
+        }
       }
 
       handleSwipe(direction) {
