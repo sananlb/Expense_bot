@@ -2973,6 +2973,8 @@
           'demos/pdf-reports.mp4?' + version,
           'demos/bot-questions.mp4?' + version
         ];
+        // Предзагруженные видео для быстрого переключения
+        this.preloadedVideos = [];
         this.slideTitles = [
           'Умная категоризация',
           'Последние траты',
@@ -3114,23 +3116,56 @@
       changeVideoSource(index) {
         if (!this.video || !this.videoSources[index]) return;
 
-        // Pause current video briefly
-        this.video.pause();
+        // Создаем новый video элемент для плавного перехода
+        const newVideo = document.createElement('video');
+        newVideo.src = this.videoSources[index];
+        newVideo.muted = true;
+        newVideo.autoplay = true;
+        newVideo.playsInline = true;
+        newVideo.setAttribute('webkit-playsinline', '');
+        newVideo.preload = 'auto';
 
-        // Directly change source
-        this.video.src = this.videoSources[index];
+        // Копируем стили со старого видео
+        newVideo.style.width = '100%';
+        newVideo.style.height = '100%';
+        newVideo.style.objectFit = 'cover';
+        newVideo.style.borderRadius = '12px';
+        newVideo.id = 'mainVideo';
 
-        // Load new video
-        this.video.load();
+        // Когда новое видео готово к воспроизведению
+        newVideo.addEventListener('canplaythrough', () => {
+          // Заменяем старое видео новым
+          const phoneScreen = document.querySelector('.phone-screen');
+          if (phoneScreen && this.video) {
+            this.video.pause();
+            phoneScreen.replaceChild(newVideo, this.video);
+            this.video = newVideo;
 
-        // Always play the new video after loading
-        this.video.play().catch(e => {
-          console.log('Play failed, retrying:', e);
-          // If autoplay fails, try again after a small delay
-          setTimeout(() => {
-            this.video.play().catch(err => console.log('Play retry failed:', err));
-          }, 100);
-        });
+            // Запускаем воспроизведение
+            newVideo.play().catch(e => {
+              console.log('Play failed, retrying:', e);
+              setTimeout(() => {
+                newVideo.play().catch(err => console.log('Play retry failed:', err));
+              }, 100);
+            });
+
+            // Предзагружаем следующее видео
+            const nextIndex = (index + 1) % this.totalSlides;
+            this.preloadVideo(nextIndex);
+          }
+        }, { once: true });
+
+        // Начинаем загрузку
+        newVideo.load();
+      }
+
+      preloadVideo(index) {
+        // Предзагрузка следующего видео через link prefetch
+        const link = document.createElement('link');
+        link.rel = 'prefetch';
+        link.href = this.videoSources[index];
+        link.as = 'video';
+        document.head.appendChild(link);
       }
 
       handleSwipe(direction) {
