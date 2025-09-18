@@ -90,12 +90,12 @@ class Profile(models.Model):
     @property
     def referrals_count(self):
         """Количество приглашенных пользователей"""
-        return self.referrals.count()
+        return self.referred_users.count()
     
     @property
     def active_referrals_count(self):
         """Количество активных рефералов с подпиской"""
-        return self.referrals.filter(
+        return self.referred_users.filter(
             subscriptions__is_active=True,
             subscriptions__end_date__gt=timezone.now()
         ).distinct().count()
