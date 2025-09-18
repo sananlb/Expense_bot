@@ -283,16 +283,22 @@
       white-space: nowrap;
       position: relative;
       color: var(--dark);
-      filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.12));
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+    }
+
+    /* For English multi-line title */
+    [data-lang="en"] .hero-text h1 {
+      white-space: normal;
     }
 
     .hero-text h1 span {
       position: relative;
       display: inline-block;
-      background: linear-gradient(180deg, #0f172a 0%, #64748b 100%);
+      background: linear-gradient(180deg, #0f172a 0%, #546379 100%);
       background-clip: text;
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
+      padding-right: 0.055em; /* Compensate for negative letter-spacing */
     }
 
     /* Fallback для браузеров без поддержки градиента */
@@ -318,6 +324,11 @@
         rgba(148, 163, 184, 0.05) 80%,
         transparent 100%);
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.015);
+    }
+
+    /* Hide underline for br elements */
+    .hero-text h1 br + span::before {
+      content: none;
     }
 
     .hero-text p {
@@ -856,6 +867,23 @@
         0 2px 4px rgba(0, 0, 0, 0.12),
         0 1px 2px rgba(0, 0, 0, 0.08);
       letter-spacing: -0.01em;
+      position: relative;
+      display: inline-block;
+    }
+
+    .phone-title::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(148, 163, 184, 0.08) 20%,
+        rgba(148, 163, 184, 0.12) 50%,
+        rgba(148, 163, 184, 0.08) 80%,
+        transparent 100%);
     }
 
     .phone-description {
@@ -2037,6 +2065,21 @@
       transform: translateY(0);
     }
 
+    /* Reduced reveal effect on mobile */
+    @media (max-width: 768px) {
+      .reveal {
+        transform: translateY(15px);
+        transition: all 0.5s ease;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .reveal {
+        transform: translateY(10px);
+        transition: all 0.4s ease;
+      }
+    }
+
     /* Video Carousel Styles - Simplified for phone screen */
     .phone-screen .carousel-wrapper {
       position: relative;
@@ -2495,7 +2538,7 @@
           hero_subtitle: 'Скажите "кофе 200" или "зарплата +80000". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.',
           trust_free: 'Бесплатный старт',
           trust_no_banks: 'Без привязки к банкам',
-          demo_title: 'Посмотрите бота в действии',
+          demo_title: 'Бот в действии',
           demo_subtitle: 'Реальные примеры использования',
           demo_li1: 'Быстрая запись трат одним сообщением',
           demo_li2: 'Голосовые команды для hands-free режима',
@@ -2587,8 +2630,8 @@
           nav_faq: 'FAQ',
           btn_launch: 'Launch the bot',
           btn_demo: 'Watch demo',
-          hero_title: 'Simple money management',
-          hero_subtitle: 'Say “coffee 200” or “salary +80000”. AI recognizes, categorizes, and builds reports. No banks, no complex apps.',
+          hero_title: '<span>Simple money</span><br><span>management</span>',
+          hero_subtitle: 'Say "coffee 200" or "salary +80000".<br>AI recognizes, categorizes, and builds reports.<br>No banks, no complex apps.',
           trust_free: 'Free to start',
           trust_no_banks: 'No bank linking required',
           demo_title: 'See the bot in action',
@@ -2686,7 +2729,7 @@
         document.querySelectorAll('[data-i18n]').forEach(el => {
           const key = el.getAttribute('data-i18n');
           if (d[key] !== undefined) {
-            if (key === 'pricing_badge') el.innerHTML = d[key];
+            if (key === 'pricing_badge' || key === 'hero_title' || key === 'hero_subtitle') el.innerHTML = d[key];
             else el.textContent = d[key];
           }
         });
