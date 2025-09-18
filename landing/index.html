@@ -274,18 +274,48 @@
 
     .hero-text h1 {
       font-family: var(--font-display);
-      font-size: 48px;
-      font-weight: 500;
-      line-height: 1.1;
-      margin-bottom: 28px;
+      font-size: 56px;
+      font-weight: 400;
+      line-height: 1.15;
+      margin-bottom: 32px;
       color: var(--dark);
-      letter-spacing: -0.035em;
+      letter-spacing: -0.04em;
       max-width: 100%;
       white-space: nowrap;
-      background: linear-gradient(135deg, var(--dark) 0%, #334155 100%);
+      position: relative;
+      background: linear-gradient(135deg, #1e293b 0%, #64748b 50%, #0f172a 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
+    }
+
+    .hero-text h1 span {
+      position: relative;
+      display: inline-block;
+    }
+
+    .hero-text h1 span::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(100, 116, 139, 0.3) 20%,
+        rgba(100, 116, 139, 0.5) 50%,
+        rgba(100, 116, 139, 0.3) 80%,
+        transparent 100%);
+      transform: scaleX(0);
+      transform-origin: left;
+      animation: underlineReveal 1.5s ease-out 0.5s forwards;
+    }
+
+    @keyframes underlineReveal {
+      to {
+        transform: scaleX(1);
+      }
     }
 
     .hero-text p {
@@ -1426,7 +1456,7 @@
       }
 
       .hero-text h1 {
-        font-size: 44px;
+        font-size: 48px;
         white-space: normal;
       }
 
@@ -1466,7 +1496,7 @@
       }
 
       .hero-text h1 {
-        font-size: 32px;
+        font-size: 36px;
         line-height: 1.2;
         max-width: 100%;
         white-space: normal;
@@ -1773,7 +1803,7 @@
       }
 
       .hero-text h1 {
-        font-size: 26px;
+        font-size: 28px;
         letter-spacing: -0.025em;
         white-space: normal;
       }
@@ -2159,7 +2189,7 @@
     <div class="container">
       <div class="hero-content">
         <div class="hero-text reveal">
-          <h1 data-i18n="hero_title">Вести бюджет — просто</h1>
+          <h1><span data-i18n="hero_title">Вести бюджет — просто</span></h1>
           <p data-i18n="hero_subtitle">Скажите "кофе 200" или "зарплата +80000". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.</p>
           <div class="hero-buttons">
             <a href="https://t.me/showmecoinbot?start=landing" target="_blank" class="btn btn-primary">
