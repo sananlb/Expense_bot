@@ -330,6 +330,53 @@ docker image prune -f
 **ВАЖНО:** Вся документация проекта хранится в папке `docs/`
 - `docs/CELERY_DOCUMENTATION.md` - полная документация по Celery (конфигурация, задачи, troubleshooting)
 
+## Обновление лендинга на сервере
+
+### ⚠️ ВАЖНО: Правильная последовательность обновления лендинга
+
+**Проблема:** После `git pull` страница может показываться старая из-за кеширования
+
+**Правильный порядок действий:**
+```bash
+# 1. Подключиться к серверу
+ssh batman@80.66.87.178
+
+# 2. Обновить код из репозитория
+cd /home/batman/expense_bot
+git pull
+
+# 3. Скопировать файлы лендинга в веб-директорию
+sudo cp -rf landing/* /var/www/coins-bot/
+
+# 4. Установить правильные права
+sudo chown -R www-data:www-data /var/www/coins-bot/
+
+# 5. Перезагрузить nginx для сброса кеша
+sudo nginx -s reload
+```
+
+**Или одной командой:**
+```bash
+cd /home/batman/expense_bot && git pull && sudo cp -rf landing/* /var/www/coins-bot/ && sudo chown -R www-data:www-data /var/www/coins-bot/ && sudo nginx -s reload
+```
+
+### После обновления на сервере:
+1. **В браузере обязательно:** Нажать `Ctrl+F5` (Windows/Linux) или `Cmd+Shift+R` (Mac)
+2. **На мобильном:** Очистить кеш браузера или открыть в приватном режиме
+3. **Проверить обновление:** Открыть консоль разработчика (F12) и проверить Network → отключить кеш
+
+### Если страница все еще старая:
+```bash
+# Проверить что файлы обновились
+grep -c "искомый_текст" /var/www/coins-bot/index.html
+
+# Принудительно перезапустить nginx
+sudo systemctl restart nginx
+
+# Проверить дату изменения файла
+ls -la /var/www/coins-bot/index.html
+```
+
 ## Команды для отладки PDF отчетов
 ```bash
 # Проверка последних ошибок в логах Django
