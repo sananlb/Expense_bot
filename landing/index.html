@@ -275,7 +275,7 @@
     .hero-text h1 {
       font-family: var(--font-display);
       font-size: 44px;
-      font-weight: 400;
+      font-weight: 500;
       line-height: 1.1;
       margin-bottom: 28px;
       letter-spacing: -0.055em;
@@ -288,7 +288,7 @@
     .hero-text h1 span {
       position: relative;
       display: inline-block;
-      background: linear-gradient(180deg, #0f172a 0%, #64748b 100%);
+      background: linear-gradient(180deg, #0f172a 60%, #334155 100%);
       background-clip: text;
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
@@ -306,19 +306,19 @@
     .hero-text h1 span::after {
       content: '';
       position: absolute;
-      bottom: -2px;
+      bottom: -3px;
       left: 0;
       right: 0;
       height: 1px;
       background: linear-gradient(90deg,
         transparent 0%,
-        rgba(148, 163, 184, 0.15) 25%,
-        rgba(148, 163, 184, 0.25) 50%,
-        rgba(148, 163, 184, 0.15) 75%,
+        rgba(148, 163, 184, 0.08) 30%,
+        rgba(148, 163, 184, 0.12) 50%,
+        rgba(148, 163, 184, 0.08) 70%,
         transparent 100%);
       transform: scaleX(0);
       transform-origin: left;
-      animation: underlineReveal 1.5s ease-out 0.8s forwards;
+      animation: underlineReveal 1.8s ease-out 1s forwards;
     }
 
     @keyframes underlineReveal {
