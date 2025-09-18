@@ -2963,13 +2963,15 @@
       constructor() {
         this.currentSlide = 0;
         this.totalSlides = 6;
+        // Добавляем версию для обхода кеша браузера
+        const version = 'v=' + new Date().getTime();
         this.videoSources = [
-          'demos/ai-categorization.mp4',
-          'demos/recent-expenses.mp4',
-          'demos/analytics.mp4',
-          'demos/cashback.mp4',
-          'demos/pdf-reports.mp4',
-          'demos/bot-questions.mp4'
+          'demos/ai-categorization.mp4?' + version,
+          'demos/recent-expenses.mp4?' + version,
+          'demos/analytics.mp4?' + version,
+          'demos/cashback.mp4?' + version,
+          'demos/pdf-reports.mp4?' + version,
+          'demos/bot-questions.mp4?' + version
         ];
         this.slideTitles = [
           'Умная категоризация',
