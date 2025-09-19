@@ -95,9 +95,15 @@ class Profile(models.Model):
     @property
     def active_referrals_count(self):
         """Количество активных рефералов с подпиской"""
-        return self.referred_users.filter(
-            subscriptions__is_active=True,
-            subscriptions__end_date__gt=timezone.now()
+        from django.db.models import Q
+        # Получаем профили приглашенных пользователей через AffiliateReferral
+        referred_profiles = Profile.objects.filter(
+            referred_by__referrer=self
+        )
+        # Фильтруем тех, у кого есть активная подписка
+        return referred_profiles.filter(
+            Q(subscriptions__is_active=True) &
+            Q(subscriptions__end_date__gt=timezone.now())
         ).distinct().count()
 
 
