@@ -290,19 +290,8 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
             pass
 
         # Вызываем команду /start после принятия политики
-        # Создаем фейковое сообщение для вызова обработчика /start
-        from aiogram.types import Message, User, Chat
-        fake_message = Message(
-            message_id=0,
-            date=callback.message.date,
-            chat=callback.message.chat,
-            from_user=callback.from_user,
-            text='/start'
-        )
-
-        # Вызываем обработчик команды /start
-        from aiogram.types import CommandObject
-        await cmd_start(fake_message, state, CommandObject(command='start'), lang=profile.language_code or 'ru')
+        # Отправляем новое приветственное сообщение
+        await cmd_start(callback.message, state, CommandObject(command='start'), lang=profile.language_code or 'ru')
 
     except Exception as e:
         logger.error(f"privacy_accept error: {e}")
