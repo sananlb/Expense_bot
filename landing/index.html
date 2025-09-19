@@ -2398,7 +2398,7 @@
 
             <div class="phone-screen">
               <!-- Одно видео с динамическим источником -->
-              <video id="mainVideo" muted playsinline webkit-playsinline preload="metadata" src="demos/ai-categorization.mp4">
+              <video id="mainVideo" muted playsinline webkit-playsinline preload="metadata" src="demos/ai-categorization.mp4" style="background: #000;">
               </video>
             </div>
           </div>
@@ -3246,21 +3246,26 @@
       changeVideoSource(index) {
         if (!this.video || !this.videoSources[index]) return;
 
-        // Создаем скриншот текущего кадра перед переключением
-        const canvas = document.createElement('canvas');
-        canvas.width = this.video.videoWidth || 320;
-        canvas.height = this.video.videoHeight || 640;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(this.video, 0, 0, canvas.width, canvas.height);
+        // Попробуем захватить последний кадр, но с проверкой на ошибки
+        try {
+          // Проверяем что видео загружено и имеет размеры
+          if (this.video.videoWidth > 0 && this.video.videoHeight > 0) {
+            const canvas = document.createElement('canvas');
+            canvas.width = this.video.videoWidth;
+            canvas.height = this.video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(this.video, 0, 0, canvas.width, canvas.height);
 
-        // Устанавливаем скриншот как постер
-        const posterDataUrl = canvas.toDataURL();
+            // Устанавливаем скриншот как постер
+            this.video.poster = canvas.toDataURL();
+          }
+        } catch (e) {
+          console.log('Could not capture frame:', e);
+          // Продолжаем без постера
+        }
 
         // Простой и надежный подход
         this.video.pause();
-
-        // Сохраняем постер для плавного перехода
-        this.video.poster = posterDataUrl;
 
         // Меняем источник
         this.video.src = this.videoSources[index];
