@@ -3121,8 +3121,18 @@
         console.log('VideoCarousel initialized, video element:', this.video);
 
         if (this.video) {
+          // Добавляем атрибут preload для лучшей загрузки
+          this.video.preload = 'auto';
+
           // Set initial video source
           this.video.src = this.videoSources[0];
+
+          // Предзагружаем все видео
+          this.videoSources.forEach((src, index) => {
+            if (index > 0) { // Первое видео уже загружается
+              this.preloadVideo(index);
+            }
+          });
 
           // Wait for first video to be ready before playing
           this.video.addEventListener('loadeddata', () => {
@@ -3236,8 +3246,21 @@
       changeVideoSource(index) {
         if (!this.video || !this.videoSources[index]) return;
 
+        // Создаем скриншот текущего кадра перед переключением
+        const canvas = document.createElement('canvas');
+        canvas.width = this.video.videoWidth || 320;
+        canvas.height = this.video.videoHeight || 640;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(this.video, 0, 0, canvas.width, canvas.height);
+
+        // Устанавливаем скриншот как постер
+        const posterDataUrl = canvas.toDataURL();
+
         // Простой и надежный подход
         this.video.pause();
+
+        // Сохраняем постер для плавного перехода
+        this.video.poster = posterDataUrl;
 
         // Меняем источник
         this.video.src = this.videoSources[index];
@@ -3245,14 +3268,23 @@
         // Загружаем и воспроизводим
         this.video.load();
 
+        // Предзагружаем следующее видео
+        const nextIndex = (index + 1) % this.totalSlides;
+        this.preloadVideo(nextIndex);
+
         // Как только видео готово - играем
         const playPromise = this.video.play();
         if (playPromise !== undefined) {
-          playPromise.catch(e => {
+          playPromise.then(() => {
+            // Убираем постер после успешного воспроизведения
+            this.video.poster = '';
+          }).catch(e => {
             console.log('Autoplay prevented, retrying:', e);
             // Повторная попытка через небольшую задержку
             setTimeout(() => {
-              this.video.play().catch(err => console.log('Play retry failed:', err));
+              this.video.play().then(() => {
+                this.video.poster = '';
+              }).catch(err => console.log('Play retry failed:', err));
             }, 100);
           });
         }
