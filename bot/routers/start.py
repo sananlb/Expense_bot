@@ -290,11 +290,25 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
             pass
 
         # Вызываем команду /start после принятия политики
-        # Отправляем новое приветственное сообщение
-        await cmd_start(callback.message, state, CommandObject(command='start'), lang=profile.language_code or 'ru')
+        # Создаем корректное сообщение от пользователя
+        from aiogram.types import Message
+        import datetime
+
+        # Создаем сообщение с правильными данными пользователя
+        user_message = Message(
+            message_id=callback.message.message_id + 1,
+            date=datetime.datetime.now(),
+            chat=callback.message.chat,
+            from_user=callback.from_user,  # Используем from_user из callback - это данные пользователя
+            text='/start'
+        )
+
+        # Вызываем обработчик /start
+        await cmd_start(user_message, state, CommandObject(command='start'), lang=profile.language_code or 'ru')
 
     except Exception as e:
-        logger.error(f"privacy_accept error: {e}")
+        import traceback
+        logger.error(f"privacy_accept error: {e}\n{traceback.format_exc()}")
         await callback.answer('Ошибка. Попробуйте /start', show_alert=True)
 
 
