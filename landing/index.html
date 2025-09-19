@@ -1984,8 +1984,8 @@
           box-shadow: var(--shadow-equal);
         }
       }
-      /* Сохраняем анимацию появления */
-      .features .feature-card.reveal { opacity: 0; }
+      /* Анимация появления отключена */
+      .features .feature-card.reveal { opacity: 1; }
       .features .feature-card.reveal.active { opacity: 1; }
     }
 
@@ -2053,31 +2053,16 @@
     }
 
 
-    /* Scroll Reveal */
+    /* Scroll Reveal - DISABLED */
     .reveal {
-      opacity: 0;
-      transform: translateY(30px);
-      transition: all 0.8s ease;
+      opacity: 1;
+      transform: translateY(0);
+      transition: none;
     }
 
     .reveal.active {
       opacity: 1;
       transform: translateY(0);
-    }
-
-    /* Reduced reveal effect on mobile */
-    @media (max-width: 768px) {
-      .reveal {
-        transform: translateY(15px);
-        transition: all 0.5s ease;
-      }
-    }
-
-    @media (max-width: 480px) {
-      .reveal {
-        transform: translateY(10px);
-        transition: all 0.4s ease;
-      }
     }
 
     /* Video Carousel Styles - Simplified for phone screen */
@@ -2971,7 +2956,9 @@
 
     // FAQ items are always expanded - no accordion functionality
 
-    // Scroll Reveal Animation
+    // Scroll Reveal Animation - DISABLED
+    // Все элементы теперь видны сразу, без анимации появления
+    /*
     const revealElements = document.querySelectorAll('.reveal');
 
     const revealOnScroll = () => {
@@ -2987,6 +2974,7 @@
 
     window.addEventListener('scroll', revealOnScroll);
     revealOnScroll(); // Initial check
+    */
 
     // Mobile Menu Toggle
     const mobileMenuToggle = document.querySelector('.mobile-menu-toggle');
