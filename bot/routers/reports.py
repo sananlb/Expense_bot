@@ -196,8 +196,13 @@ async def show_expenses_summary(
             except Exception:
                 return False
         
-        user_has_household = await has_household(user_id)
-        
+        has_subscription = await check_subscription(user_id)
+
+        if not has_subscription:
+            household_mode = False
+
+        user_has_household = await has_household(user_id) if has_subscription else False
+
         summary = await get_expenses_summary(
             user_id=user_id,
             start_date=start_date,
@@ -242,10 +247,12 @@ async def show_expenses_summary(
         # Проверяем есть ли операции вообще
         has_expenses = summary['total'] > 0
         has_incomes = summary.get('income_total', 0) > 0
-        
+
         if not has_expenses and not has_incomes:
             text += get_text('no_expenses_period', lang)
-        else:
+            # Даже если нет трат, продолжаем показывать интерфейс
+
+        if has_expenses or has_incomes:
             # Показываем только те строки, где есть данные
             expense_amount = format_amount(summary['total'], summary['currency'], lang)
             income_amount = format_amount(summary.get('income_total', 0), summary['currency'], lang)
@@ -370,6 +377,8 @@ async def show_expenses_summary(
         else:
             period = 'custom'
             show_pdf = True
+
+        show_pdf = show_pdf and has_subscription
         
         # Логирование для отладки
         logger.info(f"Period determination: start_date={start_date}, end_date={end_date}, today={today}, is_today={is_today}, period={period}")

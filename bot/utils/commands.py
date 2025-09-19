@@ -25,25 +25,24 @@ async def set_bot_commands(bot: Bot):
 
 
 async def update_user_commands(bot: Bot, user_id: int):
-    """Обновляем команды для конкретного пользователя с учетом языка и настроек"""
+    """Обновляем команды для конкретного пользователя с учетом языка и подписки"""
     # Получаем язык пользователя
     from bot.utils import get_user_language
     from bot.utils import get_text
-    from bot.services.profile import get_user_settings
-    
+    from bot.services.subscription import check_subscription
+
     lang = await get_user_language(user_id)
-    
-    # Получаем настройки пользователя
-    user_settings = await get_user_settings(user_id)
-    cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
-    
+
+    # Проверяем наличие активной подписки
+    has_subscription = await check_subscription(user_id)
+
     # Формируем базовые команды
     commands = [
         BotCommand(command="expenses", description=f"📊 {get_text('expenses_today', lang)}"),
     ]
-    
-    # Добавляем команду cashback только если кешбэк включен
-    if cashback_enabled:
+
+    # Добавляем команду cashback только если есть активная подписка
+    if has_subscription:
         commands.append(BotCommand(command="cashback", description=f"💳 {get_text('cashback_menu', lang)}"))
     
     # Добавляем остальные команды

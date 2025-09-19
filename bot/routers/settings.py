@@ -101,21 +101,22 @@ async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
         # Используем household_id (не триггерит ORM в async контексте)
         if getattr(profile, 'household_id', None):
             text_lines.append(f"{get_text('view_scope', lang)}: {scope_text}")
-        text = "\n".join(text_lines)
-        
-        # Получаем настройки кешбэка
-        user_settings = await get_user_settings(message.from_user.id)
-        cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
-        
         # Проверяем подписку
         from bot.services.subscription import check_subscription
         has_subscription = await check_subscription(message.from_user.id)
-        
+
+        text = "\n".join(text_lines)
+
+        # Получаем настройки кешбэка
+        user_settings = await get_user_settings(message.from_user.id)
+        cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
+
         await send_message_with_cleanup(
             message, 
             state, 
             text, 
-            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription, view_scope)
+            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription, view_scope),
+            parse_mode="HTML"
         )
         
     except Exception as e:
@@ -171,19 +172,19 @@ async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: st
         # Используем household_id (не триггерит ORM в async контексте)
         if getattr(profile, 'household_id', None):
             text_lines.append(f"{get_text('view_scope', lang)}: {scope_text}")
-        text = "\n".join(text_lines)
-        
-        # Получаем настройки кешбэка
-        user_settings = await get_user_settings(callback.from_user.id)
-        cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
-        
         # Проверяем подписку
         from bot.services.subscription import check_subscription
         has_subscription = await check_subscription(callback.from_user.id)
-        
+
+        text = "\n".join(text_lines)
+
+        # Получаем настройки кешбэка
+        user_settings = await get_user_settings(callback.from_user.id)
+        cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
         await callback.message.edit_text(
             text,
-            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription, view_scope)
+            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription, view_scope),
+            parse_mode="HTML"
         )
         
     except Exception as e:

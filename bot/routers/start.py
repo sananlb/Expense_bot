@@ -7,6 +7,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeybo
 from aiogram.fsm.context import FSMContext
 import asyncio
 import logging
+from typing import Optional
 
 from bot.utils import get_text
 from bot.constants import get_privacy_url_for
@@ -16,7 +17,7 @@ from bot.services.category import create_default_categories, create_default_inco
 from bot.utils.message_utils import send_message_with_cleanup, delete_message_with_effect
 from bot.utils.commands import update_user_commands
 from bot.services.affiliate import process_referral_link  # Новая реферальная система Telegram Stars
-from expenses.models import Subscription, Profile
+from expenses.models import Subscription, Profile, Expense, Income
 from django.utils import timezone
 from datetime import timedelta
 
@@ -25,22 +26,104 @@ logger = logging.getLogger(__name__)
 router = Router(name="start")
 
 
+def get_welcome_message(lang: str = 'ru', referral_message: str = '') -> str:
+    """
+    Генерирует приветственное сообщение для бота
+
+    Args:
+        lang: Язык сообщения ('ru' или 'en')
+        referral_message: Дополнительное сообщение о реферальной ссылке
+
+    Returns:
+        Готовое приветственное сообщение
+    """
+    if lang == 'en':
+        text = """<b>🪙 Coins - smart finance tracking</b>
+
+<b>💸 Adding expenses and income:</b>
+Send a text or voice message:
+"Coffee", "Gas 4050", "Bonus +40000"
+The amount and category will be selected based on your previous entries.
+You can backdate entries, e.g., "10.09 1200 groceries" or "coffee 340 10.09.2025".
+
+<b>📁 Categories:</b>
+Customize categories for yourself - add your own, delete unnecessary ones. AI will automatically determine the category for each entry.
+
+<b>💳 Bank card cashbacks:</b>
+Add information about cashbacks on your bank cards. All cashbacks are calculated automatically and displayed in reports. Pin the cashback message in the chat for one-click access.
+
+<b>📋 Transaction diary:</b>
+View the history of all transactions for any period in a convenient format. The diary shows expenses and income by day with totals.
+
+<b>📊 Reports:</b>
+Request a report in natural language:
+"Show expenses for July", "How much did I earn this month"
+Get beautiful PDF reports with charts
+
+<b>🏠 Household:</b>
+Track finances together with your family. Switch between personal and family views. Create a household and add members by sending them an invite link."""
+    else:
+        text = """<b>🪙 Coins - умный учет ваших финансов</b>
+
+<b>💸 Добавление расходов и доходов:</b>
+Отправьте текст или голосовое сообщение:
+"Кофе", "Дизель 4050", "Премия +40000"
+Сумма и категория подберутся на основании ваших предыдущих записей.
+Можно добавлять задним числом: например, "10.09 1200 продукты" или "кофе 340 10.09.2025".
+
+<b>📁 Категории:</b>
+Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. ИИ автоматически определит категорию для каждой записи.
+
+<b>💳 Кешбэки по банковским картам:</b>
+Добавьте информацию о кешбеках по вашим банковским картам. Все кешбеки рассчитываются автоматически и отображаются в отчетах. Закрепите сообщение с кешбэком в чате, чтобы оно было доступно по одному клику.
+
+<b>📋 Дневник операций:</b>
+Просматривайте историю всех операций за любой период в удобном формате. Дневник показывает расходы и доходы по дням с итогами.
+
+<b>📊 Отчеты:</b>
+Попросите отчет естественным языком:
+"Покажи траты за июль", "Сколько я заработал в этом месяце"
+Получайте красивые PDF отчеты с графиками
+
+<b>🏠 Семейный бюджет:</b>
+Ведите общий учет с семьёй. Переключайтесь между личным и семейным режимом просмотра. Создайте семью и добавляйте участников, отправив им приглашение."""
+
+    # Добавляем реферальное сообщение, если есть
+    if referral_message:
+        text += referral_message
+
+    return text
+
+
 @router.message(Command("start"))
-async def cmd_start(message: types.Message, state: FSMContext, command: CommandObject, lang: str = 'ru'):
+async def cmd_start(
+    message: types.Message,
+    state: FSMContext,
+    command: Optional[CommandObject] = None,
+    lang: str = 'ru'
+):
     """Обработка команды /start - показать информацию о боте"""
     user_id = message.from_user.id
-    
+
     # Проверяем, есть ли реферальный код или приглашение в семейный бюджет в команде
     referral_code = None
     family_token = None
-    if command.args:
-        args = command.args.strip()
-        if args.startswith('ref_'):
+    start_args = None
+    if command and command.args:
+        start_args = command.args.strip()
+    else:
+        data = await state.get_data()
+        stored_args = data.get('start_command_args')
+        if stored_args:
+            start_args = stored_args.strip()
+
+    if start_args:
+        if start_args.startswith('ref_'):
             # Формат: /start ref_ABCD1234
-            referral_code = args[4:]  # Убираем префикс ref_
-        elif args.startswith('family_'):
+            referral_code = start_args[4:]
+        elif start_args.startswith('family_'):
             # Формат: /start family_TOKEN
-            family_token = args[7:]  # Убираем префикс family_
+            family_token = start_args[7:]
     
     # Создаем или получаем профиль пользователя
     profile = await get_or_create_profile(
@@ -48,8 +131,18 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
         language_code=message.from_user.language_code
     )
     
-    # Проверяем, новый ли это пользователь (по наличию подписок)
-    is_new_user = not await Subscription.objects.filter(profile=profile).aexists()
+    # Проверяем, новый ли это пользователь
+    # Считаем пользователя новым, если у него:
+    # 1. Нет записей о тратах
+    # 2. Нет записей о доходах
+    # 3. Нет истории подписок (включая истёкшие)
+    has_expenses = await Expense.objects.filter(profile=profile).aexists()
+    has_incomes = await Income.objects.filter(profile=profile).aexists()
+    has_subscription_history = await Subscription.objects.filter(profile=profile).aexists()
+
+    is_new_user = not has_expenses and not has_incomes and not has_subscription_history
+
+    logger.info(f"[START] User {user_id} status: has_expenses={has_expenses}, has_incomes={has_incomes}, has_subscription_history={has_subscription_history}, is_new_user={is_new_user}, is_beta_tester={profile.is_beta_tester}")
     
     # Определяем язык для отображения
     # Если у пользователя уже есть сохраненный язык - используем его
@@ -73,6 +166,8 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
     
     # Проверка принятия политики конфиденциальности
     if not profile.accepted_privacy:
+        # Сохраняем аргументы /start для обработки после принятия политики
+        await state.update_data(start_command_args=start_args)
         short = get_text('short_privacy_for_acceptance', display_lang)
         policy_url = get_privacy_url_for(display_lang)
         text_priv = (
@@ -160,99 +255,43 @@ async def cmd_start(message: types.Message, state: FSMContext, command: CommandO
             end_date__gt=timezone.now()
         ).aexists()
         
+        logger.info(f"[START] Subscription check for user {user_id}: is_new_user={is_new_user}, has_active_subscription={has_active_subscription}, existing_trial={existing_trial}")
+
         # Создаем пробную подписку только если:
         # 1. Это новый пользователь
         # 2. У него нет активной подписки
         # 3. У него никогда не было пробной подписки
         # 4. Он не beta_tester
         if is_new_user and not has_active_subscription and not existing_trial:
-            trial_end = timezone.now() + timedelta(days=7)
-            await Subscription.objects.acreate(
-                profile=profile,
-                type='trial',
-                payment_method='trial',
-                amount=0,
-                start_date=timezone.now(),
-                end_date=trial_end,
-                is_active=True
-            )
-            logger.info(f"Created trial subscription for new user {user_id}")
+            try:
+                trial_end = timezone.now() + timedelta(days=7)
+                await Subscription.objects.acreate(
+                    profile=profile,
+                    type='trial',
+                    payment_method='trial',
+                    amount=0,
+                    start_date=timezone.now(),
+                    end_date=trial_end,
+                    is_active=True
+                )
+                logger.info(f"[START] Successfully created trial subscription for new user {user_id}, expires: {trial_end}")
+            except Exception as e:
+                logger.error(f"[START] Failed to create trial subscription for user {user_id}: {e}")
+        else:
+            logger.info(f"[START] Not creating trial subscription for user {user_id}: is_new_user={is_new_user}, has_active_subscription={has_active_subscription}, existing_trial={existing_trial}")
     else:
-        logger.info(f"User {user_id} is a beta tester, skipping trial subscription")
+        logger.info(f"[START] User {user_id} is a beta tester, skipping trial subscription")
     
     # Обновляем команды бота для пользователя
     await update_user_commands(message.bot, user_id)
-    
-    # Информация о боте на нужном языке
-    if display_lang == 'en':
-        text = """<b>🪙 Coins - smart finance tracking</b>
 
-<b>💸 Adding expenses and income:</b>
-Send a text or voice message:
-"Coffee", "Gas 4050", "Bonus +40000"
-The amount and category will be selected based on your previous entries.
-You can backdate entries, e.g., "10.09 1200 groceries" or "coffee 340 10.09.2025".
+    # Получаем приветственное сообщение
+    text = get_welcome_message(display_lang, referral_message)
 
-<b>📁 Categories:</b>
-Customize categories for yourself - add your own, delete unnecessary ones. AI will automatically determine the category for each entry.
-
-<b>💳 Bank card cashbacks:</b>
-Add information about cashbacks on your bank cards. All cashbacks are calculated automatically and displayed in reports. Pin the cashback message in the chat for one-click access.
-
-<b>📋 Transaction diary:</b>
-View the history of all transactions for any period in a convenient format. The diary shows expenses and income by day with totals.
-
-<b>📊 Reports:</b>
-Request a report in natural language:
-"Show expenses for July", "How much did I earn this month"
-Get beautiful PDF reports with charts"""
-    else:
-        text = """<b>🪙 Coins - умный учет ваших финансов</b>
-
-<b>💸 Добавление расходов и доходов:</b>
-Отправьте текст или голосовое сообщение:
-"Кофе", "Дизель 4050", "Премия +40000"
-Сумма и категория подберутся на основании ваших предыдущих записей.
-Можно добавлять задним числом: например, "10.09 1200 продукты" или "кофе 340 10.09.2025".
-
-<b>📁 Категории:</b>
-Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. ИИ автоматически определит категорию для каждой записи.
-
-<b>💳 Кешбэки по банковским картам:</b>
-Добавьте информацию о кешбеках по вашим банковским картам. Все кешбеки рассчитываются автоматически и отображаются в отчетах. Закрепите сообщение с кешбэком в чате, чтобы оно было доступно по одному клику.
-
-<b>📋 Дневник операций:</b>
-Просматривайте историю всех операций за любой период в удобном формате. Дневник показывает расходы и доходы по дням с итогами.
-
-<b>📊 Отчеты:</b>
-Попросите отчет естественным языком:
-"Покажи траты за июль", "Сколько я заработал в этом месяце"
-Получайте красивые PDF отчеты с графиками"""
-    
-    # Добавляем реферальное сообщение, если есть
-    text += referral_message
-
-    # Добавляем блок про семейный бюджет внизу
-    if display_lang == 'en':
-        household_footer = (
-            "\n\n"
-            "<b>🏠 Household:</b>\n"
-            "Track finances together with your family. "
-            "Switch between personal and family views. "
-            "Create a household and add members by sending them an invite link."
-        )
-    else:
-        household_footer = (
-            "\n\n"
-            "<b>🏠 Семейный бюджет:</b>\n"
-            "Ведите общий учет с семьёй. "
-            "Переключайтесь между личным и семейным режимом просмотра. "
-            "Создайте семью и добавляйте участников, отправив им приглашение."
-        )
-    text += household_footer
-    
     # Отправляем информацию без кнопок
     await send_message_with_cleanup(message, state, text, parse_mode="HTML")
+    # Сбрасываем сохраненные аргументы /start после успешной обработки
+    await state.update_data(start_command_args=None)
 
 
 
@@ -289,63 +328,102 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
         except Exception:
             pass
 
-        # После принятия политики отправляем приветственное сообщение
+        # После принятия политики выполняем полную инициализацию нового пользователя
+        user_id = callback.from_user.id
         display_lang = profile.language_code or 'ru'
 
-        # Формируем приветственный текст
-        if display_lang == 'en':
-            text = """<b>🪙 Coins - smart finance tracking</b>
+        # Создаем базовые категории для нового пользователя
+        categories_created = await create_default_categories(user_id)
+        # Создаем базовые категории доходов
+        income_categories_created = await create_default_income_categories(user_id)
 
-<b>💸 Adding expenses and income:</b>
-Send a text or voice message:
-"Coffee", "Gas 4050", "Bonus +40000"
-The amount and category will be selected based on your previous entries.
-You can backdate entries, e.g., "10.09 1200 groceries" or "coffee 340 10.09.2025".
+        # Проверяем, новый ли это пользователь для создания пробной подписки
+        # Считаем пользователя новым, если у него:
+        # 1. Нет записей о тратах
+        # 2. Нет записей о доходах
+        # 3. Нет истории подписок (включая истёкшие)
+        has_expenses = await Expense.objects.filter(profile=profile).aexists()
+        has_incomes = await Income.objects.filter(profile=profile).aexists()
+        has_subscription_history = await Subscription.objects.filter(profile=profile).aexists()
 
-<b>📁 Categories:</b>
-Customize categories for yourself - add your own, delete unnecessary ones. AI will automatically determine the category for each entry.
+        is_new_user = not has_expenses and not has_incomes and not has_subscription_history
 
-<b>💳 Bank card cashbacks:</b>
-Add information about cashbacks on your bank cards. All cashbacks are calculated automatically and displayed in reports. Pin the cashback message in the chat for one-click access.
+        logger.info(f"[PRIVACY_ACCEPT] User {user_id} status: has_expenses={has_expenses}, has_incomes={has_incomes}, has_subscription_history={has_subscription_history}, is_new_user={is_new_user}, is_beta_tester={profile.is_beta_tester}")
 
-<b>📋 Transaction diary:</b>
-View the history of all transactions for any period in a convenient format. The diary shows expenses and income by day with totals.
+        # Создаем пробную подписку для новых пользователей (если не beta_tester)
+        if not profile.is_beta_tester and is_new_user:
+            # Проверяем существующие подписки
+            existing_trial = await profile.subscriptions.filter(
+                type='trial'
+            ).aexists()
 
-<b>📊 Reports:</b>
-Request a report in natural language:
-"Show expenses for July", "How much did I earn this month"
-Get beautiful PDF reports with charts
+            has_active_subscription = await profile.subscriptions.filter(
+                is_active=True,
+                end_date__gt=timezone.now()
+            ).aexists()
 
-<b>🏠 Household:</b>
-Track finances together with your family. Switch between personal and family views. Create a household and add members by sending them an invite link."""
-        else:
-            text = """<b>🪙 Coins - умный учет ваших финансов</b>
+            logger.info(f"[PRIVACY_ACCEPT] Subscription check for user {user_id}: is_new_user={is_new_user}, has_active_subscription={has_active_subscription}, existing_trial={existing_trial}")
 
-<b>💸 Добавление расходов и доходов:</b>
-Отправьте текст или голосовое сообщение:
-"Кофе", "Дизель 4050", "Премия +40000"
-Сумма и категория подберутся на основании ваших предыдущих записей.
-Можно добавлять задним числом: например, "10.09 1200 продукты" или "кофе 340 10.09.2025".
+            # Создаем пробную подписку только если:
+            # 1. Это новый пользователь
+            # 2. У него нет активной подписки
+            # 3. У него никогда не было пробной подписки
+            # 4. Он не beta_tester
+            if not has_active_subscription and not existing_trial:
+                try:
+                    trial_end = timezone.now() + timedelta(days=7)
+                    await Subscription.objects.acreate(
+                        profile=profile,
+                        type='trial',
+                        payment_method='trial',
+                        amount=0,
+                        start_date=timezone.now(),
+                        end_date=trial_end,
+                        is_active=True
+                    )
+                    logger.info(f"[PRIVACY_ACCEPT] Successfully created trial subscription for new user {user_id}, expires: {trial_end}")
+                except Exception as e:
+                    logger.error(f"[PRIVACY_ACCEPT] Failed to create trial subscription for user {user_id}: {e}")
+            else:
+                logger.info(f"[PRIVACY_ACCEPT] Not creating trial subscription for user {user_id}: has_active_subscription={has_active_subscription}, existing_trial={existing_trial}")
+        elif profile.is_beta_tester:
+            logger.info(f"[PRIVACY_ACCEPT] User {user_id} is a beta tester, skipping trial subscription")
 
-<b>📁 Категории:</b>
-Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. ИИ автоматически определит категорию для каждой записи.
+        # Получаем сохраненные аргументы /start для обработки реферальных ссылок
+        data = await state.get_data()
+        start_args = data.get('start_command_args')
 
-<b>💳 Кешбэки по банковским картам:</b>
-Добавьте информацию о кешбеках по вашим банковским картам. Все кешбеки рассчитываются автоматически и отображаются в отчетах. Закрепите сообщение с кешбэком в чате, чтобы оно было доступно по одному клику.
+        # Обработка реферальной ссылки для новых пользователей
+        referral_message = ""
+        if is_new_user and start_args and start_args.startswith('ref_'):
+            referral_code = start_args[4:]
+            logger.info(f"[PRIVACY_ACCEPT] Processing referral code '{referral_code}' for new user {user_id}")
+            try:
+                # Обрабатываем реферальную ссылку Telegram Stars
+                affiliate_referral = await process_referral_link(user_id, referral_code)
 
-<b>📋 Дневник операций:</b>
-Просматривайте историю всех операций за любой период в удобном формате. Дневник показывает расходы и доходы по дням с итогами.
+                if affiliate_referral:
+                    # Успешно обработана ссылка Telegram Stars
+                    if display_lang == 'en':
+                        referral_message = "\n\n⭐ You joined via an affiliate link! Your friend will receive commission from your purchases."
+                    else:
+                        referral_message = "\n\n⭐ Вы перешли по партнёрской ссылке! Ваш друг будет получать комиссию с ваших покупок."
 
-<b>📊 Отчеты:</b>
-Попросите отчет естественным языком:
-"Покажи траты за июль", "Сколько я заработал в этом месяце"
-Получайте красивые PDF отчеты с графиками
+                    logger.info(f"New user {user_id} registered via Telegram Stars affiliate link after privacy acceptance")
+            except Exception as e:
+                logger.error(f"Error processing referral code after privacy acceptance: {e}")
 
-<b>🏠 Семейный бюджет:</b>
-Ведите общий учет с семьёй. Переключайтесь между личным и семейным режимом просмотра. Создайте семью и добавляйте участников, отправив им приглашение."""
+        # Обновляем команды бота для пользователя
+        await update_user_commands(callback.bot, user_id)
+
+        # Получаем приветственное сообщение
+        text = get_welcome_message(display_lang, referral_message)
 
         # Отправляем приветственное сообщение
         await callback.message.answer(text, parse_mode="HTML")
+
+        # Сбрасываем сохраненные аргументы /start после успешной обработки
+        await state.update_data(start_command_args=None)
 
     except Exception as e:
         import traceback
@@ -375,68 +453,9 @@ async def callback_start(callback: types.CallbackQuery, state: FSMContext, lang:
     """Показать информацию о боте через callback"""
     # Обновляем команды бота для пользователя
     await update_user_commands(callback.bot, callback.from_user.id)
-    
-    # Информация о боте на нужном языке
-    if lang == 'en':
-        text = """<b>🪙 Coins - smart finance tracking</b>
 
-<b>💸 Adding expenses:</b>
-Send a text or voice message:
-"Coffee 200" or "Gas 4095 station"
-You can backdate entries, e.g., "10.09 1200 groceries" or "coffee 340 10.09.2025".
-
-<b>📁 Expense categories:</b>
-Customize categories for yourself - add your own, delete unnecessary ones. AI will automatically determine the category for each expense.
-
-<b>💳 Bank card cashbacks:</b>
-Add information about cashbacks on your bank cards. All cashbacks are calculated automatically and displayed in reports. Pin the cashback message in the chat for one-click access.
-
-<b>📊 Expense reports:</b>
-Request a report in natural language:
-"Show expenses for July" or "How much did I spend yesterday"
-Get beautiful PDF reports with charts"""
-    else:
-        text = """<b>🪙 Coins - умный учет ваших финансов</b>
-
-<b>💸 Добавление расходов и доходов:</b>
-Отправьте текст или голосовое сообщение:
-"Кофе", "Дизель 4050", "Премия +40000"
-Сумма и категория подберутся на основании ваших предыдущих записей.
-Можно добавлять задним числом: например, "10.09 1200 продукты" или "кофе 340 10.09.2025".
-
-<b>📁 Категории:</b>
-Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. ИИ автоматически определит категорию для каждой записи.
-
-<b>💳 Кешбэки по банковским картам:</b>
-Добавьте информацию о кешбеках по вашим банковским картам. Все кешбеки рассчитываются автоматически и отображаются в отчетах. Закрепите сообщение с кешбэком в чате, чтобы оно было доступно по одному клику.
-
-<b>📋 Дневник операций:</b>
-Просматривайте историю всех операций за любой период в удобном формате. Дневник показывает расходы и доходы по дням с итогами.
-
-<b>📊 Отчеты:</b>
-Попросите отчет естественным языком:
-"Покажи траты за июль", "Сколько я заработал в этом месяце"
-Получайте красивые PDF отчеты с графиками"""
-    
-    # Добавляем блок про семейный бюджет внизу
-    if lang == 'en':
-        household_footer = (
-            "\n\n"
-            "<b>🏠 Household:</b>\n"
-            "Track finances together with your family. "
-            "Switch between personal and family views. "
-            "Create a household and add members by sending them an invite link."
-        )
-    else:
-        household_footer = (
-            "\n\n"
-            "<b>🏠 Семейный бюджет:</b>\n"
-            "Ведите общий учет с семьёй. "
-            "Переключайтесь между личным и семейным режимом просмотра. "
-            "Создайте семью и добавляйте участников, отправив им приглашение."
-        )
-    
-    text += household_footer
+    # Получаем приветственное сообщение
+    text = get_welcome_message(lang)
 
     try:
         await callback.message.edit_text(text, parse_mode="HTML")
