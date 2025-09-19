@@ -289,22 +289,63 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
         except Exception:
             pass
 
-        # Вызываем команду /start после принятия политики
-        # Создаем корректное сообщение от пользователя
-        from aiogram.types import Message
-        import datetime
+        # После принятия политики отправляем приветственное сообщение
+        display_lang = profile.language_code or 'ru'
 
-        # Создаем сообщение с правильными данными пользователя
-        user_message = Message(
-            message_id=callback.message.message_id + 1,
-            date=datetime.datetime.now(),
-            chat=callback.message.chat,
-            from_user=callback.from_user,  # Используем from_user из callback - это данные пользователя
-            text='/start'
-        )
+        # Формируем приветственный текст
+        if display_lang == 'en':
+            text = """<b>🪙 Coins - smart finance tracking</b>
 
-        # Вызываем обработчик /start
-        await cmd_start(user_message, state, CommandObject(command='start'), lang=profile.language_code or 'ru')
+<b>💸 Adding expenses and income:</b>
+Send a text or voice message:
+"Coffee", "Gas 4050", "Bonus +40000"
+The amount and category will be selected based on your previous entries.
+You can backdate entries, e.g., "10.09 1200 groceries" or "coffee 340 10.09.2025".
+
+<b>📁 Categories:</b>
+Customize categories for yourself - add your own, delete unnecessary ones. AI will automatically determine the category for each entry.
+
+<b>💳 Bank card cashbacks:</b>
+Add information about cashbacks on your bank cards. All cashbacks are calculated automatically and displayed in reports. Pin the cashback message in the chat for one-click access.
+
+<b>📋 Transaction diary:</b>
+View the history of all transactions for any period in a convenient format. The diary shows expenses and income by day with totals.
+
+<b>📊 Reports:</b>
+Request a report in natural language:
+"Show expenses for July", "How much did I earn this month"
+Get beautiful PDF reports with charts
+
+<b>🏠 Household:</b>
+Track finances together with your family. Switch between personal and family views. Create a household and add members by sending them an invite link."""
+        else:
+            text = """<b>🪙 Coins - умный учет ваших финансов</b>
+
+<b>💸 Добавление расходов и доходов:</b>
+Отправьте текст или голосовое сообщение:
+"Кофе", "Дизель 4050", "Премия +40000"
+Сумма и категория подберутся на основании ваших предыдущих записей.
+Можно добавлять задним числом: например, "10.09 1200 продукты" или "кофе 340 10.09.2025".
+
+<b>📁 Категории:</b>
+Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. ИИ автоматически определит категорию для каждой записи.
+
+<b>💳 Кешбэки по банковским картам:</b>
+Добавьте информацию о кешбеках по вашим банковским картам. Все кешбеки рассчитываются автоматически и отображаются в отчетах. Закрепите сообщение с кешбэком в чате, чтобы оно было доступно по одному клику.
+
+<b>📋 Дневник операций:</b>
+Просматривайте историю всех операций за любой период в удобном формате. Дневник показывает расходы и доходы по дням с итогами.
+
+<b>📊 Отчеты:</b>
+Попросите отчет естественным языком:
+"Покажи траты за июль", "Сколько я заработал в этом месяце"
+Получайте красивые PDF отчеты с графиками
+
+<b>🏠 Семейный бюджет:</b>
+Ведите общий учет с семьёй. Переключайтесь между личным и семейным режимом просмотра. Создайте семью и добавляйте участников, отправив им приглашение."""
+
+        # Отправляем приветственное сообщение
+        await callback.message.answer(text, parse_mode="HTML")
 
     except Exception as e:
         import traceback
