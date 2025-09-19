@@ -25,21 +25,41 @@ cd /home/batman/expense_bot && docker-compose restart celery celery-beat
 
 ## Обновление кода на сервере
 
-### Полное обновление с GitHub
+### 🚀 НОВЫЙ СПОСОБ - Полное обновление одной командой (РЕКОМЕНДУЕТСЯ)
+```bash
+cd /home/batman/expense_bot && bash scripts/full_update.sh
+```
+Или еще короче:
+```bash
+cd /home/batman/expense_bot && bash update.sh
+```
+
+Этот скрипт автоматически:
+- Остановит контейнеры
+- Обновит код из Git
+- Обновит лендинг страницу
+- Пересоберет Docker образы
+- Запустит контейнеры
+- Проверит что всё работает
+
+### Старый способ - Полное обновление вручную
 ```bash
 cd /home/batman/expense_bot && \
 git fetch origin && \
 git reset --hard origin/master && \
 docker-compose down && \
 docker-compose build --no-cache && \
-docker-compose up -d
+docker-compose up -d && \
+chmod +x scripts/update_landing.sh && \
+bash scripts/update_landing.sh
 ```
 
 ### Быстрое обновление (только pull и restart)
 ```bash
 cd /home/batman/expense_bot && \
 git pull origin master && \
-docker-compose restart bot celery web
+docker-compose restart app celery web && \
+bash scripts/update_landing.sh
 ```
 
 ## Работа с Celery
