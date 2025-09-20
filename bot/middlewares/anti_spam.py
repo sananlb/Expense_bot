@@ -5,6 +5,7 @@ from typing import Callable, Dict, Any, Awaitable
 from datetime import datetime, timedelta
 from collections import defaultdict
 import logging
+import os
 from aiogram import BaseMiddleware
 from aiogram.types import Message
 import asyncio
@@ -24,11 +25,16 @@ class AntiSpamMiddleware(BaseMiddleware):
         # Хранилище для подсчета регистраций в единицу времени
         self.registration_window = defaultdict(int)
         self.window_reset_time = datetime.now()
+        # Для отслеживания регистраций в секунду
+        self.second_window = []
+        self.last_second_check = datetime.now()
 
-        # Настройки защиты
-        self.MAX_STARTS_PER_HOUR = 3  # Максимум 3 команды /start в час от одного пользователя
-        self.MAX_REGISTRATIONS_PER_MINUTE = 5  # Максимум 5 новых регистраций в минуту глобально
-        self.BAN_DURATION = timedelta(hours=1)  # Длительность временного бана
+        # Настройки защиты (можно переопределить через ENV)
+        self.MAX_STARTS_PER_HOUR = int(os.getenv('ANTI_SPAM_MAX_STARTS_HOUR', '5'))
+        self.MAX_REGISTRATIONS_PER_MINUTE = int(os.getenv('ANTI_SPAM_MAX_REG_MINUTE', '30'))
+        self.MAX_REGISTRATIONS_PER_SECOND = int(os.getenv('ANTI_SPAM_MAX_REG_SECOND', '3'))
+        ban_minutes = int(os.getenv('ANTI_SPAM_BAN_MINUTES', '30'))
+        self.BAN_DURATION = timedelta(minutes=ban_minutes)
         self.banned_users = {}  # Словарь забаненных пользователей
 
     async def __call__(
@@ -63,12 +69,22 @@ class AntiSpamMiddleware(BaseMiddleware):
 
         # Проверка команды /start
         if event.text and event.text.startswith('/start'):
+            # Проверка регистраций в секунду (против ботов)
+            self.second_window = [ts for ts in self.second_window if now - ts < timedelta(seconds=1)]
+            if len(self.second_window) >= self.MAX_REGISTRATIONS_PER_SECOND:
+                logger.warning(f"Too many registrations per second: {len(self.second_window)}")
+                await event.answer(
+                    "⚠️ Слишком много запросов. Подождите несколько секунд."
+                )
+                return
+            self.second_window.append(now)
+
             # Сбрасываем счетчик регистраций каждую минуту
             if now - self.window_reset_time > timedelta(minutes=1):
                 self.registration_window.clear()
                 self.window_reset_time = now
 
-            # Проверяем глобальный лимит регистраций
+            # Проверяем глобальный лимит регистраций в минуту
             total_registrations = sum(self.registration_window.values())
             if total_registrations >= self.MAX_REGISTRATIONS_PER_MINUTE:
                 logger.warning(f"Global registration limit reached: {total_registrations} registrations/minute")
