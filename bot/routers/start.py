@@ -125,49 +125,97 @@ async def cmd_start(
             # Формат: /start family_TOKEN
             family_token = start_args[7:]
     
-    # Создаем или получаем профиль пользователя
-    profile = await get_or_create_profile(
-        telegram_id=user_id,
-        language_code=message.from_user.language_code
-    )
-    
-    # Проверяем, новый ли это пользователь
-    # Считаем пользователя новым, если у него:
-    # 1. Нет записей о тратах
-    # 2. Нет записей о доходах
-    # 3. Нет истории подписок (включая истёкшие)
-    has_expenses = await Expense.objects.filter(profile=profile).aexists()
-    has_incomes = await Income.objects.filter(profile=profile).aexists()
-    has_subscription_history = await Subscription.objects.filter(profile=profile).aexists()
+    # Пытаемся получить существующий профиль пользователя, чтобы не создавать
+    # записи до принятия политики конфиденциальности
+    try:
+        profile = await Profile.objects.aget(telegram_id=user_id)
+        profile_exists = True
+    except Profile.DoesNotExist:
+        profile = None
+        profile_exists = False
 
-    is_new_user = not has_expenses and not has_incomes and not has_subscription_history
+    if profile_exists:
+        # Проверяем, новый ли это пользователь
+        # Считаем пользователя новым, если у него:
+        # 1. Нет записей о тратах
+        # 2. Нет записей о доходах
+        # 3. Нет истории подписок (включая истёкшие)
+        has_expenses = await Expense.objects.filter(profile=profile).aexists()
+        has_incomes = await Income.objects.filter(profile=profile).aexists()
+        has_subscription_history = await Subscription.objects.filter(profile=profile).aexists()
 
-    logger.info(f"[START] User {user_id} status: has_expenses={has_expenses}, has_incomes={has_incomes}, has_subscription_history={has_subscription_history}, is_new_user={is_new_user}, is_beta_tester={profile.is_beta_tester}")
-    
-    # Определяем язык для отображения
-    # Если у пользователя уже есть сохраненный язык - используем его
-    # Если это новый пользователь - определяем по языку системы Telegram
-    if profile.language_code:
-        display_lang = profile.language_code
+        is_new_user = not has_expenses and not has_incomes and not has_subscription_history
+
+        logger.info(
+            "[START] User %s status: has_expenses=%s, has_incomes=%s, has_subscription_history=%s, is_new_user=%s, is_beta_tester=%s",
+            user_id,
+            has_expenses,
+            has_incomes,
+            has_subscription_history,
+            is_new_user,
+            profile.is_beta_tester,
+        )
+
+        # Определяем язык для отображения
+        # Если у пользователя уже есть сохраненный язык - используем его
+        # Если поле пустое — определяем по языку системы Telegram
+        if profile.language_code:
+            display_lang = profile.language_code
+        else:
+            user_language_code = message.from_user.language_code or 'en'
+            display_lang = 'ru' if user_language_code.startswith('ru') else 'en'
+            profile.language_code = display_lang
+            await profile.asave()
+
+        # Проверка принятия политики конфиденциальности до выполнения
+        # остальных действий
+        if not profile.accepted_privacy:
+            await state.update_data(start_command_args=start_args)
+            short = get_text('short_privacy_for_acceptance', display_lang)
+            policy_url = get_privacy_url_for(display_lang)
+            text_priv = (
+                f"<b>📄 Политика конфиденциальности</b>\n\n"
+                f"{short}\n\n"
+                f"Полный текст: <a href=\"{policy_url}\">по ссылке</a>"
+            )
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text=get_text('btn_decline_privacy', display_lang),
+                        callback_data='privacy_decline'
+                    ),
+                    InlineKeyboardButton(
+                        text=get_text('btn_accept_privacy', display_lang),
+                        callback_data='privacy_accept'
+                    ),
+                ]
+            ])
+            await message.answer(text_priv, reply_markup=kb, parse_mode='HTML')
+            return
+
+        # Обработка приглашения в семейный бюджет для существующих пользователей
+        if family_token:
+            from bot.routers.household import process_family_invite
+            await process_family_invite(message, family_token)
+            return  # Прекращаем выполнение команды /start
+
     else:
-        # Для новых пользователей определяем язык по системному языку Telegram
+        # Новый пользователь — сохраняем данные во временное состояние FSM
         user_language_code = message.from_user.language_code or 'en'
-        display_lang = 'ru' if user_language_code.startswith('ru') else 'en'
-        # Сохраняем язык только для новых пользователей
-        profile.language_code = display_lang
-        await profile.asave()
-    
-    # Обработка приглашения в семейный бюджет
-    if family_token:
-        # Импортируем функцию обработки приглашения
-        from bot.routers.household import process_family_invite
-        await process_family_invite(message, family_token)
-        return  # Прекращаем выполнение команды /start
-    
-    # Проверка принятия политики конфиденциальности
-    if not profile.accepted_privacy:
-        # Сохраняем аргументы /start для обработки после принятия политики
-        await state.update_data(start_command_args=start_args)
+        display_lang = 'ru' if user_language_code and user_language_code.startswith('ru') else 'en'
+
+        await state.update_data(
+            start_command_args=start_args,
+            pending_profile_data={
+                'telegram_id': user_id,
+                'language_code': display_lang,
+                'raw_language_code': message.from_user.language_code,
+                'username': message.from_user.username,
+                'first_name': message.from_user.first_name,
+                'last_name': message.from_user.last_name,
+            },
+        )
+
         short = get_text('short_privacy_for_acceptance', display_lang)
         policy_url = get_privacy_url_for(display_lang)
         text_priv = (
@@ -177,8 +225,14 @@ async def cmd_start(
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text=get_text('btn_decline_privacy', display_lang), callback_data='privacy_decline'),
-                InlineKeyboardButton(text=get_text('btn_accept_privacy', display_lang), callback_data='privacy_accept'),
+                InlineKeyboardButton(
+                    text=get_text('btn_decline_privacy', display_lang),
+                    callback_data='privacy_decline'
+                ),
+                InlineKeyboardButton(
+                    text=get_text('btn_accept_privacy', display_lang),
+                    callback_data='privacy_accept'
+                ),
             ]
         ])
         await message.answer(text_priv, reply_markup=kb, parse_mode='HTML')
@@ -210,8 +264,8 @@ async def cmd_start(
                     yes_text, no_text = "✅ Да", "✖️ Нет"
                 from aiogram.utils.keyboard import InlineKeyboardBuilder
                 kb = InlineKeyboardBuilder()
-                kb.button(text=yes_text, callback_data=f"family_accept:{inv.token}")
                 kb.button(text=no_text, callback_data="close")
+                kb.button(text=yes_text, callback_data=f"family_accept:{inv.token}")
                 kb.adjust(2)
                 await message.answer(confirm_text, reply_markup=kb.as_markup(), parse_mode="HTML")
             else:
@@ -290,56 +344,78 @@ async def callback_menu(callback: types.CallbackQuery, state: FSMContext, lang: 
 @router.callback_query(F.data == 'privacy_accept')
 async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
     try:
-        profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
+        user_id = callback.from_user.id
+        data = await state.get_data()
+        start_args = data.get('start_command_args')
+        pending_profile_data = data.get('pending_profile_data') or {}
+
+        try:
+            profile = await Profile.objects.aget(telegram_id=user_id)
+        except Profile.DoesNotExist:
+            profile = None
+
+        if profile is None:
+            language_code = pending_profile_data.get('language_code')
+            raw_language_code = pending_profile_data.get('raw_language_code')
+            if not language_code:
+                user_language_code = raw_language_code or callback.from_user.language_code or 'en'
+                language_code = 'ru' if user_language_code and user_language_code.startswith('ru') else 'en'
+            profile = await get_or_create_profile(
+                telegram_id=user_id,
+                language_code=language_code,
+            )
+            if not profile.language_code:
+                profile.language_code = language_code
+        else:
+            language_code = profile.language_code
+
+        display_lang = language_code or pending_profile_data.get('language_code') or 'ru'
+
+        if not profile.language_code:
+            profile.language_code = display_lang
         profile.accepted_privacy = True
         await profile.asave()
+
         await callback.answer('Согласие принято')
         try:
             await callback.message.delete()
         except Exception:
             pass
 
-        # После принятия политики выполняем полную инициализацию нового пользователя
-        user_id = callback.from_user.id
-        display_lang = profile.language_code or 'ru'
+        await create_default_categories(user_id)
+        await create_default_income_categories(user_id)
 
-        # Создаем базовые категории для нового пользователя
-        categories_created = await create_default_categories(user_id)
-        # Создаем базовые категории доходов
-        income_categories_created = await create_default_income_categories(user_id)
-
-        # Проверяем, новый ли это пользователь для создания пробной подписки
-        # Считаем пользователя новым, если у него:
-        # 1. Нет записей о тратах
-        # 2. Нет записей о доходах
-        # 3. Нет истории подписок (включая истёкшие)
         has_expenses = await Expense.objects.filter(profile=profile).aexists()
         has_incomes = await Income.objects.filter(profile=profile).aexists()
         has_subscription_history = await Subscription.objects.filter(profile=profile).aexists()
 
         is_new_user = not has_expenses and not has_incomes and not has_subscription_history
 
-        logger.info(f"[PRIVACY_ACCEPT] User {user_id} status: has_expenses={has_expenses}, has_incomes={has_incomes}, has_subscription_history={has_subscription_history}, is_new_user={is_new_user}, is_beta_tester={profile.is_beta_tester}")
+        logger.info(
+            "[PRIVACY_ACCEPT] User %s status: has_expenses=%s, has_incomes=%s, has_subscription_history=%s, is_new_user=%s, is_beta_tester=%s",
+            user_id,
+            has_expenses,
+            has_incomes,
+            has_subscription_history,
+            is_new_user,
+            profile.is_beta_tester,
+        )
 
-        # Создаем пробную подписку для новых пользователей (если не beta_tester)
         if not profile.is_beta_tester and is_new_user:
-            # Проверяем существующие подписки
-            existing_trial = await profile.subscriptions.filter(
-                type='trial'
-            ).aexists()
-
+            existing_trial = await profile.subscriptions.filter(type='trial').aexists()
             has_active_subscription = await profile.subscriptions.filter(
                 is_active=True,
                 end_date__gt=timezone.now()
             ).aexists()
 
-            logger.info(f"[PRIVACY_ACCEPT] Subscription check for user {user_id}: is_new_user={is_new_user}, has_active_subscription={has_active_subscription}, existing_trial={existing_trial}")
+            logger.info(
+                "[PRIVACY_ACCEPT] Subscription check for user %s: is_new_user=%s, has_active_subscription=%s, existing_trial=%s",
+                user_id,
+                is_new_user,
+                has_active_subscription,
+                existing_trial,
+            )
 
-            # Создаем пробную подписку только если:
-            # 1. Это новый пользователь
-            # 2. У него нет активной подписки
-            # 3. У него никогда не было пробной подписки
-            # 4. Он не beta_tester
             if not has_active_subscription and not existing_trial:
                 try:
                     trial_end = timezone.now() + timedelta(days=7)
@@ -352,49 +428,89 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
                         end_date=trial_end,
                         is_active=True
                     )
-                    logger.info(f"[PRIVACY_ACCEPT] Successfully created trial subscription for new user {user_id}, expires: {trial_end}")
+                    logger.info(
+                        "[PRIVACY_ACCEPT] Successfully created trial subscription for new user %s, expires: %s",
+                        user_id,
+                        trial_end,
+                    )
                 except Exception as e:
-                    logger.error(f"[PRIVACY_ACCEPT] Failed to create trial subscription for user {user_id}: {e}")
+                    logger.error(
+                        "[PRIVACY_ACCEPT] Failed to create trial subscription for user %s: %s",
+                        user_id,
+                        e,
+                    )
             else:
-                logger.info(f"[PRIVACY_ACCEPT] Not creating trial subscription for user {user_id}: has_active_subscription={has_active_subscription}, existing_trial={existing_trial}")
+                logger.info(
+                    "[PRIVACY_ACCEPT] Not creating trial subscription for user %s: has_active_subscription=%s, existing_trial=%s",
+                    user_id,
+                    has_active_subscription,
+                    existing_trial,
+                )
         elif profile.is_beta_tester:
-            logger.info(f"[PRIVACY_ACCEPT] User {user_id} is a beta tester, skipping trial subscription")
+            logger.info("[PRIVACY_ACCEPT] User %s is a beta tester, skipping trial subscription", user_id)
 
-        # Получаем сохраненные аргументы /start для обработки реферальных ссылок
-        data = await state.get_data()
-        start_args = data.get('start_command_args')
+        family_token = None
+        if start_args and start_args.startswith('family_'):
+            family_token = start_args[7:]
 
-        # Обработка реферальной ссылки для новых пользователей
+        if family_token:
+            try:
+                from bot.services.family import get_invite_by_token
+                inv = await get_invite_by_token(family_token)
+                if inv and inv.is_valid():
+                    inviter_tid = inv.inviter.telegram_id
+                    if display_lang == 'en':
+                        confirm_text = (
+                            "👥 Do you want to share a family budget with user "
+                            f"<code>{inviter_tid}</code>?"
+                        )
+                        yes_text, no_text = "✅ Yes", "✖️ No"
+                    else:
+                        confirm_text = (
+                            "👥 Вы действительно хотите вести совместный бюджет с пользователем "
+                            f"<code>{inviter_tid}</code>?"
+                        )
+                        yes_text, no_text = "✅ Да", "✖️ Нет"
+                    from aiogram.utils.keyboard import InlineKeyboardBuilder
+                    kb = InlineKeyboardBuilder()
+                    kb.button(text=no_text, callback_data='close')
+                    kb.button(text=yes_text, callback_data=f"family_accept:{inv.token}")
+                    kb.adjust(2)
+                    await callback.message.answer(confirm_text, reply_markup=kb.as_markup(), parse_mode="HTML")
+                else:
+                    await callback.message.answer(
+                        "Invite link is invalid or expired" if display_lang == 'en' else "Ссылка-приглашение недействительна или истек срок действия"
+                    )
+            except Exception as e:
+                logger.error(f"Error handling family invite after privacy acceptance: {e}")
+
         referral_message = ""
         if is_new_user and start_args and start_args.startswith('ref_'):
             referral_code = start_args[4:]
-            logger.info(f"[PRIVACY_ACCEPT] Processing referral code '{referral_code}' for new user {user_id}")
+            logger.info(
+                "[PRIVACY_ACCEPT] Processing referral code '%s' for new user %s",
+                referral_code,
+                user_id,
+            )
             try:
-                # Обрабатываем реферальную ссылку Telegram Stars
                 affiliate_referral = await process_referral_link(user_id, referral_code)
 
                 if affiliate_referral:
-                    # Успешно обработана ссылка Telegram Stars
                     if display_lang == 'en':
                         referral_message = "\n\n⭐ You joined via an affiliate link! Your friend will receive commission from your purchases."
                     else:
                         referral_message = "\n\n⭐ Вы перешли по партнёрской ссылке! Ваш друг будет получать комиссию с ваших покупок."
 
-                    logger.info(f"New user {user_id} registered via Telegram Stars affiliate link after privacy acceptance")
+                    logger.info("New user %s registered via Telegram Stars affiliate link after privacy acceptance", user_id)
             except Exception as e:
                 logger.error(f"Error processing referral code after privacy acceptance: {e}")
 
-        # Обновляем команды бота для пользователя
         await update_user_commands(callback.bot, user_id)
 
-        # Получаем приветственное сообщение
         text = get_welcome_message(display_lang, referral_message)
-
-        # Отправляем приветственное сообщение
         await callback.message.answer(text, parse_mode="HTML")
 
-        # Сбрасываем сохраненные аргументы /start после успешной обработки
-        await state.update_data(start_command_args=None)
+        await state.update_data(start_command_args=None, pending_profile_data=None)
 
     except Exception as e:
         import traceback

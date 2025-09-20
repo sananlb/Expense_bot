@@ -52,13 +52,14 @@ class SubscriptionInline(admin.TabularInline):
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ['telegram_id', 'subscription_status', 
-                    'is_beta_tester', 'referrals_count_display', 'language_code', 
-                    'currency', 'is_active', 'created_at']
+    list_display = ['telegram_id', 'subscription_status',
+                    'is_beta_tester', 'referrals_count_display', 'payment_stats',
+                    'language_code', 'currency', 'is_active', 'created_at']
     list_filter = ['is_active', 'is_beta_tester', 'language_code', 'currency', 'created_at']
     search_fields = ['telegram_id', 'beta_access_key']
     readonly_fields = ['created_at', 'updated_at',
-                       'referrals_count', 'active_referrals_count']
+                       'referrals_count', 'active_referrals_count',
+                       'total_payments_count', 'total_stars_paid']
     inlines = [SubscriptionInline]
     
     fieldsets = (
@@ -67,6 +68,10 @@ class ProfileAdmin(admin.ModelAdmin):
         }),
         ('Настройки', {
             'fields': ('language_code', 'timezone', 'currency')
+        }),
+        ('Статистика платежей', {
+            'fields': ('total_payments_count', 'total_stars_paid'),
+            'description': 'Общая статистика платежей пользователя через Telegram Stars'
         }),
         ('Бета-тестирование', {
             'fields': ('is_beta_tester', 'beta_access_key'),
@@ -144,7 +149,22 @@ class ProfileAdmin(admin.ModelAdmin):
         return '0'
     
     referrals_count_display.short_description = 'Рефералы'
-    
+
+    def payment_stats(self, obj):
+        """Статистика платежей"""
+        payments = obj.total_payments_count or 0
+        stars = obj.total_stars_paid or 0
+
+        if payments > 0:
+            return format_html(
+                '<span title="Всего {} платежей"><b>{}⭐</b> ({} пл.)</span>',
+                payments, stars, payments
+            )
+        return format_html('<span style="color: gray;">—</span>')
+
+    payment_stats.short_description = 'Платежи'
+    payment_stats.admin_order_field = 'total_stars_paid'
+
     actions = ['make_beta_tester', 'remove_beta_tester',
                'add_month_subscription', 'add_six_months_subscription']
     

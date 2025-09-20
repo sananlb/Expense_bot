@@ -62,6 +62,18 @@ class Profile(models.Model):
         verbose_name='Принята публичная оферта'
     )
     
+    # Статистика платежей
+    total_payments_count = models.IntegerField(
+        default=0,
+        verbose_name='Всего платежей',
+        help_text='Общее количество платежей через Telegram Stars'
+    )
+    total_stars_paid = models.IntegerField(
+        default=0,
+        verbose_name='Всего уплачено звезд',
+        help_text='Общее количество уплаченных Telegram Stars'
+    )
+
     # Семейный бюджет (домохозяйство)
     # Пользователь может принадлежать одному домохозяйству.
     # Если null — ведет личный бюджет.

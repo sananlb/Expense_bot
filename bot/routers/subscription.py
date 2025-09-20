@@ -893,6 +893,11 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
         is_active=True
     )
 
+    # Обновляем статистику платежей в профиле пользователя
+    profile.total_payments_count = (profile.total_payments_count or 0) + 1
+    profile.total_stars_paid = (profile.total_stars_paid or 0) + stars_amount
+    await profile.asave(update_fields=['total_payments_count', 'total_stars_paid'])
+
     logger.info(f"Created subscription #{subscription.id} for user {user_id}: {start_date} → {end_date}")
     
     # Бонус за приглашение

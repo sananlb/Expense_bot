@@ -46,15 +46,15 @@ def get_confirm_join_keyboard(action: str, token: str = None, lang: str = 'ru') 
     if action == "join":
         keyboard = [
             [
-                InlineKeyboardButton(text=get_text('yes_join', lang), callback_data=f"confirm_join:{token}"),
-                InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cancel_action")
+                InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cancel_action"),
+                InlineKeyboardButton(text=get_text('yes_join', lang), callback_data=f"confirm_join:{token}")
             ]
         ]
     elif action == "leave":
         keyboard = [
             [
-                InlineKeyboardButton(text=get_text('yes_leave', lang), callback_data="confirm_leave"),
-                InlineKeyboardButton(text=get_text('cancel', lang), callback_data="household_budget")
+                InlineKeyboardButton(text=get_text('cancel', lang), callback_data="household_budget"),
+                InlineKeyboardButton(text=get_text('yes_leave', lang), callback_data="confirm_leave")
             ]
         ]
     else:

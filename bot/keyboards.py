@@ -358,8 +358,8 @@ def yes_no_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     """Клавиатура Да/Нет"""
     keyboard = InlineKeyboardBuilder()
     
-    keyboard.button(text=get_text('yes', lang), callback_data="yes")
     keyboard.button(text=get_text('no', lang), callback_data="no")
+    keyboard.button(text=get_text('yes', lang), callback_data="yes")
     
     keyboard.adjust(2)
     return keyboard.as_markup()

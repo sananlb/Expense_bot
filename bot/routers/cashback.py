@@ -1096,8 +1096,8 @@ async def confirm_remove_cashback(callback: types.CallbackQuery):
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text=get_text('yes_delete', lang), callback_data=f"confirm_remove_cb_{cashback_id}"),
-            InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu")
+            InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu"),
+            InlineKeyboardButton(text=get_text('yes_delete', lang), callback_data=f"confirm_remove_cb_{cashback_id}")
         ]
     ])
     
@@ -1319,8 +1319,8 @@ async def handle_confirm_remove_cashback(callback: types.CallbackQuery):
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text=get_text('yes_delete', lang), callback_data=f"confirm_remove_cb_{cashback_id}"),
-            InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu")
+            InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu"),
+            InlineKeyboardButton(text=get_text('yes_delete', lang), callback_data=f"confirm_remove_cb_{cashback_id}")
         ]
     ])
     
