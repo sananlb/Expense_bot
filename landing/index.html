@@ -260,7 +260,7 @@
       position: relative;
       overflow: hidden;
       margin-bottom: 0;
-      background: linear-gradient(135deg, rgba(203, 213, 225, 0.03) 0%, rgba(148, 163, 184, 0.02) 100%);
+      background: linear-gradient(180deg, rgba(230, 240, 250, 0.4) 0%, rgba(220, 235, 248, 0.35) 100%);
     }
 
 
@@ -796,17 +796,26 @@
       margin-bottom: 32px;
       line-height: 1.6;
     }
-    /* Demo text slight left padding and centered button */
-    .demo-text { padding-left: 16px; }
-    .demo-text .btn { display: inline-flex; margin: 0 auto; }
+    /* Demo text centered on all viewports */
+    .demo-text {
+      padding-left: 0;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .demo-text .btn {
+      display: inline-flex;
+      margin: 0 auto;
+    }
     @media (max-width: 1024px) {
-      .demo-text { padding-left: 12px; }
+      .demo-text { padding-left: 0; }
     }
     @media (max-width: 768px) {
-      .demo-text { padding-left: 16px; }
+      .demo-text { padding-left: 0; }
     }
     @media (max-width: 480px) {
-      .demo-text { padding-left: 20px; }
+      .demo-text { padding-left: 0; }
     }
 
     .demo-list {
@@ -1808,24 +1817,57 @@
       /* Градиентные переходы между секциями убраны */
 
       /* Более светлые фоны секций на мобильных */
+      .desktop-only {
+        display: none !important;
+      }
+
+      .demo-container {
+        justify-items: center;
+      }
+
+      .demo-text {
+        width: 100%;
+        align-items: center;
+      }
+
+      .demo-text h2,
+      .demo-text p {
+        width: 100%;
+        text-align: center;
+      }
+
+      .hero {
+        background-image:
+          radial-gradient(circle at 15% 12%, rgba(236, 244, 255, 0.92) 0%, rgba(236, 244, 255, 0.65) 45%, rgba(236, 244, 255, 0) 70%),
+          linear-gradient(180deg, rgba(230, 240, 250, 0.25) 0%, rgba(220, 235, 248, 0.2) 100%);
+      }
+
       .features {
-        background: linear-gradient(180deg, #fafbfc 0%, #f8f9fa 100%);
+        background-image:
+          radial-gradient(circle at 8% 6%, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.82) 38%, rgba(255, 255, 255, 0) 70%),
+          linear-gradient(180deg, #fafbfc 0%, #f8f9fa 100%);
       }
 
       .benefits-section {
-        background: linear-gradient(180deg, rgba(230, 240, 250, 0.25) 0%, rgba(220, 235, 248, 0.2) 100%);
+        background-image:
+          radial-gradient(circle at 8% 8%, rgba(236, 244, 255, 0.92) 0%, rgba(236, 244, 255, 0.65) 45%, rgba(236, 244, 255, 0) 72%),
+          linear-gradient(180deg, rgba(230, 240, 250, 0.25) 0%, rgba(220, 235, 248, 0.2) 100%);
       }
 
       .pricing-section {
-        background: linear-gradient(180deg, rgba(225, 237, 250, 0.3) 0%, rgba(215, 230, 245, 0.25) 100%);
+        background-image:
+          radial-gradient(circle at 8% 8%, rgba(228, 240, 255, 0.95) 0%, rgba(228, 240, 255, 0.65) 48%, rgba(228, 240, 255, 0) 75%),
+          linear-gradient(180deg, rgba(225, 237, 250, 0.3) 0%, rgba(215, 230, 245, 0.25) 100%);
       }
 
       .faq-section {
-        background: linear-gradient(180deg, #fafbfc 0%, #f8f9fa 100%);
+        background-image:
+          radial-gradient(circle at 8% 7%, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.78) 40%, rgba(255, 255, 255, 0) 68%),
+          linear-gradient(180deg, #fafbfc 0%, #f8f9fa 100%);
       }
 
       .cta-section {
-        background: linear-gradient(135deg, rgba(99, 102, 241, 0.85) 0%, rgba(139, 92, 246, 0.85) 100%);
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
       }
 
       .logo {
@@ -1860,7 +1902,7 @@
       }
 
       .hero {
-        padding: 84px 0 60px;
+        padding: 120px 0 60px; /* Увеличиваем верхний отступ от шапки */
       }
 
       .hero-text h1 {
@@ -2059,6 +2101,49 @@
         grid-template-columns: 1fr;
         max-width: 100%;
       }
+
+      /* Изменяем градиенты на мобильных - светлый в верхнем левом углу */
+      .hero {
+        background: radial-gradient(circle at 15% 12%, rgba(236, 244, 255, 0.92) 0%, rgba(236, 244, 255, 0.65) 45%, rgba(236, 244, 255, 0) 70%), linear-gradient(135deg, rgba(230, 240, 250, 0.25) 0%, rgba(220, 235, 248, 0.2) 100%) !important;
+      }
+
+      .features {
+        background: radial-gradient(circle at 8% 6%, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0.82) 38%, rgba(255, 255, 255, 0) 70%), linear-gradient(135deg, #fafbfc 0%, #f0f2f6 100%) !important;
+      }
+
+      .how-it-works {
+        background: linear-gradient(180deg, rgba(230, 240, 250, 0.4) 0%, rgba(220, 235, 248, 0.35) 100%) !important;
+      }
+
+      .pricing-section {
+        background: radial-gradient(circle at 8% 8%, rgba(228, 240, 255, 0.92) 0%, rgba(228, 240, 255, 0.58) 46%, rgba(228, 240, 255, 0) 74%), linear-gradient(135deg, rgba(225, 237, 250, 0.4) 0%, rgba(215, 230, 245, 0.2) 100%) !important;
+      }
+
+      .cta-section {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+      }
+
+      /* Скрываем элементы в секции "Бот в действии" на мобильных */
+      .demo-section .demo-list {
+        display: none !important;
+      }
+
+      .demo-section .demo-text .btn.btn-primary {
+        display: none !important;
+      }
+
+      /* Уменьшаем отступ после заголовка в demo секции */
+      .demo-text {
+        padding-bottom: 0;
+      }
+
+      .demo-text h2 {
+        margin-bottom: 16px;
+      }
+
+      .demo-text p {
+        margin-bottom: 24px;
+      }
     }
 
     /* Loading Animation */
@@ -2217,7 +2302,7 @@
             <span>|</span>
             <a href="#" id="lang-en">EN</a>
           </span>
-          <a href="https://t.me/showmecoinbot" target="_blank" class="btn btn-primary">
+          <a href="https://t.me/showmecoinbot" target="_blank" class="btn btn-primary desktop-only">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
             </svg>
@@ -2371,17 +2456,20 @@
   <!-- Demo Section -->
   <section class="demo-section" id="demo">
     <div class="container">
+      <div class="section-header reveal" style="text-align: center; margin-bottom: 40px;">
+        <span class="section-tag" data-i18n="demo_tag">ДЕМО</span>
+      </div>
       <div class="demo-container">
         <div class="demo-text reveal">
           <h2 data-i18n="demo_title">Посмотрите бота в действии</h2>
           <p data-i18n="demo_subtitle">Реальные примеры использования от наших пользователей</p>
-          <ul class="demo-list">
+          <ul class="demo-list desktop-only">
             <li data-i18n="demo_li1">Быстрая запись трат одним сообщением</li>
             <li data-i18n="demo_li2">Голосовые команды для hands-free режима</li>
             <li data-i18n="demo_li3">Вопросы о статистике естественным языком</li>
             <li data-i18n="demo_li4">Мгновенные отчеты и графики</li>
           </ul>
-          <a href="https://t.me/showmecoinbot" target="_blank" class="btn btn-primary">
+          <a href="https://t.me/showmecoinbot" target="_blank" class="btn btn-primary desktop-only">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
             </svg>
@@ -2544,6 +2632,7 @@
           hero_subtitle: 'Скажите "кофе 200" или "зарплата +80000". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.',
           trust_free: 'Бесплатный старт',
           trust_no_banks: 'Без привязки к банкам',
+          demo_tag: 'ДЕМО',
           demo_title: 'Бот в действии',
           demo_subtitle: 'Реальные примеры использования',
           demo_li1: 'Быстрая запись трат одним сообщением',
@@ -2640,6 +2729,7 @@
           hero_subtitle: 'Say "coffee 200" or "salary +80000".<br>AI recognizes, categorizes, and builds reports.<br>No banks, no complex apps.',
           trust_free: 'Free to start',
           trust_no_banks: 'No bank linking required',
+          demo_tag: 'DEMO',
           demo_title: 'See the bot in action',
           demo_subtitle: 'Real usage examples',
           demo_li1: 'Log expenses quickly in one message',

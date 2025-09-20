@@ -1,5 +1,5 @@
 """
-Роутер для партнерской программы Telegram Stars
+Роутер для партнерской программы
 """
 from aiogram import Router, F, types
 from aiogram.types import Message, CallbackQuery
@@ -27,7 +27,7 @@ def get_referral_keyboard(lang: str = 'ru'):
     builder = InlineKeyboardBuilder()
 
     builder.button(
-        text="📊 Подробная статистика" if lang == 'ru' else "📊 Detailed statistics",
+        text="📊 Статистика" if lang == 'ru' else "📊 Statistics",
         callback_data="referral_stats"
     )
     builder.button(
@@ -44,7 +44,7 @@ def get_referral_keyboard(lang: str = 'ru'):
 
 
 async def get_referral_info_text(profile: Profile, bot_username: str, lang: str = 'ru') -> tuple[str, bool]:
-    """Получить текст с информацией о партнерской программе Telegram Stars"""
+    """Получить текст с информацией о партнерской программе"""
     # Получаем или создаем партнерскую ссылку
     affiliate_link = await get_or_create_affiliate_link(profile.telegram_id, bot_username)
 
@@ -57,30 +57,16 @@ async def get_referral_info_text(profile: Profile, bot_username: str, lang: str 
             "🌟 <b>Partner Program</b>\n\n"
             "Your referral link:\n"
             f"<code>{affiliate_link.telegram_link}</code>\n\n"
-            "🎁 <b>Internal bonus</b>\n"
-            "Invite a friend: when they buy their first paid plan, your subscription is extended for the same duration once.\n\n"
-            "📊 <b>Your stats:</b>\n"
-            f"• Users attracted: {stats['referrals_count']}\n"
-            f"• Bonuses granted: {stats['rewarded_referrals']}\n"
-            f"• Waiting for first payment: {stats['pending_referrals']}\n"
-            f"• Total months rewarded: {rewards_months}\n\n"
-            "⭐ <b>Telegram Stars affiliate</b>\n"
-            "You can also join the official Telegram program: open <i>Settings → My Stars → Earn Stars</i>, find our bot and subscribe to the campaign. Telegram will track and credit Stars commissions automatically."
+            "🎁 <b>How it works</b>\n"
+            "Invite a friend: when they buy their first paid plan, your subscription is extended for the same duration once."
         )
     else:
         text = (
             "🌟 <b>Партнёрская программа</b>\n\n"
             "Ваша реферальная ссылка:\n"
             f"<code>{affiliate_link.telegram_link}</code>\n\n"
-            "🎁 <b>Наш бонус</b>\n"
-            "Приглашайте друзей: когда приглашённый оплатит первую подписку, мы продлим вашу на такой же срок (один раз).\n\n"
-            "📊 <b>Статистика:</b>\n"
-            f"• Привлечено пользователей: {stats['referrals_count']}\n"
-            f"• Бонусы выданы: {stats['rewarded_referrals']}\n"
-            f"• Ожидают первую оплату: {stats['pending_referrals']}\n"
-            f"• Всего месяцев подарено: {rewards_months}\n\n"
-            "⭐ <b>Официальная программа Telegram Stars</b>\n"
-            "Хотите получать комиссию звёздами? Откройте <i>Настройки → Мои звёзды → Заработать звёзды</i>, найдите наш бот и подключитесь к кампании. Telegram сам начислит и выплатит комиссию в Stars."
+            "🎁 <b>Как это работает</b>\n"
+            "Приглашайте друзей: когда приглашённый оплатит первую подписку, мы продлим вашу на такой же срок (один раз)."
         )
 
     return text, True  # Всегда есть код, так как создаём автоматически
@@ -140,21 +126,17 @@ async def show_referral_stats(callback: CallbackQuery, state: FSMContext):
 
     if lang == 'en':
         text = (
-            "📊 <b>Detailed statistics</b>\n\n"
+            "📊 <b>Statistics</b>\n\n"
             f"• Link clicks: {stats['clicks']}\n"
             f"• Users attracted: {stats['referrals_count']}\n"
-            f"• Bonuses granted: {stats['rewarded_referrals']}\n"
-            f"• Waiting for first payment: {stats['pending_referrals']}\n"
             f"• Conversion rate: {stats['conversion_rate']}%\n"
             f"• Total months rewarded: {stats['rewarded_months']}\n"
         )
     else:
         text = (
-            "📊 <b>Подробная статистика</b>\n\n"
+            "📊 <b>Статистика</b>\n\n"
             f"• Переходов по ссылке: {stats['clicks']}\n"
             f"• Привлечено пользователей: {stats['referrals_count']}\n"
-            f"• Бонусы выданы: {stats['rewarded_referrals']}\n"
-            f"• Ожидают первую оплату: {stats['pending_referrals']}\n"
             f"• Конверсия: {stats['conversion_rate']}%\n"
             f"• Всего месяцев подарено: {stats['rewarded_months']}\n"
         )

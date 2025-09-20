@@ -769,6 +769,10 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
         lang=lang
     )
     
+    # Удаляем старое меню перед отправкой
+    from bot.utils.message_utils import delete_last_menu
+    await delete_last_menu(state, message.bot, message.chat.id)
+
     # Отправляем подтверждение (сообщение о трате не должно исчезать)
     await send_message_with_cleanup(message, state,
         message_text,
@@ -865,6 +869,11 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         "CategoryForm:waiting_for_new_icon",
         # CategoryStates (второй класс для категорий)
         "CategoryStates:editing_name",
+        # Edit expense states
+        "EditExpenseForm:choosing_field",
+        "EditExpenseForm:editing_amount",
+        "EditExpenseForm:editing_description",
+        "EditExpenseForm:editing_category",
         # Cashback states
         "CashbackForm:waiting_for_category",
         "CashbackForm:waiting_for_bank",
@@ -880,6 +889,50 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         # Chat states
         "ChatStates:active_chat"
     ]
+
+    # Если активно любое состояние редактирования или меню, которое должно быть закрыто при вводе траты
+    states_to_clear_on_expense = [
+        "EditExpenseForm:editing_category",
+        "EditExpenseForm:choosing_field",
+        "EditExpenseForm:editing_amount",
+        "EditExpenseForm:editing_description",
+        "PromoCodeStates:waiting_for_promo",
+        "CategoryForm:waiting_for_name",
+        "CategoryForm:waiting_for_icon",
+        "CategoryStates:editing_name"
+    ]
+
+    if current_state and current_state in states_to_clear_on_expense:
+        # Сначала получаем данные для удаления меню
+        data = await state.get_data()
+        last_menu_id = data.get('last_menu_message_id')
+
+        # Сохраняем данные о кешбеке если есть
+        cashback_menu_ids = data.get('cashback_menu_ids', [])
+        persistent_cashback = data.get('persistent_cashback_menu', False)
+
+        # Очищаем состояние
+        await state.clear()
+
+        # Восстанавливаем данные о кешбеке если нужно
+        if persistent_cashback and cashback_menu_ids:
+            await state.update_data(
+                persistent_cashback_menu=True,
+                cashback_menu_ids=cashback_menu_ids
+            )
+
+        # Пытаемся удалить последнее меню если это не меню кешбека
+        if last_menu_id and last_menu_id not in cashback_menu_ids:
+            try:
+                await message.bot.delete_message(
+                    chat_id=message.chat.id,
+                    message_id=last_menu_id
+                )
+            except:
+                pass
+
+        logger.info(f"Cleared state {current_state} for user {message.from_user.id} on expense input")
+        current_state = None  # Сбрасываем для продолжения обработки
 
     # Пропускаем обработку трат, если активно состояние другого роутера
     if current_state and current_state in skip_states:
@@ -1026,6 +1079,10 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     ]
                 ])
                 
+                # Удаляем старое меню перед отправкой
+                from bot.utils.message_utils import delete_last_menu
+                await delete_last_menu(state, message.bot, message.chat.id)
+
                 # Отправляем подтверждение (сообщение о доходе не должно исчезать)
                 await send_message_with_cleanup(
                     message=message,
@@ -1164,7 +1221,11 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                                 InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_income_{income.id}")
                             ]
                         ])
-                        
+
+                        # Удаляем старое меню перед отправкой
+                        from bot.utils.message_utils import delete_last_menu
+                        await delete_last_menu(state, message.bot, message.chat.id)
+
                         # Отправляем подтверждение
                         await send_message_with_cleanup(
                             message=message,
@@ -1234,6 +1295,10 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                                 ]
                             ])
                             
+                            # Удаляем старое меню перед отправкой
+                            from bot.utils.message_utils import delete_last_menu
+                            await delete_last_menu(state, message.bot, message.chat.id)
+
                             # Отправляем подтверждение
                             await send_message_with_cleanup(
                                 message=message,
@@ -1304,6 +1369,10 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     lang=lang
                 )
                 
+                # Удаляем старое меню перед отправкой
+                from bot.utils.message_utils import delete_last_menu
+                await delete_last_menu(state, message.bot, message.chat.id)
+
                 # Отправляем подтверждение (сообщение о трате не должно исчезать)
                 await cancel_typing()
                 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
@@ -1415,6 +1484,11 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     )
     
     await cancel_typing()
+
+    # Удаляем старое меню перед отправкой сообщения о трате
+    from bot.utils.message_utils import delete_last_menu
+    await delete_last_menu(state, message.bot, message.chat.id)
+
     await send_message_with_cleanup(message, state,
         message_text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
@@ -1425,7 +1499,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         parse_mode="HTML",
         keep_message=True  # Не удалять это сообщение при следующих действиях
     )
-    
+
     # Гарантируем отмену задачи
     await cancel_typing()
     

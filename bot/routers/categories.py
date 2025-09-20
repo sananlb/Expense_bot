@@ -62,7 +62,7 @@ async def cmd_categories(message: types.Message, state: FSMContext):
         except (TelegramBadRequest, TelegramNotFound):
             pass  # Сообщение уже удалено
     
-    # По умолчанию показываем категории трат  
+    # По умолчанию показываем категории трат, передаем state для сохранения ID меню
     await show_expense_categories_menu(message, state)
 
 

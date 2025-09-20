@@ -329,7 +329,7 @@ async def change_currency(callback: CallbackQuery, state: FSMContext, lang: str 
 @router.callback_query(SettingsStates.currency, F.data.startswith("curr_"))
 async def process_currency_change(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Обработать изменение валюты"""
-    currency = callback.data.replace('curr_', '')
+    currency = callback.data.replace('curr_', '').upper()
     
     try:
         # Сохраняем валюту в профиле

@@ -6,6 +6,14 @@
 - **Путь проекта:** `/home/batman/expense_bot`
 - **ВАЖНО:** Все docker команды выполнять из `/home/batman/expense_bot`
 
+## Docker-сервисы (из docker-compose.yml)
+- **bot** - основной Telegram бот (контейнер: expense_bot_app)
+- **web** - Django админ-панель (контейнер: expense_bot_web)
+- **celery** - воркер для фоновых задач (контейнер: expense_bot_celery)
+- **celery-beat** - планировщик задач (контейнер: expense_bot_celery_beat)
+- **db** - PostgreSQL база данных (контейнер: expense_bot_db)
+- **redis** - кеш и брокер сообщений (контейнер: expense_bot_redis)
+
 ## Базовые команды
 
 ### Переход в папку проекта (ВСЕГДА ПЕРВЫМ ДЕЛОМ!)
@@ -58,7 +66,7 @@ bash scripts/update_landing.sh
 ```bash
 cd /home/batman/expense_bot && \
 git pull origin master && \
-docker-compose restart app celery web && \
+docker-compose restart bot celery web && \
 bash scripts/update_landing.sh
 ```
 
@@ -117,6 +125,16 @@ print(f'Задача запущена: {result.id}')"
 
 ## Мониторинг логов
 
+### Логи основного бота
+```bash
+cd /home/batman/expense_bot && docker-compose logs --tail=100 bot
+```
+
+### Логи бота в реальном времени
+```bash
+cd /home/batman/expense_bot && docker-compose logs -f bot
+```
+
 ### Мониторинг Celery в реальном времени
 ```bash
 cd /home/batman/expense_bot && docker-compose logs -f celery-beat celery
@@ -125,6 +143,11 @@ cd /home/batman/expense_bot && docker-compose logs -f celery-beat celery
 ### Мониторинг только задачи send_daily_admin_report
 ```bash
 cd /home/batman/expense_bot && docker-compose logs -f celery-beat celery | grep --line-buffered "send_daily"
+```
+
+### Мониторинг ошибок в боте
+```bash
+cd /home/batman/expense_bot && docker-compose logs bot | grep -E "(ERROR|Exception|Traceback)" | tail -50
 ```
 
 ### Мониторинг ошибок Celery
@@ -209,6 +232,18 @@ cd /home/batman/expense_bot && bash scripts/check_celery.sh
 ### Проверка всех контейнеров
 ```bash
 cd /home/batman/expense_bot && docker-compose ps
+```
+
+### Проверка конкретного сервиса
+```bash
+# Для бота
+cd /home/batman/expense_bot && docker-compose logs --tail=50 bot
+
+# Для Django админки
+cd /home/batman/expense_bot && docker-compose logs --tail=50 web
+
+# Для Celery
+cd /home/batman/expense_bot && docker-compose logs --tail=50 celery
 ```
 
 ### Перезапуск всей системы

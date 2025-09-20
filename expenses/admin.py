@@ -442,11 +442,11 @@ class SubscriptionAdmin(admin.ModelAdmin):
 @admin.register(PromoCode)
 class PromoCodeAdmin(admin.ModelAdmin):
     list_display = ['code', 'get_discount_display', 'applicable_subscription_types',
-                    'is_active', 'used_count', 'max_uses', 'valid_until', 'created_by']
+                    'get_active_status', 'used_count', 'max_uses', 'valid_until', 'created_by']
     list_filter = ['is_active', 'discount_type', 'applicable_subscription_types',
                    'created_at', 'valid_until']
     search_fields = ['code', 'description']
-    readonly_fields = ['used_count', 'created_at', 'updated_at']
+    readonly_fields = ['used_count', 'created_at', 'updated_at', 'created_by']
 
     fieldsets = (
         ('Основная информация', {
@@ -463,9 +463,48 @@ class PromoCodeAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         })
     )
-    
+
     actions = ['activate_codes', 'deactivate_codes']
-    
+
+    def get_changeform_initial_data(self, request):
+        """Устанавливаем начальные значения для формы создания промокода"""
+        initial = super().get_changeform_initial_data(request)
+        # Не устанавливаем начальное значение для valid_until -
+        # пусть пользователь сам выбирает дату и время
+        return initial
+
+    def get_active_status(self, obj):
+        """Показать статус активности с учетом лимита использований"""
+        from django.utils.html import format_html
+
+        # Проверяем, достиг ли промокод лимита использований
+        if obj.max_uses and obj.used_count >= obj.max_uses:
+            return format_html('<span style="color: red;">✗</span>')
+        elif obj.is_active:
+            return format_html('<span style="color: green;">✓</span>')
+        else:
+            return format_html('<span style="color: red;">✗</span>')
+
+    get_active_status.short_description = 'Активен'
+    get_active_status.admin_order_field = 'is_active'
+
+    def save_model(self, request, obj, form, change):
+        """Автоматически заполняем created_by при создании промокода"""
+        if not change:  # Только при создании нового промокода
+            # Пытаемся найти профиль админа по telegram_id
+            # Если у админа есть профиль в боте - используем его
+            from expenses.models import Profile
+            try:
+                # Попробуем найти профиль по username админа
+                admin_profile = Profile.objects.filter(username=request.user.username).first()
+                if not admin_profile:
+                    # Если нет - создаем профиль для админа или используем первый профиль админа
+                    admin_profile = Profile.objects.filter(telegram_id=881292737).first()  # Ваш telegram_id
+                obj.created_by = admin_profile
+            except Exception:
+                pass  # Если не удалось - оставляем пустым
+        super().save_model(request, obj, form, change)
+
     def activate_codes(self, request, queryset):
         """Активировать промокоды"""
         updated = queryset.update(is_active=True)

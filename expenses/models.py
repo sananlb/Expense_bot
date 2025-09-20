@@ -755,6 +755,11 @@ class PromoCode(models.Model):
     def __str__(self):
         return f"{self.code} ({self.get_discount_display()})"
     
+    def save(self, *args, **kwargs):
+        if self.code:
+            self.code = self.code.upper()
+        super().save(*args, **kwargs)
+    
     def get_discount_display(self):
         """Отображение скидки"""
         if self.discount_type == 'percent':

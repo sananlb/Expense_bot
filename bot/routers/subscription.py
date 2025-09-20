@@ -327,7 +327,7 @@ async def ask_promocode(callback: CallbackQuery, state: FSMContext):
 @router.message(PromoCodeStates.waiting_for_promo)
 async def process_promocode(message: Message, state: FSMContext):
     """Обработка введенного промокода"""
-    promo_code = message.text.strip().upper()
+    raw_code = (message.text or '').strip()
     user_id = message.from_user.id
     
     try:
@@ -336,7 +336,9 @@ async def process_promocode(message: Message, state: FSMContext):
         
         # Ищем промокод
         try:
-            promocode = await PromoCode.objects.aget(code=promo_code)
+            promocode = await PromoCode.objects.filter(code__iexact=raw_code).afirst()
+            if not promocode:
+                raise PromoCode.DoesNotExist
         except PromoCode.DoesNotExist:
             await message.answer(
                 "❌ <b>Промокод не найден</b>\n\n"

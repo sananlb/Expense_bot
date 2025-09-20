@@ -44,19 +44,38 @@ AMOUNT_PATTERNS = [
 
 # Паттерны для определения валюты
 CURRENCY_PATTERNS = {
+    # Major world currencies
     'USD': [r'\$', r'usd', r'долл', r'доллар'],
-    'EUR': [r'€', r'eur', r'евро'],
-    'CNY': [r'¥', r'cny', r'юан'],
-    'GBP': [r'£', r'gbp', r'фунт'],
-    'RUB': [r'₽', r'руб', r'рубл'],
+    'EUR': [r'€', r'eur', r'евро', r'euro'],
+    'GBP': [r'£', r'gbp', r'фунт', r'sterling', r'pounds?\b'],
+    'CNY': [r'¥', r'cny', r'юан', r'yuan', r'renminbi', r'rmb'],
+    'CHF': [r'chf', r'₣', r'франк(?:ов|а)?\b', r'swiss\s+franc', r'francs?\b'],
+    'INR': [r'inr', r'₹', r'рупи[йяею]', r'индийск.*руп'],
+    'TRY': [r'try', r'₺', r'лир[аиы]?\b', r'турец.*лир'],
+
+    # Local currencies (CIS and nearby)
+    'KZT': [r'kzt', r'₸', r'тенге', r'теньге', r'тенг[еиия]', r'тнг', r'tenge'],
+    'UAH': [r'uah', r'грн', r'гривн[а-я]*', r'гривен', r'hryvni?a', r'hryvnya'],
+    'BYN': [r'byn', r'byr', r'бел[ао]рус.*руб', r'belarus.*rubl', r'belarusian\s+ruble'],
+    'RUB': [r'₽', r'rub', r'руб', r'рубл'],
+    'UZS': [r'uzs', r"so['’]m", r'сум(?:ов|ы|у)?\b', r'узбек.*сум', r'uzbek.*som'],
+    'AMD': [r'amd', r'драм', r'dram'],
+    'TMT': [r'tmt', r'туркмен.*манат', r'turkmen.*manat'],
+    'AZN': [r'azn', r'азер.*манат', r'azer.*manat', r'манат(?:ов|ы)?\b'],
+    'KGS': [r'kgs', r'kgz', r'сом(?:ов|ы|у)?\b', r'киргиз.*сом', r'кырг.*сом'],
+    'TJS': [r'tjs', r'сомон[ия]?\b', r'таджик.*сом', r'tajik.*somoni'],
+    'MDL': [r'mdl', r'лей(?:ев|я|и|ем|ями)?\b', r'молдав.*лей', r'moldov.*le[ui]'],
+    'GEL': [r'gel', r'лари\b', r'lari\b', r'gruzi.*lari'],
+
     # Latin American currencies
-    'ARS': [r'ars', r'песо', r'аргентинских?', r'аргентинское', r'аргентинский'],
-    'COP': [r'cop', r'колумбийских?', r'колумбийское', r'колумбийский'],
-    'PEN': [r'pen', r'солей?', r'перуанских?', r'перуанское', r'перуанский'],
-    'CLP': [r'clp', r'чилийских?', r'чилийское', r'чилийский'],
-    'MXN': [r'mxn', r'мексиканских?', r'мексиканское', r'мексиканский'],
-    'BRL': [r'brl', r'реалов?', r'бразильских?', r'бразильское', r'бразильский'],
+    'ARS': [r'ars', r'аргентинских?', r'аргентинское', r'аргентинский', r'argentin[ea].*peso', r'песо'],
+    'COP': [r'cop', r'колумбийских?', r'колумбийское', r'колумбийский', r'colombian.*peso'],
+    'PEN': [r'pen', r'солей?', r'перуанских?', r'перуанское', r'перуанский', r'peruvian\s+sol'],
+    'CLP': [r'clp', r'чилийских?', r'чилийское', r'чилийский', r'chilean.*peso'],
+    'MXN': [r'mxn', r'мексиканских?', r'мексиканское', r'мексиканский', r'mexican.*peso'],
+    'BRL': [r'brl', r'реал(?:ов|ы)?', r'бразильских?', r'бразильское', r'бразильский', r'brazilian\s+real'],
 }
+
 
 # Паттерны для определения дохода - ТОЛЬКО знак +
 INCOME_PATTERNS = [
@@ -314,7 +333,7 @@ def detect_currency(text: str, user_currency: str = 'RUB') -> str:
             if re.search(pattern, text_lower):
                 return currency
     
-    return user_currency  # Default to user's currency
+    return (user_currency or 'RUB').upper()  # Default to user's currency in uppercase
 
 
 async def parse_expense_message(text: str, user_id: Optional[int] = None, profile=None, use_ai: bool = True) -> Optional[Dict[str, Any]]:
@@ -476,7 +495,8 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
     
     # Определяем валюту
-    user_currency = profile.currency if profile else 'RUB'
+    user_currency = (profile.currency if profile else 'RUB') or 'RUB'
+    user_currency = user_currency.upper()
     currency = detect_currency(original_text, user_currency)
     
     # Базовый результат (НЕ заполняем category если не найдена)
@@ -858,7 +878,8 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
             description = 'Доход'
     
     # Определяем валюту
-    user_currency = profile.currency if profile else 'RUB'
+    user_currency = (profile.currency if profile else 'RUB') or 'RUB'
+    user_currency = user_currency.upper()
     currency = detect_currency(original_text, user_currency)
     
     # Формируем результат
