@@ -5,12 +5,14 @@ from .menu_cleanup import MenuCleanupMiddleware
 from .rate_limit import RateLimitMiddleware
 from .security_check import SecurityCheckMiddleware
 from .logging_middleware import LoggingMiddleware
+from .anti_spam import AntiSpamMiddleware
 
 __all__ = [
-    "DatabaseMiddleware", 
-    "LocalizationMiddleware", 
+    "DatabaseMiddleware",
+    "LocalizationMiddleware",
     "MenuCleanupMiddleware",
     "RateLimitMiddleware",
     "SecurityCheckMiddleware",
-    "LoggingMiddleware"
+    "LoggingMiddleware",
+    "AntiSpamMiddleware"
 ]

@@ -139,22 +139,26 @@ def create_dispatcher() -> Dispatcher:
     # 3. Logging - логирует все запросы
     dp.message.middleware(LoggingMiddleware())
     dp.callback_query.middleware(LoggingMiddleware())
-    
-    # 4. Security - проверяет контент на безопасность
+
+    # 4. AntiSpam - защита от массовых регистраций ботов
+    from bot.middlewares import AntiSpamMiddleware
+    dp.message.middleware(AntiSpamMiddleware())
+
+    # 5. Security - проверяет контент на безопасность
     dp.message.middleware(SecurityCheckMiddleware())
     dp.callback_query.middleware(SecurityCheckMiddleware())
-    
-    # 5. Rate Limiting - ограничивает частоту запросов
+
+    # 6. Rate Limiting - ограничивает частоту запросов
     from bot.middleware.rate_limit import CommandRateLimitMiddleware
     dp.message.middleware(CommandRateLimitMiddleware())
     dp.message.middleware(RateLimitMiddleware())
     dp.callback_query.middleware(RateLimitMiddleware())
-    
-    # 6. Database - подключает БД
+
+    # 7. Database - подключает БД
     dp.message.middleware(DatabaseMiddleware())
     dp.callback_query.middleware(DatabaseMiddleware())
-    
-    # 7. Localization - устанавливает язык
+
+    # 8. Localization - устанавливает язык
     dp.message.middleware(LocalizationMiddleware())
     dp.callback_query.middleware(LocalizationMiddleware())
     
