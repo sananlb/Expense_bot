@@ -288,12 +288,12 @@ async def cmd_start(
                 # ВАЖНО: НЕ привязываем к старой системе, если пользователь в новой!
                 if display_lang == 'en':
                     referral_message = (
-                        "\n\n⭐ You joined via an affiliate link! "
+                        "\n\n🤝 You joined via an affiliate link! "
                         "Your friend will get a one-time subscription extension matching your first plan."
                     )
                 else:
                     referral_message = (
-                        "\n\n⭐ Вы перешли по партнёрской ссылке! "
+                        "\n\n🤝 Вы перешли по партнёрской ссылке! "
                         "Ваш друг получит однократное продление подписки на срок вашей первой покупки."
                     )
 
@@ -497,9 +497,9 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
 
                 if affiliate_referral:
                     if display_lang == 'en':
-                        referral_message = "\n\n⭐ You joined via an affiliate link! Your friend will receive commission from your purchases."
+                        referral_message = "\n\n🤝 You joined via an affiliate link! Your friend will get a one-time subscription extension matching your first purchase."
                     else:
-                        referral_message = "\n\n⭐ Вы перешли по партнёрской ссылке! Ваш друг будет получать комиссию с ваших покупок."
+                        referral_message = "\n\n🤝 Вы перешли по партнёрской ссылке! Ваш друг получит однократное продление подписки на срок вашей первой покупки."
 
                     logger.info("New user %s registered via Telegram Stars affiliate link after privacy acceptance", user_id)
             except Exception as e:
