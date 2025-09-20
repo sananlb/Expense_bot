@@ -233,9 +233,15 @@ async def cmd_start(
                 # Успешно обработана ссылка Telegram Stars
                 # ВАЖНО: НЕ привязываем к старой системе, если пользователь в новой!
                 if display_lang == 'en':
-                    referral_message = "\n\n⭐ You joined via an affiliate link! Your friend will receive commission from your purchases."
+                    referral_message = (
+                        "\n\n⭐ You joined via an affiliate link! "
+                        "Your friend will get a one-time subscription extension matching your first plan."
+                    )
                 else:
-                    referral_message = "\n\n⭐ Вы перешли по партнёрской ссылке! Ваш друг будет получать комиссию с ваших покупок."
+                    referral_message = (
+                        "\n\n⭐ Вы перешли по партнёрской ссылке! "
+                        "Ваш друг получит однократное продление подписки на срок вашей первой покупки."
+                    )
 
                 logger.info(f"New user {user_id} registered via Telegram Stars affiliate link from {affiliate_referral.referrer.telegram_id}")
                 # Старая система с бонусными днями ПОЛНОСТЬЮ УДАЛЕНА
@@ -243,44 +249,9 @@ async def cmd_start(
         except Exception as e:
             logger.error(f"Error processing referral code: {e}")
     
-    # Проверяем, есть ли у пользователя подписка (только если не beta_tester)
-    if not profile.is_beta_tester:
-        # Проверяем существующие подписки
-        existing_trial = await profile.subscriptions.filter(
-            type='trial'
-        ).aexists()
-        
-        has_active_subscription = await profile.subscriptions.filter(
-            is_active=True,
-            end_date__gt=timezone.now()
-        ).aexists()
-        
-        logger.info(f"[START] Subscription check for user {user_id}: is_new_user={is_new_user}, has_active_subscription={has_active_subscription}, existing_trial={existing_trial}")
-
-        # Создаем пробную подписку только если:
-        # 1. Это новый пользователь
-        # 2. У него нет активной подписки
-        # 3. У него никогда не было пробной подписки
-        # 4. Он не beta_tester
-        if is_new_user and not has_active_subscription and not existing_trial:
-            try:
-                trial_end = timezone.now() + timedelta(days=7)
-                await Subscription.objects.acreate(
-                    profile=profile,
-                    type='trial',
-                    payment_method='trial',
-                    amount=0,
-                    start_date=timezone.now(),
-                    end_date=trial_end,
-                    is_active=True
-                )
-                logger.info(f"[START] Successfully created trial subscription for new user {user_id}, expires: {trial_end}")
-            except Exception as e:
-                logger.error(f"[START] Failed to create trial subscription for user {user_id}: {e}")
-        else:
-            logger.info(f"[START] Not creating trial subscription for user {user_id}: is_new_user={is_new_user}, has_active_subscription={has_active_subscription}, existing_trial={existing_trial}")
-    else:
-        logger.info(f"[START] User {user_id} is a beta tester, skipping trial subscription")
+    # НЕ создаем пробную подписку здесь - она будет создана после принятия политики конфиденциальности
+    # Это предотвращает дублирование подписок
+    logger.info(f"[START] User {user_id}: is_new_user={is_new_user}, is_beta_tester={profile.is_beta_tester}")
     
     # Обновляем команды бота для пользователя
     await update_user_commands(message.bot, user_id)

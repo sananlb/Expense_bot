@@ -9,6 +9,7 @@ from aiogram.fsm.state import State, StatesGroup
 from bot.services.household import HouseholdService
 from asgiref.sync import sync_to_async
 from bot.services.profile import get_or_create_profile
+from bot.services.subscription import check_subscription
 from bot.utils import get_text
 from bot.keyboards_household import (
     get_household_menu_keyboard,
@@ -37,9 +38,20 @@ class HouseholdStates(StatesGroup):
 async def household_menu(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Главное меню семейного бюджета"""
     await callback.answer()
-    
+
+    has_subscription = await check_subscription(callback.from_user.id)
+    if not has_subscription:
+        text = get_text('household_subscription_required', lang)
+        keyboard = get_household_menu_keyboard(lang, subscription_active=False)
+        await callback.message.edit_text(
+            text,
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+        return
+
     profile = await get_or_create_profile(callback.from_user.id)
-    
+
     has_household = await sync_to_async(lambda: bool(profile.household_id))()
     if has_household:
         # Пользователь уже в семейном бюджете — собираем данные через ORM в sync контексте
@@ -62,7 +74,7 @@ async def household_menu(callback: CallbackQuery, state: FSMContext, lang: str =
     else:
         # Пользователь не в семейном бюджете
         text = f"{get_text('household_intro', lang)}\n\n{get_text('choose_action', lang)}"
-        keyboard = get_household_menu_keyboard(lang)
+        keyboard = get_household_menu_keyboard(lang, subscription_active=True)
     
     await callback.message.edit_text(
         text,
@@ -74,8 +86,12 @@ async def household_menu(callback: CallbackQuery, state: FSMContext, lang: str =
 @router.callback_query(F.data == "create_household")
 async def create_household_start(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Начало создания семейного бюджета"""
+    if not await check_subscription(callback.from_user.id):
+        await callback.answer(get_text('household_subscription_required', lang).replace('<b>', '').replace('</b>', ''), show_alert=True)
+        return
+
     await callback.answer()
-    
+
     await callback.message.edit_text(
         get_text('enter_household_name', lang),
         parse_mode="HTML",

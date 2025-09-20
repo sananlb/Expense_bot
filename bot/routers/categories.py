@@ -239,7 +239,7 @@ async def show_income_categories_menu(message: types.Message | types.CallbackQue
         ])
     else:
         # Без подписки можно только просматривать
-        text += "\n\n" + (get_text('income_categories_subscription_note', lang) if lang == 'en' else "💎 Для управления категориями доходов необходима подписка")
+        text += "\n\n" + get_text('income_categories_subscription_note', lang)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=get_text('get_subscription', lang), callback_data="menu_subscription")],
             [InlineKeyboardButton(text=get_text('expense_categories_button', lang), callback_data="expense_categories_menu")],

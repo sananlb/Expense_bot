@@ -336,9 +336,14 @@ try:
         'schedule': crontab(hour=10, minute=0),  # 10 AM daily
         'options': {'queue': 'reports'}
     },
-    'process-held-affiliate-commissions': {
-        'task': 'expense_bot.celery_tasks.process_held_affiliate_commissions',
-        'schedule': crontab(hour=2, minute=0),  # 2 AM daily
+    'process-affiliate-commissions': {
+        'task': 'expenses.tasks.process_affiliate_commissions',
+        'schedule': crontab(hour=2, minute=0),  # 02:00 daily
+        'options': {'queue': 'maintenance'}
+    },
+    'check-subscription-refunds': {
+        'task': 'expenses.tasks.check_subscription_refunds',
+        'schedule': crontab(hour=3, minute=0),  # Daily at 03:00
         'options': {'queue': 'maintenance'}
     },
     'system-health-check': {

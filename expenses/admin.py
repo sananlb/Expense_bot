@@ -441,18 +441,19 @@ class SubscriptionAdmin(admin.ModelAdmin):
 
 @admin.register(PromoCode)
 class PromoCodeAdmin(admin.ModelAdmin):
-    list_display = ['code', 'get_discount_display', 'is_active', 'used_count',
-                    'max_uses', 'valid_until', 'created_by']
-    list_filter = ['is_active', 'discount_type', 'created_at', 'valid_until']
+    list_display = ['code', 'get_discount_display', 'applicable_subscription_types',
+                    'is_active', 'used_count', 'max_uses', 'valid_until', 'created_by']
+    list_filter = ['is_active', 'discount_type', 'applicable_subscription_types',
+                   'created_at', 'valid_until']
     search_fields = ['code', 'description']
     readonly_fields = ['used_count', 'created_at', 'updated_at']
-    
+
     fieldsets = (
         ('Основная информация', {
             'fields': ('code', 'description', 'is_active')
         }),
         ('Скидка', {
-            'fields': ('discount_type', 'discount_value')
+            'fields': ('discount_type', 'discount_value', 'applicable_subscription_types')
         }),
         ('Ограничения', {
             'fields': ('max_uses', 'used_count', 'valid_from', 'valid_until')

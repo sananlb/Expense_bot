@@ -5,13 +5,20 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from bot.utils import get_text
 
 
-def get_household_menu_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+def get_household_menu_keyboard(lang: str = 'ru', subscription_active: bool = True) -> InlineKeyboardMarkup:
     """Клавиатура для пользователей без семейного бюджета"""
-    keyboard = [
-        [InlineKeyboardButton(text=get_text('create_household_button', lang), callback_data="create_household")],
-        [InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")],
-        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
-    ]
+    if subscription_active:
+        keyboard = [
+            [InlineKeyboardButton(text=get_text('create_household_button', lang), callback_data="create_household")],
+            [InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
+        ]
+    else:
+        keyboard = [
+            [InlineKeyboardButton(text=get_text('get_subscription', lang), callback_data="menu_subscription")],
+            [InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
+        ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 

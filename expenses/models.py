@@ -596,6 +596,7 @@ class Subscription(models.Model):
     PAYMENT_METHODS = [
         ('trial', 'Пробный период'),
         ('stars', 'Telegram Stars'),
+        ('referral', 'Реферальное продление'),
     ]
     
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='subscriptions')
@@ -693,6 +694,19 @@ class PromoCode(models.Model):
         help_text='Процент (0-100), количество Stars или дни'
     )
     
+    # Применимость к типам подписок
+    applicable_subscription_types = models.CharField(
+        max_length=20,
+        choices=[
+            ('all', 'Все подписки'),
+            ('month', 'Только месячная'),
+            ('six_months', 'Только на 6 месяцев'),
+        ],
+        default='all',
+        verbose_name='Применимо к',
+        help_text='К каким типам подписок применим промокод'
+    )
+
     # Ограничения
     max_uses = models.IntegerField(
         default=0,
@@ -766,10 +780,16 @@ class PromoCode(models.Model):
     def apply_discount(self, base_price):
         """Применить скидку к базовой цене"""
         if self.discount_type == 'percent':
-            return base_price * (1 - self.discount_value / 100)
+            # Защищаемся от некорректных значений (0-100%)
+            discount_percent = max(0, min(100, float(self.discount_value)))
+            result = base_price * (1 - discount_percent / 100)
+            # Округляем до целого и не допускаем отрицательных значений
+            return max(0, int(round(result)))
         elif self.discount_type == 'fixed':
-            return max(0, base_price - self.discount_value)
-        return base_price
+            # Защищаемся от отрицательных скидок
+            discount_amount = max(0, float(self.discount_value))
+            return max(0, int(base_price - discount_amount))
+        return int(base_price)
 
 
 class PromoCodeUsage(models.Model):
@@ -1455,7 +1475,29 @@ class AffiliateReferral(models.Model):
         default=0,
         verbose_name='Всего потрачено звёзд'
     )
-    
+
+    reward_granted = models.BooleanField(
+        default=False,
+        verbose_name='Бонус выдан'
+    )
+    reward_granted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Дата выдачи бонуса'
+    )
+    reward_subscription = models.ForeignKey(
+        'Subscription',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='referral_rewards',
+        verbose_name='Подписка-бонус'
+    )
+    reward_months = models.IntegerField(
+        default=0,
+        verbose_name='Количество месяцев в бонусе'
+    )
+
     class Meta:
         db_table = 'affiliate_referrals'
         verbose_name = 'Реферальная связь'

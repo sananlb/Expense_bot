@@ -12,8 +12,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@sync_to_async
-def get_or_create_category(user_id: int, category_name: str) -> ExpenseCategory:
+def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCategory:
     """Получить категорию по имени или вернуть категорию 'Прочие расходы'"""
     logger.info(f"Looking for category '{category_name}' for user {user_id}")
     
@@ -159,6 +158,9 @@ def get_or_create_category(user_id: int, category_name: str) -> ExpenseCategory:
             logger.info(f"Created default category 'Прочие расходы' for user {user_id}")
     
     return other_category
+
+
+get_or_create_category = sync_to_async(get_or_create_category_sync)
 
 
 @sync_to_async
@@ -481,34 +483,18 @@ def update_default_categories_language(user_id: int, new_lang: str) -> bool:
         return False
 
 
-@sync_to_async
-def create_default_categories(user_id: int) -> bool:
-    """
-    Создать базовые категории для нового пользователя
-    
-    Args:
-        user_id: ID пользователя в Telegram
-        
-    Returns:
-        True если категории созданы, False если уже существуют
-    """
-    try:
-        profile = Profile.objects.get(telegram_id=user_id)
-    except Profile.DoesNotExist:
-        # Создаем профиль если его нет
-        profile = Profile.objects.create(telegram_id=user_id)
+def create_default_categories_sync(user_id: int) -> bool:
+    """Создать базовые категории для нового пользователя."""
+    profile, created = Profile.objects.get_or_create(telegram_id=user_id)
+    if created:
         logger.info(f"Created new profile for user {user_id}")
-    
+
+    if ExpenseCategory.objects.filter(profile=profile).exists():
+        return False
+
     try:
-        
-        # Проверяем, есть ли уже категории у пользователя
-        if ExpenseCategory.objects.filter(profile=profile).exists():
-            return False
-            
-        # Определяем язык пользователя
         lang = profile.language_code or 'ru'
-        
-        # Базовые категории с переводами
+
         if lang == 'en':
             default_categories = [
                 ('Supermarkets', '🛒'),
@@ -535,29 +521,25 @@ def create_default_categories(user_id: int) -> bool:
         else:
             from expenses.models import DEFAULT_CATEGORIES
             default_categories = DEFAULT_CATEGORIES
-        
-        # Создаем категории с эмодзи в поле name
-        categories = []
-        for name, icon in default_categories:
-            # Сохраняем эмодзи вместе с названием
-            category_with_icon = f"{icon} {name}"
-            category = ExpenseCategory(
+
+        categories = [
+            ExpenseCategory(
                 profile=profile,
-                name=category_with_icon,
-                icon='',  # Поле icon больше не используем
+                name=f"{icon} {name}",
+                icon='',
                 is_active=True
             )
-            categories.append(category)
-            
+            for name, icon in default_categories
+        ]
+
         ExpenseCategory.objects.bulk_create(categories)
         return True
-        
-    except Profile.DoesNotExist:
-        # Если профиля еще нет, создаем его
-        profile = Profile.objects.create(telegram_id=user_id)
-        return create_default_categories(user_id)
-    except Exception as e:
+    except Exception as exc:
+        logger.error(f"Failed to create default categories for {user_id}: {exc}")
         return False
+
+
+create_default_categories = sync_to_async(create_default_categories_sync)
 
 
 @sync_to_async
@@ -609,10 +591,17 @@ def create_default_income_categories(user_id: int) -> bool:
         # Создаем категории доходов
         categories = []
         for name, icon in default_income_categories:
+            # Для английских категорий эмодзи уже включен в name
+            # Для русских категорий нужно добавить эмодзи к названию
+            if lang == 'en':
+                category_name = name  # Эмодзи уже включен
+            else:
+                category_name = f"{icon} {name}"  # Добавляем эмодзи к русскому названию
+
             category = IncomeCategory(
                 profile=profile,
-                name=name,  # Эмодзи уже включен в название
-                icon=icon,  
+                name=category_name,
+                icon=icon,
                 is_active=True,
                 is_default=False
             )

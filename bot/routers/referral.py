@@ -2,25 +2,19 @@
 Роутер для партнерской программы Telegram Stars
 """
 from aiogram import Router, F, types
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
-from datetime import datetime, timedelta
-from django.utils import timezone
-from django.db.models import Q, Sum, Count
-from asgiref.sync import sync_to_async
-
-from expenses.models import Profile, AffiliateLink, AffiliateReferral, AffiliateCommission, AffiliateProgram
+from expenses.models import Profile, AffiliateLink, AffiliateReferral
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.services.subscription import check_subscription
 from bot.utils import get_user_language, get_text
 from bot.services.affiliate import (
     get_or_create_affiliate_link,
     get_referrer_stats,
-    get_commission_history,
-    get_or_create_affiliate_program
+    get_reward_history,
 )
 
 logger = logging.getLogger(__name__)
@@ -37,8 +31,8 @@ def get_referral_keyboard(lang: str = 'ru'):
         callback_data="referral_stats"
     )
     builder.button(
-        text="📅 История выплат" if lang == 'ru' else "📅 Payment history",
-        callback_data="referral_commissions"
+        text="📅 История бонусов" if lang == 'ru' else "📅 Bonus history",
+        callback_data="referral_rewards"
     )
     builder.button(
         text=get_text('close', lang),
@@ -54,35 +48,39 @@ async def get_referral_info_text(profile: Profile, bot_username: str, lang: str 
     # Получаем или создаем партнерскую ссылку
     affiliate_link = await get_or_create_affiliate_link(profile.telegram_id, bot_username)
 
-    # Получаем программу
-    affiliate_program = await get_or_create_affiliate_program(commission_percent=50)
-
     # Получаем статистику
     stats = await get_referrer_stats(profile.telegram_id)
 
+    rewards_months = stats['rewarded_months']
     if lang == 'en':
         text = (
-            f"🌟 <b>Partner Program</b>\n\n"
-            f"Your referral link:\n"
+            "🌟 <b>Partner Program</b>\n\n"
+            "Your referral link:\n"
             f"<code>{affiliate_link.telegram_link}</code>\n\n"
-            f"📊 <b>Your statistics:</b>\n"
+            "🎁 <b>Internal bonus</b>\n"
+            "Invite a friend: when they buy their first paid plan, your subscription is extended for the same duration once.\n\n"
+            "📊 <b>Your stats:</b>\n"
             f"• Users attracted: {stats['referrals_count']}\n"
-            f"• Paid subscriptions: {stats['active_referrals']}\n"
-            f"• Earned: {stats['total_earned']} ⭐\n"
-            f"• Pending: {stats['pending_amount']} ⭐\n\n"
-            f"💡 Share your link and earn {affiliate_program.get_commission_percent()}% commission in Telegram Stars!"
+            f"• Bonuses granted: {stats['rewarded_referrals']}\n"
+            f"• Waiting for first payment: {stats['pending_referrals']}\n"
+            f"• Total months rewarded: {rewards_months}\n\n"
+            "⭐ <b>Telegram Stars affiliate</b>\n"
+            "You can also join the official Telegram program: open <i>Settings → My Stars → Earn Stars</i>, find our bot and subscribe to the campaign. Telegram will track and credit Stars commissions automatically."
         )
     else:
         text = (
-            f"🌟 <b>Партнёрская программа</b>\n\n"
-            f"Ваша реферальная ссылка:\n"
+            "🌟 <b>Партнёрская программа</b>\n\n"
+            "Ваша реферальная ссылка:\n"
             f"<code>{affiliate_link.telegram_link}</code>\n\n"
-            f"📊 <b>Ваша статистика:</b>\n"
+            "🎁 <b>Наш бонус</b>\n"
+            "Приглашайте друзей: когда приглашённый оплатит первую подписку, мы продлим вашу на такой же срок (один раз).\n\n"
+            "📊 <b>Статистика:</b>\n"
             f"• Привлечено пользователей: {stats['referrals_count']}\n"
-            f"• Оплатили подписку: {stats['active_referrals']}\n"
-            f"• Заработано: {stats['total_earned']} ⭐\n"
-            f"• В ожидании: {stats['pending_amount']} ⭐\n\n"
-            f"💡 Делитесь ссылкой и получайте {affiliate_program.get_commission_percent()}% комиссии звёздами Telegram!"
+            f"• Бонусы выданы: {stats['rewarded_referrals']}\n"
+            f"• Ожидают первую оплату: {stats['pending_referrals']}\n"
+            f"• Всего месяцев подарено: {rewards_months}\n\n"
+            "⭐ <b>Официальная программа Telegram Stars</b>\n"
+            "Хотите получать комиссию звёздами? Откройте <i>Настройки → Мои звёзды → Заработать звёзды</i>, найдите наш бот и подключитесь к кампании. Telegram сам начислит и выплатит комиссию в Stars."
         )
 
     return text, True  # Всегда есть код, так как создаём автоматически
@@ -138,38 +136,28 @@ async def show_referral_stats(callback: CallbackQuery, state: FSMContext):
     bot_info = await callback.bot.get_me()
     affiliate_link = await get_or_create_affiliate_link(user_id, bot_info.username)
 
-    # Получаем статистику
     stats = await get_referrer_stats(user_id)
 
-    # Формируем детальную статистику
     if lang == 'en':
         text = (
-            "📊 <b>Detailed Statistics</b>\n\n"
-            f"<b>Your referrals:</b>\n"
+            "📊 <b>Detailed statistics</b>\n\n"
+            f"• Link clicks: {stats['clicks']}\n"
             f"• Users attracted: {stats['referrals_count']}\n"
-            f"• Paid users: {stats['active_referrals']}\n"
-            f"• Conversion rate: {stats['conversion_rate']}%\n\n"
-            f"<b>Earnings:</b>\n"
-            f"• Earned: {stats['total_earned']} ⭐\n"
-            f"• Pending: {stats['pending_amount']} ⭐"
+            f"• Bonuses granted: {stats['rewarded_referrals']}\n"
+            f"• Waiting for first payment: {stats['pending_referrals']}\n"
+            f"• Conversion rate: {stats['conversion_rate']}%\n"
+            f"• Total months rewarded: {stats['rewarded_months']}\n"
         )
-        if stats['referrals_count'] > 0:
-            avg_earning = stats['total_earned'] / stats['referrals_count'] if stats['referrals_count'] > 0 else 0
-            text += f"\n• Average per user: {avg_earning:.1f} ⭐"
     else:
         text = (
             "📊 <b>Подробная статистика</b>\n\n"
-            f"<b>Ваши рефералы:</b>\n"
+            f"• Переходов по ссылке: {stats['clicks']}\n"
             f"• Привлечено пользователей: {stats['referrals_count']}\n"
-            f"• Оплатили подписку: {stats['active_referrals']}\n"
-            f"• Конверсия: {stats['conversion_rate']}%\n\n"
-            f"<b>Заработок:</b>\n"
-            f"• Заработано: {stats['total_earned']} ⭐\n"
-            f"• В ожидании: {stats['pending_amount']} ⭐"
+            f"• Бонусы выданы: {stats['rewarded_referrals']}\n"
+            f"• Ожидают первую оплату: {stats['pending_referrals']}\n"
+            f"• Конверсия: {stats['conversion_rate']}%\n"
+            f"• Всего месяцев подарено: {stats['rewarded_months']}\n"
         )
-        if stats['referrals_count'] > 0:
-            avg_earning = stats['total_earned'] / stats['referrals_count'] if stats['referrals_count'] > 0 else 0
-            text += f"\n• В среднем с пользователя: {avg_earning:.1f} ⭐"
 
     # Кнопка назад
     builder = InlineKeyboardBuilder()
@@ -195,74 +183,59 @@ async def show_referral_stats(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
-@router.callback_query(F.data == "referral_commissions")
-async def show_referral_commissions(callback: CallbackQuery, state: FSMContext):
-    """Показать историю комиссий"""
+@router.callback_query(F.data == "referral_rewards")
+async def show_referral_rewards(callback: CallbackQuery, state: FSMContext):
+    """Показать историю бонусов"""
     user_id = callback.from_user.id
     lang = await get_user_language(user_id)
 
-    # Получаем историю комиссий
-    commissions = await get_commission_history(user_id, limit=10)
+    rewards = await get_reward_history(user_id, limit=10)
 
-    # Формируем текст с историей
     if lang == 'en':
-        text = "📅 <b>Payment History</b>\n\n"
-        if not commissions:
-            text += "No payments yet.\n\n"
-            text += "💡 <i>Share your referral link to start earning!</i>"
+        text = "📅 <b>Bonus history</b>\n\n"
+        if not rewards:
+            text += "No referral activity yet.\n\n"
+            text += "💡 <i>Share your link — the first paid plan of a friend will extend your subscription.</i>"
         else:
-            for commission in commissions:
-                status_emoji = {
-                    'pending': '⏳',
-                    'hold': '🔒',
-                    'paid': '✅',
-                    'cancelled': '❌',
-                    'refunded': '↩️'
-                }.get(commission['status'], '❓')
-
-                text += (
-                    f"{status_emoji} {commission['created_at'].strftime('%d.%m.%Y')}\n"
-                    f"   Amount: {commission['commission_amount']} ⭐\n"
-                    f"   Status: {commission['status']}\n"
-                )
-                if commission['status'] == 'hold' and commission['hold_until']:
-                    days_left = (commission['hold_until'] - timezone.now()).days
-                    text += f"   Release in: {days_left} days\n"
-                text += "\n"
+            for reward in rewards:
+                if reward['reward_granted']:
+                    granted_at = reward['reward_granted_at'].strftime('%d.%m.%Y') if reward['reward_granted_at'] else '—'
+                    months_text = '1 month' if reward['reward_months'] == 1 else f"{reward['reward_months']} months"
+                    text += (
+                        f"✅ {granted_at}\n"
+                        f"   Bonus: {months_text}\n"
+                        f"   Referred user: {reward['referred_user_id']}\n\n"
+                    )
+                else:
+                    joined = reward['joined_at'].strftime('%d.%m.%Y') if reward.get('joined_at') else '—'
+                    text += (
+                        f"⏳ {joined}\n"
+                        "   Waiting for the first payment\n"
+                        f"   Referred user: {reward['referred_user_id']}\n\n"
+                    )
     else:
-        text = "📅 <b>История выплат</b>\n\n"
-        if not commissions:
-            text += "Выплат пока нет.\n\n"
-            text += "💡 <i>Делитесь вашей реферальной ссылкой, чтобы начать зарабатывать!</i>"
+        text = "📅 <b>История бонусов</b>\n\n"
+        if not rewards:
+            text += "Пока нет данных.\n\n"
+            text += "💡 <i>Поделитесь ссылкой: первая покупка друга продлит вашу подписку.</i>"
         else:
-            for commission in commissions:
-                status_emoji = {
-                    'pending': '⏳',
-                    'hold': '🔒',
-                    'paid': '✅',
-                    'cancelled': '❌',
-                    'refunded': '↩️'
-                }.get(commission['status'], '❓')
+            for reward in rewards:
+                if reward['reward_granted']:
+                    granted_at = reward['reward_granted_at'].strftime('%d.%m.%Y') if reward['reward_granted_at'] else '—'
+                    months_text = '1 месяц' if reward['reward_months'] == 1 else f"{reward['reward_months']} месяцев"
+                    text += (
+                        f"✅ {granted_at}\n"
+                        f"   Бонус: {months_text}\n"
+                        f"   Пользователь: {reward['referred_user_id']}\n\n"
+                    )
+                else:
+                    joined = reward['joined_at'].strftime('%d.%m.%Y') if reward.get('joined_at') else '—'
+                    text += (
+                        f"⏳ {joined}\n"
+                        "   Ожидаем первую оплату\n"
+                        f"   Пользователь: {reward['referred_user_id']}\n\n"
+                    )
 
-                status_text = {
-                    'pending': 'Ожидание',
-                    'hold': 'Холд',
-                    'paid': 'Выплачено',
-                    'cancelled': 'Отменено',
-                    'refunded': 'Возврат'
-                }.get(commission['status'], commission['status'])
-
-                text += (
-                    f"{status_emoji} {commission['created_at'].strftime('%d.%m.%Y')}\n"
-                    f"   Сумма: {commission['commission_amount']} ⭐\n"
-                    f"   Статус: {status_text}\n"
-                )
-                if commission['status'] == 'hold' and commission['hold_until']:
-                    days_left = (commission['hold_until'] - timezone.now()).days
-                    text += f"   До выплаты: {days_left} дн.\n"
-                text += "\n"
-
-    # Кнопки навигации
     builder = InlineKeyboardBuilder()
     builder.button(text=get_text('back', lang), callback_data="menu_referral")
     builder.button(text=get_text('close', lang), callback_data="close")

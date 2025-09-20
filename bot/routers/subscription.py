@@ -19,7 +19,7 @@ from bot.constants import get_offer_url_for
 from django.core.exceptions import ObjectDoesNotExist
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.utils import get_text
-from bot.services.affiliate import process_referral_commission, get_or_create_affiliate_program
+from bot.services.affiliate import reward_referrer_subscription_extension
 
 logger = logging.getLogger(__name__)
 
@@ -448,44 +448,162 @@ async def process_promocode(message: Message, state: FSMContext):
             )
             
         else:
-            # Промокод на скидку - показываем кнопки оплаты со скидкой
-            await state.update_data(active_promocode=promocode.id)
-            
-            discount_text = promocode.get_discount_display()
-            
-            # Создаем клавиатуру с ценами со скидкой
-            builder = InlineKeyboardBuilder()
-            
-            # Рассчитываем цены со скидкой
+            # Промокод на скидку - проверяем не дает ли он 100% скидку
+            # Проверяем применимость промокода к типам подписок
+            applicable_to = getattr(promocode, 'applicable_subscription_types', 'all')
+
             month_price = SUBSCRIPTION_PRICES['month']['stars']
             six_months_price = SUBSCRIPTION_PRICES['six_months']['stars']
-            
-            month_discounted = int(promocode.apply_discount(month_price))
-            six_months_discounted = int(promocode.apply_discount(six_months_price))
-            
-            builder.button(
-                text=f"⭐ На месяц - {month_discounted} звёзд {discount_text}",
-                callback_data="subscription_buy_month_promo"
-            )
-            builder.button(
-                text=f"⭐ На 6 месяцев - {six_months_discounted} звёзд {discount_text}",
-                callback_data="subscription_buy_six_months_promo"
-            )
-            builder.button(
-                text="❌ Отмена",
-                callback_data="menu_subscription"
-            )
-            
-            builder.adjust(1)
-            
-            await message.answer(
-                f"✅ <b>Промокод принят!</b>\n\n"
-                f"Промокод: {promocode.code}\n"
-                f"Скидка: {discount_text}\n\n"
-                f"Выберите подписку для покупки со скидкой:",
-                reply_markup=builder.as_markup(),
-                parse_mode="HTML"
-            )
+
+            # Применяем скидку с учетом ограничений по типу подписки
+            if applicable_to == 'month':
+                # Промокод только для месячной подписки
+                month_discounted = int(promocode.apply_discount(month_price))
+                six_months_discounted = six_months_price  # Без скидки
+            elif applicable_to == 'six_months':
+                # Промокод только для 6-месячной подписки
+                month_discounted = month_price  # Без скидки
+                six_months_discounted = int(promocode.apply_discount(six_months_price))
+            else:
+                # Промокод для всех подписок (applicable_to == 'all')
+                month_discounted = int(promocode.apply_discount(month_price))
+                six_months_discounted = int(promocode.apply_discount(six_months_price))
+
+            # Проверяем есть ли 100% скидка на какую-либо подписку
+            has_free_subscription = False
+            if applicable_to == 'month' and month_discounted == 0:
+                # 100% скидка на месячную подписку
+                has_free_subscription = True
+                days_to_add = 30
+                sub_type = 'month'
+                period_text = 'месяц'
+            elif applicable_to == 'six_months' and six_months_discounted == 0:
+                # 100% скидка на 6-месячную подписку
+                has_free_subscription = True
+                days_to_add = 180
+                sub_type = 'six_months'
+                period_text = '6 месяцев'
+            elif applicable_to == 'all' and (month_discounted == 0 or six_months_discounted == 0):
+                # 100% скидка на все подписки - даем месячную по умолчанию
+                has_free_subscription = True
+                days_to_add = 30
+                sub_type = 'month'
+                period_text = 'месяц'
+
+            if has_free_subscription:
+
+                # Проверяем текущую подписку
+                active_sub = await profile.subscriptions.filter(
+                    is_active=True,
+                    end_date__gt=timezone.now()
+                ).order_by('-end_date').afirst()
+
+                if active_sub:
+                    # Продлеваем существующую подписку на месяц
+                    active_sub.end_date = active_sub.end_date + timedelta(days=days_to_add)
+                    await active_sub.asave()
+                    subscription = active_sub
+                else:
+                    # Создаем новую подписку соответствующего типа
+                    start_date = timezone.now()
+                    end_date = start_date + timedelta(days=days_to_add)
+
+                    subscription = await Subscription.objects.acreate(
+                        profile=profile,
+                        type=sub_type,  # Тип подписки из промокода
+                        payment_method='promo',  # Промокод
+                        amount=0,  # Бесплатно по промокоду
+                        start_date=start_date,
+                        end_date=end_date,
+                        is_active=True
+                    )
+
+                # Записываем использование промокода
+                await PromoCodeUsage.objects.acreate(
+                    promocode=promocode,
+                    profile=profile,
+                    subscription=subscription
+                )
+
+                # Увеличиваем счетчик использований
+                promocode.used_count += 1
+                await promocode.asave()
+
+                # Очищаем состояние
+                await state.clear()
+
+                await message.answer(
+                    f"🎉 <b>Промокод активирован!</b> 🎉\n"
+                    f"{'━' * 25}\n\n"
+                    f"✅ Вы получили подписку на <b>{period_text} БЕСПЛАТНО!</b>\n\n"
+                    f"📅 <b>Подписка действует до:</b> {subscription.end_date.strftime('%d.%m.%Y')}\n\n"
+                    f"💎 <b>Ваши преимущества:</b>\n"
+                    f"• Безлимитные траты\n"
+                    f"• PDF отчёты\n"
+                    f"• Приоритетная поддержка\n\n"
+                    f"<i>Спасибо за использование нашего сервиса!</i> 💙",
+                    parse_mode="HTML"
+                )
+                return  # Завершаем обработку
+
+            else:
+                # Обычный промокод со скидкой (не 100%)
+                await state.update_data(active_promocode=promocode.id)
+
+                discount_text = promocode.get_discount_display()
+
+                # Создаем клавиатуру с ценами со скидкой
+                builder = InlineKeyboardBuilder()
+
+                # Проверяем были ли цены изначально 0 (бесплатные)
+                month_was_free = month_discounted == 0
+                six_months_was_free = six_months_discounted == 0
+
+                # Убеждаемся что цены не меньше 1 звезды (минимум для Telegram)
+                month_discounted = max(1, month_discounted)
+                six_months_discounted = max(1, six_months_discounted)
+
+                # Формируем текст кнопок с учетом бесплатности и применимости
+                if applicable_to in ['month', 'all']:
+                    if month_was_free:
+                        month_text = "⭐ На месяц - бесплатно!"
+                    elif month_discounted < month_price:
+                        month_text = f"⭐ На месяц - {month_discounted} звёзд {discount_text}"
+                    else:
+                        month_text = f"⭐ На месяц - {month_discounted} звёзд"
+
+                    builder.button(
+                        text=month_text,
+                        callback_data="subscription_buy_month_promo"
+                    )
+
+                if applicable_to in ['six_months', 'all']:
+                    if six_months_was_free:
+                        six_months_text = "⭐ На 6 месяцев - бесплатно!"
+                    elif six_months_discounted < six_months_price:
+                        six_months_text = f"⭐ На 6 месяцев - {six_months_discounted} звёзд {discount_text}"
+                    else:
+                        six_months_text = f"⭐ На 6 месяцев - {six_months_discounted} звёзд"
+
+                    builder.button(
+                        text=six_months_text,
+                        callback_data="subscription_buy_six_months_promo"
+                    )
+                builder.button(
+                    text="❌ Отмена",
+                    callback_data="menu_subscription"
+                )
+
+                builder.adjust(1)
+
+                await message.answer(
+                    f"✅ <b>Промокод принят!</b>\n\n"
+                    f"Промокод: {promocode.code}\n"
+                    f"Скидка: {discount_text}\n\n"
+                    f"Выберите подписку для покупки со скидкой:",
+                    reply_markup=builder.as_markup(),
+                    parse_mode="HTML"
+                )
         
         await state.clear()
         
@@ -522,17 +640,88 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
     # Применяем скидку
     original_price = sub_info['stars']
     discounted_price = int(promocode.apply_discount(original_price))
-    
+
     # Отвечаем на callback чтобы убрать индикатор загрузки
     await callback.answer()
-    
+
     # Удаляем старое сообщение
     try:
         await callback.message.delete()
     except (TelegramBadRequest, TelegramNotFound):
         pass  # Сообщение уже удалено или не найдено
-    
-    # Создаем инвойс для оплаты со скидкой
+
+    # Проверяем случай с нулевой ценой (бесплатный промокод)
+    if discounted_price == 0:
+        # Не можем создать инвойс на 0 звезд - обработаем как бесплатную подписку
+        profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
+
+        # Определяем количество дней на основе типа подписки
+        days_to_add = 30 if sub_type == "month" else 180
+
+        # Проверяем текущую подписку
+        active_sub = await profile.subscriptions.filter(
+            is_active=True,
+            end_date__gt=timezone.now()
+        ).order_by('-end_date').afirst()
+
+        if active_sub:
+            # Продлеваем существующую подписку
+            active_sub.end_date = active_sub.end_date + timedelta(days=days_to_add)
+            await active_sub.asave()
+            subscription = active_sub
+        else:
+            # Создаем новую подписку
+            start_date = timezone.now()
+            end_date = start_date + timedelta(days=days_to_add)
+
+            subscription = await Subscription.objects.acreate(
+                profile=profile,
+                type=sub_type,
+                payment_method='promo',  # Промокод
+                amount=0,  # Бесплатно по промокоду
+                start_date=start_date,
+                end_date=end_date,
+                is_active=True
+            )
+
+        # Записываем использование промокода
+        await PromoCodeUsage.objects.acreate(
+            promocode=promocode,
+            profile=profile,
+            subscription=subscription
+        )
+
+        # Увеличиваем счетчик использований
+        promocode.used_count += 1
+        await promocode.asave()
+
+        # Очищаем состояние
+        await state.clear()
+
+        period_text = "месяц" if sub_type == "month" else "6 месяцев"
+        await callback.bot.send_message(
+            chat_id=callback.from_user.id,
+            text=(
+                f"🎉 <b>ПОЗДРАВЛЯЕМ!</b> 🎉\n"
+                f"{'━' * 25}\n\n"
+                f"✨ <b>Промокод активирован!</b>\n\n"
+                f"📦 <b>Подписка:</b> На {period_text} (бесплатно)\n"
+                f"📅 <b>Действует до:</b> {subscription.end_date.strftime('%d.%m.%Y')}\n\n"
+                f"{'━' * 25}\n"
+                f"💎 <b>Преимущества вашей подписки:</b>\n"
+                f"• Безлимитные траты\n"
+                f"• PDF отчёты\n"
+                f"• Приоритетная поддержка\n\n"
+                f"<i>Спасибо за поддержку проекта!</i> 💙"
+            ),
+            parse_mode="HTML"
+        )
+        return
+
+    # Обычный случай - создаем инвойс для оплаты со скидкой
+    # Убеждаемся что цена не меньше 1 звезды
+    discounted_price = max(1, discounted_price)
+
     invoice_msg = await callback.bot.send_invoice(
         chat_id=callback.from_user.id,
         title=f"{sub_info['title']} (со скидкой)",
@@ -627,10 +816,13 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     payment = message.successful_payment
     payload = payment.invoice_payload
     payload_parts = payload.split("_")
-    
-    # Логируем payload для отладки
+
+    # Логируем payload и сумму для отладки
     logger.info(f"Payment payload: {payload}")
     logger.info(f"Payload parts: {payload_parts}")
+    logger.info(f"Payment total_amount: {payment.total_amount}")
+    logger.info(f"Payment currency: {payment.currency}")
+    logger.info(f"Payment telegram_payment_charge_id: {payment.telegram_payment_charge_id}")
     
     # Проверяем тип подписки
     if payload_parts[2] == "months":
@@ -648,86 +840,115 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     # Создаем подписку
     sub_info = SUBSCRIPTION_PRICES[sub_type]
     
-    # Ищем активную подписку для продления
-    active_subscription = await profile.subscriptions.filter(
+    now_ts = timezone.now()
+
+    # Снимаем флаг активности с истекших подписок (чтобы чистить историю)
+    expired = await profile.subscriptions.filter(
         is_active=True,
-        end_date__gt=timezone.now()
+        end_date__lte=now_ts
+    ).aupdate(is_active=False)
+
+    if expired:
+        logger.info(f"Marked {expired} expired subscriptions inactive for user {user_id}")
+
+    # Рассчитываем период новой подписки
+    latest_subscription = await profile.subscriptions.filter(
+        end_date__gt=now_ts
     ).order_by('-end_date').afirst()
-    
-    if active_subscription:
-        # Продлеваем существующую подписку
-        active_subscription.end_date = active_subscription.end_date + relativedelta(months=sub_info['months'])
-        
-        # Обновляем информацию о последнем платеже
-        active_subscription.telegram_payment_charge_id = payment.telegram_payment_charge_id
-        active_subscription.amount = payment.total_amount
-        active_subscription.updated_at = timezone.now()
-        
-        await active_subscription.asave()
-        subscription = active_subscription
-        
-        logger.info(f"Extended existing subscription for user {user_id} until {active_subscription.end_date}")
-    else:
-        # Если нет активной подписки, создаем новую
-        start_date = timezone.now()
-        end_date = start_date + relativedelta(months=sub_info['months'])
-        
-        # Создаем новую подписку
-        subscription = await Subscription.objects.acreate(
-            profile=profile,
-            type=sub_type,
-            payment_method='stars',
-            amount=payment.total_amount,  # Фактически оплаченная сумма
-            telegram_payment_charge_id=payment.telegram_payment_charge_id,
-            start_date=start_date,
-            end_date=end_date,
-            is_active=True
+
+    if latest_subscription:
+        base_start = max(latest_subscription.end_date, now_ts)
+        logger.info(
+            f"Extending subscription for user {user_id}: latest_end={latest_subscription.end_date}, new_start={base_start}"
         )
-        
-        logger.info(f"Created new subscription for user {user_id} until {end_date}")
+    else:
+        base_start = now_ts
+        logger.info(f"Creating fresh subscription for user {user_id}: start={base_start}")
+
+    start_date = base_start
+    end_date = start_date + relativedelta(months=sub_info['months'])
+
+    # Определяем правильную сумму в Stars
+    # Если валюта XTR (Telegram Stars), то total_amount уже в Stars
+    # Иначе используем цену из конфига
+    if payment.currency == "XTR":
+        stars_amount = payment.total_amount
+    else:
+        # Fallback на цену из конфигурации
+        stars_amount = sub_info['stars']
+
+    logger.info(f"Creating subscription with amount: {stars_amount} Stars")
+
+    # Создаем запись подписки с корректным методом оплаты
+    subscription = await Subscription.objects.acreate(
+        profile=profile,
+        type=sub_type,
+        payment_method='stars',  # ВАЖНО: всегда 'stars' для платных подписок
+        amount=stars_amount,  # Используем правильную сумму в Stars
+        telegram_payment_charge_id=payment.telegram_payment_charge_id,
+        start_date=start_date,
+        end_date=end_date,
+        is_active=True
+    )
+
+    logger.info(f"Created subscription #{subscription.id} for user {user_id}: {start_date} → {end_date}")
     
-    # Обработка реферальных комиссий Telegram Stars
+    # Бонус за приглашение
     try:
-        # Убеждаемся, что реферальная программа активна
-        affiliate_program = await get_or_create_affiliate_program(commission_percent=50)  # 50% комиссия
-        
-        # Обрабатываем комиссию
-        commission = await process_referral_commission(subscription, telegram_payment_charge_id=payment.telegram_payment_charge_id)
-        
-        if commission:
-            logger.info(f"Affiliate commission created: {commission.commission_amount} stars for referrer {commission.referrer.telegram_id} from payment by {user_id}")
-            
-            # Можем отправить уведомление рефереру (опционально)
+        reward_result = await reward_referrer_subscription_extension(subscription)
+
+        if reward_result and reward_result.get('status') == 'reward_granted':
+            referrer_tid = reward_result['referrer_id']
+            reward_months = reward_result['reward_months']
+            reward_end = reward_result['reward_end'].strftime('%d.%m.%Y')
+            months_text_ru = '1 месяц' if reward_months == 1 else f'{reward_months} месяцев'
+            months_text_en = '1 month' if reward_months == 1 else f'{reward_months} months'
+
             try:
-                # Проверяем что реферер может получать сообщения
-                referrer_profile = commission.referrer
-                if referrer_profile and referrer_profile.telegram_id:
-                    referrer_message = (
-                        f"💰 <b>Начислена партнёрская комиссия!</b>\n\n"
-                        f"Ваш реферал оплатил подписку.\n"
-                        f"Сумма комиссии: <b>{commission.commission_amount} ⭐</b>\n"
-                        f"Статус: На холде (21 день)\n\n"
-                        f"<i>Комиссия будет доступна после проверочного периода.</i>"
+                referrer_profile = await Profile.objects.aget(telegram_id=referrer_tid)
+                referrer_lang = referrer_profile.language_code or 'ru'
+            except Profile.DoesNotExist:
+                referrer_profile = None
+                referrer_lang = 'ru'
+
+            if referrer_lang == 'en':
+                referrer_message = (
+                    "🎉 <b>Referral bonus!</b>\n\n"
+                    "Your invited friend purchased a subscription.\n"
+                    f"We extended your access for {months_text_en}.\n"
+                    f"New expiry date: <b>{reward_end}</b>\n\n"
+                    "Thank you for sharing the bot!"
+                )
+            else:
+                referrer_message = (
+                    "🎉 <b>Реферальный бонус!</b>\n\n"
+                    "Ваш приглашённый пользователь оплатил подписку.\n"
+                    f"Мы продлили вашу подписку на {months_text_ru}.\n"
+                    f"Новая дата окончания: <b>{reward_end}</b>\n\n"
+                    "Спасибо, что делитесь ботом!"
+                )
+
+            try:
+                await message.bot.send_message(
+                    chat_id=referrer_tid,
+                    text=referrer_message,
+                    parse_mode='HTML'
+                )
+                logger.info(
+                    "Notified referrer %s about subscription extension reward",
+                    referrer_tid
+                )
+            except Exception as send_error:
+                if "bot was blocked" in str(send_error).lower() or "chat not found" in str(send_error).lower():
+                    logger.info("Referrer %s unavailable for reward notification", referrer_tid)
+                else:
+                    logger.warning(
+                        "Could not notify referrer %s: %s",
+                        referrer_tid,
+                        send_error
                     )
-                    
-                    # Отправляем с обработкой ошибок блокировки бота
-                    try:
-                        await message.bot.send_message(
-                            chat_id=commission.referrer.telegram_id,
-                            text=referrer_message,
-                            parse_mode='HTML'
-                        )
-                        logger.info(f"Notified referrer {referrer_profile.telegram_id} about commission")
-                    except Exception as send_error:
-                        # Если бот заблокирован или пользователь недоступен
-                        if "bot was blocked" in str(send_error).lower() or "chat not found" in str(send_error).lower():
-                            logger.info(f"Referrer {referrer_profile.telegram_id} has blocked the bot or is unavailable")
-                        else:
-                            logger.warning(f"Could not notify referrer {referrer_profile.telegram_id}: {send_error}")
-            except Exception as e:
-                logger.error(f"Error preparing referrer notification: {e}")
     except Exception as e:
-        logger.error(f"Error processing affiliate commission: {e}")
+        logger.error(f"Error processing referral reward: {e}")
         # Не прерываем основной процесс из-за ошибки в реферальной системе
     
     # Если был использован промокод, записываем это

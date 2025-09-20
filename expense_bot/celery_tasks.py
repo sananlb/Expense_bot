@@ -1245,61 +1245,15 @@ def check_category_keywords_limit(category):
         logger.error(f"Error checking category keywords limit: {e}")
 
 
+# Backward compatible entry-point that now calls the new task implementation
 @shared_task
 def process_held_affiliate_commissions():
-    """
-    Обработка комиссий после окончания холда (21 день).
-    Запускается ежедневно для проверки и выплаты комиссий.
-    """
-    from expenses.models import AffiliateCommission
-    
-    try:
-        now = timezone.now()
-        
-        # Находим комиссии, у которых закончился холд
-        commissions_to_process = AffiliateCommission.objects.filter(
-            status='hold',
-            hold_until__lte=now
-        ).select_related('referrer', 'referred')
-        
-        processed_count = 0
-        total_amount = 0
-        
-        for commission in commissions_to_process:
-            try:
-                # Telegram автоматически выплачивает звёзды после 21 дня холда
-                # Мы только обновляем статус в нашей БД для учёта
-                
-                commission.status = 'paid'
-                commission.paid_at = now
-                commission.save()
-                
-                processed_count += 1
-                total_amount += commission.commission_amount
-                
-                logger.info(f"Processed affiliate commission {commission.id}: "
-                          f"{commission.commission_amount} stars to user {commission.referrer.telegram_id}")
-                
-                # TODO: Отправить уведомление рефереру о выплате через бота
-                # await send_commission_payment_notification(commission)
-                
-            except Exception as e:
-                logger.error(f"Error processing commission {commission.id}: {e}")
-                continue
-        
-        if processed_count > 0:
-            logger.info(f"Processed {processed_count} affiliate commissions, "
-                       f"total amount: {total_amount} stars")
-        
-        return {
-            'processed': processed_count,
-            'total_amount': total_amount,
-            'timestamp': now.isoformat()
-        }
-        
-    except Exception as e:
-        logger.error(f"Error in process_held_affiliate_commissions: {e}")
-        return {'error': str(e)}
+    from expenses.tasks import process_affiliate_commissions
+
+    logger.warning(
+        "process_held_affiliate_commissions is deprecated; routing to expenses.tasks.process_affiliate_commissions"
+    )
+    return process_affiliate_commissions()
 
 
 @shared_task

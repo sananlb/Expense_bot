@@ -437,8 +437,12 @@ async def show_today_expenses(callback: types.CallbackQuery, state: FSMContext, 
 @router.callback_query(lambda c: c.data == "pdf_generate_current")
 async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Генерация PDF отчета за текущий выбранный месяц"""
+    if not await check_subscription(callback.from_user.id):
+        await callback.answer(get_text('subscription_required', lang), show_alert=True)
+        return
+
     await callback.answer()
-    
+
     # Получаем текущий период из состояния
     data = await state.get_data()
     month = data.get('current_month', date.today().month)

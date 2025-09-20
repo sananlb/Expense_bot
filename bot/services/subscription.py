@@ -33,7 +33,7 @@ async def check_subscription(telegram_id: int, include_trial: bool = True) -> bo
             has_subscription = await profile.subscriptions.filter(
                 is_active=True,
                 end_date__gt=timezone.now()
-            ).exclude(subscription_type='trial').aexists()
+            ).exclude(type='trial').aexists()
         
         return has_subscription
     except Profile.DoesNotExist:
@@ -48,7 +48,7 @@ async def is_trial_active(telegram_id: int) -> bool:
         # Проверяем наличие активного пробного периода
         has_trial = await profile.subscriptions.filter(
             is_active=True,
-            subscription_type='trial',
+            type='trial',
             end_date__gt=timezone.now()
         ).aexists()
         

@@ -4,12 +4,11 @@
 import logging
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional, Dict, Any, List
-from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Q, Sum, Count, F
+from django.db.models import Sum, F
 from django.utils import timezone
 from asgiref.sync import sync_to_async
 
@@ -18,8 +17,7 @@ from expenses.models import (
     Subscription,
     AffiliateProgram,
     AffiliateLink,
-    AffiliateReferral,
-    AffiliateCommission
+    AffiliateReferral
 )
 
 logger = logging.getLogger(__name__)
@@ -212,153 +210,155 @@ def process_referral_link(new_user_id: int, referral_code: str) -> Optional[Affi
 
 
 # ============================================
-# ОБРАБОТКА КОМИССИЙ
+# ВОЗНАГРАЖДЕНИЕ ЗА ПЕРВУЮ ПОДПИСКУ
 # ============================================
 
 @sync_to_async
-def process_referral_commission(subscription: Subscription, telegram_payment_charge_id: Optional[str] = None) -> Optional[AffiliateCommission]:
-    """
-    Обработать комиссию при оплате подписки
-    
-    Args:
-        subscription: Оплаченная подписка
-    
-    Returns:
-        AffiliateCommission или None если комиссия не начислена
-    """
-    logger.info(f"[COMMISSION] Processing commission for subscription {subscription.id}, user {subscription.profile.telegram_id}")
-    
-    # Проверяем, есть ли активная реферальная программа
-    program = AffiliateProgram.objects.filter(is_active=True).first()
-    if not program:
-        logger.info(f"[COMMISSION] No active affiliate program found")
-        return None
-    
-    logger.info(f"[COMMISSION] Active program found with {program.commission_permille} permille commission")
-    
-    # Проверяем срок действия программы
-    if program.end_date and program.end_date < timezone.now():
-        logger.info(f"[COMMISSION] Affiliate program expired at {program.end_date}")
-        return None
-    
-    # Проверяем комиссию
-    if program.commission_permille <= 0:
-        logger.warning(f"[COMMISSION] Commission rate is zero or negative: {program.commission_permille}")
-        return None
-    
-    # Проверяем, что это платная подписка (не trial, не referral)
+def reward_referrer_subscription_extension(subscription: Subscription) -> Optional[Dict[str, Any]]:
+    """Продлить подписку рефереру при первой оплате реферала"""
+    logger.info(
+        "[AFFILIATE] Checking referral reward for subscription %s (user %s)",
+        subscription.id,
+        subscription.profile.telegram_id
+    )
+
+    # Учитываем только оплаченные подписки в Stars
     if subscription.payment_method != 'stars' or subscription.amount <= 0:
-        logger.info(f"[COMMISSION] Subscription not eligible: payment_method={subscription.payment_method}, amount={subscription.amount}")
+        logger.info(
+            "[AFFILIATE] Subscription %s is not eligible for reward (method=%s, amount=%s)",
+            subscription.id,
+            subscription.payment_method,
+            subscription.amount
+        )
         return None
-    
+
+    months_map = {
+        'month': 1,
+        'six_months': 6,
+    }
+    reward_months = months_map.get(subscription.type)
+    if not reward_months:
+        logger.warning(
+            "[AFFILIATE] Unsupported subscription type %s for referral reward",
+            subscription.type
+        )
+        return None
+
     try:
-        # Находим реферальную связь
-        referral = AffiliateReferral.objects.select_related(
-            'referrer', 'referred', 'affiliate_link'
-        ).get(referred=subscription.profile)
-        
-        logger.info(f"[COMMISSION] Found referral: referrer={referral.referrer.telegram_id}, referred={referral.referred.telegram_id}")
-        
-        # Проверяем идемпотентность по платежу
-        # Проверяем и по telegram_payment_id, и по subscription для надежности
-        existing_commission = AffiliateCommission.objects.filter(
-            subscription=subscription
-        ).first()
-        
-        if existing_commission:
-            logger.warning(f"[COMMISSION] Commission already exists for subscription {subscription.id}")
-            return existing_commission
-        
-        if telegram_payment_charge_id:
-            existing_by_payment = AffiliateCommission.objects.filter(
-                telegram_payment_id=telegram_payment_charge_id
-            ).first()
-            if existing_by_payment:
-                logger.warning(f"[COMMISSION] Commission already exists for payment {telegram_payment_charge_id}")
-                return existing_by_payment
-
-        # Рассчитываем комиссию
-        commission_amount = program.calculate_commission(subscription.amount)
-        logger.info(f"[COMMISSION] Calculated commission: {commission_amount} stars from {subscription.amount} stars")
-        
-        if commission_amount <= 0:
-            logger.warning(f"[COMMISSION] Commission amount is zero or negative: {commission_amount}")
-            return None
-        
-        with transaction.atomic():
-            # Запомним, является ли это первым платёжом до инкремента (для конверсии)
-            was_first_payment = (referral.total_payments == 0)
-
-            # Создаём запись о комиссии
-            commission = AffiliateCommission.objects.create(
-                referrer=referral.referrer,
-                referred=referral.referred,
-                subscription=subscription,
-                referral=referral,
-                payment_amount=subscription.amount,
-                commission_amount=commission_amount,
-                commission_rate=program.commission_permille,
-                status='hold',  # Сразу ставим на холд
-                hold_until=timezone.now() + timedelta(days=21),  # 21 день холда
-                telegram_payment_id=telegram_payment_charge_id
-            )
-            
-            # Обновляем статистику реферала
-            if not referral.first_payment_at:
-                referral.first_payment_at = timezone.now()
-            
-            referral.total_payments = F('total_payments') + 1
-            referral.total_spent = F('total_spent') + subscription.amount
-            referral.save(update_fields=['first_payment_at', 'total_payments', 'total_spent'])
-            referral.refresh_from_db()  # Обновляем значения после F() выражений
-            
-            # Обновляем статистику реферальной ссылки
-            if was_first_payment:  # Первый успешный платёж = конверсия
-                referral.affiliate_link.conversions = F('conversions') + 1
-            
-            referral.affiliate_link.total_earned = F('total_earned') + commission_amount
-            referral.affiliate_link.save(update_fields=['conversions', 'total_earned'] if was_first_payment else ['total_earned'])
-            referral.affiliate_link.refresh_from_db()  # Обновляем значения после F() выражений
-        
-        logger.info(f"[COMMISSION] Successfully created commission {commission.id} for {commission_amount} stars")
-        return commission
-        
+        referral = AffiliateReferral.objects.select_related('referrer', 'affiliate_link').get(
+            referred=subscription.profile
+        )
     except AffiliateReferral.DoesNotExist:
-        # Пользователь не был приглашён по реферальной ссылке
-        logger.info(f"[COMMISSION] No referral found for user {subscription.profile.telegram_id}")
-        return None
-    except Exception as e:
-        logger.error(f"[COMMISSION] Unexpected error: {e}")
+        logger.info(
+            "[AFFILIATE] No referral relationship found for user %s",
+            subscription.profile.telegram_id
+        )
         return None
 
+    if referral.reward_granted:
+        logger.info(
+            "[AFFILIATE] Reward already granted for referral %s",
+            referral.id
+        )
+        return {
+            'status': 'already_rewarded',
+            'referral_id': referral.id,
+            'referrer_id': referral.referrer.telegram_id,
+        }
 
-@sync_to_async
-def update_commission_status(commission_id: int, status: str, telegram_transaction_id: Optional[str] = None) -> bool:
-    """
-    Обновить статус комиссии
-    
-    Args:
-        commission_id: ID комиссии
-        status: Новый статус ('pending', 'hold', 'paid', 'cancelled', 'refunded')
-        telegram_transaction_id: ID транзакции от Telegram
-    
-    Returns:
-        bool: Успешность обновления
-    """
-    try:
-        commission = AffiliateCommission.objects.get(id=commission_id)
-        commission.status = status
-        
-        if telegram_transaction_id:
-            commission.telegram_transaction_id = telegram_transaction_id
-        
-        if status == 'paid':
-            commission.paid_at = timezone.now()
-        
-        commission.save()
-        return True
-    except AffiliateCommission.DoesNotExist:
-        return False
+    reward_duration = subscription.end_date - subscription.start_date
+    if reward_duration.total_seconds() <= 0:
+        logger.warning(
+            "[AFFILIATE] Non-positive reward duration for subscription %s",
+            subscription.id
+        )
+        return None
+
+    now = timezone.now()
+    referrer_profile = referral.referrer
+
+    with transaction.atomic():
+        # Деактивируем истекшие подписки реферера для корректного расчёта
+        expired = Subscription.objects.filter(
+            profile=referrer_profile,
+            is_active=True,
+            end_date__lte=now
+        ).update(is_active=False)
+        if expired:
+            logger.debug(
+                "[AFFILIATE] Marked %s expired subscriptions inactive for referrer %s",
+                expired,
+                referrer_profile.telegram_id
+            )
+
+        latest_subscription = Subscription.objects.filter(
+            profile=referrer_profile,
+            end_date__gt=now
+        ).order_by('-end_date').first()
+
+        if latest_subscription:
+            reward_start = max(latest_subscription.end_date, now)
+        else:
+            reward_start = now
+
+        reward_end = reward_start + reward_duration
+
+        reward_subscription = Subscription.objects.create(
+            profile=referrer_profile,
+            type=subscription.type,
+            payment_method='referral',
+            amount=0,
+            start_date=reward_start,
+            end_date=reward_end,
+            is_active=True
+        )
+
+        logger.info(
+            "[AFFILIATE] Created referral reward subscription %s for referrer %s: %s → %s",
+            reward_subscription.id,
+            referrer_profile.telegram_id,
+            reward_start,
+            reward_end
+        )
+
+        now_ts = timezone.now()
+        if not referral.first_payment_at:
+            referral.first_payment_at = now_ts
+
+        referral.total_payments = F('total_payments') + 1
+        referral.total_spent = F('total_spent') + subscription.amount
+        referral.reward_granted = True
+        referral.reward_granted_at = now_ts
+        referral.reward_subscription = reward_subscription
+        referral.reward_months = reward_months
+        referral.save(
+            update_fields=[
+                'first_payment_at',
+                'total_payments',
+                'total_spent',
+                'reward_granted',
+                'reward_granted_at',
+                'reward_subscription',
+                'reward_months'
+            ]
+        )
+        referral.refresh_from_db()
+
+        # Обновляем статистику по ссылке
+        if referral.affiliate_link:
+            referral.affiliate_link.conversions = F('conversions') + 1
+            referral.affiliate_link.save(update_fields=['conversions'])
+            referral.affiliate_link.refresh_from_db()
+
+    return {
+        'status': 'reward_granted',
+        'referral_id': referral.id,
+        'referrer_id': referrer_profile.telegram_id,
+        'reward_subscription_id': reward_subscription.id,
+        'reward_months': reward_months,
+        'reward_start': reward_start,
+        'reward_end': reward_end,
+    }
 
 
 # ============================================
@@ -387,44 +387,28 @@ def get_referrer_stats(user_id: int) -> Dict[str, Any]:
                 'clicks': 0,
                 'conversions': 0,
                 'conversion_rate': 0,
-                'total_earned': 0,
-                'pending_amount': 0,
                 'referrals_count': 0,
-                'active_referrals': 0
+                'rewarded_referrals': 0,
+                'pending_referrals': 0,
+                'rewarded_months': 0,
             }
-        
-        # Получаем статистику по комиссиям
-        commissions_stats = AffiliateCommission.objects.filter(
-            referrer=profile
-        ).aggregate(
-            total_earned=Sum('commission_amount', filter=Q(status='paid')),
-            pending_amount=Sum('commission_amount', filter=Q(status__in=['pending', 'hold'])),
-            total_commissions=Count('id')
-        )
-        
-        # Получаем количество рефералов
-        # Сначала получаем всех рефералов с аннотацией количества платежей
-        referrals_qs = AffiliateReferral.objects.filter(
-            referrer=profile
-        ).annotate(
-            payments_count=Count('commissions')
-        )
 
-        # Теперь считаем общее количество и активных (с платежами)
-        referrals = {
-            'total': referrals_qs.count(),
-            'active': referrals_qs.filter(payments_count__gt=0).count()
-        }
-        
-        # Рассчитываем конверсию в платящих
-        referrals_count = referrals['total'] or 0
-        active_referrals = referrals['active'] or 0
+        referrals_qs = AffiliateReferral.objects.filter(referrer=profile)
+
+        referrals_count = referrals_qs.count()
+        rewarded_referrals = referrals_qs.filter(reward_granted=True).count()
+        pending_referrals = referrals_count - rewarded_referrals
+
+        reward_stats = referrals_qs.filter(reward_granted=True).aggregate(
+            total_months=Sum('reward_months')
+        )
+        total_reward_months = reward_stats['total_months'] or 0
+
         conversion_rate = 0
         if referrals_count > 0:
-            rate = (active_referrals / referrals_count) * 100
-            # Показываем целое число, если нет дробной части
+            rate = (rewarded_referrals / referrals_count) * 100
             conversion_rate = int(rate) if rate == int(rate) else round(rate, 1)
-        
+
         return {
             'has_link': True,
             'link': affiliate_link.telegram_link,
@@ -432,10 +416,10 @@ def get_referrer_stats(user_id: int) -> Dict[str, Any]:
             'clicks': affiliate_link.clicks,
             'conversions': affiliate_link.conversions,
             'conversion_rate': conversion_rate,
-            'total_earned': commissions_stats['total_earned'] or 0,
-            'pending_amount': commissions_stats['pending_amount'] or 0,
             'referrals_count': referrals_count,
-            'active_referrals': active_referrals
+            'rewarded_referrals': rewarded_referrals,
+            'pending_referrals': pending_referrals,
+            'rewarded_months': total_reward_months,
         }
         
     except Profile.DoesNotExist:
@@ -463,7 +447,7 @@ def get_referral_history(user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
         referrals = AffiliateReferral.objects.filter(
             referrer=profile
         ).select_related('referred').order_by('-joined_at')[:limit]
-        
+
         history = []
         for referral in referrals:
             history.append({
@@ -472,93 +456,41 @@ def get_referral_history(user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
                 'first_payment_at': referral.first_payment_at,
                 'total_payments': referral.total_payments,
                 'total_spent': referral.total_spent,
-                'is_active': referral.total_payments > 0
+                'reward_granted': referral.reward_granted,
+                'reward_months': referral.reward_months,
+                'reward_granted_at': referral.reward_granted_at,
+                'is_active': referral.reward_granted,
             })
-        
+
         return history
-        
+
     except Profile.DoesNotExist:
         return []
 
 
 @sync_to_async
-def get_commission_history(user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
-    """
-    Получить историю комиссий пользователя
-    
-    Args:
-        user_id: Telegram ID реферера
-        limit: Максимальное количество записей
-    
-    Returns:
-        Список комиссий с информацией
-    """
+def get_reward_history(user_id: int, limit: int = 10) -> List[Dict[str, Any]]:
+    """Получить историю бонусов за рефералов"""
     try:
         profile = Profile.objects.get(telegram_id=user_id)
-        
-        commissions = AffiliateCommission.objects.filter(
+
+        referrals = AffiliateReferral.objects.filter(
             referrer=profile
-        ).select_related('referred', 'subscription').order_by('-created_at')[:limit]
-        
+        ).select_related('referred').order_by('-reward_granted_at', '-joined_at')[:limit]
+
         history = []
-        for commission in commissions:
+        for referral in referrals:
             history.append({
-                'id': commission.id,
-                'referred_user_id': commission.referred.telegram_id,
-                'payment_amount': commission.payment_amount,
-                'commission_amount': commission.commission_amount,
-                'commission_rate': commission.get_commission_percent(),
-                'status': commission.status,
-                'status_display': commission.get_status_display(),
-                'created_at': commission.created_at,
-                'paid_at': commission.paid_at,
-                'hold_until': commission.hold_until
+                'referred_user_id': referral.referred.telegram_id,
+                'joined_at': referral.joined_at,
+                'reward_granted': referral.reward_granted,
+                'reward_months': referral.reward_months,
+                'reward_granted_at': referral.reward_granted_at,
             })
-        
+
         return history
-        
+
     except Profile.DoesNotExist:
         return []
 
 
-# ============================================
-# CELERY ЗАДАЧИ
-# ============================================
-
-@sync_to_async
-def process_held_commissions():
-    """
-    Обработать комиссии, у которых закончился холд
-    (Должна вызываться периодически через Celery)
-    """
-    now = timezone.now()
-    
-    # Находим комиссии, у которых закончился холд
-    commissions = AffiliateCommission.objects.filter(
-        status='hold',
-        hold_until__lte=now
-    )
-    
-    for commission in commissions:
-        # Меняем статус на 'paid'
-        # В реальности здесь должна быть интеграция с Telegram API
-        # для проверки статуса транзакции
-        commission.status = 'paid'
-        commission.paid_at = now
-        commission.save()
-        
-        # TODO: Отправить уведомление рефереру о выплате
-
-
-@sync_to_async
-def send_referral_notification(referrer_id: int, referred_id: int, commission_amount: int):
-    """
-    Отправить уведомление рефереру о новом платеже реферала
-    
-    Args:
-        referrer_id: Telegram ID реферера
-        referred_id: Telegram ID реферала
-        commission_amount: Сумма комиссии
-    """
-    # TODO: Реализовать отправку уведомления через бота
-    pass

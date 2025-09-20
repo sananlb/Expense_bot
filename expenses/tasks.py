@@ -6,6 +6,9 @@ import time
 
 from admin_panel.models import BroadcastMessage, BroadcastRecipient
 from bot.telegram_utils import send_telegram_message
+from django.db import transaction
+
+from expenses.models import AffiliateCommission
 
 logger = logging.getLogger(__name__)
 
@@ -135,3 +138,193 @@ def cleanup_old_broadcasts():
     
     logger.info(f"Cleaned up {count} broadcast recipient records")
     return count
+
+
+def _notify_commission_paid(commission):
+    try:
+        from bot.telegram_utils import send_telegram_message
+
+        message = (
+            f"🎉 <b>Комиссия выплачена!</b>\n\n"
+            f"Вам начислено <b>{commission.commission_amount} ⭐</b> "
+            f"за привлечение пользователя.\n\n"
+            f"Спасибо за участие в партнёрской программе!"
+        )
+        send_telegram_message(
+            commission.referrer.telegram_id,
+            message,
+            parse_mode='HTML'
+        )
+    except Exception as exc:
+        logger.error(
+            f"Failed to send notification to {commission.referrer.telegram_id}: {exc}"
+        )
+
+
+def _finalize_commission(commission: AffiliateCommission, *, now=None):
+    now = now or timezone.now()
+
+    if commission.status != 'hold':
+        return {
+            'status': 'already_processed',
+            'commission_id': commission.id,
+            'amount': commission.commission_amount,
+        }
+
+    with transaction.atomic():
+        commission.status = 'paid'
+        commission.paid_at = now
+        commission.save(update_fields=['status', 'paid_at'])
+
+    logger.info(
+        "[COMMISSION] Released commission %s: %s stars to %s",
+        commission.id,
+        commission.commission_amount,
+        commission.referrer.telegram_id,
+    )
+
+    _notify_commission_paid(commission)
+
+    return {
+        'status': 'success',
+        'commission_id': commission.id,
+        'amount': commission.commission_amount,
+        'referrer_id': commission.referrer.telegram_id,
+    }
+
+
+@shared_task
+def release_affiliate_commission(commission_id, requeue_if_not_ready: bool = True):
+    """Завершить конкретную комиссию после окончания холда."""
+
+    try:
+        commission = AffiliateCommission.objects.select_related('referrer').get(id=commission_id)
+
+        if commission.status != 'hold':
+            logger.info(
+                "[COMMISSION] Commission %s already processed, status: %s",
+                commission_id,
+                commission.status,
+            )
+            return {'status': 'already_processed', 'commission_id': commission_id}
+
+        now = timezone.now()
+        if commission.hold_until and commission.hold_until > now:
+            logger.info(
+                "[COMMISSION] Commission %s hold ends at %s (now=%s)",
+                commission_id,
+                commission.hold_until,
+                now,
+            )
+
+            if requeue_if_not_ready:
+                eta = commission.hold_until + timedelta(minutes=1)
+                release_affiliate_commission.apply_async(
+                    args=[commission_id],
+                    kwargs={'requeue_if_not_ready': False},
+                    eta=eta,
+                    queue='maintenance',
+                )
+                logger.info(
+                    "[COMMISSION] Rescheduled commission %s release for %s",
+                    commission_id,
+                    eta,
+                )
+
+            return {'status': 'hold_not_expired', 'commission_id': commission_id}
+
+        return _finalize_commission(commission, now=now)
+
+    except AffiliateCommission.DoesNotExist:
+        logger.error(f"[COMMISSION] Commission {commission_id} not found")
+        return {'status': 'not_found', 'commission_id': commission_id}
+    except Exception as exc:
+        logger.error(
+            f"[COMMISSION] Failed to release commission {commission_id}: {exc}"
+        )
+        return {
+            'status': 'error',
+            'commission_id': commission_id,
+            'error': str(exc),
+        }
+
+
+@shared_task
+def process_affiliate_commissions(batch_size: int = 200):
+    """Ежедневный бэкап-проход по комиссиям, у которых истёк холд."""
+
+    now = timezone.now()
+    processed = 0
+    total_amount = 0
+
+    while True:
+        qs = (
+            AffiliateCommission.objects
+            .select_related('referrer')
+            .filter(status='hold', hold_until__lte=now)
+            .order_by('hold_until')[:batch_size]
+        )
+
+        if not qs:
+            break
+
+        for commission in qs:
+            result = _finalize_commission(commission, now=now)
+            if result['status'] == 'success':
+                processed += 1
+                total_amount += result['amount']
+
+    logger.info(
+        "[COMMISSION] Daily sweep processed %s commissions totalling %s stars",
+        processed,
+        total_amount,
+    )
+
+    return {
+        'processed': processed,
+        'total_amount': total_amount,
+        'timestamp': now.isoformat(),
+    }
+
+
+@shared_task
+def check_subscription_refunds():
+    """
+    Периодическая задача для проверки возвратов подписок.
+    Запускается раз в день для проверки отменённых подписок.
+    """
+    from django.db import transaction
+
+    now = timezone.now()
+    refunded_count = 0
+
+    # Проверяем и отменяем комиссии при возврате средств (если подписка была отменена)
+    cancelled_subscriptions = AffiliateCommission.objects.filter(
+        status__in=['hold', 'paid'],
+        subscription__is_active=False,
+        subscription__end_date__lt=now  # Подписка истекла досрочно
+    ).select_related('subscription')
+
+    for commission in cancelled_subscriptions:
+        # Проверяем, была ли подписка отменена досрочно
+        subscription = commission.subscription
+        expected_end = subscription.start_date + timedelta(days=30 if subscription.type == 'month' else 180)
+
+        if subscription.end_date < expected_end - timedelta(days=2):  # Допуск 2 дня
+            try:
+                with transaction.atomic():
+                    commission.status = 'refunded'
+                    commission.save(update_fields=['status'])
+                    refunded_count += 1
+
+                    logger.info(
+                        f"[COMMISSION] Refunded commission {commission.id} due to subscription cancellation"
+                    )
+
+            except Exception as e:
+                logger.error(f"[COMMISSION] Failed to refund commission {commission.id}: {e}")
+
+    if refunded_count > 0:
+        logger.info(f"[COMMISSION] Refunded {refunded_count} commissions due to subscription cancellations")
+
+    return {'refunded': refunded_count, 'timestamp': now.isoformat()}
