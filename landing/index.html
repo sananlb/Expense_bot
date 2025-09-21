@@ -6,6 +6,34 @@
   <title data-i18n-meta-title>Coins Bot — Умный учет доходов и расходов в Telegram</title>
   <meta name="description" content="Управляйте финансами голосом и текстом. Учет доходов и расходов, AI-категоризация, семейный бюджет, PDF-отчеты. Начните бесплатно!" data-i18n-meta-desc>
 
+  <!-- Google Analytics 4 -->
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-YMSY7V8YY7"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-YMSY7V8YY7');
+  </script>
+
+  <!-- Yandex.Metrika counter -->
+  <script type="text/javascript" >
+    (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+    m[i].l=1*new Date();
+    for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+    k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
+    (window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
+
+    ym(104228689, "init", {
+         clickmap:true,
+         trackLinks:true,
+         accurateTrackBounce:true,
+         webvisor:true
+    });
+  </script>
+  <noscript><div><img src="https://mc.yandex.ru/watch/104228689" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+  <!-- /Yandex.Metrika counter -->
+
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.coins-bot.ru/">
@@ -3571,6 +3599,91 @@
 
       // Начальная инициализация
       requestAnimationFrame(updateFeatureCardsActive);
+    });
+
+    // Analytics Events Tracking
+    // Отслеживание кликов по кнопкам перехода в бота
+    document.addEventListener('DOMContentLoaded', function() {
+      // Находим все ссылки на Telegram бота
+      const botLinks = document.querySelectorAll('a[href*="t.me/showmecoinbot"]');
+
+      botLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+          // Google Analytics 4 - отправляем событие
+          if (typeof gtag !== 'undefined') {
+            gtag('event', 'open_bot_click', {
+              'event_category': 'engagement',
+              'event_label': 'telegram_bot',
+              'value': 1
+            });
+          }
+
+          // Яндекс.Метрика - достижение цели
+          if (typeof ym !== 'undefined') {
+            ym(104228689, 'reachGoal', 'OPEN_BOT');
+          }
+        });
+      });
+
+      // Отслеживание просмотра демо-видео
+      const demoVideos = document.querySelectorAll('.demo-video, video');
+      demoVideos.forEach(video => {
+        video.addEventListener('play', function() {
+          if (typeof gtag !== 'undefined') {
+            gtag('event', 'video_play', {
+              'event_category': 'engagement',
+              'event_label': 'demo_video'
+            });
+          }
+          if (typeof ym !== 'undefined') {
+            ym(104228689, 'reachGoal', 'VIDEO_PLAY');
+          }
+        });
+      });
+
+      // Отслеживание скролла (глубина просмотра)
+      let scrollDepth = 0;
+      window.addEventListener('scroll', function() {
+        const scrollPercent = Math.round((window.scrollY + window.innerHeight) / document.documentElement.scrollHeight * 100);
+
+        // Отправляем событие при достижении 25%, 50%, 75%, 100%
+        if (scrollPercent >= 25 && scrollDepth < 25) {
+          scrollDepth = 25;
+          if (typeof gtag !== 'undefined') {
+            gtag('event', 'scroll_depth', {
+              'event_category': 'engagement',
+              'event_label': '25%'
+            });
+          }
+        } else if (scrollPercent >= 50 && scrollDepth < 50) {
+          scrollDepth = 50;
+          if (typeof gtag !== 'undefined') {
+            gtag('event', 'scroll_depth', {
+              'event_category': 'engagement',
+              'event_label': '50%'
+            });
+          }
+        } else if (scrollPercent >= 75 && scrollDepth < 75) {
+          scrollDepth = 75;
+          if (typeof gtag !== 'undefined') {
+            gtag('event', 'scroll_depth', {
+              'event_category': 'engagement',
+              'event_label': '75%'
+            });
+          }
+        } else if (scrollPercent >= 95 && scrollDepth < 100) {
+          scrollDepth = 100;
+          if (typeof gtag !== 'undefined') {
+            gtag('event', 'scroll_depth', {
+              'event_category': 'engagement',
+              'event_label': '100%'
+            });
+          }
+          if (typeof ym !== 'undefined') {
+            ym(104228689, 'reachGoal', 'SCROLL_COMPLETE');
+          }
+        }
+      });
     });
   </script>
 </body>
