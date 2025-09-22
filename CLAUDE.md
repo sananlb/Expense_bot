@@ -329,6 +329,7 @@ docker image prune -f
 
 **ВАЖНО:** Вся документация проекта хранится в папке `docs/`
 - `docs/CELERY_DOCUMENTATION.md` - полная документация по Celery (конфигурация, задачи, troubleshooting)
+- `docs/MONITORING_DOCUMENTATION.md` - система мониторинга, Sentry, health checks, уведомления админу
 
 ## Обновление лендинга на сервере
 
