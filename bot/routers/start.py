@@ -17,6 +17,7 @@ from bot.services.category import create_default_categories, create_default_inco
 from bot.utils.message_utils import send_message_with_cleanup, delete_message_with_effect
 from bot.utils.commands import update_user_commands
 from bot.services.affiliate import process_referral_link  # Новая реферальная система Telegram Stars
+from bot.services.utm_tracking import parse_utm_source, save_utm_data  # UTM-метки
 from expenses.models import Subscription, Profile, Expense, Income
 from django.utils import timezone
 from datetime import timedelta
@@ -105,9 +106,10 @@ async def cmd_start(
     """Обработка команды /start - показать информацию о боте"""
     user_id = message.from_user.id
 
-    # Проверяем, есть ли реферальный код или приглашение в семейный бюджет в команде
+    # Проверяем параметры команды (реферальный код, семейный токен, UTM-метки)
     referral_code = None
     family_token = None
+    utm_data = None
     start_args = None
     if command and command.args:
         start_args = command.args.strip()
@@ -119,11 +121,14 @@ async def cmd_start(
 
     if start_args:
         if start_args.startswith('ref_'):
-            # Формат: /start ref_ABCD1234
+            # Формат: /start ref_ABCD1234 - реферальная система Telegram Stars
             referral_code = start_args[4:]
         elif start_args.startswith('family_'):
-            # Формат: /start family_TOKEN
+            # Формат: /start family_TOKEN - приглашение в семейный бюджет
             family_token = start_args[7:]
+        else:
+            # Пробуем распарсить как UTM-метку
+            utm_data = await parse_utm_source(start_args)
     
     # Пытаемся получить существующий профиль пользователя, чтобы не создавать
     # записи до принятия политики конфиденциальности
@@ -166,6 +171,15 @@ async def cmd_start(
             display_lang = 'ru' if user_language_code.startswith('ru') else 'en'
             profile.language_code = display_lang
             await profile.asave()
+
+        # Сохраняем UTM-данные для существующего пользователя (если есть)
+        if utm_data and is_new_user:
+            logger.info(f"[START] Processing UTM for new user {user_id}: {start_args}")
+            saved = await save_utm_data(profile, utm_data)
+            if saved:
+                logger.info(f"[START] UTM data saved for user {user_id}: source={utm_data.get('source')}, campaign={utm_data.get('campaign')}")
+            else:
+                logger.info(f"[START] UTM data NOT saved for user {user_id} (already has source or error)")
 
         # Проверка принятия политики конфиденциальности до выполнения
         # остальных действий
@@ -277,7 +291,8 @@ async def cmd_start(
     
     # Обработка реферальной ссылки для новых пользователей
     referral_message = ""
-    if is_new_user and referral_code:
+    # Обрабатываем реферальные коды только если это не UTM-метка
+    if is_new_user and referral_code and not utm_data:
         logger.info(f"[START] Processing referral code '{referral_code}' for new user {user_id}")
         try:
             # Сначала пробуем обработать как реферальную ссылку Telegram Stars
@@ -375,6 +390,13 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
             profile.language_code = display_lang
         profile.accepted_privacy = True
         await profile.asave()
+
+        # Обрабатываем UTM-данные после принятия политики
+        if start_args and not start_args.startswith('ref_') and not start_args.startswith('family_'):
+            utm_data = await parse_utm_source(start_args)
+            if utm_data:
+                await save_utm_data(profile, utm_data)
+                logger.info(f"[PRIVACY_ACCEPT] UTM data saved for user {user_id}: source={utm_data.get('source')}")
 
         await callback.answer('Согласие принято')
         try:

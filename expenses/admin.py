@@ -10,7 +10,8 @@ from .models import (
     Profile, UserSettings, ExpenseCategory, Expense, Budget,
     Cashback, RecurringPayment, Subscription, PromoCode,
     PromoCodeUsage, Income, IncomeCategory,
-    AffiliateProgram, AffiliateLink, AffiliateReferral, AffiliateCommission
+    AffiliateProgram, AffiliateLink, AffiliateReferral, AffiliateCommission,
+    AdvertiserCampaign
 )
 from dateutil.relativedelta import relativedelta
 from bot.utils.category_helpers import get_category_display_name
@@ -54,12 +55,13 @@ class SubscriptionInline(admin.TabularInline):
 class ProfileAdmin(admin.ModelAdmin):
     list_display = ['telegram_id', 'subscription_status',
                     'is_beta_tester', 'referrals_count_display', 'payment_stats',
-                    'language_code', 'currency', 'is_active', 'created_at']
-    list_filter = ['is_active', 'is_beta_tester', 'language_code', 'currency', 'created_at']
-    search_fields = ['telegram_id', 'beta_access_key']
+                    'language_code', 'currency', 'is_active', 'acquisition_source_display', 'created_at']
+    list_filter = ['is_active', 'is_beta_tester', 'language_code', 'currency', 'acquisition_source', 'created_at']
+    search_fields = ['telegram_id', 'beta_access_key', 'acquisition_campaign']
     readonly_fields = ['created_at', 'updated_at',
                        'referrals_count', 'active_referrals_count',
-                       'total_payments_count', 'total_stars_paid']
+                       'total_payments_count', 'total_stars_paid',
+                       'acquisition_date']
     inlines = [SubscriptionInline]
     
     fieldsets = (
@@ -68,6 +70,10 @@ class ProfileAdmin(admin.ModelAdmin):
         }),
         ('Настройки', {
             'fields': ('language_code', 'timezone', 'currency')
+        }),
+        ('Источник привлечения', {
+            'fields': ('acquisition_source', 'acquisition_campaign', 'acquisition_date', 'acquisition_details'),
+            'description': 'Данные об источнике привлечения пользователя (UTM-метки)'
         }),
         ('Статистика платежей', {
             'fields': ('total_payments_count', 'total_stars_paid'),
@@ -163,6 +169,42 @@ class ProfileAdmin(admin.ModelAdmin):
         return format_html('<span style="color: gray;">—</span>')
 
     payment_stats.short_description = 'Платежи'
+
+    def acquisition_source_display(self, obj):
+        """Отображение источника привлечения с ссылкой для блогеров"""
+        if obj.acquisition_source:
+            source_labels = {
+                'organic': '🌱',
+                'blogger': '📹',
+                'ads': '📢',
+                'referral': '🤝',
+                'social': '📱',
+                'other': '📍'
+            }
+            icon = source_labels.get(obj.acquisition_source, '❓')
+
+            # Для блогеров показываем имя и ссылку
+            if obj.acquisition_source == 'blogger' and obj.acquisition_campaign:
+                # Извлекаем имя блогера из кампании
+                campaign_name = obj.acquisition_campaign.split('_')[0] if '_' in obj.acquisition_campaign else obj.acquisition_campaign
+
+                # Формируем полную ссылку
+                link = f"https://t.me/showmecoinbot?start=b_{obj.acquisition_campaign}"
+
+                return format_html(
+                    '{} <b>{}</b> <a href="{}" target="_blank" title="Персональная ссылка блогера">🔗</a>',
+                    icon, campaign_name, link
+                )
+            elif obj.acquisition_campaign:
+                return format_html(
+                    '{} {}',
+                    icon, obj.acquisition_campaign
+                )
+            else:
+                return format_html('{} {}', icon, obj.get_acquisition_source_display())
+        return format_html('<span style="color: gray;">—</span>')
+
+    acquisition_source_display.short_description = 'Источник'
     payment_stats.admin_order_field = 'total_stars_paid'
 
     actions = ['make_beta_tester', 'remove_beta_tester',
@@ -809,3 +851,190 @@ class AffiliateCommissionAdmin(admin.ModelAdmin):
     def commission_rate_display(self, obj):
         return f"{obj.get_commission_percent()}%"
     commission_rate_display.short_description = 'Ставка'
+
+
+# ==============================
+# Рекламные кампании
+# ==============================
+
+@admin.register(AdvertiserCampaign)
+class AdvertiserCampaignAdmin(admin.ModelAdmin):
+    list_display = [
+        'name', 'campaign', 'link_display', 'source_type', 'status',
+        'users_count', 'paying_users_count', 'conversion_display',
+        'total_revenue_display', 'roi_display', 'is_active', 'created_at'
+    ]
+    list_filter = ['source_type', 'status', 'is_active', 'created_at', 'start_date']
+    search_fields = ['name', 'campaign', 'utm_code', 'contact_info']
+    readonly_fields = ['utm_code', 'link_display_detail', 'created_at', 'updated_at', 'created_by']
+    date_hierarchy = 'created_at'
+
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('name', 'campaign', 'utm_code', 'source_type')
+        }),
+        ('Статус и управление', {
+            'fields': ('is_active', 'status')
+        }),
+        ('Планирование', {
+            'fields': ('start_date', 'end_date', 'budget', 'target_users', 'target_conversion'),
+            'classes': ('collapse',)
+        }),
+        ('Дополнительная информация', {
+            'fields': ('description', 'contact_info'),
+            'classes': ('collapse',)
+        }),
+        ('Системные', {
+            'fields': ('created_by', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    actions = ['activate_campaigns', 'deactivate_campaigns', 'set_completed']
+
+    def get_queryset(self, request):
+        """Добавляем аннотации для статистики"""
+        # Просто возвращаем queryset без аннотаций
+        # Статистика будет считаться через методы модели
+        return super().get_queryset(request)
+
+    def link_display(self, obj):
+        """Отображение полной ссылки"""
+        link = obj.link
+        # Копирование ссылки по клику
+        return format_html(
+            '<div style="display: flex; align-items: center; gap: 5px;">'
+            '<code style="background: #f5f5f5; padding: 3px 6px; border-radius: 3px; font-size: 11px;">{}</code>'
+            '<button onclick="navigator.clipboard.writeText(\'{}\'); this.textContent=\'✓\'; '
+            'setTimeout(() => this.textContent=\'📋\', 2000); return false;" '
+            'style="padding: 2px 6px; background: #4CAF50; color: white; border: none; '
+            'border-radius: 3px; cursor: pointer; font-size: 11px;" '
+            'title="Копировать ссылку">📋</button>'
+            '</div>',
+            link, link
+        )
+    link_display.short_description = 'Ссылка'
+    link_display.allow_tags = True
+
+    def link_display_detail(self, obj):
+        """Отображение полной ссылки в детальном просмотре"""
+        link = obj.link
+        return format_html(
+            '<div style="margin: 10px 0;">'
+            '<input type="text" value="{}" readonly '
+            'style="width: 400px; padding: 5px; font-family: monospace; background: #f5f5f5; border: 1px solid #ddd; border-radius: 3px;" '
+            'onclick="this.select();" />'
+            '<button onclick="navigator.clipboard.writeText(\'{}\'); this.textContent=\'✓ Скопировано\'; '
+            'setTimeout(() => this.textContent=\'📋 Копировать\', 2000); return false;" '
+            'style="margin-left: 10px; padding: 5px 15px; background: #4CAF50; color: white; border: none; '
+            'border-radius: 3px; cursor: pointer;">'
+            '📋 Копировать</button>'
+            '<div style="margin-top: 5px; color: #666; font-size: 12px;">Полная ссылка для рекламопроизводителя</div>'
+            '</div>',
+            link, link
+        )
+    link_display_detail.short_description = 'Ссылка для кампании'
+
+    def users_count(self, obj):
+        """Количество привлеченных пользователей"""
+        stats = obj.get_stats()
+        return stats.get('total_users', 0)
+    users_count.short_description = 'Пользователи'
+
+    def paying_users_count(self, obj):
+        """Количество платящих пользователей"""
+        stats = obj.get_stats()
+        return stats.get('paying_users', 0)
+    paying_users_count.short_description = 'Платящих'
+
+    def conversion_display(self, obj):
+        """Конверсия в платящих"""
+        stats = obj.get_stats()
+        conversion = stats.get('conversion_to_paying', 0)
+
+        if conversion >= 15:
+            color = 'green'
+            icon = '🔥'
+        elif conversion >= 10:
+            color = 'orange'
+            icon = '✅'
+        elif conversion >= 5:
+            color = 'blue'
+            icon = '📈'
+        else:
+            color = 'red'
+            icon = '📊'
+
+        return format_html(
+            '<span style="color: {};">{} {}%</span>',
+            color, icon, f"{conversion:.1f}"
+        )
+    conversion_display.short_description = 'Конверсия'
+
+    def total_revenue_display(self, obj):
+        """Общий доход"""
+        stats = obj.get_stats()
+        revenue_stars = stats.get('total_revenue', 0)
+        revenue_rub = stats.get('total_revenue_rub', 0)
+
+        if revenue_stars > 0:
+            return format_html(
+                '<span title="≈ {} ₽">{}⭐</span>',
+                revenue_rub, revenue_stars
+            )
+        return format_html('<span style="color: gray;">—</span>')
+    total_revenue_display.short_description = 'Доход'
+
+    def roi_display(self, obj):
+        """ROI кампании"""
+        stats = obj.get_stats()
+        roi = stats.get('roi', 0)
+
+        if roi > 100:
+            color = 'green'
+            icon = '💰'
+        elif roi > 0:
+            color = 'orange'
+            icon = '📈'
+        elif roi == 0:
+            return format_html('<span style="color: gray;">—</span>')
+        else:
+            color = 'red'
+            icon = '📉'
+
+        return format_html(
+            '<span style="color: {};">{} {}%</span>',
+            color, icon, f"{roi:.1f}"
+        )
+    roi_display.short_description = 'ROI'
+
+    def save_model(self, request, obj, form, change):
+        """Автоматически заполняем created_by при создании"""
+        if not change and not obj.created_by:
+            # Пытаемся найти профиль админа
+            try:
+                from expenses.models import Profile
+                admin_profile = Profile.objects.filter(telegram_id=881292737).first()
+                if admin_profile:
+                    obj.created_by = request.user
+            except Exception:
+                pass
+        super().save_model(request, obj, form, change)
+
+    def activate_campaigns(self, request, queryset):
+        """Активировать кампании"""
+        updated = queryset.update(is_active=True, status='active')
+        self.message_user(request, f'{updated} кампаний активировано.')
+    activate_campaigns.short_description = 'Активировать кампании'
+
+    def deactivate_campaigns(self, request, queryset):
+        """Деактивировать кампании"""
+        updated = queryset.update(is_active=False, status='paused')
+        self.message_user(request, f'{updated} кампаний приостановлено.')
+    deactivate_campaigns.short_description = 'Приостановить кампании'
+
+    def set_completed(self, request, queryset):
+        """Пометить как завершенные"""
+        updated = queryset.update(status='completed')
+        self.message_user(request, f'{updated} кампаний помечено как завершенные.')
+    set_completed.short_description = 'Пометить как завершенные'

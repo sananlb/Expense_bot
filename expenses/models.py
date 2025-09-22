@@ -74,6 +74,45 @@ class Profile(models.Model):
         help_text='Общее количество уплаченных Telegram Stars'
     )
 
+    # UTM метки и источник привлечения пользователя
+    acquisition_source = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='Источник привлечения',
+        help_text='Источник привлечения: blogger, ads, organic, referral',
+        choices=[
+            ('organic', 'Органический'),
+            ('blogger', 'Блогер'),
+            ('ads', 'Реклама'),
+            ('referral', 'Реферал'),
+            ('social', 'Соцсети'),
+            ('other', 'Другое'),
+        ]
+    )
+    acquisition_campaign = models.CharField(
+        max_length=100,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name='Кампания/Канал',
+        help_text='Название кампании или канала (имя блогера, название рекламы и т.д.)'
+    )
+    acquisition_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Дата привлечения',
+        help_text='Дата первого перехода по ссылке'
+    )
+    acquisition_details = models.JSONField(
+        null=True,
+        blank=True,
+        default=dict,
+        verbose_name='Дополнительные данные',
+        help_text='Дополнительные данные об источнике (utm_content, utm_term и т.д.)'
+    )
+
     # Семейный бюджет (домохозяйство)
     # Пользователь может принадлежать одному домохозяйству.
     # Если null — ведет личный бюджет.
@@ -1647,3 +1686,4 @@ class AffiliateCommission(models.Model):
         """Рассчитать дату окончания холда (21 день)"""
         from datetime import timedelta
         return self.created_at + timedelta(days=21)
+from .models_campaigns import AdvertiserCampaign

@@ -32,6 +32,7 @@ from .routers import (
     budget_router,
     top5_router,
     household_router,
+    blogger_stats_router,
     # pdf_report_router  # Временно отключено
 )
 from .middlewares import (
@@ -179,6 +180,7 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(reports_router)  # Команды должны быть выше FSM состояний
     dp.include_router(budget_router)        # Роутер бюджетов
     dp.include_router(top5_router)
+    dp.include_router(blogger_stats_router)  # Статистика для блогеров
     dp.include_router(settings_router)
     # dp.include_router(pdf_report_router)   # PDF отчеты - временно отключено из-за проблем с playwright
     dp.include_router(info_router)
