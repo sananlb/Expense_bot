@@ -209,6 +209,22 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                     
                     # Парсим параметры
                     params = {'user_id': user_id}
+
+                    # Сначала парсим обычные параметры для всех функций
+                    if params_str and func_name != 'analytics_query':
+                        # Простой парсинг параметров
+                        for param in params_str.split(','):
+                            if '=' in param:
+                                key, value = param.split('=', 1)
+                                key = key.strip()
+                                value = value.strip().strip('"\'')
+                                # Преобразуем типы
+                                if value.isdigit():
+                                    value = int(value)
+                                elif value.replace('.', '').isdigit():
+                                    value = float(value)
+                                params[key] = value
+
                     # Специальная обработка analytics_query(spec_json=...)
                     if func_name == 'analytics_query':
                         spec = None
@@ -250,19 +266,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                                         return str(result)[:1000]
                             else:
                                 return f"Ошибка: {result.get('message','Не удалось получить данные')}"
-                    if params_str:
-                        # Простой парсинг параметров
-                        for param in params_str.split(','):
-                            if '=' in param:
-                                key, value = param.split('=', 1)
-                                key = key.strip()
-                                value = value.strip().strip('"\'')
-                                # Преобразуем типы
-                                if value.isdigit():
-                                    value = int(value)
-                                elif value.replace('.', '').isdigit():
-                                    value = float(value)
-                                params[key] = value
+
                     from .function_call_utils import normalize_function_call
                     func_name, params = normalize_function_call(message, func_name, params, user_id)
 

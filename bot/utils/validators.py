@@ -46,25 +46,29 @@ async def validate_amount(text: str) -> Optional[float]:
 def parse_description_amount(text: str, allow_only_amount: bool = False) -> Dict[str, Any]:
     """
     Парсит текст в формате 'Описание Сумма' или просто 'Сумма'
-    Поддерживает знак + для определения доходов
-    
+    Поддерживает знак + или слово "плюс" для определения доходов
+
     Args:
         text: Текст для парсинга
         allow_only_amount: Разрешить ввод только суммы без описания
-        
+
     Returns:
         dict: {'description': str или None, 'amount': float, 'is_income': bool}
-        
+
     Raises:
         ValueError: Если формат неверный
     """
     parts = text.strip().split()
-    
+
     if len(parts) == 0:
         raise ValueError("Пустой ввод. Отправьте сумму или название и сумму.")
-    
-    # Проверяем, есть ли знак + для определения дохода
+
+    # Проверяем, есть ли слово "плюс" отдельно (например, "зарплата плюс 5000")
     is_income = False
+    if 'плюс' in [p.lower() for p in parts]:
+        is_income = True
+        # Удаляем слово "плюс" из частей
+        parts = [p for p in parts if p.lower() != 'плюс']
     
     # Если только одна часть
     if len(parts) == 1:
@@ -72,9 +76,13 @@ def parse_description_amount(text: str, allow_only_amount: bool = False) -> Dict
             # Пробуем парсить как сумму
             try:
                 amount_str = parts[0]
+                # Проверяем знак + или слово "плюс"
                 if amount_str.startswith('+'):
                     is_income = True
                     amount_str = amount_str[1:]  # Убираем знак +
+                elif amount_str.lower().startswith('плюс'):
+                    is_income = True
+                    amount_str = amount_str[4:].strip()  # Убираем слово "плюс"
                 amount = float(amount_str.replace(',', '.'))
                 if amount <= 0:
                     raise ValueError("Сумма должна быть больше 0")
@@ -90,11 +98,14 @@ def parse_description_amount(text: str, allow_only_amount: bool = False) -> Dict
     
     # Если несколько частей - последняя это сумма
     amount_str = parts[-1]
-    
-    # Проверяем знак + в сумме
+
+    # Проверяем знак + или слово "плюс" в сумме
     if amount_str.startswith('+'):
         is_income = True
         amount_str = amount_str[1:]  # Убираем знак +
+    elif amount_str.lower().startswith('плюс'):
+        is_income = True
+        amount_str = amount_str[4:].strip()  # Убираем слово "плюс"
     
     try:
         amount = float(amount_str.replace(',', '.'))
@@ -108,14 +119,16 @@ def parse_description_amount(text: str, allow_only_amount: bool = False) -> Dict
             raise ValueError("Неверный формат суммы")
     
     # Собираем описание из всех частей кроме последней
-    description = " ".join(parts[:-1])
-    
-    # Капитализируем первую букву
-    if description:
-        description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
-    
+    if len(parts) > 1:
+        description = " ".join(parts[:-1])
+        # Капитализируем первую букву
+        if description:
+            description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
+    else:
+        description = None
+
     return {
-        'description': description if description else None,
+        'description': description,
         'amount': amount,
         'is_income': is_income
     }

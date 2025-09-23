@@ -384,47 +384,96 @@ class ExpenseFunctions:
     
     @staticmethod
     @sync_to_async
-    def search_expenses(user_id: int, query: str, limit: int = 20) -> Dict[str, Any]:
+    def search_expenses(user_id: int, query: str, limit: int = 20, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
         """
         Поиск трат по тексту
-        
+
         Args:
             user_id: ID пользователя
             query: Поисковый запрос
             limit: Максимальное количество результатов
+            start_date: Начальная дата периода (YYYY-MM-DD)
+            end_date: Конечная дата периода (YYYY-MM-DD)
         """
         try:
             profile, _ = Profile.objects.get_or_create(
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
-            
+
+            logger.info(f"search_expenses: profile_id={profile.id}, query='{query}', limit={limit}, period={start_date} to {end_date}")
+
             # Поиск по описанию и категориям
-            expenses = Expense.objects.filter(
-                profile=profile
-            ).filter(
-                Q(description__icontains=query) | 
+            # Сначала пробуем стандартный поиск
+            queryset = Expense.objects.filter(profile=profile)
+
+            # Добавляем фильтрацию по датам если указаны
+            if start_date:
+                from datetime import datetime
+                try:
+                    start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
+                    queryset = queryset.filter(expense_date__gte=start_dt)
+                except ValueError:
+                    logger.warning(f"Invalid start_date format: {start_date}")
+
+            if end_date:
+                from datetime import datetime
+                try:
+                    end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
+                    queryset = queryset.filter(expense_date__lte=end_dt)
+                except ValueError:
+                    logger.warning(f"Invalid end_date format: {end_date}")
+
+            expenses = queryset.filter(
+                Q(description__icontains=query) |
                 Q(category__name__icontains=query)
             ).select_related('category').order_by('-expense_date', '-expense_time')[:limit]
-            
+
+            # Если ничего не найдено и запрос содержит кириллицу - используем альтернативный метод
+            # (SQLite плохо работает с icontains для кириллицы)
+            if len(expenses) == 0 and any(ord(c) > 127 for c in query):
+                # Получаем все траты пользователя с учетом дат и фильтруем в Python
+                all_expenses = queryset.select_related('category').order_by('-expense_date', '-expense_time')
+
+                query_lower = query.lower()
+                filtered_expenses = []
+
+                for exp in all_expenses:
+                    # Проверяем описание
+                    if exp.description and query_lower in exp.description.lower():
+                        filtered_expenses.append(exp)
+                        continue
+                    # Проверяем категорию
+                    if exp.category and exp.category.name and query_lower in exp.category.name.lower():
+                        filtered_expenses.append(exp)
+
+                expenses = filtered_expenses[:limit]
+                logger.info(f"search_expenses: fallback search found {len(expenses)} expenses")
+
+            logger.info(f"search_expenses: found {len(expenses)} expenses for query '{query}'")
+
             # Получаем язык пользователя
             lang = profile.language_code or 'ru'
-            
+
             results = []
+            total_amount = 0
             for exp in expenses:
+                amount = float(exp.amount)
+                total_amount += amount
                 results.append({
                     'date': exp.expense_date.isoformat(),
                     'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
-                    'amount': float(exp.amount),
+                    'amount': amount,
                     'category': get_category_display_name(exp.category, lang) if exp.category else 'Без категории',
                     'description': exp.description,
                     'currency': exp.currency
                 })
-            
+
             return {
                 'success': True,
                 'query': query,
                 'count': len(results),
+                'total': total_amount,
                 'results': results
             }
             

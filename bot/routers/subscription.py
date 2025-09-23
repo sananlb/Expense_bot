@@ -36,14 +36,49 @@ SUBSCRIPTION_PRICES = {
     'month': {
         'stars': 150,
         'months': 1,
-        'title': 'Подписка на месяц',
-        'description': 'Полный доступ ко всем функциям на 1 месяц'
+        'title': '💎 Premium на 1 месяц',
+        'description': '''🎯 Естественные вопросы к статистике
+🎤 Голосовой ввод трат
+💵 Учёт доходов
+📊 PDF отчёты и графики
+🏷️ Редактирование категорий
+💳 Отслеживание кэшбэка
+🏠 Семейный доступ''',
+        'emoji_title': '💎 Premium • 1 месяц',
+        'features': [
+            '🎯 Естественные вопросы к статистике',
+            '🎤 Голосовой ввод трат',
+            '💵 Учёт доходов',
+            '📊 PDF отчёты и графики',
+            '🏷️ Редактирование категорий',
+            '💳 Отслеживание кэшбэка',
+            '🏠 Семейный доступ'
+        ]
     },
     'six_months': {
         'stars': 600,
         'months': 6,
-        'title': 'Подписка на 6 месяцев',
-        'description': 'Полный доступ ко всем функциям на 6 месяцев'
+        'title': '💎 Premium на 6 месяцев',
+        'description': '''✨ Все функции Premium + Экономия 300 звёзд!
+🎯 AI-аналитика
+🎤 Голосовой ввод
+💵 Учёт доходов
+📊 PDF отчёты
+🏷️ Редактирование категорий
+💳 Отслеживание кэшбэка
+🏠 Семейный доступ
+🚀 Приоритетная поддержка''',
+        'emoji_title': '💎 Premium • 6 месяцев',
+        'features': [
+            '🎯 Все функции Premium',
+            '💰 Экономия 300 звёзд',
+            '🚀 Приоритетная поддержка',
+            '🎁 Ранний доступ к новинкам',
+            '💵 Учёт доходов',
+            '🏷️ Редактирование категорий',
+            '💳 Отслеживание кэшбэка',
+            '🏠 Семейный доступ'
+        ]
     }
 }
 
@@ -138,7 +173,7 @@ async def show_subscription_menu(callback: CallbackQuery, state: FSMContext, lan
     data = await state.get_data()
     invoice_msg_id = data.get('invoice_msg_id')
     subscription_back_msg_id = data.get('subscription_back_msg_id')
-    
+
     # Удаляем сообщение с инвойсом, если оно есть
     if invoice_msg_id:
         try:
@@ -148,7 +183,7 @@ async def show_subscription_menu(callback: CallbackQuery, state: FSMContext, lan
             )
         except (TelegramBadRequest, TelegramNotFound):
             pass  # Сообщение уже удалено или не найдено
-    
+
     # Удаляем сообщение с кнопкой "Назад"
     if subscription_back_msg_id:
         try:
@@ -158,7 +193,7 @@ async def show_subscription_menu(callback: CallbackQuery, state: FSMContext, lan
             )
         except (TelegramBadRequest, TelegramNotFound):
             pass  # Сообщение уже удалено или не найдено
-    
+
     # Очищаем сохраненные ID
     await state.update_data(invoice_msg_id=None, subscription_back_msg_id=None)
     
@@ -186,13 +221,15 @@ async def send_stars_invoice(callback: CallbackQuery, state: FSMContext, sub_typ
         await callback.message.delete()
     except (TelegramBadRequest, TelegramNotFound):
         pass
+
+    # Отправляем инвойс с полным описанием
     invoice_msg = await callback.bot.send_invoice(
         chat_id=callback.from_user.id,
         title=sub_info['title'],
-        description=sub_info['description'],
+        description=sub_info['description'],  # Используем полное описание с функциями
         payload=f"subscription_{sub_type}_{callback.from_user.id}",
         currency="XTR",
-        prices=[LabeledPrice(label=sub_info['title'], amount=sub_info['stars'])],
+        prices=[LabeledPrice(label="Оплата", amount=sub_info['stars'])],
         start_parameter=f"sub_{sub_type}",
         need_name=False,
         need_phone_number=False,
@@ -200,14 +237,21 @@ async def send_stars_invoice(callback: CallbackQuery, state: FSMContext, sub_typ
         need_shipping_address=False,
         is_flexible=False
     )
+
+    # Кнопка назад
     builder = InlineKeyboardBuilder()
-    builder.button(text="← Назад", callback_data="menu_subscription")
+    builder.button(text="← Назад в меню", callback_data="menu_subscription")
     back_msg = await callback.bot.send_message(
         chat_id=callback.from_user.id,
-        text="Назад в меню подписки",
+        text="↩️ Вернуться в меню подписки",
         reply_markup=builder.as_markup()
     )
-    await state.update_data(invoice_msg_id=invoice_msg.message_id, subscription_back_msg_id=back_msg.message_id)
+
+    # Сохраняем ID сообщений для удаления
+    await state.update_data(
+        invoice_msg_id=invoice_msg.message_id,
+        subscription_back_msg_id=back_msg.message_id
+    )
     await callback.answer()
 
 
@@ -724,10 +768,13 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
     # Убеждаемся что цена не меньше 1 звезды
     discounted_price = max(1, discounted_price)
 
+    # Описание для инвойса со скидкой
+    invoice_description = f"🎁 Промокод {promocode.code} ({promocode.get_discount_display()}) • Цена: {discounted_price}⭐ вместо {original_price}⭐ • " + sub_info['description']
+
     invoice_msg = await callback.bot.send_invoice(
         chat_id=callback.from_user.id,
         title=f"{sub_info['title']} (со скидкой)",
-        description=f"{sub_info['description']}\n\n💸 Промокод: {promocode.code} {promocode.get_discount_display()}\n✨ Цена со скидкой: {discounted_price} звёзд (вместо {original_price})",
+        description=invoice_description,
         payload=f"subscription_{sub_type}_{callback.from_user.id}_promo_{promocode.id}",
         currency="XTR",  # Telegram Stars
         prices=[
@@ -743,18 +790,18 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
         need_shipping_address=False,
         is_flexible=False
     )
-    
+
     # Отправляем отдельное сообщение с кнопкой "Назад"
     builder = InlineKeyboardBuilder()
-    builder.button(text="← Назад", callback_data="menu_subscription")
-    
+    builder.button(text="← Назад в меню", callback_data="menu_subscription")
+
     back_msg = await callback.bot.send_message(
         chat_id=callback.from_user.id,
-        text="Назад в меню подписки",
+        text="↩️ Вернуться в меню подписки",
         reply_markup=builder.as_markup()
     )
-    
-    # Сохраняем ID обоих сообщений для удаления после оплаты или при новой команде
+
+    # Сохраняем ID сообщений для удаления после оплаты или при новой команде
     await state.update_data(
         invoice_msg_id=invoice_msg.message_id,
         subscription_back_msg_id=back_msg.message_id

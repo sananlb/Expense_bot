@@ -20,7 +20,7 @@ ALLOWED_PARAMS: Dict[str, set] = {
     'get_average_expenses': {'user_id', 'period_days'},
     'get_recent_expenses': {'user_id', 'limit'},
     'get_daily_totals': {'user_id', 'days'},
-    'search_expenses': {'user_id', 'query', 'limit'},
+    'search_expenses': {'user_id', 'query', 'limit', 'start_date', 'end_date'},
     'get_weekday_statistics': {'user_id', 'period_days'},
     'predict_month_expense': {'user_id'},
     'check_budget_status': {'user_id', 'budget_amount'},
