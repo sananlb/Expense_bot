@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title data-i18n-meta-title>Coins Bot — Умный учет доходов и расходов в Telegram</title>
-  <meta name="description" content="Управляйте финансами голосом и текстом. Учет доходов и расходов, AI-категоризация, семейный бюджет, PDF-отчеты. Начните бесплатно!" data-i18n-meta-desc>
+  <title data-i18n-meta-title>Coins Bot — Умный учет расходов в Telegram</title>
+  <meta name="description" content="Управляйте финансами голосом и текстом. Учет расходов, AI-категоризация, семейный бюджет, PDF-отчеты. Начните бесплатно!" data-i18n-meta-desc>
 
   <!-- Google Analytics 4 -->
   <!-- Global site tag (gtag.js) - Google Analytics -->
@@ -37,15 +37,15 @@
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://www.coins-bot.ru/">
-  <meta property="og:title" content="Coins Bot — Умный учет доходов и расходов в Telegram">
-  <meta property="og:description" content="Управляйте финансами голосом и текстом. Учет доходов и расходов, AI-категоризация, семейный бюджет, PDF-отчеты. Начните бесплатно!">
+  <meta property="og:title" content="Coins Bot — Умный учет расходов в Telegram">
+  <meta property="og:description" content="Управляйте финансами голосом и текстом. Учет расходов, AI-категоризация, семейный бюджет, PDF-отчеты. Начните бесплатно!">
   <meta property="og:image" content="https://www.coins-bot.ru/photo_2025-09-13_10-57-55.jpg">
 
   <!-- Twitter -->
   <meta property="twitter:card" content="summary_large_image">
   <meta property="twitter:url" content="https://www.coins-bot.ru/">
-  <meta property="twitter:title" content="Coins Bot — Умный учет доходов и расходов в Telegram">
-  <meta property="twitter:description" content="Управляйте финансами голосом и текстом. Учет доходов и расходов, AI-категоризация, семейный бюджет, PDF-отчеты.">
+  <meta property="twitter:title" content="Coins Bot — Умный учет расходов в Telegram">
+  <meta property="twitter:description" content="Управляйте финансами голосом и текстом. Учет расходов, AI-категоризация, семейный бюджет, PDF-отчеты.">
   <meta property="twitter:image" content="https://www.coins-bot.ru/photo_2025-09-13_10-57-55.jpg">
 
   <!-- Favicon -->
@@ -2371,7 +2371,7 @@
       <div class="hero-content">
         <div class="hero-text reveal">
           <h1><span data-i18n="hero_title">Вести бюджет — просто</span></h1>
-          <p data-i18n="hero_subtitle">Скажите "кофе 200" или "зарплата +80000". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.</p>
+          <p data-i18n="hero_subtitle">Скажите "кофе 200" или "такси 500". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.</p>
           <div class="hero-buttons">
             <a href="https://t.me/showmecoinbot?start=landing" target="_blank" class="btn btn-primary">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -2471,12 +2471,12 @@
         <div class="step reveal">
           <div class="step-number">2</div>
           <h3 class="step-title" data-i18n="how_step2_title">Добавьте операцию</h3>
-          <p class="step-desc" data-i18n="how_step2_desc">Напишите или продиктуйте "такси 540" или "зарплата +80000"</p>
+          <p class="step-desc" data-i18n="how_step2_desc">Напишите или продиктуйте "такси 540" или "продукты 1200"</p>
         </div>
         <div class="step reveal">
           <div class="step-number">3</div>
           <h3 class="step-title" data-i18n="how_step3_title">Получите аналитику</h3>
-          <p class="step-desc" data-i18n="how_step3_desc">Просматривайте дневник, статистику трат и доходов по категориям</p>
+          <p class="step-desc" data-i18n="how_step3_desc">Просматривайте дневник, статистику трат по категориям</p>
         </div>
       </div>
     </div>
@@ -2591,7 +2591,8 @@
             <div class="plan-price" style="font-size: 24px;">0₽</div>
             <div class="plan-period" data-i18n="plan_forever">навсегда</div>
             <ul class="plan-features">
-              <li data-i18n="feat_basic_tracking">Учет расходов и доходов</li>
+              <li data-i18n="feat_expense_only">Только учет расходов</li>
+              <li class="disabled" data-i18n="feat_income_tracking">Учет доходов</li>
               <li data-i18n="feat_ai_categorization">AI-категоризация</li>
               <li data-i18n="feat_basic_stats">Базовая статистика</li>
               <li data-i18n="feat_recurring">Повторяющиеся операции</li>
@@ -2612,7 +2613,8 @@
             <div class="plan-price" style="font-size: 24px;" data-i18n="plan_price_premium">150⭐/мес</div>
             <div class="plan-period" data-i18n="plan_period_premium">или 600⭐ за 6 месяцев</div>
             <ul class="plan-features">
-              <li data-i18n="feat_basic_tracking">Учет расходов и доходов</li>
+              <li data-i18n="feat_expense_only">Только учет расходов</li>
+              <li data-i18n="feat_income_tracking">Учет доходов</li>
               <li data-i18n="feat_ai_categorization">AI-категоризация</li>
               <li data-i18n="feat_basic_stats">Базовая статистика</li>
               <li data-i18n="feat_recurring">Повторяющиеся операции</li>
@@ -2655,7 +2657,7 @@
           btn_launch: 'Запустить бота',
           btn_demo: 'Посмотреть демо',
           hero_title: 'Вести бюджет — просто',
-          hero_subtitle: 'Скажите "кофе 200" или "зарплата +80000". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.',
+          hero_subtitle: 'Скажите "кофе 200" или "такси 500". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.',
           trust_free: 'Бесплатный старт',
           trust_no_banks: 'Без привязки к банкам',
           demo_tag: 'ДЕМО',
@@ -2684,6 +2686,8 @@
           pricing_features: 'Возможности',
           pricing_free: 'Free',
           pricing_premium: 'Premium',
+          feat_expense_only: 'Только учет расходов',
+          feat_income_tracking: 'Учет доходов',
           feat_basic_tracking: 'Учет расходов и доходов',
           feat_ai_categorization: 'AI-категоризация',
           feat_basic_stats: 'Базовая статистика',
@@ -2710,9 +2714,9 @@
           how_step1_title: 'Откройте бота',
           how_step1_desc: 'Перейдите в Telegram и найдите @showmecoinbot или нажмите на кнопку запуска',
           how_step2_title: 'Добавьте операцию',
-          how_step2_desc: 'Напишите или продиктуйте "такси 540" или "зарплата +80000"',
+          how_step2_desc: 'Напишите или продиктуйте "такси 540" или "продукты 1200"',
           how_step3_title: 'Получите аналитику',
-          how_step3_desc: 'Просматривайте дневник, статистику трат и доходов по категориям',
+          how_step3_desc: 'Просматривайте дневник, статистику трат по категориям',
           pricing_try7: 'Попробовать 7 дней бесплатно',
           plan_free: 'Бесплатный',
           plan_forever: 'навсегда',
@@ -2751,7 +2755,7 @@
           btn_launch: 'Launch the bot',
           btn_demo: 'Watch demo',
           hero_title: '<span>Simple money</span><br><span>management</span>',
-          hero_subtitle: 'Say "coffee 200" or "salary +80000".<br>AI recognizes, categorizes, and builds reports.<br>No banks, no complex apps.',
+          hero_subtitle: 'Say "coffee 200" or "taxi 500".<br>AI recognizes, categorizes, and builds reports.<br>No banks, no complex apps.',
           trust_free: 'Free to start',
           trust_no_banks: 'No bank linking required',
           demo_tag: 'DEMO',
@@ -2780,6 +2784,8 @@
           pricing_features: 'Features',
           pricing_free: 'Free',
           pricing_premium: 'Premium',
+          feat_expense_only: 'Expense tracking only',
+          feat_income_tracking: 'Income tracking',
           feat_basic_tracking: 'Expense & income tracking',
           feat_ai_categorization: 'AI categorization',
           feat_basic_stats: 'Basic statistics',
@@ -2806,7 +2812,7 @@
           how_step1_title: 'Open the bot',
           how_step1_desc: 'Go to Telegram, find @showmecoinbot or click the launch button',
           how_step2_title: 'Add an entry',
-          how_step2_desc: 'Type or say “taxi 540” or “salary +80000”',
+          how_step2_desc: 'Type or say "taxi 540" or "groceries 1200"',
           how_step3_title: 'Get analytics',
           how_step3_desc: 'View diary, spending and income stats by categories',
           pricing_try7: 'Try 7 days free',
@@ -3227,7 +3233,7 @@
         ];
         this.slideDescriptions = [
           'AI автоматически определяет категории',
-          'История всех расходов и доходов',
+          'История всех расходов',
           'Статистика и графики по категориям',
           'Отслеживание кэшбэка от банков',
           'Детальные отчеты для скачивания',

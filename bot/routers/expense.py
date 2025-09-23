@@ -1001,13 +1001,42 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     from ..utils.expense_parser import detect_income_intent, parse_income_message
     if detect_income_intent(text):
         logger.info(f"Detected income intent: '{text}'")
+
+        # Проверка подписки для функции учета доходов
+        has_subscription = await check_subscription(user_id)
+        if not has_subscription:
+            # Отменяем индикатор печатания
+            await cancel_typing()
+
+            # Формируем сообщение о необходимости подписки
+            subscription_msg = f"""❌ <b>Учет доходов — премиум функция</b>
+
+💰 Функция учета доходов доступна только по подписке.
+
+С подпиской вы получите:
+• 📊 Полный учет доходов и расходов
+• 🎤 Голосовой ввод трат
+• 📄 PDF отчеты
+• 👨‍👩‍👧‍👦 Семейный бюджет
+• 💳 Кешбэк менеджер
+• 📈 Расширенная аналитика
+
+Оформите подписку, чтобы вести полноценный учет финансов!"""
+
+            # Создаем кнопку для оформления подписки
+            from ..keyboards.subscription import get_subscription_button
+            keyboard = get_subscription_button()
+
+            await message.answer(subscription_msg, reply_markup=keyboard, parse_mode="HTML")
+            return
+
         # Обрабатываем как доход
         from expenses.models import Profile
         try:
             profile = await Profile.objects.aget(telegram_id=user_id)
         except Profile.DoesNotExist:
             profile = None
-        
+
         # Парсим доход
         parsed_income = await parse_income_message(text, user_id=user_id, profile=profile, use_ai=True)
         
