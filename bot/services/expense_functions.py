@@ -138,23 +138,11 @@ class ExpenseFunctions:
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
-            today = date.today()
-            
-            # Определяем даты периода
-            if period == 'today':
-                start_date = end_date = today
-            elif period == 'yesterday':
-                start_date = end_date = today - timedelta(days=1)
-            elif period == 'week':
-                start_date = today - timedelta(days=today.weekday())
-                end_date = today
-            elif period == 'month':
-                start_date = today.replace(day=1)
-                end_date = today
-            elif period == 'year':
-                start_date = today.replace(month=1, day=1)
-                end_date = today
-            else:
+            # Используем единую функцию для определения дат периода
+            from bot.utils.date_utils import get_period_dates
+            try:
+                start_date, end_date = get_period_dates(period)
+            except Exception:
                 from bot.utils import get_text
                 lang = profile.language_code or 'ru'
                 return {
@@ -384,7 +372,7 @@ class ExpenseFunctions:
     
     @staticmethod
     @sync_to_async
-    def search_expenses(user_id: int, query: str, limit: int = 20, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
+    def search_expenses(user_id: int, query: str, limit: int = 20, start_date: str = None, end_date: str = None, period: str = None) -> Dict[str, Any]:
         """
         Поиск трат по тексту
 
@@ -394,12 +382,22 @@ class ExpenseFunctions:
             limit: Максимальное количество результатов
             start_date: Начальная дата периода (YYYY-MM-DD)
             end_date: Конечная дата периода (YYYY-MM-DD)
+            period: Период ('last_week', 'last_month', 'week', 'month', etc.)
         """
         try:
+            from bot.utils.date_utils import get_period_dates
+
             profile, _ = Profile.objects.get_or_create(
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
+
+            # Определяем даты периода
+            if period:
+                # Если задан период, используем его
+                period_start, period_end = get_period_dates(period)
+                start_date = period_start.isoformat()
+                end_date = period_end.isoformat()
 
             logger.info(f"search_expenses: profile_id={profile.id}, query='{query}', limit={limit}, period={start_date} to {end_date}")
 
@@ -623,18 +621,34 @@ class ExpenseFunctions:
     
     @staticmethod
     @sync_to_async
-    def get_max_single_expense(user_id: int, period_days: int = 60) -> Dict[str, Any]:
+    def get_max_single_expense(user_id: int, period: str = None, period_days: int = None) -> Dict[str, Any]:
         """
         Найти самую большую единичную трату
+
+        Args:
+            user_id: ID пользователя
+            period: Период ('last_week', 'last_month', 'week', 'month', etc.)
+            period_days: Количество дней (используется если period не задан)
         """
         try:
+            from bot.utils.date_utils import get_period_dates
+
             profile, _ = Profile.objects.get_or_create(
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
-            end_date = date.today()
-            start_date = end_date - timedelta(days=period_days)
-            
+
+            # Определяем период
+            if period:
+                start_date, end_date = get_period_dates(period)
+            elif period_days:
+                end_date = date.today()
+                start_date = end_date - timedelta(days=period_days)
+            else:
+                # По умолчанию последние 60 дней
+                end_date = date.today()
+                start_date = end_date - timedelta(days=60)
+
             max_expense = Expense.objects.filter(
                 profile=profile,
                 expense_date__gte=start_date,
@@ -676,31 +690,48 @@ class ExpenseFunctions:
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
-            today = date.today()
-
-            # Определяем период
-            if period == 'week':
-                start_date = today - timedelta(days=today.weekday())
-            elif period == 'month':
-                start_date = today.replace(day=1)
-            elif period == 'year':
-                start_date = today.replace(month=1, day=1)
-            else:
-                start_date = today - timedelta(days=30)
+            # Используем единую функцию для определения дат периода
+            from bot.utils.date_utils import get_period_dates
+            try:
+                start_date, end_date = get_period_dates(period)
+            except Exception:
+                # Если период не распознан, используем последние 30 дней
+                end_date = date.today()
+                start_date = end_date - timedelta(days=30)
 
             from expenses.models import ExpenseCategory
             from django.db.models import Q
 
             # Пытаемся найти категорию пользователя по имени
+            # Ищем в нескольких полях для лучшего совпадения
+            cat_q = Q(name__icontains=category)
+            # Также ищем в мультиязычных полях
+            cat_q |= Q(name_ru__icontains=category)
+            cat_q |= Q(name_en__icontains=category)
+
+            # Учитываем что может быть передано название без эмодзи
+            # Например "продукты" вместо "🥕 Продукты"
             cat_obj = ExpenseCategory.objects.filter(
-                profile=profile,
-                name__icontains=category
-            ).first()
+                profile=profile
+            ).filter(cat_q).first()
+
+            # Если точное совпадение не найдено, пробуем более гибкий поиск
+            if not cat_obj:
+                # Удаляем эмодзи из запроса если они есть и ищем снова
+                import re
+                clean_category = re.sub(r'[^\w\s]', '', category, flags=re.UNICODE).strip()
+                if clean_category and clean_category != category:
+                    cat_q = Q(name__icontains=clean_category)
+                    cat_q |= Q(name_ru__icontains=clean_category)
+                    cat_q |= Q(name_en__icontains=clean_category)
+                    cat_obj = ExpenseCategory.objects.filter(
+                        profile=profile
+                    ).filter(cat_q).first()
 
             qs = Expense.objects.filter(
                 profile=profile,
                 expense_date__gte=start_date,
-                expense_date__lte=today
+                expense_date__lte=end_date
             )
 
             # Универсальное правило: ищем как по категории, так и по описанию
@@ -710,8 +741,10 @@ class ExpenseFunctions:
             if cat_obj:
                 q_filter |= Q(category=cat_obj)
 
-            # Также ищем по названию категории
+            # Также ищем по всем полям названий категории
             q_filter |= Q(category__name__icontains=category)
+            q_filter |= Q(category__name_ru__icontains=category)
+            q_filter |= Q(category__name_en__icontains=category)
 
             # И ищем упоминание категории в описании траты
             q_filter |= Q(description__icontains=category)
@@ -1509,19 +1542,11 @@ class ExpenseFunctions:
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
-            today = date.today()
-            if period == 'today':
-                start_date = end_date = today
-            elif period == 'week':
-                start_date = today - timedelta(days=today.weekday())
-                end_date = today
-            elif period == 'month':
-                start_date = today.replace(day=1)
-                end_date = today
-            elif period == 'year':
-                start_date = today.replace(month=1, day=1)
-                end_date = today
-            else:
+            # Используем единую функцию для определения дат периода
+            from bot.utils.date_utils import get_period_dates
+            try:
+                start_date, end_date = get_period_dates(period)
+            except Exception:
                 return {'success': False, 'message': f'Unknown period: {period}'}
             incomes = Income.objects.filter(
                 profile=profile,
@@ -1542,23 +1567,45 @@ class ExpenseFunctions:
             return {'success': False, 'message': str(e)}
     
     @staticmethod
-    @sync_to_async  
-    def get_max_single_income(user_id: int) -> Dict[str, Any]:
+    @sync_to_async
+    def get_max_single_income(user_id: int, period: str = None, period_days: int = None) -> Dict[str, Any]:
         """
         Найти самый большой единичный доход
+
+        Args:
+            user_id: ID пользователя
+            period: Период ('last_week', 'last_month', 'week', 'month', etc.)
+            period_days: Количество дней (используется если period не задан)
         """
         try:
+            from bot.utils.date_utils import get_period_dates
+
             profile = Profile.objects.get(telegram_id=user_id)
-            
-            max_income = Income.objects.filter(profile=profile).order_by('-amount').first()
-            
+
+            # Определяем период
+            if period:
+                start_date, end_date = get_period_dates(period)
+            elif period_days:
+                end_date = date.today()
+                start_date = end_date - timedelta(days=period_days)
+            else:
+                # По умолчанию последние 60 дней
+                end_date = date.today()
+                start_date = end_date - timedelta(days=60)
+
+            max_income = Income.objects.filter(
+                profile=profile,
+                income_date__gte=start_date,
+                income_date__lte=end_date
+            ).order_by('-amount').first()
+
             if not max_income:
                 return {
                     'success': True,
-                    'message': 'Нет данных о доходах',
+                    'message': f'Нет данных о доходах за последние {period_days} дней',
                     'income': None
                 }
-            
+
             return {
                 'success': True,
                 'income': {
