@@ -674,17 +674,27 @@ TEXTS = {
 
 Бот сделает запись и ответит вам. Нажав кнопку "Редактировать", вы можете изменить любые параметры записи.
 
-Отредактируйте категорию - бот запомнит, к какой категории относится ваша трата, и в следующий раз будет вставлять категорию правильно.
+Отредактируйте категорию - бот запомнит, к какой категории относится ваша трата, и в следующий раз будет выбирать категорию правильно.
 
-<b>💡 Полезные возможности:</b>
-• Можно вводить трату/доход без суммы одним словом, если у вас уже была подобная запись - бот возьмет всю информацию из предыдущей записи
-• Можно делать запись задним числом - для этого в конце траты напишите дату в формате 23.09.2025
+Можно вводить трату/доход без суммы одним словом, если у вас уже была подобная запись - бот возьмет всю информацию из предыдущей записи.
+
+Можно делать запись задним числом - для этого в конце траты напишите дату в формате 23.09.2025
 
 <b>💳 Кешбэк:</b>
 Кешбэк можно вводить через меню, а можно и сообщением боту в формате:
 "кешбэк X% категория XXXX банк"
 
-Закрепите заметку с кешбэками в чате с ботом, чтобы иметь быстрый доступ.''',
+Закрепите заметку с кешбэками в чате с ботом, чтобы иметь быстрый доступ.
+
+<b>💬 Вопросы боту естественным языком:</b>
+Спрашивайте бота о ваших финансах простыми словами:
+• "Сколько я потратил на продукты в этом месяце?"
+• "Сколько я потратил на кофе в августе?"
+• "Какая моя самая большая трата за неделю?"
+• "Сколько я заработал в сентябре?"
+• "На что я трачу больше всего денег?"
+
+Бот понимает разговорный язык и поможет с анализом ваших финансов.''',
     },
     'en': {
         # Policies and offer
@@ -1338,15 +1348,25 @@ The bot will make a record and respond to you. By pressing the "Edit" button, yo
 
 Edit the category - the bot will remember which category your expense belongs to and will insert the category correctly next time.
 
-<b>💡 Useful features:</b>
-• You can enter expense/income without amount in one word if you already had a similar record - the bot will take all information from the previous record
-• You can make a record retroactively - for this, write the date at the end of the expense in the format 23.09.2025
+You can enter expense/income without amount in one word if you already had a similar record - the bot will take all information from the previous record.
+
+You can make a record retroactively - for this, write the date at the end of the expense in the format 23.09.2025
 
 <b>💳 Cashback:</b>
 Cashback can be entered through the menu, or by message to the bot in the format:
 "cashback X% category XXXX bank"
 
-Pin the note with cashbacks in the chat with the bot for quick access.''',
+Pin the note with cashbacks in the chat with the bot for quick access.
+
+<b>💬 Natural language questions to the bot:</b>
+Ask the bot about your finances in simple words:
+• "How much did I spend on groceries this month?"
+• "How much did I spend on coffee in August?"
+• "What's my biggest expense this week?"
+• "How much did I earn in September?"
+• "What do I spend the most money on?"
+
+The bot understands natural language and will help analyze your finances.''',
 
         # Recurring payments translations
         'no_categories_create_first': '❌ You have no categories. Please create categories first.',
