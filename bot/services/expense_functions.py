@@ -824,29 +824,21 @@ class ExpenseFunctions:
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
-            today = date.today()
-            
+
+            # Используем get_period_dates для обоих периодов
+            from bot.utils.date_utils import get_period_dates
+
             # Определяем первый период
+            # Для текущих периодов используем алиасы
             if period1 == 'this_week':
-                p1_start = today - timedelta(days=today.weekday())
-                p1_end = today
+                period1 = 'week'
             elif period1 == 'this_month':
-                p1_start = today.replace(day=1)
-                p1_end = today
-            else:
-                p1_start = today - timedelta(days=7)
-                p1_end = today
-            
+                period1 = 'month'
+
+            p1_start, p1_end = get_period_dates(period1)
+
             # Определяем второй период
-            if period2 == 'last_week':
-                p2_end = p1_start - timedelta(days=1)
-                p2_start = p2_end - timedelta(days=6)
-            elif period2 == 'last_month':
-                p2_end = p1_start - timedelta(days=1)
-                p2_start = p2_end.replace(day=1)
-            else:
-                p2_end = p1_start - timedelta(days=1)
-                p2_start = p2_end - timedelta(days=6)
+            p2_start, p2_end = get_period_dates(period2)
             
             # Получаем суммы
             total1 = Expense.objects.filter(
@@ -1315,21 +1307,12 @@ class ExpenseFunctions:
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
-            today = date.today()
-            
-            # Определяем даты периода
-            if period == 'today':
-                start_date = end_date = today
-            elif period == 'week':
-                start_date = today - timedelta(days=today.weekday())
-                end_date = today
-            elif period == 'month':
-                start_date = today.replace(day=1)
-                end_date = today
-            elif period == 'year':
-                start_date = today.replace(month=1, day=1)
-                end_date = today
-            else:
+
+            # Используем get_period_dates для определения периода
+            from bot.utils.date_utils import get_period_dates
+            try:
+                start_date, end_date = get_period_dates(period)
+            except Exception as e:
                 from bot.utils import get_text
                 lang = profile.language_code or 'ru'
                 return {
@@ -2035,23 +2018,10 @@ class ExpenseFunctions:
         """
         try:
             profile = Profile.objects.get(telegram_id=user_id)
-            today = date.today()
-            
-            # Определяем период
-            if period == 'today':
-                start_date = end_date = today
-            elif period == 'week':
-                start_date = today - timedelta(days=7)
-                end_date = today
-            elif period == 'month':
-                start_date = today.replace(day=1)
-                end_date = today
-            elif period == 'year':
-                start_date = today.replace(month=1, day=1)
-                end_date = today
-            else:
-                start_date = today - timedelta(days=30)
-                end_date = today
+
+            # Используем get_period_dates для определения периода
+            from bot.utils.date_utils import get_period_dates
+            start_date, end_date = get_period_dates(period)
             
             # Ищем категорию
             from expenses.models import IncomeCategory
@@ -2306,25 +2276,9 @@ class ExpenseFunctions:
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
-            today = date.today()
-            
-            # Определяем даты периода
-            if period == 'today':
-                start_date = end_date = today
-            elif period == 'week':
-                start_date = today - timedelta(days=today.weekday())
-                end_date = today
-            elif period == 'month':
-                start_date = today.replace(day=1)
-                end_date = today
-            elif period == 'year':
-                start_date = today.replace(month=1, day=1)
-                end_date = today
-            else:
-                return {
-                    'success': False,
-                    'message': f'Неизвестный период: {period}'
-                }
+            # Используем get_period_dates для определения периода
+            from bot.utils.date_utils import get_period_dates
+            start_date, end_date = get_period_dates(period)
             
             # Получаем расходы
             expenses = Expense.objects.filter(

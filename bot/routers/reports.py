@@ -462,9 +462,10 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
         # Определяем "сегодня" с учетом часового пояса пользователя
         now_user_tz = datetime.now(user_tz)
         end_date = now_user_tz.date()
-        start_date = end_date - timedelta(days=3)  # Расширяем до 3 дней
-        
-        # Получаем траты и доходы за последние 3 дня, но не более 30 операций в сумме
+        # Убираем ограничение по дням - показываем все операции (лимитируется только количеством)
+        start_date = None
+
+        # Получаем все траты и доходы, но не более 30 операций в сумме
         @sync_to_async
         def get_recent_operations():
             from expenses.models import Income
@@ -477,13 +478,11 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
             if household_mode:
                 expenses_qs = Expense.objects.filter(
                     profile__household=profile.household,
-                    expense_date__gte=start_date,
                     expense_date__lte=end_date
                 )
             else:
                 expenses_qs = Expense.objects.filter(
                     profile__telegram_id=user_id,
-                    expense_date__gte=start_date,
                     expense_date__lte=end_date
                 )
             expenses = list(expenses_qs.select_related('category').order_by('-expense_date', '-expense_time')[:30])
@@ -492,13 +491,11 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
             if household_mode:
                 incomes_qs = Income.objects.filter(
                     profile__household=profile.household,
-                    income_date__gte=start_date,
                     income_date__lte=end_date
                 )
             else:
                 incomes_qs = Income.objects.filter(
                     profile__telegram_id=user_id,
-                    income_date__gte=start_date,
                     income_date__lte=end_date
                 )
             incomes = list(incomes_qs.select_related('category').order_by('-income_date', '-income_time')[:30])

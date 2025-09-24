@@ -524,20 +524,20 @@ class PDFReportService:
                     cashback_by_category[cb.category_id].append(cb)
             
             # Получаем топ-7 категорий
-            categories_stats = expenses.values('category__id', 'category__name', 'category__icon').annotate(
+            categories_stats = expenses.values('category__id', 'category__name').annotate(
                 amount=Sum('amount')
             ).order_by('-amount')
-            
+
             top_categories = []
             other_amount = 0
             other_cashback = 0
-            
+
             idx = 0
             async for cat_stat in categories_stats:
                 if idx < 7:
                     amount = float(cat_stat['amount'])
                     category_id = cat_stat['category__id']
-                    
+
                     # Рассчитываем кешбек для категории
                     category_cashback = 0
                     if category_id in cashback_by_category:
@@ -546,10 +546,10 @@ class PDFReportService:
                             if cb.limit_amount and cb.limit_amount > 0:
                                 cb_amount = min(amount, float(cb.limit_amount))
                             category_cashback += cb_amount * (cb.cashback_percent / 100)
-                    
+
                     top_categories.append({
                         'name': cat_stat['category__name'],
-                        'icon': cat_stat['category__icon'] or '📊',
+                        'icon': '📊',
                         'amount': amount,
                         'cashback': category_cashback,
                         'color': category_colors[idx] if idx < len(category_colors) else '#95a5a6'

@@ -75,30 +75,58 @@ class PDFReportService:
         try:
             # Получаем профиль пользователя
             profile = await Profile.objects.aget(telegram_id=user_id)
-            
+
             # Определяем период
             start_date = date(year, month, 1)
             last_day = calendar.monthrange(year, month)[1]
             end_date = date(year, month, last_day)
-            
+
+            # Статистика по категориям (нежная палитра с чуть более темными оттенками)
+            # Определяем цвета здесь, чтобы они были доступны для всех разделов отчета
+            category_colors = [
+                '#4A90E2',  # мягкий синий (темнее)
+                '#FF6B35',  # кораллово-оранжевый (темнее)
+                '#7ED321',  # светло-зеленый (темнее)
+                '#8B5CF6',  # средний фиолетовый (темнее)
+                '#F5A623',  # золотой (темнее)
+                '#50C8E8',  # небесно-голубой (темнее)
+                '#BD5EFF',  # сливовый (темнее)
+                '#86D36B',  # бледно-зеленый (темнее)
+                '#E94B9A',  # светло-орхидный (темнее)
+                '#FF8C00',  # оранжевый (темнее)
+                '#5DADE2',  # светло-синий (темнее)
+                '#D4AC0D',  # пшеничный (темнее)
+                '#C39BD3',  # светло-фиолетовый (темнее)
+                '#17A2B8',  # светлый морской зеленый (темнее)
+                '#E91E63'   # ярко-розовый (темнее)
+            ]
+
             # Получаем расходы за период
             expenses = Expense.objects.filter(
                 profile=profile,
                 expense_date__gte=start_date,
                 expense_date__lte=end_date
             )
-            
+
             # Общая статистика
             total_stats = await expenses.aaggregate(
                 total_amount=Sum('amount'),
                 total_count=Count('id')
             )
-            
+
             total_amount = float(total_stats['total_amount'] or 0)
             total_count = total_stats['total_count'] or 0
-            
-            if total_count == 0:
-                return None
+
+            # Инициализируем переменные по умолчанию
+            top_categories = []
+            total_cashback = 0
+            change_percent = 0
+            change_direction = ""
+            prev_summaries = []
+            daily_expenses = {}
+            daily_categories = {}
+            income_categories = []
+            daily_incomes = {}
 
             # Определяем режим отображения (личный/семейный) для пометки в отчете
             household_mode = False
@@ -117,286 +145,307 @@ class PDFReportService:
                             household_name = hh.household.name
                 except Exception:
                     household_name = None
-            
-            # Статистика по категориям (нежная палитра с чуть более темными оттенками)
-            category_colors = [
-                '#4A90E2',  # мягкий синий (темнее)
-                '#FF6B35',  # кораллово-оранжевый (темнее)
-                '#7ED321',  # светло-зеленый (темнее)
-                '#8B5CF6',  # средний фиолетовый (темнее)
-                '#F5A623',  # золотой (темнее)
-                '#50C8E8',  # небесно-голубой (темнее)
-                '#BD5EFF',  # сливовый (темнее)
-                '#86D36B',  # бледно-зеленый (темнее)
-                '#E94B9A',  # светло-орхидный (темнее)
-                '#FF8C00',  # оранжевый (темнее)
-                '#5DADE2',  # светло-синий (темнее)
-                '#D4AC0D',  # пшеничный (темнее)
-                '#C39BD3',  # светло-фиолетовый (темнее)
-                '#17A2B8',  # светлый морской зеленый (темнее)
-                '#E91E63'   # ярко-розовый (темнее)
-            ]
-            
-            # Получаем все кешбеки пользователя для этого месяца
-            user_cashbacks = []
-            async for cb in Cashback.objects.filter(
-                profile=profile,
-                month=month
-            ).select_related('category'):
-                user_cashbacks.append(cb)
-            
-            # Создаем словарь кешбеков по категориям
-            cashback_by_category = {}
-            for cb in user_cashbacks:
-                if cb.category_id:
-                    if cb.category_id not in cashback_by_category:
-                        cashback_by_category[cb.category_id] = []
-                    cashback_by_category[cb.category_id].append(cb)
-            
-            # Получаем все категории для определения мультиязычности
-            categories_with_multilang = {}
-            async for exp in expenses.select_related('category'):
-                if exp.category and exp.category.id not in categories_with_multilang:
-                    cat = exp.category
-                    # Используем стандартный метод для получения отображаемого имени
-                    display_name = cat.get_display_name(lang)
-                    categories_with_multilang[cat.id] = display_name
-            
-            # Получаем категории с учетом мультиязычности
-            categories_stats = expenses.values('category__id', 'category__name', 'category__icon').annotate(
-                amount=Sum('amount')
-            ).order_by('-amount')
-            
-            # Определяем количество категорий для логики отображения
-            total_categories_count = await categories_stats.acount()
 
-            # Единое поведение: всегда показываем топ-9 + "Остальные покупки"
-            max_display_categories = 9
+            # Обрабатываем расходы только если они есть
+            if total_count > 0:
+                # Получаем все кешбеки пользователя для этого месяца
+                user_cashbacks = []
+                async for cb in Cashback.objects.filter(
+                    profile=profile,
+                    month=month
+                ).select_related('category'):
+                    user_cashbacks.append(cb)
+
+                # Создаем словарь кешбеков по категориям
+                cashback_by_category = {}
+                for cb in user_cashbacks:
+                    if cb.category_id:
+                        if cb.category_id not in cashback_by_category:
+                            cashback_by_category[cb.category_id] = []
+                        cashback_by_category[cb.category_id].append(cb)
+
+                # Получаем все категории для определения мультиязычности
+                categories_with_multilang = {}
+                async for exp in expenses.select_related('category'):
+                    if exp.category and exp.category.id not in categories_with_multilang:
+                        cat = exp.category
+                        # Используем стандартный метод для получения отображаемого имени
+                        display_name = cat.get_display_name(lang)
+                        categories_with_multilang[cat.id] = display_name
             
-            top_categories = []
-            other_amount = 0
-            other_cashback = 0
+                # Получаем категории с учетом мультиязычности
+                categories_stats = expenses.values('category__id', 'category__name').annotate(
+                    amount=Sum('amount')
+                ).order_by('-amount')
             
-            idx = 0
-            async for cat_stat in categories_stats:
-                if idx < max_display_categories:
-                    amount = float(cat_stat['amount'])
-                    category_id = cat_stat['category__id']
+                # Определяем количество категорий для логики отображения
+                total_categories_count = await categories_stats.acount()
+
+                # Единое поведение: всегда показываем топ-9 + "Остальные покупки"
+                max_display_categories = 9
+            
+                top_categories = []
+                other_amount = 0
+                other_cashback = 0
+            
+                idx = 0
+                async for cat_stat in categories_stats:
+                    if idx < max_display_categories:
+                        amount = float(cat_stat['amount'])
+                        category_id = cat_stat['category__id']
                     
-                    # Рассчитываем кешбек для категории
-                    category_cashback = 0
-                    if category_id in cashback_by_category:
-                        for cb in cashback_by_category[category_id]:
-                            cb_amount = amount
-                            if cb.limit_amount and cb.limit_amount > 0:
-                                cb_amount = min(amount, float(cb.limit_amount))
-                            category_cashback += cb_amount * (float(cb.cashback_percent) / 100)
+                        # Рассчитываем кешбек для категории
+                        category_cashback = 0
+                        if category_id in cashback_by_category:
+                            for cb in cashback_by_category[category_id]:
+                                cb_amount = amount
+                                if cb.limit_amount and cb.limit_amount > 0:
+                                    cb_amount = min(amount, float(cb.limit_amount))
+                                category_cashback += cb_amount * (float(cb.cashback_percent) / 100)
                     
-                    # Используем мультиязычное имя если доступно
-                    cat_name = categories_with_multilang.get(category_id, cat_stat['category__name'])
+                        # Используем мультиязычное имя если доступно
+                        cat_name = categories_with_multilang.get(category_id, cat_stat['category__name'])
 
-                    # Обрезаем длинные названия категорий для корректного отображения в PDF
-                    cat_name_truncated = truncate_text(cat_name, max_length=25, suffix="...")
+                        # Обрезаем длинные названия категорий для корректного отображения в PDF
+                        if cat_name:
+                            cat_name_truncated = truncate_text(cat_name, max_length=25, suffix="...")
+                        else:
+                            cat_name_truncated = 'Без категории'
 
+                        top_categories.append({
+                            'name': cat_name_truncated,
+                            'icon': '',  # Пустое, т.к. get_display_name() уже включает эмодзи
+                            'amount': amount,
+                            'cashback': category_cashback,
+                            'color': category_colors[idx] if idx < len(category_colors) else '#95a5a6'
+                        })
+                    else:
+                        amount = float(cat_stat['amount'])
+                        category_id = cat_stat['category__id']
+                        other_amount += amount
+                    
+                        # Рассчитываем кешбек для "Другое"
+                        if category_id in cashback_by_category:
+                            for cb in cashback_by_category[category_id]:
+                                cb_amount = amount
+                                if cb.limit_amount and cb.limit_amount > 0:
+                                    cb_amount = min(amount, float(cb.limit_amount))
+                                other_cashback += cb_amount * (float(cb.cashback_percent) / 100)
+                
+                    idx += 1
+            
+                # Добавляем единый блок "Остальные покупки"
+                if other_amount > 0:
+                    other_name = 'Остальные покупки'
+                    other_icon = ''
                     top_categories.append({
-                        'name': cat_name_truncated,
-                        'icon': '',  # Пустое, т.к. get_display_name() уже включает эмодзи
-                        'amount': amount,
-                        'cashback': category_cashback,
-                        'color': category_colors[idx] if idx < len(category_colors) else '#95a5a6'
+                        'name': other_name,
+                        'icon': other_icon,
+                        'amount': other_amount,
+                        'cashback': other_cashback,
+                        'color': '#95a5a6'
                     })
-                else:
-                    amount = float(cat_stat['amount'])
-                    category_id = cat_stat['category__id']
-                    other_amount += amount
+            
+                # Расходы по дням
+                daily_expenses = {}
+                daily_categories = {}
+            
+                # Получаем все расходы с категориями
+                expenses_list = expenses.select_related('category')
+                async for expense in expenses_list:
+                    day = expense.expense_date.day
+                
+                    if day not in daily_expenses:
+                        daily_expenses[day] = 0
+                        daily_categories[day] = {}
+                
+                    daily_expenses[day] += float(expense.amount)
+                
+                    # Используем мультиязычное имя категории
+                    if expense.category:
+                        cat_name = categories_with_multilang.get(expense.category.id, expense.category.name)
+                    else:
+                        cat_name = 'Без категории'
                     
-                    # Рассчитываем кешбек для "Другое"
-                    if category_id in cashback_by_category:
-                        for cb in cashback_by_category[category_id]:
-                            cb_amount = amount
-                            if cb.limit_amount and cb.limit_amount > 0:
-                                cb_amount = min(amount, float(cb.limit_amount))
-                            other_cashback += cb_amount * (float(cb.cashback_percent) / 100)
-                
-                idx += 1
+                    if cat_name not in daily_categories[day]:
+                        daily_categories[day][cat_name] = 0
+                    daily_categories[day][cat_name] += float(expense.amount)
             
-            # Добавляем единый блок "Остальные покупки"
-            if other_amount > 0:
-                other_name = 'Остальные покупки'
-                other_icon = ''
-                top_categories.append({
-                    'name': other_name,
-                    'icon': other_icon,
-                    'amount': other_amount,
-                    'cashback': other_cashback,
-                    'color': '#95a5a6'
-                })
+                # Общий кешбек
+                total_cashback = sum(cat['cashback'] for cat in top_categories)
             
-            # Расходы по дням
-            daily_expenses = {}
-            daily_categories = {}
+                # Сравнение с предыдущим месяцем
+                prev_month = month - 1 if month > 1 else 12
+                prev_year = year if month > 1 else year - 1
             
-            # Получаем все расходы с категориями
-            expenses_list = expenses.select_related('category')
-            async for expense in expenses_list:
-                day = expense.expense_date.day
-                
-                if day not in daily_expenses:
-                    daily_expenses[day] = 0
-                    daily_categories[day] = {}
-                
-                daily_expenses[day] += float(expense.amount)
-                
-                # Используем мультиязычное имя категории
-                if expense.category:
-                    cat_name = categories_with_multilang.get(expense.category.id, expense.category.name)
-                else:
-                    cat_name = 'Без категории'
-                    
-                if cat_name not in daily_categories[day]:
-                    daily_categories[day][cat_name] = 0
-                daily_categories[day][cat_name] += float(expense.amount)
+                prev_start = date(prev_year, prev_month, 1)
+                prev_last_day = calendar.monthrange(prev_year, prev_month)[1]
+                prev_end = date(prev_year, prev_month, prev_last_day)
             
-            # Общий кешбек
-            total_cashback = sum(cat['cashback'] for cat in top_categories)
-            
-            # Сравнение с предыдущим месяцем
-            prev_month = month - 1 if month > 1 else 12
-            prev_year = year if month > 1 else year - 1
-            
-            prev_start = date(prev_year, prev_month, 1)
-            prev_last_day = calendar.monthrange(prev_year, prev_month)[1]
-            prev_end = date(prev_year, prev_month, prev_last_day)
-            
-            prev_total = await Expense.objects.filter(
-                profile=profile,
-                expense_date__gte=prev_start,
-                expense_date__lte=prev_end
-            ).aaggregate(total=Sum('amount'))
-            
-            prev_amount = float(prev_total['total'] or 0)
-            
-            if prev_amount > 0:
-                change_percent = round((total_amount - prev_amount) / prev_amount * 100, 1)
-                change_direction = "↑" if change_percent > 0 else "↓"
-            else:
-                change_percent = 0
-                change_direction = ""
-            
-            # Статистика по месяцам (последние 6 месяцев, от новых к старым)
-            prev_summaries = []
-            for i in range(0, 6):
-                stats_date = date(year, month, 1) - relativedelta(months=i)
-                stats_start = date(stats_date.year, stats_date.month, 1)
-                stats_last_day = calendar.monthrange(stats_date.year, stats_date.month)[1]
-                stats_end = date(stats_date.year, stats_date.month, stats_last_day)
-                
-                # Расходы за месяц по валютам
-                month_expenses_by_currency = Expense.objects.filter(
+                prev_total = await Expense.objects.filter(
                     profile=profile,
-                    expense_date__gte=stats_start,
-                    expense_date__lte=stats_end
-                ).values('currency').annotate(
+                    expense_date__gte=prev_start,
+                    expense_date__lte=prev_end
+                ).aaggregate(total=Sum('amount'))
+            
+                prev_amount = float(prev_total['total'] or 0)
+            
+                if prev_amount > 0:
+                    change_percent = round((total_amount - prev_amount) / prev_amount * 100, 1)
+                    change_direction = "↑" if change_percent > 0 else "↓"
+                else:
+                    change_percent = 0
+                    change_direction = ""
+            
+                # Статистика по месяцам (последние 6 месяцев, от новых к старым)
+                # Оптимизация: собираем данные за все 6 месяцев одним запросом
+                prev_summaries = []
+
+                # Определяем границы периода для запроса (6 месяцев назад)
+                six_months_ago = date(year, month, 1) - relativedelta(months=5)
+                six_months_start = date(six_months_ago.year, six_months_ago.month, 1)
+
+                # Получаем все расходы за 6 месяцев одним запросом
+                all_expenses_6m = []
+                async for item in Expense.objects.filter(
+                    profile=profile,
+                    expense_date__gte=six_months_start,
+                    expense_date__lte=end_date
+                ).values('expense_date__year', 'expense_date__month', 'currency').annotate(
                     total=Sum('amount'),
                     count=Count('id')
-                ).order_by('-count')
-                
-                # Доходы за месяц по валютам
-                month_incomes_by_currency = Income.objects.filter(
+                ):
+                    all_expenses_6m.append(item)
+
+                # Получаем все доходы за 6 месяцев одним запросом
+                all_incomes_6m = []
+                async for item in Income.objects.filter(
                     profile=profile,
-                    income_date__gte=stats_start,
-                    income_date__lte=stats_end
-                ).values('currency').annotate(
+                    income_date__gte=six_months_start,
+                    income_date__lte=end_date
+                ).values('income_date__year', 'income_date__month', 'currency').annotate(
                     total=Sum('amount'),
                     count=Count('id')
-                ).order_by('-count')
-                
-                # Собираем топ-2 валюты по общему количеству операций
-                currency_operations = {}
-                async for expense in month_expenses_by_currency:
+                ):
+                    all_incomes_6m.append(item)
+
+                # Группируем данные по месяцам
+                expenses_by_month = {}
+                for expense in all_expenses_6m:
+                    key = (expense['expense_date__year'], expense['expense_date__month'])
+                    if key not in expenses_by_month:
+                        expenses_by_month[key] = {}
                     curr = expense['currency'] or 'RUB'
-                    if curr not in currency_operations:
-                        currency_operations[curr] = {'expense': 0, 'income': 0, 'count': 0}
-                    currency_operations[curr]['expense'] = float(expense['total'])
-                    currency_operations[curr]['count'] += expense['count']
-                
-                async for income in month_incomes_by_currency:
+                    if curr not in expenses_by_month[key]:
+                        expenses_by_month[key][curr] = {'total': 0, 'count': 0}
+                    expenses_by_month[key][curr]['total'] = float(expense['total'])
+                    expenses_by_month[key][curr]['count'] = expense['count']
+
+                incomes_by_month = {}
+                for income in all_incomes_6m:
+                    key = (income['income_date__year'], income['income_date__month'])
+                    if key not in incomes_by_month:
+                        incomes_by_month[key] = {}
                     curr = income['currency'] or 'RUB'
-                    if curr not in currency_operations:
-                        currency_operations[curr] = {'expense': 0, 'income': 0, 'count': 0}
-                    currency_operations[curr]['income'] = float(income['total'])
-                    currency_operations[curr]['count'] += income['count']
+                    if curr not in incomes_by_month[key]:
+                        incomes_by_month[key][curr] = {'total': 0, 'count': 0}
+                    incomes_by_month[key][curr]['total'] = float(income['total'])
+                    incomes_by_month[key][curr]['count'] = income['count']
+
+                # Теперь формируем данные для каждого месяца
+                for i in range(0, 6):
+                    stats_date = date(year, month, 1) - relativedelta(months=i)
+                    month_key = (stats_date.year, stats_date.month)
+
+                    # Используем уже полученные данные вместо новых запросов
+                    currency_operations = {}
+
+                    # Обрабатываем расходы из кеша
+                    if month_key in expenses_by_month:
+                        for curr, data in expenses_by_month[month_key].items():
+                            if curr not in currency_operations:
+                                currency_operations[curr] = {'expense': 0, 'income': 0, 'count': 0}
+                            currency_operations[curr]['expense'] = data['total']
+                            currency_operations[curr]['count'] += data['count']
+
+                    # Обрабатываем доходы из кеша
+                    if month_key in incomes_by_month:
+                        for curr, data in incomes_by_month[month_key].items():
+                            if curr not in currency_operations:
+                                currency_operations[curr] = {'expense': 0, 'income': 0, 'count': 0}
+                            currency_operations[curr]['income'] = data['total']
+                            currency_operations[curr]['count'] += data['count']
                 
-                # Сортируем валюты по количеству операций и берем топ-2
-                sorted_currencies = sorted(currency_operations.items(), key=lambda x: x[1]['count'], reverse=True)[:2]
+                    # Сортируем валюты по количеству операций и берем топ-2
+                    sorted_currencies = sorted(currency_operations.items(), key=lambda x: x[1]['count'], reverse=True)[:2]
                 
-                # Форматируем данные для отображения
-                expenses_str = ''
-                incomes_str = ''
-                balance_str = ''
+                    # Форматируем данные для отображения
+                    expenses_str = ''
+                    incomes_str = ''
+                    balance_str = ''
                 
-                currency_symbols = {
-                    'RUB': '₽',
-                    'USD': '$',
-                    'EUR': '€',
-                    'GBP': '£',
-                    'CNY': '¥',
-                    'TRY': '₺',
-                    'UAH': '₴',
-                    'KZT': '₸',
-                    'BYN': 'Br',
-                    'GEL': '₾',
-                    'AMD': '֏',
-                    'AZN': '₼'
-                }
+                    currency_symbols = {
+                        'RUB': '₽',
+                        'USD': '$',
+                        'EUR': '€',
+                        'GBP': '£',
+                        'CNY': '¥',
+                        'TRY': '₺',
+                        'UAH': '₴',
+                        'KZT': '₸',
+                        'BYN': 'Br',
+                        'GEL': '₾',
+                        'AMD': '֏',
+                        'AZN': '₼'
+                    }
                 
-                # Сначала собираем все части для каждого типа данных
-                expenses_parts = []
-                incomes_parts = []
-                balance_parts = []
+                    # Сначала собираем все части для каждого типа данных
+                    expenses_parts = []
+                    incomes_parts = []
+                    balance_parts = []
                 
-                for idx, (curr, data) in enumerate(sorted_currencies):
-                    symbol = currency_symbols.get(curr, curr)
+                    for idx, (curr, data) in enumerate(sorted_currencies):
+                        symbol = currency_symbols.get(curr, curr)
                     
-                    expense_amount = data['expense']
-                    income_amount = data['income']
-                    balance = income_amount - expense_amount
+                        expense_amount = data['expense']
+                        income_amount = data['income']
+                        balance = income_amount - expense_amount
                     
-                    # Пропускаем валюты где все суммы нулевые
-                    if expense_amount == 0 and income_amount == 0:
-                        continue
+                        # Пропускаем валюты где все суммы нулевые
+                        if expense_amount == 0 and income_amount == 0:
+                            continue
                     
-                    # Добавляем части только если они не нулевые
-                    if expense_amount > 0:
-                        expenses_parts.append(f"{round(expense_amount):,.0f}{symbol}")
+                        # Добавляем части только если они не нулевые
+                        if expense_amount > 0:
+                            expenses_parts.append(f"{round(expense_amount):,.0f}{symbol}")
                         
-                    if income_amount > 0:
-                        incomes_parts.append(f"{round(income_amount):,.0f}{symbol}")
+                        if income_amount > 0:
+                            incomes_parts.append(f"{round(income_amount):,.0f}{symbol}")
                     
-                    if balance != 0:
-                        balance_parts.append(f"{round(balance):+,.0f}{symbol}")
+                        if balance != 0:
+                            balance_parts.append(f"{round(balance):+,.0f}{symbol}")
                 
-                # Формируем финальные строки только из непустых частей
-                expenses_str = ' / '.join(expenses_parts) if expenses_parts else ''
-                incomes_str = ' / '.join(incomes_parts) if incomes_parts else ''
-                balance_str = ' / '.join(balance_parts) if balance_parts else ''
+                    # Формируем финальные строки только из непустых частей
+                    expenses_str = ' / '.join(expenses_parts) if expenses_parts else ''
+                    incomes_str = ' / '.join(incomes_parts) if incomes_parts else ''
+                    balance_str = ' / '.join(balance_parts) if balance_parts else ''
                 
-                # Если совсем нет данных, показываем прочерки
-                if not expenses_str:
-                    expenses_str = '-'
-                    incomes_str = '-'
-                    balance_str = '-'
+                    # Если совсем нет данных, показываем прочерки
+                    if not expenses_str:
+                        expenses_str = '-'
+                        incomes_str = '-'
+                        balance_str = '-'
                 
-                month_names = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
-                               'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
+                    month_names = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
+                                   'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
                 
-                prev_summaries.append({
-                    'label': f"{month_names[stats_date.month - 1]} {stats_date.year}",
-                    'expenses': expenses_str,
-                    'incomes': incomes_str,
-                    'balance': balance_str,
-                    'is_current': stats_date.month == month and stats_date.year == year
-                })
+                    prev_summaries.append({
+                        'label': f"{month_names[stats_date.month - 1]} {stats_date.year}",
+                        'expenses': expenses_str,
+                        'incomes': incomes_str,
+                        'balance': balance_str,
+                        'is_current': stats_date.month == month and stats_date.year == year
+                    })
             
             # Получаем доходы за период
             incomes = Income.objects.filter(
@@ -413,7 +462,11 @@ class PDFReportService:
             
             income_total_amount = float(income_stats['total_amount'] or 0)
             income_total_count = income_stats['total_count'] or 0
-            
+
+            # Проверяем есть ли данные для отчета (расходы или доходы)
+            if total_count == 0 and income_total_count == 0:
+                return None
+
             # Получаем все категории доходов для определения мультиязычности
             income_categories_with_multilang = {}
             async for income in incomes.select_related('category'):
@@ -424,7 +477,7 @@ class PDFReportService:
                     income_categories_with_multilang[cat.id] = display_name
 
             # Доходы по категориям
-            income_category_stats = incomes.values('category__id', 'category__name', 'category__icon').annotate(
+            income_category_stats = incomes.values('category__id', 'category__name').annotate(
                 amount=Sum('amount')
             ).order_by('-amount')
             
@@ -437,15 +490,19 @@ class PDFReportService:
                     category_name = cat_stat['category__name'] if cat_stat['category__name'] else (
                         '💵 Other income' if lang == 'en' else '💵 Прочие доходы'
                     )
-                
+
                 # Обрезаем длинные названия категорий для корректного отображения в PDF
-                category_name_truncated = truncate_text(category_name, max_length=25, suffix="...")
+                if category_name:
+                    category_name_truncated = truncate_text(category_name, max_length=25, suffix="...")
+                else:
+                    category_name_truncated = '💵 Доходы' if lang == 'ru' else '💵 Income'
+
 
                 income_categories.append({
                     'name': category_name_truncated,
                     'icon': '',  # Пустое, т.к. get_display_name() уже включает эмодзи
                     'amount': float(cat_stat['amount']),
-                    'color': category_colors[len(income_categories) % len(category_colors)]
+                    'color': category_colors[len(income_categories) % len(category_colors)] if category_colors else '#95a5a6'
                 })
             
             # Доходы по дням

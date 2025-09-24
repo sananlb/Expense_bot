@@ -299,20 +299,19 @@ def get_expenses_summary(
         # По категориям доходов
         by_income_category = incomes.values(
             'category__id',
-            'category__name',
-            'category__icon'
+            'category__name'
         ).annotate(
             total=Sum('amount'),
             count=Count('id')
         ).order_by('-total')
-        
+
         # Преобразуем в список словарей
         income_categories_list = []
         for cat in by_income_category:
             income_categories_list.append({
                 'id': cat['category__id'],
                 'name': cat['category__name'] or 'Прочие доходы',
-                'icon': cat['category__icon'] or '💰',
+                'icon': '💰',
                 'total': cat['total'],
                 'count': cat['count']
             })

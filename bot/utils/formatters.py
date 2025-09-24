@@ -311,18 +311,21 @@ def format_percentage(value: float, total: float, decimals: int = 1) -> str:
 def truncate_text(text: str, max_length: int = 50, suffix: str = "...") -> str:
     """
     Обрезка текста с добавлением суффикса
-    
+
     Args:
         text: Исходный текст
         max_length: Максимальная длина
         suffix: Суффикс для обрезанного текста
-        
+
     Returns:
         str: Обрезанный текст
     """
+    if text is None:
+        return ""
+
     if len(text) <= max_length:
         return text
-    
+
     return text[:max_length - len(suffix)] + suffix
 
 

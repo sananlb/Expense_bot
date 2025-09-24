@@ -15,12 +15,12 @@ ALLOWED_PARAMS: Dict[str, set] = {
     # Expenses
     'get_max_expense_day': {'user_id', 'period_days'},
     'get_period_total': {'user_id', 'period'},
-    'get_max_single_expense': {'user_id', 'period_days'},
+    'get_max_single_expense': {'user_id', 'period', 'period_days'},
     'get_category_statistics': {'user_id', 'period_days', 'start_date', 'end_date'},
     'get_average_expenses': {'user_id', 'period_days'},
     'get_recent_expenses': {'user_id', 'limit'},
     'get_daily_totals': {'user_id', 'days'},
-    'search_expenses': {'user_id', 'query', 'limit', 'start_date', 'end_date'},
+    'search_expenses': {'user_id', 'query', 'limit', 'start_date', 'end_date', 'period'},
     'get_weekday_statistics': {'user_id', 'period_days'},
     'predict_month_expense': {'user_id'},
     'check_budget_status': {'user_id', 'budget_amount'},
@@ -33,7 +33,7 @@ ALLOWED_PARAMS: Dict[str, set] = {
     # Incomes
     'get_max_income_day': {'user_id'},
     'get_income_period_total': {'user_id', 'period'},
-    'get_max_single_income': {'user_id'},
+    'get_max_single_income': {'user_id', 'period', 'period_days'},
     'get_income_category_statistics': {'user_id'},
     'get_average_incomes': {'user_id'},
     'get_recent_incomes': {'user_id', 'limit'},
@@ -201,6 +201,30 @@ def normalize_function_call(
                 ps['period_days'] = int(days)
             except Exception:
                 pass
+        params = ps
+
+    elif func_name == 'get_max_single_expense':
+        ps = {'user_id': user_id}
+        # Сохраняем параметр period если он есть
+        if 'period' in params:
+            ps['period'] = params['period']
+        elif 'period_days' in params:
+            ps['period_days'] = params['period_days']
+        else:
+            # По умолчанию используем 60 дней
+            ps['period_days'] = 60
+        params = ps
+
+    elif func_name == 'get_max_single_income':
+        ps = {'user_id': user_id}
+        # Сохраняем параметр period если он есть
+        if 'period' in params:
+            ps['period'] = params['period']
+        elif 'period_days' in params:
+            ps['period_days'] = params['period_days']
+        else:
+            # По умолчанию используем 60 дней
+            ps['period_days'] = 60
         params = ps
 
     elif func_name == 'get_daily_totals':
