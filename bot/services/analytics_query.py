@@ -30,7 +30,8 @@ ALLOWED_GROUP_BY = ['none', 'date', 'category', 'weekday']
 ALLOWED_AGGREGATES = ['sum', 'count', 'avg', 'max', 'min']
 ALLOWED_SORT_BY = ['sum', 'avg', 'max', 'min', 'amount', 'date', 'count']
 ALLOWED_SORT_DIR = ['asc', 'desc']
-ALLOWED_PERIODS = ['today', 'yesterday', 'week', 'month', 'year']
+ALLOWED_PERIODS = ['today', 'yesterday', 'day_before_yesterday', 'week', 'month', 'year',
+                   'last_week', 'last_month', 'last_year', 'week_before_last', 'month_before_last']
 
 # Projection fields whitelist for each entity
 ALLOWED_PROJECTIONS = {
@@ -43,7 +44,8 @@ ALLOWED_PROJECTIONS = {
 class DateFilter(BaseModel):
     """Date filter specification."""
     between: Optional[List[str]] = Field(None, min_items=2, max_items=2)
-    period: Optional[Literal['today', 'yesterday', 'week', 'month', 'year']] = None
+    period: Optional[Literal['today', 'yesterday', 'day_before_yesterday', 'week', 'month', 'year',
+                             'last_week', 'last_month', 'last_year', 'week_before_last', 'month_before_last']] = None
 
     @validator('between')
     def validate_between(cls, v):
@@ -199,37 +201,15 @@ class AnalyticsQueryExecutor:
                 qs = qs.filter(income_date__gte=start, income_date__lte=end)
 
         elif date_filter.period:
-            today = date.today()
-            if date_filter.period == 'today':
-                if hasattr(qs.model, 'expense_date'):
-                    qs = qs.filter(expense_date=today)
-                elif hasattr(qs.model, 'income_date'):
-                    qs = qs.filter(income_date=today)
-            elif date_filter.period == 'yesterday':
-                yesterday = today - timedelta(days=1)
-                if hasattr(qs.model, 'expense_date'):
-                    qs = qs.filter(expense_date=yesterday)
-                elif hasattr(qs.model, 'income_date'):
-                    qs = qs.filter(income_date=yesterday)
-            elif date_filter.period == 'week':
-                # Current week from Monday to today
-                start_of_week = today - timedelta(days=today.weekday())
-                if hasattr(qs.model, 'expense_date'):
-                    qs = qs.filter(expense_date__gte=start_of_week, expense_date__lte=today)
-                elif hasattr(qs.model, 'income_date'):
-                    qs = qs.filter(income_date__gte=start_of_week, income_date__lte=today)
-            elif date_filter.period == 'month':
-                start_of_month = today.replace(day=1)
-                if hasattr(qs.model, 'expense_date'):
-                    qs = qs.filter(expense_date__gte=start_of_month, expense_date__lte=today)
-                elif hasattr(qs.model, 'income_date'):
-                    qs = qs.filter(income_date__gte=start_of_month, income_date__lte=today)
-            elif date_filter.period == 'year':
-                start_of_year = today.replace(month=1, day=1)
-                if hasattr(qs.model, 'expense_date'):
-                    qs = qs.filter(expense_date__gte=start_of_year, expense_date__lte=today)
-                elif hasattr(qs.model, 'income_date'):
-                    qs = qs.filter(income_date__gte=start_of_year, income_date__lte=today)
+            from bot.utils.date_utils import get_period_dates
+
+            # Используем единую функцию для получения дат периода
+            start_date, end_date = get_period_dates(date_filter.period)
+
+            if hasattr(qs.model, 'expense_date'):
+                qs = qs.filter(expense_date__gte=start_date, expense_date__lte=end_date)
+            elif hasattr(qs.model, 'income_date'):
+                qs = qs.filter(income_date__gte=start_date, income_date__lte=end_date)
 
         return qs
 
@@ -238,11 +218,18 @@ class AnalyticsQueryExecutor:
         if cat_filter.id:
             qs = qs.filter(category_id=cat_filter.id)
         elif cat_filter.equals:
-            qs = qs.filter(category__name=cat_filter.equals)
+            # Search in all name fields for exact match
+            qs = qs.filter(
+                Q(category__name=cat_filter.equals) |
+                Q(category__name_ru=cat_filter.equals) |
+                Q(category__name_en=cat_filter.equals)
+            )
         elif cat_filter.contains:
-            # Search in both category name and description
+            # Search in all name fields and description
             qs = qs.filter(
                 Q(category__name__icontains=cat_filter.contains) |
+                Q(category__name_ru__icontains=cat_filter.contains) |
+                Q(category__name_en__icontains=cat_filter.contains) |
                 Q(description__icontains=cat_filter.contains)
             )
         return qs
@@ -257,10 +244,12 @@ class AnalyticsQueryExecutor:
 
     def _apply_text_filter(self, qs: QuerySet, text_filter: TextFilter) -> QuerySet:
         """Apply text search filtering to queryset."""
-        # Search only in safe fields
+        # Search in all safe fields including multilingual category names
         qs = qs.filter(
             Q(description__icontains=text_filter.contains) |
-            Q(category__name__icontains=text_filter.contains)
+            Q(category__name__icontains=text_filter.contains) |
+            Q(category__name_ru__icontains=text_filter.contains) |
+            Q(category__name_en__icontains=text_filter.contains)
         )
         return qs
 

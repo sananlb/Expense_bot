@@ -424,7 +424,9 @@ class ExpenseFunctions:
 
             expenses = queryset.filter(
                 Q(description__icontains=query) |
-                Q(category__name__icontains=query)
+                Q(category__name__icontains=query) |
+                Q(category__name_ru__icontains=query) |
+                Q(category__name_en__icontains=query)
             ).select_related('category').order_by('-expense_date', '-expense_time')[:limit]
 
             # Если ничего не найдено и запрос содержит кириллицу - используем альтернативный метод
@@ -441,9 +443,17 @@ class ExpenseFunctions:
                     if exp.description and query_lower in exp.description.lower():
                         filtered_expenses.append(exp)
                         continue
-                    # Проверяем категорию
-                    if exp.category and exp.category.name and query_lower in exp.category.name.lower():
-                        filtered_expenses.append(exp)
+                    # Проверяем категорию в разных полях
+                    if exp.category:
+                        if exp.category.name and query_lower in exp.category.name.lower():
+                            filtered_expenses.append(exp)
+                            continue
+                        if exp.category.name_ru and query_lower in exp.category.name_ru.lower():
+                            filtered_expenses.append(exp)
+                            continue
+                        if exp.category.name_en and query_lower in exp.category.name_en.lower():
+                            filtered_expenses.append(exp)
+                            continue
 
                 expenses = filtered_expenses[:limit]
                 logger.info(f"search_expenses: fallback search found {len(expenses)} expenses")
