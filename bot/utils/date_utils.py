@@ -19,6 +19,7 @@ def get_period_dates(period: str, base_date: Optional[date] = None) -> Tuple[dat
             - 'last_month': прошлый месяц
             - 'year', 'this_year': текущий год
             - 'last_year': прошлый год
+            - Времена года: 'зима', 'весна', 'лето', 'осень' (или winter, spring, summer, autumn/fall)
             - Названия месяцев: 'январь', 'февраль', ... 'декабрь'
             - Month names: 'january', 'february', ... 'december'
             - Сокращения: 'jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'
@@ -36,6 +37,12 @@ def get_period_dates(period: str, base_date: Optional[date] = None) -> Tuple[dat
 
         >>> get_period_dates('last_month')
         (date(2025, 8, 1), date(2025, 8, 31))
+
+        >>> get_period_dates('август')  # В сентябре вернет август текущего года
+        (date(2025, 8, 1), date(2025, 8, 31))
+
+        >>> get_period_dates('лето')  # В сентябре вернет прошедшее лето
+        (date(2025, 6, 1), date(2025, 8, 31))
     """
     if base_date is None:
         base_date = date.today()
@@ -132,6 +139,83 @@ def get_period_dates(period: str, base_date: Optional[date] = None) -> Tuple[dat
         days = int(period)
         start = base_date - timedelta(days=days-1)
         end = base_date
+        return start, end
+
+    # Проверяем времена года
+    elif period.lower() in ['зима', 'winter', 'зимой']:
+        # Зима: декабрь, январь, февраль
+        current_month = base_date.month
+        current_year = base_date.year
+
+        # Определяем какая зима нужна
+        if current_month >= 3:  # Если сейчас март или позже
+            # Прошедшая зима (декабрь прошлого года - февраль текущего)
+            start = date(current_year - 1, 12, 1)
+            end = date(current_year, 2, 28)
+            # Проверяем на високосный год
+            if current_year % 4 == 0 and (current_year % 100 != 0 or current_year % 400 == 0):
+                end = date(current_year, 2, 29)
+        else:  # Если сейчас январь или февраль
+            # Текущая зима (декабрь прошлого года - февраль текущего)
+            start = date(current_year - 1, 12, 1)
+            end = base_date  # До текущей даты
+        return start, end
+
+    elif period.lower() in ['весна', 'spring', 'весной']:
+        # Весна: март, апрель, май
+        current_month = base_date.month
+        current_year = base_date.year
+
+        if current_month >= 6:  # Если сейчас июнь или позже
+            # Прошедшая весна
+            start = date(current_year, 3, 1)
+            end = date(current_year, 5, 31)
+        elif current_month >= 3:  # Если сейчас март-май
+            # Текущая весна
+            start = date(current_year, 3, 1)
+            end = base_date
+        else:  # Если сейчас январь-февраль
+            # Прошлая весна
+            start = date(current_year - 1, 3, 1)
+            end = date(current_year - 1, 5, 31)
+        return start, end
+
+    elif period.lower() in ['лето', 'summer', 'летом']:
+        # Лето: июнь, июль, август
+        current_month = base_date.month
+        current_year = base_date.year
+
+        if current_month >= 9:  # Если сейчас сентябрь или позже
+            # Прошедшее лето
+            start = date(current_year, 6, 1)
+            end = date(current_year, 8, 31)
+        elif current_month >= 6:  # Если сейчас июнь-август
+            # Текущее лето
+            start = date(current_year, 6, 1)
+            end = base_date
+        else:  # Если сейчас январь-май
+            # Прошлое лето
+            start = date(current_year - 1, 6, 1)
+            end = date(current_year - 1, 8, 31)
+        return start, end
+
+    elif period.lower() in ['осень', 'autumn', 'fall', 'осенью']:
+        # Осень: сентябрь, октябрь, ноябрь
+        current_month = base_date.month
+        current_year = base_date.year
+
+        if current_month >= 12:  # Если сейчас декабрь
+            # Прошедшая осень
+            start = date(current_year, 9, 1)
+            end = date(current_year, 11, 30)
+        elif current_month >= 9:  # Если сейчас сентябрь-ноябрь
+            # Текущая осень
+            start = date(current_year, 9, 1)
+            end = base_date
+        else:  # Если сейчас январь-август
+            # Прошлая осень
+            start = date(current_year - 1, 9, 1)
+            end = date(current_year - 1, 11, 30)
         return start, end
 
     # Проверяем не является ли period названием месяца
