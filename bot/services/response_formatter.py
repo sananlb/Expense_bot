@@ -184,10 +184,26 @@ def format_function_result(func_name: str, result: Dict) -> str:
         results = result.get('results', [])
         total = result.get('total', 0)
         count = result.get('count', len(results))
+        query = result.get('query', '')
+
+        # Форматируем числа правильно
+        if count == 1:
+            count_text = "1 трата"
+        elif 2 <= count <= 4:
+            count_text = f"{count} траты"
+        else:
+            count_text = f"{count} трат"
+
+        # Формируем подзаголовок с указанием запроса
+        if query:
+            subtitle = f"Найдено: {count_text} на сумму {total:,.0f} ₽ по запросу \"{query}\""
+        else:
+            subtitle = f"Найдено: {count_text} на сумму {total:,.0f} ₽"
+
         return _format_expenses_list(
             {'expenses': results},
             title="🔍 Результаты поиска",
-            subtitle=f"Найдено: {count} трат на сумму {total:,.0f} ₽",
+            subtitle=subtitle,
         )
 
     if func_name == 'get_expenses_by_amount_range':
