@@ -17,6 +17,7 @@ from jinja2 import Template
 from django.conf import settings
 from django.db.models import Sum, Count, Q
 from dateutil.relativedelta import relativedelta
+from bot.utils.formatters import truncate_text
 
 from expenses.models import Expense, ExpenseCategory, Profile, Cashback, Income, IncomeCategory, UserSettings
 
@@ -193,9 +194,12 @@ class PDFReportService:
                     
                     # Используем мультиязычное имя если доступно
                     cat_name = categories_with_multilang.get(category_id, cat_stat['category__name'])
-                    
+
+                    # Обрезаем длинные названия категорий для корректного отображения в PDF
+                    cat_name_truncated = truncate_text(cat_name, max_length=25, suffix="...")
+
                     top_categories.append({
-                        'name': cat_name,
+                        'name': cat_name_truncated,
                         'icon': '',  # Пустое, т.к. get_display_name() уже включает эмодзи
                         'amount': amount,
                         'cashback': category_cashback,
@@ -434,8 +438,11 @@ class PDFReportService:
                         '💵 Other income' if lang == 'en' else '💵 Прочие доходы'
                     )
                 
+                # Обрезаем длинные названия категорий для корректного отображения в PDF
+                category_name_truncated = truncate_text(category_name, max_length=25, suffix="...")
+
                 income_categories.append({
-                    'name': category_name,
+                    'name': category_name_truncated,
                     'icon': '',  # Пустое, т.к. get_display_name() уже включает эмодзи
                     'amount': float(cat_stat['amount']),
                     'color': category_colors[len(income_categories) % len(category_colors)]

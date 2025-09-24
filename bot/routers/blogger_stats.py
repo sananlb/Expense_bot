@@ -156,9 +156,9 @@ async def cmd_blogger_stats(
     # Получаем аргументы команды
     blogger_name = None
     if command and command.args:
-        blogger_name = command.args.strip().lower()
-        # Удаляем префикс b_ если пользователь его ввел
-        if blogger_name.startswith('b_'):
+        blogger_name = command.args.strip()
+        # Удаляем префикс b_ если пользователь его ввел (регистронезависимо)
+        if blogger_name.lower().startswith('b_'):
             blogger_name = blogger_name[2:]
 
     if not blogger_name:

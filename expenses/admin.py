@@ -870,6 +870,21 @@ class AdvertiserCampaignAdmin(admin.ModelAdmin):
     date_hierarchy = 'created_at'
 
     fieldsets = (
+        ('📊 Инструкция по просмотру статистики', {
+            'description': (
+                '<div style="background: #e8f4fd; padding: 15px; border-left: 4px solid #2196F3; margin-bottom: 20px; border-radius: 4px;">'
+                '<h3 style="margin-top: 0; color: #1976D2;">Как посмотреть статистику кампании в боте:</h3>'
+                '<p style="margin: 10px 0;"><strong>Используйте команду:</strong> <code style="background: #fff; padding: 4px 8px; border-radius: 3px;">/blogger_stats ИМЯ_БЛОГЕРА</code></p>'
+                '<p style="margin: 10px 0;"><strong>Примеры:</strong></p>'
+                '<ul style="margin: 5px 0;">'
+                '<li><code style="background: #fff; padding: 2px 6px; border-radius: 3px;">/blogger_stats ivan</code> - статистика блогера ivan</li>'
+                '<li><code style="background: #fff; padding: 2px 6px; border-radius: 3px;">/blogger_stats maria</code> - статистика блогера maria</li>'
+                '</ul>'
+                '<p style="margin: 10px 0 0 0;"><strong>Что покажет команда:</strong> количество пользователей, конверсии, активность, доход и рекомендации по оптимизации.</p>'
+                '</div>'
+            ),
+            'fields': ()
+        }),
         ('Основная информация', {
             'fields': ('name', 'campaign', 'utm_code', 'source_type')
         }),

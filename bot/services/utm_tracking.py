@@ -183,9 +183,10 @@ async def get_blogger_stats_by_name(blogger_name: str) -> Dict[str, Any]:
     try:
         # Ищем всех пользователей от этого блогера
         # Учитываем разные кампании: b_ivan, b_ivan_stories, b_ivan_reels и т.д.
+        # Используем istartwith для регистронезависимого поиска
         queryset = Profile.objects.filter(
             acquisition_source='blogger',
-            acquisition_campaign__startswith=blogger_name
+            acquisition_campaign__istartswith=blogger_name
         )
 
         # Общее количество привлеченных
