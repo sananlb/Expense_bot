@@ -328,8 +328,14 @@ async def cmd_start(
     # Получаем приветственное сообщение
     text = get_welcome_message(display_lang, referral_message)
 
-    # Отправляем информацию без кнопок
-    await send_message_with_cleanup(message, state, text, parse_mode="HTML")
+    # Добавляем кнопку справки
+    help_button_text = "📖 Справка" if display_lang == 'ru' else "📖 Help"
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=help_button_text, callback_data="help_main")]
+    ])
+
+    # Отправляем информацию с кнопкой справки
+    await send_message_with_cleanup(message, state, text, parse_mode="HTML", reply_markup=keyboard)
     # Сбрасываем сохраненные аргументы /start после успешной обработки
     await state.update_data(start_command_args=None)
 
@@ -593,3 +599,92 @@ async def close_menu_compat(callback: types.CallbackQuery, state: FSMContext):
     await state.update_data(
         last_menu_message_id=None
     )
+
+
+@router.callback_query(F.data == "help_main")
+async def help_main_handler(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Показать справку по использованию бота"""
+    await callback.answer()
+
+    # Определяем язык пользователя
+    try:
+        profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
+        display_lang = profile.language_code or lang
+    except Profile.DoesNotExist:
+        display_lang = lang
+
+    # Получаем текст справки из texts.py
+    help_text = get_text('help_main_text', display_lang)
+
+    # Кнопки назад и закрыть
+    back_button_text = get_text('back', display_lang)
+    close_button_text = get_text('close', display_lang)
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text=back_button_text, callback_data="help_back"),
+            InlineKeyboardButton(text=close_button_text, callback_data="help_close")
+        ]
+    ])
+
+    # Отправляем новое сообщение со справкой
+    sent_message = await callback.message.answer(
+        help_text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    # Сохраняем ID сообщения справки для возможного удаления
+    await state.update_data(help_message_id=sent_message.message_id)
+
+    # Удаляем предыдущее сообщение (со списком команд /start)
+    try:
+        await callback.message.delete()
+    except:
+        pass  # Игнорируем ошибки удаления
+
+
+@router.callback_query(F.data == "help_back")
+async def help_back_handler(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Вернуться к приветственному сообщению из справки"""
+    await callback.answer()
+
+    # Определяем язык пользователя
+    try:
+        profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
+        display_lang = profile.language_code or lang
+    except Profile.DoesNotExist:
+        display_lang = lang
+
+    # Получаем приветственное сообщение
+    text = get_welcome_message(display_lang)
+
+    # Кнопка справки
+    help_button_text = "📖 Справка" if display_lang == 'ru' else "📖 Help"
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=help_button_text, callback_data="help_main")]
+    ])
+
+    # Редактируем текущее сообщение, заменяя справку на приветствие
+    await callback.message.edit_text(
+        text=text,
+        parse_mode="HTML",
+        reply_markup=keyboard
+    )
+
+    # Очищаем ID сообщения справки из состояния
+    await state.update_data(help_message_id=None)
+
+
+@router.callback_query(F.data == "help_close")
+async def help_close_handler(callback: types.CallbackQuery, state: FSMContext):
+    """Закрыть сообщение справки"""
+    await callback.answer()
+
+    # Удаляем сообщение справки
+    try:
+        await callback.message.delete()
+    except:
+        pass
+
+    # Очищаем ID сообщения справки из состояния
+    await state.update_data(help_message_id=None)

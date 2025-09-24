@@ -620,6 +620,71 @@ TEXTS = {
         'voice_download_error': '❌ Ошибка загрузки голосового сообщения',
         'voice_recognition_error': '❌ Не удалось распознать речь.\nПопробуйте говорить четче или отправьте текстовое сообщение.',
         'recognized': '📝 Распознано: {text}',
+
+        # Справка
+        # Старый текст справки (закомментирован)
+        # 'help_main_text': '''<b>📖 Справка по использованию бота</b>
+        #
+        # <b>🚀 Быстрый старт:</b>
+        # Просто отправьте сообщение с тратой: "кофе 200" или "такси 500"
+        # Бот автоматически определит категорию и сохранит трату.
+        #
+        # <b>💸 Как записать расходы:</b>
+        # • Текст: "продукты 1500", "бензин 3000"
+        # • С датой: "вчера кофе 200", "10.09 обед 450"
+        # • Голосом: запишите голосовое сообщение
+        #
+        # <b>💰 Как записать доходы:</b>
+        # • Добавьте плюс: "+50000 зарплата", "премия +10000"
+        # • Или используйте меню "➕ Доход"
+        #
+        # <b>📊 Отчеты:</b>
+        # • "покажи траты за июль"
+        # • "сколько потратил на продукты"
+        # • "отчет за месяц"
+        #
+        # <b>💳 Кешбэки:</b>
+        # Настройте карты с кешбэками в меню "💳 Кешбэки".
+        # Бот автоматически посчитает выгоду по каждой категории.
+        #
+        # <b>🏠 Семейный бюджет:</b>
+        # Создайте семью в настройках и ведите общий учет.
+        # Все участники видят общие траты и доходы.
+        #
+        # <b>⚙️ Полезные команды:</b>
+        # • /start - главное меню
+        # • /help - эта справка
+        # • /cashback - настройка кешбэков
+        # • /report - запросить отчет
+        # • /settings - настройки
+        #
+        # <b>💡 Советы:</b>
+        # • Закрепите сообщение с кешбэками для быстрого доступа
+        # • Используйте голосовые сообщения в дороге
+        # • Добавляйте траты сразу, чтобы ничего не забыть''',
+
+        # Новый текст справки
+        'help_main_text': '''<b>📖 Справка по использованию бота</b>
+
+<b>💸 Ввод траты/дохода:</b>
+Можно писать или отправить голосовое сообщение.
+Примеры:
+• Трата: "Такси 550", "Кофе 200"
+• Доход: "+3500 заказ" (знак "+" = доход)
+
+Бот сделает запись и ответит вам. Нажав кнопку "Редактировать", вы можете изменить любые параметры записи.
+
+Отредактируйте категорию - бот запомнит, к какой категории относится ваша трата, и в следующий раз будет вставлять категорию правильно.
+
+<b>💡 Полезные возможности:</b>
+• Можно вводить трату/доход без суммы одним словом, если у вас уже была подобная запись - бот возьмет всю информацию из предыдущей записи
+• Можно делать запись задним числом - для этого в конце траты напишите дату в формате 23.09.2025
+
+<b>💳 Кешбэк:</b>
+Кешбэк можно вводить через меню, а можно и сообщением боту в формате:
+"кешбэк X% категория XXXX банк"
+
+Закрепите заметку с кешбэками в чате с ботом, чтобы иметь быстрый доступ.''',
     },
     'en': {
         # Policies and offer
@@ -1217,7 +1282,72 @@ Thank you for participating in testing! Your feedback helps improve the bot.''',
         'voice_download_error': '❌ Error downloading voice message',
         'voice_recognition_error': '❌ Failed to recognize speech.\nTry speaking more clearly or send a text message.',
         'recognized': '📝 Recognized: {text}',
-        
+
+        # Help
+        # Old help text (commented)
+        # 'help_main_text': '''<b>📖 Bot Usage Help</b>
+        #
+        # <b>🚀 Quick Start:</b>
+        # Just send a message with expense: "coffee 200" or "taxi 500"
+        # The bot will automatically determine the category and save the expense.
+        #
+        # <b>💸 How to record expenses:</b>
+        # • Text: "groceries 1500", "gas 3000"
+        # • With date: "yesterday coffee 200", "10.09 lunch 450"
+        # • Voice: send a voice message
+        #
+        # <b>💰 How to record income:</b>
+        # • Add plus sign: "+50000 salary", "bonus +10000"
+        # • Or use menu "➕ Income"
+        #
+        # <b>📊 Reports:</b>
+        # • "show expenses for July"
+        # • "how much spent on groceries"
+        # • "monthly report"
+        #
+        # <b>💳 Cashbacks:</b>
+        # Set up cards with cashbacks in "💳 Cashbacks" menu.
+        # The bot will automatically calculate benefits for each category.
+        #
+        # <b>🏠 Household Budget:</b>
+        # Create a household in settings and track finances together.
+        # All members see shared expenses and income.
+        #
+        # <b>⚙️ Useful commands:</b>
+        # • /start - main menu
+        # • /help - this help
+        # • /cashback - cashback setup
+        # • /report - request report
+        # • /settings - settings
+        #
+        # <b>💡 Tips:</b>
+        # • Pin cashback message for quick access
+        # • Use voice messages on the go
+        # • Add expenses immediately to not forget''',
+
+        # New help text
+        'help_main_text': '''<b>📖 Bot Usage Help</b>
+
+<b>💸 Recording expenses/income:</b>
+You can type or send a voice message.
+Examples:
+• Expense: "Taxi 550", "Coffee 200"
+• Income: "+3500 order" (sign "+" = income)
+
+The bot will make a record and respond to you. By pressing the "Edit" button, you can change any record parameters.
+
+Edit the category - the bot will remember which category your expense belongs to and will insert the category correctly next time.
+
+<b>💡 Useful features:</b>
+• You can enter expense/income without amount in one word if you already had a similar record - the bot will take all information from the previous record
+• You can make a record retroactively - for this, write the date at the end of the expense in the format 23.09.2025
+
+<b>💳 Cashback:</b>
+Cashback can be entered through the menu, or by message to the bot in the format:
+"cashback X% category XXXX bank"
+
+Pin the note with cashbacks in the chat with the bot for quick access.''',
+
         # Recurring payments translations
         'no_categories_create_first': '❌ You have no categories. Please create categories first.',
         'to_categories': '📁 To Categories',
