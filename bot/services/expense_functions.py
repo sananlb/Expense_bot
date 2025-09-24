@@ -712,6 +712,9 @@ class ExpenseFunctions:
             from expenses.models import ExpenseCategory
             from django.db.models import Q
 
+            logger.info(f"get_category_total: searching for category='{category}', user={user_id}, period={period}")
+            logger.info(f"get_category_total: date range {start_date} to {end_date}")
+
             # Пытаемся найти категорию пользователя по имени
             # Ищем в нескольких полях для лучшего совпадения
             cat_q = Q(name__icontains=category)
@@ -725,11 +728,17 @@ class ExpenseFunctions:
                 profile=profile
             ).filter(cat_q).first()
 
+            if cat_obj:
+                logger.info(f"get_category_total: found category obj: id={cat_obj.id}, name='{cat_obj.name}', name_ru='{cat_obj.name_ru}', name_en='{cat_obj.name_en}'")
+            else:
+                logger.info(f"get_category_total: category not found for query '{category}'")
+
             # Если точное совпадение не найдено, пробуем более гибкий поиск
             if not cat_obj:
                 # Удаляем эмодзи из запроса если они есть и ищем снова
                 import re
                 clean_category = re.sub(r'[^\w\s]', '', category, flags=re.UNICODE).strip()
+                logger.info(f"get_category_total: trying cleaned category='{clean_category}'")
                 if clean_category and clean_category != category:
                     cat_q = Q(name__icontains=clean_category)
                     cat_q |= Q(name_ru__icontains=clean_category)
@@ -737,6 +746,14 @@ class ExpenseFunctions:
                     cat_obj = ExpenseCategory.objects.filter(
                         profile=profile
                     ).filter(cat_q).first()
+                    if cat_obj:
+                        logger.info(f"get_category_total: found with cleaned search: id={cat_obj.id}, name='{cat_obj.name}'")
+
+                # Дополнительно выведем все категории пользователя для отладки
+                all_cats = ExpenseCategory.objects.filter(profile=profile)
+                logger.info(f"get_category_total: user has {all_cats.count()} categories total")
+                for cat in all_cats[:10]:  # Первые 10 для отладки
+                    logger.info(f"  - Category: name='{cat.name}', name_ru='{cat.name_ru}', name_en='{cat.name_en}'")
 
             qs = Expense.objects.filter(
                 profile=profile,
@@ -761,9 +778,18 @@ class ExpenseFunctions:
 
             qs = qs.filter(q_filter)
 
+            logger.info(f"get_category_total: filtered queryset, found {qs.count()} expenses")
+
             from django.db.models import Sum
             total = qs.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
             count = qs.count()
+
+            logger.info(f"get_category_total: result - total={total}, count={count}")
+
+            # Если нашли траты, покажем первые несколько для отладки
+            if count > 0:
+                for exp in qs[:3]:
+                    logger.info(f"  - Expense: amount={exp.amount}, date={exp.expense_date}, category='{exp.category.name if exp.category else 'None'}', desc='{exp.description}'")
 
             return {
                 'success': True,
