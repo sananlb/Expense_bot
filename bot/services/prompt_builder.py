@@ -24,26 +24,26 @@ def build_function_call_prompt(message: str, context: List[Dict[str,str]]|None=N
 
 ДОСТУПНЫЕ ФУНКЦИИ ДЛЯ РАСХОДОВ:
 1. get_max_expense_day() - для вопросов "В какой день я больше всего потратил?"
-2. get_period_total(period='today'|'yesterday'|'week'|'month'|'year') - для "Сколько я потратил сегодня/вчера/на этой неделе?"
-3. get_max_single_expense() - для "Какая моя самая большая трата?"
+2. get_period_total(period='today'|'yesterday'|'day_before_yesterday'|'week'|'last_week'|'month'|'last_month'|'year'|'январь'|...|'декабрь'|'зима'|'весна'|'лето'|'осень') - для "Сколько я потратил сегодня/вчера/позавчера/на прошлой неделе/в августе/летом?"
+3. get_max_single_expense(period='last_week'|'last_month'|'day_before_yesterday'|'week'|'month'|'январь'|'февраль'|...|'декабрь'|'january'|'august'|'зима'|'весна'|'лето'|'осень') - для "Какая моя самая большая трата позавчера/на прошлой неделе/в прошлом месяце/в августе/летом?"
 4. get_category_statistics() - для "На что я трачу больше всего?"
 5. get_average_expenses() - для "Сколько я трачу в среднем?"
 6. get_recent_expenses(limit=10) - для "Покажи последние траты"
-7. search_expenses(query='текст', start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - УНИВЕРСАЛЬНЫЙ ПОИСК по категориям И описаниям (с опциональным периодом): "Сколько потратил на продукты в сентябре?", "Когда покупал молоко?", "Траты в Пятёрочке за август"
+7. search_expenses(query='текст', period='last_week'|'last_month') - УНИВЕРСАЛЬНЫЙ ПОИСК по категориям И описаниям: "Сколько потратил на продукты на прошлой неделе?", "Траты на кофе в прошлом месяце"
 8. get_weekday_statistics() - для "В какие дни недели я трачу больше?"
 9. predict_month_expense() - для "Сколько я потрачу в этом месяце?"
 10. check_budget_status(budget_amount=50000) - для "Уложусь ли я в бюджет?"
 11. compare_periods() - для "Я стал тратить больше или меньше?"
 12. get_expense_trend() - для "Покажи динамику трат"
 13. get_expenses_by_amount_range(min_amount=1000) - для "Покажи траты больше 1000"
-14. get_category_total(category='продукты', period='month') - для КАТЕГОРИЙ в ТЕКУЩЕМ периоде: "Сколько я трачу на категорию Продукты в ЭТОМ месяце?"
+14. get_category_total(category='продукты', period='month'|'week'|'январь'|...|'декабрь'|'зима'|'лето') - для КАТЕГОРИЙ: "Сколько я потратил на продукты в этом месяце/в августе/летом?"
 15. get_expenses_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - для "Покажи траты за период/с даты по дату"
 16. get_daily_totals(days=30) - для "Покажи траты по дням/суммы по дням за последний месяц"
 
 ДОСТУПНЫЕ ФУНКЦИИ ДЛЯ ДОХОДОВ:
 17. get_max_income_day() - для "В какой день я больше всего заработал?"
 18. get_income_period_total(period='today'|'yesterday'|'week'|'month'|'year') - для "Сколько я заработал сегодня/вчера/на этой неделе?"
-19. get_max_single_income() - для "Какой мой самый большой доход?"
+19. get_max_single_income(period='last_week'|'last_month'|'week'|'month'|'январь'|'февраль'|...|'декабрь'|'january'|'august'|'зима'|'весна'|'лето'|'осень') - для "Какой мой самый большой доход на прошлой неделе/в прошлом месяце/в августе/летом?"
 20. get_income_category_statistics() - для "Откуда больше всего доходов?"
 21. get_average_incomes() - для "Сколько я зарабатываю в среднем?"
 22. get_recent_incomes(limit=10) - для "Покажи последние доходы"
@@ -88,11 +88,20 @@ FUNCTION_CALL: имя_функции(параметр1=значение1, пар
 - Не используй get_daily_totals для одиночной даты — он для сводки по нескольким дням.
 
 СПЕЦИАЛЬНЫЕ СЛУЧАИ:
-- Для ЛЮБЫХ поисков с конкретным периодом используй search_expenses с датами:
-  "сколько я потратил в августе на продукты" → search_expenses(query='продукты', start_date='2025-08-01', end_date='2025-08-31')
-  "траты на транспорт в сентябре" → search_expenses(query='транспорт', start_date='2025-09-01', end_date='2025-09-30')
-  "покупки в супермаркетах за август" → search_expenses(query='супермаркет', start_date='2025-08-01', end_date='2025-08-31')
-  "сколько потратил на сникерс в сентябре" → search_expenses(query='сникерс', start_date='2025-09-01', end_date='2025-09-30')
+- Для поисков с периодом "прошлая неделя", "прошлый месяц", "позавчера" используй search_expenses с period:
+  "сколько я потратил на продукты на прошлой неделе" → search_expenses(query='продукты', period='last_week')
+  "траты на кофе в прошлом месяце" → search_expenses(query='кофе', period='last_month')
+  "траты позавчера" → search_expenses(query='', period='day_before_yesterday')
+- Для вопросов "самая большая трата на прошлой неделе" используй:
+  get_max_single_expense(period='last_week')
+- Для вопросов "самая большая трата позавчера" используй:
+  get_max_single_expense(period='day_before_yesterday')
+- Для вопросов "самая большая трата в августе" используй:
+  get_max_single_expense(period='август') или get_max_single_expense(period='august')
+- Для вопросов "самая большая трата летом" используй:
+  get_max_single_expense(period='лето') или get_max_single_expense(period='summer')
+- Для вопросов "самый большой доход в прошлом месяце" используй:
+  get_max_single_income(period='last_month')
 - get_category_statistics используй когда нужна статистика по ВСЕМ категориям (не конкретной)
 - get_category_total используй только для текущих периодов (этот месяц, эта неделя) без указания дат
 
