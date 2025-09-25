@@ -21,19 +21,22 @@ class ExpenseFunctions:
     
     @staticmethod
     @sync_to_async
-    def get_max_expense_day(user_id: int, period_days: int = 60) -> Dict[str, Any]:
+    def get_max_expense_day(user_id: int, period: str = None, period_days: int = None) -> Dict[str, Any]:
         """
         Найти день с максимальными тратами
-        
+
         Args:
             user_id: ID пользователя Telegram
-            period_days: Период в днях для анализа
-            
+            period: Период ('last_week', 'last_month', 'week', 'month', etc.)
+            period_days: Период в днях для анализа (используется если period не задан)
+
         Returns:
             Информация о дне с максимальными тратами
         """
-        logger.info(f"[get_max_expense_day] Starting for user_id={user_id}, period_days={period_days}")
+        logger.info(f"[get_max_expense_day] Starting for user_id={user_id}, period={period}, period_days={period_days}")
         try:
+            from bot.utils.date_utils import get_period_dates
+
             # Используем get_or_create для автоматического создания профиля
             profile, created = Profile.objects.get_or_create(
                 telegram_id=user_id,
@@ -43,8 +46,17 @@ class ExpenseFunctions:
                 logger.info(f"[get_max_expense_day] Created new profile for user {user_id}")
             else:
                 logger.info(f"[get_max_expense_day] Profile found: id={profile.id}, telegram_id={profile.telegram_id}")
-            end_date = date.today()
-            start_date = end_date - timedelta(days=period_days)
+
+            # Определяем период
+            if period:
+                start_date, end_date = get_period_dates(period)
+            elif period_days:
+                end_date = date.today()
+                start_date = end_date - timedelta(days=period_days)
+            else:
+                # По умолчанию последние 60 дней
+                end_date = date.today()
+                start_date = end_date - timedelta(days=60)
             
             # Получаем траты за период
             expenses = Expense.objects.filter(
@@ -263,7 +275,7 @@ class ExpenseFunctions:
             for stat in stats:
                 total_sum += stat['total']
                 categories.append({
-                    'name': stat['category__name'] or 'Без категории',
+                    'name': stat['category__name'] or get_text('no_category', profile.language_code or 'ru'),
                     'total': float(stat['total']),
                     'count': stat['count'],
                     'average': float(stat['avg']),
@@ -472,7 +484,7 @@ class ExpenseFunctions:
                     'date': exp.expense_date.isoformat(),
                     'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
                     'amount': amount,
-                    'category': get_category_display_name(exp.category, lang) if exp.category else 'Без категории',
+                    'category': get_category_display_name(exp.category, lang) if exp.category else get_text('no_category', profile.language_code or 'ru'),
                     'description': exp.description,
                     'currency': exp.currency
                 })
@@ -605,7 +617,7 @@ class ExpenseFunctions:
                     'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
                     'amount': float(exp.amount),
                     # Убираем категорию для уменьшения объема данных
-                    # 'category': exp.category.name if exp.category else 'Без категории',
+                    # 'category': exp.category.name if exp.category else get_text('no_category', profile.language_code or 'ru'),
                     'description': exp.description
                 })
             
@@ -681,7 +693,7 @@ class ExpenseFunctions:
                 'weekday': weekday,
                 'time': max_expense.expense_time.strftime('%H:%M') if max_expense.expense_time else None,
                 'amount': float(max_expense.amount),
-                'category': get_category_display_name(max_expense.category, 'ru') if max_expense.category else 'Без категории',
+                'category': get_category_display_name(max_expense.category, profile.language_code or 'ru') if max_expense.category else get_text('no_category', profile.language_code or 'ru'),
                 'description': max_expense.description,
                 'currency': max_expense.currency
             }
@@ -689,6 +701,66 @@ class ExpenseFunctions:
             logger.error(f"Error in get_max_single_expense: {e}")
             return {'success': False, 'message': str(e)}
     
+    @staticmethod
+    @sync_to_async
+    def get_min_single_expense(user_id: int, period: str = None, period_days: int = None) -> Dict[str, Any]:
+        """
+        Найти самую маленькую единичную трату
+
+        Args:
+            user_id: ID пользователя
+            period: Период ('last_week', 'last_month', 'week', 'month', etc.)
+            period_days: Количество дней (используется если period не задан)
+        """
+        try:
+            from bot.utils.date_utils import get_period_dates
+
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
+
+            # Определяем период
+            if period:
+                start_date, end_date = get_period_dates(period)
+            elif period_days:
+                end_date = date.today()
+                start_date = end_date - timedelta(days=period_days)
+            else:
+                # По умолчанию последние 60 дней
+                end_date = date.today()
+                start_date = end_date - timedelta(days=60)
+
+            min_expense = Expense.objects.filter(
+                profile=profile,
+                expense_date__gte=start_date,
+                expense_date__lte=end_date
+            ).select_related('category').order_by('amount').first()
+
+            if not min_expense:
+                return {
+                    'success': False,
+                    'message': 'Нет трат за указанный период'
+                }
+
+            # Добавляем день недели
+            weekdays = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
+            weekday = weekdays[min_expense.expense_date.weekday()]
+
+            return {
+                'success': True,
+                'date': min_expense.expense_date.isoformat(),
+                'weekday': weekday,
+                'time': min_expense.expense_time.strftime('%H:%M') if min_expense.expense_time else None,
+                'amount': float(min_expense.amount),
+                'category': get_category_display_name(min_expense.category, profile.language_code or 'ru') if min_expense.category else get_text('no_category', profile.language_code or 'ru'),
+                'description': min_expense.description,
+                'currency': min_expense.currency
+            }
+        except Exception as e:
+            logger.error(f"Error in get_min_single_expense: {e}")
+            return {'success': False, 'message': str(e)}
+
     @staticmethod
     @sync_to_async
     def get_category_total(user_id: int, category: str, period: str = 'month') -> Dict[str, Any]:
@@ -911,7 +983,7 @@ class ExpenseFunctions:
                 results.append({
                     'date': exp.expense_date.isoformat(),
                     'amount': float(exp.amount),
-                    'category': get_category_display_name(exp.category, 'ru') if exp.category else 'Без категории',
+                    'category': get_category_display_name(exp.category, profile.language_code or 'ru') if exp.category else get_text('no_category', profile.language_code or 'ru'),
                     'description': exp.description
                 })
             
@@ -1154,7 +1226,7 @@ class ExpenseFunctions:
     #                 'date': exp.expense_date.isoformat(),
     #                 'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
     #                 'amount': float(exp.amount),
-    #                 'category': exp.category.name if exp.category else 'Без категории',
+    #                 'category': exp.category.name if exp.category else get_text('no_category', profile.language_code or 'ru'),
     #                 'category_icon': exp.category.icon if exp.category else '💰',
     #                 'description': exp.description,
     #                 'currency': exp.currency
@@ -1274,7 +1346,7 @@ class ExpenseFunctions:
                     'date': exp.expense_date.isoformat(),
                     'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
                     'amount': float(exp.amount),
-                    'category': get_category_display_name(exp.category, lang) if exp.category else 'Без категории',
+                    'category': get_category_display_name(exp.category, lang) if exp.category else get_text('no_category', profile.language_code or 'ru'),
                     'description': exp.description,
                     'currency': exp.currency
                 })
@@ -1418,7 +1490,7 @@ class ExpenseFunctions:
             for stat in stats:
                 total_sum += stat['total']
                 categories.append({
-                    'name': stat['category__name'] or 'Без категории',
+                    'name': stat['category__name'] or get_text('no_category', profile.language_code or 'ru'),
                     'total': float(stat['total']),
                     'count': stat['count'],
                     'average': float(stat['avg']),
@@ -1475,7 +1547,7 @@ class ExpenseFunctions:
                     'date': income.income_date.isoformat(),
                     'time': income.income_time.strftime('%H:%M') if income.income_time else None,
                     'amount': float(income.amount),
-                    'category': get_category_display_name(income.category, lang) if income.category else 'Без категории',
+                    'category': get_category_display_name(income.category, lang) if income.category else get_text('no_category', profile.language_code or 'ru'),
                     'description': income.description,
                     'currency': income.currency
                 })
@@ -1499,7 +1571,10 @@ class ExpenseFunctions:
         Найти день с максимальным доходом
         """
         try:
-            profile = Profile.objects.get(telegram_id=user_id)
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
             
             # Группируем доходы по дням
             incomes = Income.objects.filter(profile=profile).values('income_date').annotate(
@@ -1527,8 +1602,8 @@ class ExpenseFunctions:
             for inc in day_incomes[:10]:
                 details.append({
                     'amount': float(inc.amount),
-                    'description': inc.description or get_category_display_name(inc.category, 'ru') if inc.category else 'Доход',
-                    'category': get_category_display_name(inc.category, 'ru') if inc.category else 'Без категории'
+                    'description': inc.description or get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else 'Доход',
+                    'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru')
                 })
             
             return {
@@ -1599,7 +1674,10 @@ class ExpenseFunctions:
         try:
             from bot.utils.date_utils import get_period_dates
 
-            profile = Profile.objects.get(telegram_id=user_id)
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
 
             # Определяем период
             if period:
@@ -1630,7 +1708,7 @@ class ExpenseFunctions:
                 'income': {
                     'amount': float(max_income.amount),
                     'description': max_income.description or 'Доход',
-                    'category': get_category_display_name(max_income.category, 'ru') if max_income.category else 'Без категории',
+                    'category': get_category_display_name(max_income.category, profile.language_code or 'ru') if max_income.category else get_text('no_category', profile.language_code or 'ru'),
                     'date': max_income.income_date.isoformat()
                 }
             }
@@ -1640,12 +1718,71 @@ class ExpenseFunctions:
     
     @staticmethod
     @sync_to_async
+    def get_min_single_income(user_id: int, period: str = None, period_days: int = None) -> Dict[str, Any]:
+        """
+        Найти самый маленький единичный доход
+
+        Args:
+            user_id: ID пользователя
+            period: Период ('last_week', 'last_month', 'week', 'month', etc.)
+            period_days: Количество дней (используется если period не задан)
+        """
+        try:
+            from bot.utils.date_utils import get_period_dates
+
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
+
+            # Определяем период
+            if period:
+                start_date, end_date = get_period_dates(period)
+            elif period_days:
+                end_date = date.today()
+                start_date = end_date - timedelta(days=period_days)
+            else:
+                # По умолчанию последние 60 дней
+                end_date = date.today()
+                start_date = end_date - timedelta(days=60)
+
+            min_income = Income.objects.filter(
+                profile=profile,
+                income_date__gte=start_date,
+                income_date__lte=end_date
+            ).order_by('amount').first()
+
+            if not min_income:
+                return {
+                    'success': True,
+                    'message': f'Нет данных о доходах за указанный период',
+                    'income': None
+                }
+
+            return {
+                'success': True,
+                'income': {
+                    'amount': float(min_income.amount),
+                    'description': min_income.description or 'Доход',
+                    'category': get_category_display_name(min_income.category, profile.language_code or 'ru') if min_income.category else get_text('no_category', profile.language_code or 'ru'),
+                    'date': min_income.income_date.isoformat()
+                }
+            }
+        except Exception as e:
+            logger.error(f"Error in get_min_single_income: {e}")
+            return {'success': False, 'message': str(e)}
+
+    @staticmethod
+    @sync_to_async
     def get_income_category_statistics(user_id: int) -> Dict[str, Any]:
         """
         Статистика доходов по категориям (аналог get_category_statistics)
         """
         try:
-            profile = Profile.objects.get(telegram_id=user_id)
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
             today = date.today()
             month_ago = today - timedelta(days=30)
             
@@ -1661,7 +1798,7 @@ class ExpenseFunctions:
             total_income = Decimal('0')
             
             for stat in stats:
-                category_name = stat['category__name'] or 'Без категории'
+                category_name = stat['category__name'] or get_text('no_category', profile.language_code or 'ru')
                 amount = float(stat['total'])
                 total_income += stat['total']
                 categories.append({
@@ -1691,7 +1828,10 @@ class ExpenseFunctions:
         Средние доходы за разные периоды
         """
         try:
-            profile = Profile.objects.get(telegram_id=user_id)
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
             today = date.today()
             
             # За последние 30 дней
@@ -1736,7 +1876,10 @@ class ExpenseFunctions:
         Поиск доходов по описанию
         """
         try:
-            profile = Profile.objects.get(telegram_id=user_id)
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
             
             incomes = Income.objects.filter(
                 profile=profile,
@@ -1749,7 +1892,7 @@ class ExpenseFunctions:
                     'date': inc.income_date.isoformat(),
                     'amount': float(inc.amount),
                     'description': inc.description or 'Доход',
-                    'category': get_category_display_name(inc.category, 'ru') if inc.category else 'Без категории'
+                    'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru')
                 })
             
             return {
@@ -1769,7 +1912,10 @@ class ExpenseFunctions:
         Статистика доходов по дням недели
         """
         try:
-            profile = Profile.objects.get(telegram_id=user_id)
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
             
             incomes = Income.objects.filter(profile=profile)
             
@@ -1802,7 +1948,10 @@ class ExpenseFunctions:
         Прогноз доходов на текущий месяц
         """
         try:
-            profile = Profile.objects.get(telegram_id=user_id)
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
             today = date.today()
             
             # Доходы с начала месяца
@@ -1841,7 +1990,10 @@ class ExpenseFunctions:
         Проверка достижения целевого дохода (аналог check_budget_status)
         """
         try:
-            profile = Profile.objects.get(telegram_id=user_id)
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
             today = date.today()
             month_start = today.replace(day=1)
             
@@ -1874,7 +2026,10 @@ class ExpenseFunctions:
         Сравнение доходов за разные периоды
         """
         try:
-            profile = Profile.objects.get(telegram_id=user_id)
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
             today = date.today()
             
             # Текущий месяц
@@ -1921,7 +2076,10 @@ class ExpenseFunctions:
         Тренд доходов за период
         """
         try:
-            profile = Profile.objects.get(telegram_id=user_id)
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
             today = date.today()
             start_date = today - timedelta(days=days)
             
@@ -1975,7 +2133,10 @@ class ExpenseFunctions:
         Получить доходы в диапазоне сумм
         """
         try:
-            profile = Profile.objects.get(telegram_id=user_id)
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
             
             queryset = Income.objects.filter(profile=profile)
             
@@ -1993,7 +2154,7 @@ class ExpenseFunctions:
                     'date': inc.income_date.isoformat(),
                     'amount': float(inc.amount),
                     'description': inc.description or 'Доход',
-                    'category': get_category_display_name(inc.category, 'ru') if inc.category else 'Без категории'
+                    'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru')
                 })
             
             total = queryset.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
@@ -2017,7 +2178,10 @@ class ExpenseFunctions:
         Сумма доходов по конкретной категории за период
         """
         try:
-            profile = Profile.objects.get(telegram_id=user_id)
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
 
             # Используем get_period_dates для определения периода
             from bot.utils.date_utils import get_period_dates
@@ -2025,10 +2189,17 @@ class ExpenseFunctions:
             
             # Ищем категорию
             from expenses.models import IncomeCategory
+            from django.db.models import Q
+
+            # Ищем в нескольких полях для лучшего совпадения
+            cat_q = Q(name__icontains=category)
+            # Также ищем в мультиязычных полях
+            cat_q |= Q(name_ru__icontains=category)
+            cat_q |= Q(name_en__icontains=category)
+
             categories = IncomeCategory.objects.filter(
-                name__icontains=category,
                 profile=profile
-            )
+            ).filter(cat_q)
             
             if not categories:
                 return {
@@ -2067,7 +2238,10 @@ class ExpenseFunctions:
         Список доходов за период с датами
         """
         try:
-            profile = Profile.objects.get(telegram_id=user_id)
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
             today = date.today()
             
             # Парсим даты
@@ -2102,7 +2276,7 @@ class ExpenseFunctions:
                     'date': inc.income_date.isoformat(),
                     'amount': amount,
                     'description': inc.description or 'Доход',
-                    'category': get_category_display_name(inc.category, 'ru') if inc.category else 'Без категории'
+                    'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru')
                 })
             
             return {
@@ -2125,7 +2299,10 @@ class ExpenseFunctions:
         Суммы доходов по дням за период
         """
         try:
-            profile = Profile.objects.get(telegram_id=user_id)
+            profile, _ = Profile.objects.get_or_create(
+                telegram_id=user_id,
+                defaults={'language_code': 'ru'}
+            )
             today = date.today()
             start_date = today - timedelta(days=days)
             
@@ -2211,7 +2388,7 @@ class ExpenseFunctions:
                     'date': exp.expense_date.isoformat(),
                     'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
                     'amount': -float(exp.amount),  # Отрицательное значение для расходов
-                    'category': get_category_display_name(exp.category, lang) if exp.category else 'Без категории',
+                    'category': get_category_display_name(exp.category, lang) if exp.category else get_text('no_category', profile.language_code or 'ru'),
                     'description': exp.description,
                     'currency': exp.currency
                 })
@@ -2223,7 +2400,7 @@ class ExpenseFunctions:
                     'date': income.income_date.isoformat(),
                     'time': income.income_time.strftime('%H:%M') if income.income_time else None,
                     'amount': float(income.amount),  # Положительное значение для доходов
-                    'category': get_category_display_name(income.category, lang) if income.category else 'Без категории',
+                    'category': get_category_display_name(income.category, lang) if income.category else get_text('no_category', profile.language_code or 'ru'),
                     'description': income.description,
                     'currency': income.currency
                 })
@@ -2323,7 +2500,7 @@ class ExpenseFunctions:
                     'count': income_count,
                     'categories': [
                         {
-                            'name': cat['category__name'] or 'Без категории',
+                            'name': cat['category__name'] or get_text('no_category', profile.language_code or 'ru'),
                             'amount': float(cat['total'])
                         }
                         for cat in income_categories
@@ -2334,7 +2511,7 @@ class ExpenseFunctions:
                     'count': expense_count,
                     'categories': [
                         {
-                            'name': cat['category__name'] or 'Без категории',
+                            'name': cat['category__name'] or get_text('no_category', profile.language_code or 'ru'),
                             'amount': float(cat['total'])
                         }
                         for cat in expense_categories

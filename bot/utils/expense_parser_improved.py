@@ -261,19 +261,29 @@ async def _enhance_with_ai(parsed_expense: ParsedExpense) -> Optional[ParsedExpe
 def parse_expense_message(text: str, use_ai: bool = False) -> Optional[ParsedExpense]:
     """
     Продвинутый парсер текстовых сообщений с поддержкой AI
-    
+
     Примеры:
     - "Кофе 200" -> ParsedExpense(amount=200, description='Кофе', category='кафе')
+    - "-200 кофе" -> ParsedExpense(amount=200, description='кофе', category='кафе')
+    - "минус 500 обед" -> ParsedExpense(amount=500, description='обед', category='кафе')
     - "Потратил на бензин 4095" -> ParsedExpense(amount=4095, description='бензин', category='транспорт')
     - "Купил в пятерочке продукты за 1500" -> ParsedExpense(amount=1500, description='продукты в пятерочке', category='продукты')
     """
     if not text or not text.strip():
         return None
-    
+
     original_text = text.strip()
-    
+
+    # Удаляем знак минус или слово "минус" из начала текста, если они есть
+    # Это нужно для корректного парсинга суммы
+    text_cleaned = original_text
+    if text_cleaned.lower().startswith('минус'):
+        text_cleaned = text_cleaned[5:].strip()
+    elif text_cleaned.startswith('-'):
+        text_cleaned = text_cleaned[1:].strip()
+
     # Исправляем опечатки
-    corrected_text = correct_typos(original_text)
+    corrected_text = correct_typos(text_cleaned)
     
     # Извлекаем сумму
     amount, text_without_amount = extract_amount_advanced(corrected_text)

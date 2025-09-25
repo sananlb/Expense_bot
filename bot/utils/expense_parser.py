@@ -88,6 +88,17 @@ INCOME_PATTERNS = [
     r'^плюс\s*\d',  # "плюс" и цифры с возможным пробелом
 ]
 
+# Паттерны для явного определения траты - знак - или слово "минус"
+EXPENSE_PATTERNS = [
+    r'^\-',  # Начинается с -
+    r'^\-\d',  # Начинается с - и сразу цифра (-500)
+    r'\s\-\d',  # Пробел, затем - и цифры (кофе -200)
+    r'\-\s*\d',  # - и цифры с возможным пробелом
+    r'^минус\s+\d',  # Начинается со слова "минус" и цифра (минус 5000)
+    r'\sминус\s+\d',  # Пробел, затем "минус" и цифры (кофе минус 200)
+    r'^минус\s*\d',  # "минус" и цифры с возможным пробелом
+]
+
 # Импортируем словарь ключевых слов из models
 from expenses.models import CATEGORY_KEYWORDS as MODEL_CATEGORY_KEYWORDS
 
@@ -345,9 +356,11 @@ def detect_currency(text: str, user_currency: str = 'RUB') -> str:
 async def parse_expense_message(text: str, user_id: Optional[int] = None, profile=None, use_ai: bool = True) -> Optional[Dict[str, Any]]:
     """
     Парсит текстовое сообщение и извлекает информацию о расходе
-    
+
     Примеры:
     - "Кофе 200" -> {'amount': 200, 'description': 'Кофе', 'category': 'кафе'}
+    - "-200 кофе" -> {'amount': 200, 'description': 'кофе', 'category': 'кафе'}
+    - "минус 500 обед" -> {'amount': 500, 'description': 'обед', 'category': 'кафе'}
     - "Дизель 4095 АЗС" -> {'amount': 4095, 'description': 'Дизель АЗС', 'category': 'транспорт'}
     - "Продукты в пятерочке 1500" -> {'amount': 1500, 'description': 'Продукты в пятерочке', 'category': 'продукты'}
     - "Кофе 200 15.03.2024" -> {'amount': 200, 'description': 'Кофе', 'expense_date': date(2024, 3, 15)}
@@ -355,13 +368,26 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     """
     if not text:
         return None
-    
+
     # Сохраняем оригинальный текст
     original_text = text.strip()
-    
+
+    # Удаляем знак минус или слово "минус" из начала текста, если они есть
+    # Это нужно для корректного парсинга суммы
+    text_cleaned = original_text
+    for pattern in EXPENSE_PATTERNS:
+        match = re.search(pattern, text_cleaned.lower())
+        if match:
+            # Удаляем знак минус или слово "минус"
+            if text_cleaned.lower().startswith('минус'):
+                text_cleaned = text_cleaned[5:].strip()
+            elif text_cleaned.startswith('-'):
+                text_cleaned = text_cleaned[1:].strip()
+            break
+
     # Сначала извлекаем дату, если она есть
-    expense_date, text_without_date = extract_date_from_text(original_text)
-    
+    expense_date, text_without_date = extract_date_from_text(text_cleaned)
+
     # Используем текст без даты для дальнейшего парсинга
     text_to_parse = text_without_date
     
