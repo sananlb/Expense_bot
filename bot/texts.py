@@ -98,7 +98,7 @@ TEXTS = {
         
         # Отчеты
         'today_spent': 'Сегодня потрачено',
-        'summary': 'Сводка за',
+        'summary': 'Итоги',
         'total': 'Всего',
         'total_spent': 'Всего потрачено',
         'by_categories': 'По категориям',
@@ -559,7 +559,7 @@ TEXTS = {
         'change': 'Изменить',
         
         # Отчеты
-        'summary_for': 'Сводка за',
+        'summary_for': 'Итоги',
         'total_spent_month': 'Всего потрачено',
         'no_expenses_this_month': 'В этом месяце трат пока нет.',
         'other_currencies': 'Другие валюты',
@@ -791,7 +791,7 @@ TEXTS = {
         
         # Reports
         'today_spent': 'Spent today',
-        'summary': 'Summary for',
+        'summary': 'Daily results',
         'total': 'Total',
         'total_spent': 'Total spent',
         'by_categories': 'By categories',
@@ -1234,7 +1234,7 @@ Thank you for participating in testing! Your feedback helps improve the bot.''',
         'change': 'Change',
         
         # Reports
-        'summary_for': 'Summary for',
+        'summary_for': 'Daily results',
         'total_spent_month': 'Total spent',
         'no_expenses_this_month': 'No expenses this month yet.',
         'other_currencies': 'Other currencies',
