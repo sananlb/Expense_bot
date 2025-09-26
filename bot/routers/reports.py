@@ -215,7 +215,7 @@ async def show_expenses_summary(
         # Формируем текст
         if start_date == end_date:
             if start_date == date.today():
-                period_text = get_text('today', lang)
+                period_text = "дня" if lang == 'ru' else "today"
             else:
                 period_text = start_date.strftime('%d.%m.%Y')
         else:
