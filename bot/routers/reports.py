@@ -215,7 +215,7 @@ async def show_expenses_summary(
         # Формируем текст
         if start_date == end_date:
             if start_date == date.today():
-                period_text = "дня" if lang == 'ru' else "today"
+                period_text = "дня" if lang == 'ru' else ""
             else:
                 period_text = start_date.strftime('%d.%m.%Y')
         else:
@@ -240,9 +240,15 @@ async def show_expenses_summary(
             
             household_name = await sync_to_async(get_household_name)(user_id)
             text = f"🏠 <b>{household_name}</b>\n"
-            text += f"📊 <b>{get_text('summary', lang)} {period_text}</b>\n\n"
+            if period_text:
+                text += f"📊 <b>{get_text('summary', lang)} {period_text}</b>\n\n"
+            else:
+                text += f"📊 <b>{get_text('summary', lang)}</b>\n\n"
         else:
-            text = f"📊 <b>{get_text('summary', lang)} {period_text}</b>\n\n"
+            if period_text:
+                text = f"📊 <b>{get_text('summary', lang)} {period_text}</b>\n\n"
+            else:
+                text = f"📊 <b>{get_text('summary', lang)}</b>\n\n"
         
         # Проверяем есть ли операции вообще
         has_expenses = summary['total'] > 0
