@@ -246,9 +246,11 @@ git stash pop  # восстанавливаем локальные измене�
 ## Database
 - Type: PostgreSQL 15 (Alpine)
 - Database name: expense_bot
-- User: batman (DB_USER в .env)
+- User: expense_user (DB_USER в .env)
 - Container: expense_bot_db
-- Default credentials: DB_USER=batman, DB_NAME=expense_bot
+- Default credentials: DB_USER=expense_user, DB_NAME=expense_bot
+- **ВАЖНО:** Пользователь БД - expense_user, НЕ batman!
+- Команда для создания дампа: `docker exec expense_bot_db pg_dump -U expense_user expense_bot > backup.sql`
 
 ## Static Files
 - Container path: /app/staticfiles/
@@ -376,6 +378,91 @@ sudo systemctl restart nginx
 
 # Проверить дату изменения файла
 ls -la /var/www/coins-bot/index.html
+```
+
+## Backup Process
+**КРИТИЧЕСКИ ВАЖНО:** Правильные команды для резервного копирования
+
+### Создание дампа БД через Docker
+```bash
+# Правильная команда с пользователем expense_user
+docker exec expense_bot_db pg_dump -U expense_user expense_bot > /home/batman/backups/backup_$(date +%Y%m%d_%H%M%S).sql
+
+# Проверка созданного дампа
+ls -la /home/batman/backups/
+
+# Создание папки для бэкапов если не существует
+mkdir -p /home/batman/backups/
+```
+
+### Архивирование проекта
+```bash
+# Создание архива проекта с исключениями
+cd /home/batman && tar -czf backups/expense_bot_project_$(date +%Y%m%d_%H%M%S).tar.gz \
+  --exclude='expense_bot/__pycache__' \
+  --exclude='expense_bot/.git' \
+  --exclude='expense_bot/logs' \
+  --exclude='expense_bot/staticfiles' \
+  --exclude='expense_bot/.env' \
+  expense_bot/
+```
+
+### Путь для бэкапов
+- Основная директория: `/home/batman/backups/`
+- Дампы БД: `/home/batman/backups/backup_YYYYMMDD_HHMMSS.sql`
+- Архивы проекта: `/home/batman/backups/expense_bot_project_YYYYMMDD_HHMMSS.tar.gz`
+
+## Common Errors
+**ВАЖНЫЕ ОШИБКИ И ИХ РЕШЕНИЯ:**
+
+### ❌ Ошибка "role batman is not permitted to log in"
+**Проблема:** Попытка использовать пользователя batman для БД
+```bash
+# НЕПРАВИЛЬНО:
+docker exec expense_bot_db pg_dump -U batman expense_bot
+
+# ПРАВИЛЬНО:
+docker exec expense_bot_db pg_dump -U expense_user expense_bot
+```
+**Решение:** ВСЕГДА используй expense_user для операций с БД!
+
+### ❌ Ошибка с CRLF line endings
+**Проблема:** Файлы с Windows line endings на Linux сервере
+```bash
+# Симптомы:
+/bin/bash^M: bad interpreter
+syntax error near unexpected token
+
+# РЕШЕНИЕ:
+# Установить dos2unix если не установлен
+sudo apt-get install dos2unix
+
+# Конвертировать файл
+dos2unix filename.sh
+
+# Для всех .sh файлов в директории
+find . -name "*.sh" -type f -exec dos2unix {} \;
+```
+
+### ❌ Ошибка "Permission denied" при выполнении скриптов
+```bash
+# Дать права на выполнение
+chmod +x script.sh
+
+# Проверить права
+ls -la script.sh
+```
+
+### ❌ Ошибка подключения к БД
+```bash
+# Проверить что контейнер БД запущен
+docker ps | grep expense_bot_db
+
+# Проверить логи контейнера БД
+docker logs expense_bot_db
+
+# Проверить переменные окружения
+docker exec expense_bot_app env | grep DB_
 ```
 
 ## Команды для отладки PDF отчетов
