@@ -209,7 +209,7 @@ TEXTS = {
         
         # Настройки
         'settings': 'Настройки',
-        'settings_menu': '⚙️ Настройки',
+        'settings_menu': '<b>⚙️ Настройки</b>',
         'household_button': '🏠 Семейный бюджет',
         'my_budget_button': '👤 Мой бюджет',
         'household_budget_button': '🏠 Семейный бюджет',
@@ -898,7 +898,7 @@ Example: "alphabank 5% 2000 rub"''',
         
         # Settings
         'settings': 'Settings',
-        'settings_menu': 'Settings',
+        'settings_menu': '<b>⚙️ Settings</b>',
         'household_button': '🏠 Household',
         'my_budget_button': '👤 My budget',
         'household_budget_button': '🏠 Household budget',
