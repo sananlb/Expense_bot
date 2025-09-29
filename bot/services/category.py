@@ -6,7 +6,7 @@ from expenses.models import ExpenseCategory, Profile, CategoryKeyword
 from asgiref.sync import sync_to_async
 from django.db.models import Sum, Count, Q
 from bot.utils.db_utils import get_or_create_user_profile_sync
-from bot.utils.category_helpers import get_category_display_name
+from bot.utils.category_helpers import get_category_display_name, get_category_name_without_emoji
 import logging
 
 logger = logging.getLogger(__name__)
@@ -178,7 +178,7 @@ def get_user_categories(user_id: int) -> List[ExpenseCategory]:
     
     categories = ExpenseCategory.objects.filter(
         profile=profile
-    ).order_by('name')
+    )
     
     # Force evaluation of queryset
     categories_count = categories.count()
@@ -200,10 +200,18 @@ def get_user_categories(user_id: int) -> List[ExpenseCategory]:
         else:
             regular_categories.append(cat)
     
-    # Возвращаем сначала обычные категории, затем "Прочие расходы"
+    # Сортируем по алфавиту по отображаемому названию без эмодзи, с учетом языка профиля
+    user_lang = profile.language_code or 'ru'
+    try:
+        regular_categories.sort(key=lambda c: (get_category_name_without_emoji(c, user_lang) or '').lower())
+    except Exception:
+        # На случай ошибок в данных — fallback по старому полю name
+        regular_categories.sort(key=lambda c: (c.name or '').lower())
+
+    # Возвращаем сначала отсортированные обычные категории, затем "Прочие расходы"
     if other_category:
         regular_categories.append(other_category)
-    
+
     return regular_categories
 
 
@@ -263,7 +271,8 @@ async def create_category(user_id: int, name: str, icon: str = '💰') -> Expens
                 name_ru=name if original_language == 'ru' else None,
                 name_en=name if original_language == 'en' else None,
                 original_language=original_language,
-                is_translatable=(original_language == user_lang)
+                # Пользовательские категории не переводим автоматически
+                is_translatable=False
             )
             
             logger.info(f"Created category '{name}' (id: {category.id}) for user {user_id}")
@@ -331,23 +340,31 @@ async def update_category_name(user_id: int, category_id: int, new_name: str) ->
     
     # Определяем какое поле обновлять
     if has_cyrillic and not has_latin:
-        result = await update_category(user_id, category_id, 
+        result = await update_category(user_id, category_id,
                                       name_ru=name_without_icon,
-                                      icon=icon)
+                                      icon=icon,
+                                      original_language='ru',
+                                      is_translatable=False)
     elif has_latin and not has_cyrillic:
-        result = await update_category(user_id, category_id, 
+        result = await update_category(user_id, category_id,
                                       name_en=name_without_icon,
-                                      icon=icon)
+                                      icon=icon,
+                                      original_language='en',
+                                      is_translatable=False)
     else:
         # Смешанный язык - обновляем поле исходного языка
         if category.original_language == 'en':
-            result = await update_category(user_id, category_id, 
+            result = await update_category(user_id, category_id,
                                          name_en=name_without_icon,
-                                         icon=icon)
+                                         icon=icon,
+                                         original_language='en',
+                                         is_translatable=False)
         else:
-            result = await update_category(user_id, category_id, 
+            result = await update_category(user_id, category_id,
                                          name_ru=name_without_icon,
-                                         icon=icon)
+                                         icon=icon,
+                                         original_language='ru',
+                                         is_translatable=False)
     
     return result is not None
 

@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from expenses.models import Income, IncomeCategory, Profile
 from bot.utils.db_utils import get_or_create_user_profile_sync
-from bot.utils.category_helpers import get_category_display_name
+from bot.utils.category_helpers import get_category_display_name, get_category_name_without_emoji
 
 logger = logging.getLogger(__name__)
 
@@ -1024,9 +1024,17 @@ def get_user_income_categories(telegram_id: int) -> List[IncomeCategory]:
         categories = IncomeCategory.objects.filter(
             profile=profile,
             is_active=True
-        ).order_by('name')
-        
-        return list(categories)
+        )
+
+        # Сортируем по алфавиту по отображаемому названию без эмодзи, с учетом языка профиля
+        user_lang = profile.language_code or 'ru'
+        categories_list = list(categories)
+        try:
+            categories_list.sort(key=lambda c: (get_category_name_without_emoji(c, user_lang) or '').lower())
+        except Exception:
+            categories_list.sort(key=lambda c: (c.name or '').lower())
+
+        return categories_list
         
     except Exception as e:
         logger.error(f"Error getting income categories for user {telegram_id}: {e}")
@@ -1035,8 +1043,8 @@ def get_user_income_categories(telegram_id: int) -> List[IncomeCategory]:
 
 @sync_to_async
 def create_income_category(
-    telegram_id: int, 
-    name: str, 
+    telegram_id: int,
+    name: str,
     icon: Optional[str] = None
 ) -> IncomeCategory:
     """
@@ -1066,17 +1074,43 @@ def create_income_category(
         if existing:
             raise ValueError("Категория с таким названием уже существует")
         
-        # Если есть иконка, добавляем её к названию
-        if icon and not name.startswith(icon):
-            full_name = f"{icon} {name}"
+        # Разбираем имя и иконку
+        import re
+        emoji_pattern = r'^([\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u200d\uFE0F]+)\s*'
+        match = re.match(emoji_pattern, name)
+        parsed_icon = ''
+        text = name
+        if match:
+            parsed_icon = match.group(1)
+            text = name[len(match.group(0)):].strip()
+        if icon and not parsed_icon:
+            parsed_icon = icon
+
+        # Определяем язык текста
+        has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', text))
+        has_latin = bool(re.search(r'[a-zA-Z]', text))
+        if has_cyrillic and not has_latin:
+            original_language = 'ru'
+        elif has_latin and not has_cyrillic:
+            original_language = 'en'
         else:
-            full_name = name
-            
-        category = IncomeCategory.objects.create(
+            # По умолчанию язык профиля
+            original_language = profile.language_code or 'ru'
+
+        # Создаём как непереводимую пользовательскую категорию
+        kwargs = dict(
             profile=profile,
-            name=full_name,
-            is_active=True
+            icon=parsed_icon or '',
+            is_active=True,
+            is_translatable=False,
+            original_language=original_language,
         )
+        if original_language == 'ru':
+            kwargs['name_ru'] = text
+        else:
+            kwargs['name_en'] = text
+
+        category = IncomeCategory.objects.create(**kwargs)
         
         # Генерируем ключевые слова для новой категории
         try:
@@ -1095,7 +1129,7 @@ def create_income_category(
         except Exception as e:
             logger.warning(f"Could not generate keywords for income category: {e}")
         
-        logger.info(f"Created income category '{full_name}' for user {telegram_id}")
+        logger.info(f"Created income category '{category.name}' for user {telegram_id}")
         return category
         
     except ValueError:
@@ -1140,37 +1174,56 @@ def update_income_category(
             raise ValueError("Категория не найдена")
             
         if new_name:
-            # Проверяем, нет ли уже категории с таким названием
+            # Разбираем эмодзи и текст
+            import re
+            emoji_pattern = r'^([\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u200d\uFE0F]+)\s*'
+            match = re.match(emoji_pattern, new_name)
+            parsed_icon = None
+            text = new_name
+            if match:
+                parsed_icon = match.group(1)
+                text = new_name[len(match.group(0)):].strip()
+
+            # Проверяем уникальность по собранному отображаемому имени
+            display_name = f"{parsed_icon} {text}".strip() if parsed_icon else text
             existing = IncomeCategory.objects.filter(
                 profile=profile,
-                name__iexact=new_name,
+                name__iexact=display_name,
                 is_active=True
             ).exclude(id=category_id).exists()
-            
             if existing:
                 raise ValueError("Категория с таким названием уже существует")
-                
-            # Обновляем название с учетом мультиязычности
-            # Определяем язык нового названия
-            from bot.utils.language import detect_language
-            lang = detect_language(new_name)
-            
-            if lang == 'ru':
-                category.name_ru = new_name
-                if not category.name_en:  # Если нет английского, копируем
-                    category.name_en = new_name
+
+            # Определяем язык текста
+            has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', text))
+            has_latin = bool(re.search(r'[a-zA-Z]', text))
+            if has_cyrillic and not has_latin:
+                lang = 'ru'
+                category.name_ru = text
+                category.name_en = category.name_en or text
+            elif has_latin and not has_cyrillic:
+                lang = 'en'
+                category.name_en = text
+                category.name_ru = category.name_ru or text
             else:
-                category.name_en = new_name
-                if not category.name_ru:  # Если нет русского, копируем
-                    category.name_ru = new_name
-            
-            category.original_language = lang
-            category.is_translatable = True  # Пользовательская категория
-            
-            if new_icon:
+                # Смешанный/другой — фиксируем как язык профиля
+                lang = profile.language_code or 'ru'
+                if lang == 'ru':
+                    category.name_ru = text
+                else:
+                    category.name_en = text
+
+            # Обновляем иконку
+            if parsed_icon is not None:
+                category.icon = parsed_icon
+            elif new_icon is not None:
                 category.icon = new_icon
-                
-        elif new_icon:
+
+            # Пользовательское редактирование — делаем непереводимым и фиксируем исходный язык
+            category.original_language = lang
+            category.is_translatable = False
+
+        elif new_icon is not None:
             # Только обновляем иконку
             category.icon = new_icon
             
