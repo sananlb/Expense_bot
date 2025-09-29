@@ -216,7 +216,7 @@ async def main_webhook():
     
     # Настройка webhook
     app = web.Application()
-    webhook_path = f"/webhook/{os.getenv('BOT_TOKEN')}"
+    webhook_path = "/webhook/"  # Унифицированный путь без токена
     
     SimpleRequestHandler(
         dispatcher=dp,
