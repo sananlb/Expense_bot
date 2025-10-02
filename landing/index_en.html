@@ -45,7 +45,9 @@
     nav{position:fixed;top:0;left:0;right:0;background:rgba(255,255,255,.7);backdrop-filter:blur(20px);z-index:1000}
     .nav-container{display:flex;align-items:center;justify-content:space-between;padding:12px 0}
     .logo{display:flex;align-items:center;gap:12px;font-weight:800;font-size:24px;color:var(--dark);text-decoration:none}
-    .logo img{width:48px;height:48px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+    .logo img{height:48px;width:auto;object-fit:contain;filter:drop-shadow(-1px 3px 6px rgba(0,0,0,.5))}
+    .logo span{position:relative;display:inline-block;padding-bottom:2px;text-shadow:0 1px 4px rgba(0,0,0,.2)}
+    .logo span::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent 0%,rgba(148,163,184,.15) 20%,rgba(148,163,184,.2) 50%,rgba(148,163,184,.15) 80%,transparent 100%)}
     .nav-links{display:flex;gap:24px;align-items:center}
     .nav-links a{color:var(--dark);text-decoration:none;font-weight:500}
     .btn{padding:12px 20px;border-radius:10px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:8px;border:none;color:#fff;background:#2563eb}
@@ -85,7 +87,7 @@
     <div class="container">
       <div class="nav-container">
         <a class="logo" href="#">
-          <img src="photo_2025-09-13_10-57-55.jpg" alt="Coins Bot">
+          <img src="logo_v3.webp" alt="Coins Bot">
           <span>Coins</span>
         </a>
         <div class="nav-links">
@@ -107,10 +109,6 @@
         <div>
           <h1>Budgeting made simple</h1>
           <p>Say "coffee 200" or "taxi 500". AI recognizes, categorizes, and builds reports. No banks, no complex apps.</p>
-          <div class="hero-buttons">
-            <a href="https://t.me/showmecoinbot?start=landing" target="_blank" class="btn">Launch the bot</a>
-            <a href="#demo" class="btn" style="background:#0ea5e9">Watch demo</a>
-          </div>
         </div>
         <div class="phone-frame">
           <div class="phone-screen">
