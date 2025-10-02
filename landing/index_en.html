@@ -65,8 +65,20 @@
     .phone-frame{background:#fff;border-radius:24px;box-shadow:var(--shadow-lg);padding:16px}
     .phone-screen{border-radius:16px;overflow:hidden}
     .phone-screen video{width:100%;display:block}
-    .footer{padding:40px 0;color:#475569;text-align:center}
-    @media(max-width:900px){.hero-content{grid-template-columns:1fr}}
+    .footer{background:#0f172a;color:#94a3b8;padding:60px 0 30px}
+    .footer-content{display:grid;grid-template-columns:repeat(4,1fr);gap:40px;margin-bottom:40px}
+    .footer-column h3{color:#fff;font-size:16px;font-weight:700;margin-bottom:16px}
+    .footer-column p{font-size:14px;line-height:1.6;margin-bottom:16px}
+    .footer-links{list-style:none}
+    .footer-links li{margin-bottom:10px}
+    .footer-links a{color:#94a3b8;text-decoration:none;font-size:14px;transition:color .2s}
+    .footer-links a:hover{color:#fff}
+    .social-links{display:flex;gap:12px;margin-top:16px}
+    .social-link{display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:8px;background:rgba(148,163,184,.1);color:#94a3b8;transition:all .2s}
+    .social-link:hover{background:#2563eb;color:#fff}
+    .footer-bottom{padding-top:30px;border-top:1px solid rgba(148,163,184,.1);text-align:center}
+    .footer-copy{font-size:14px;color:#64748b}
+    @media(max-width:900px){.hero-content{grid-template-columns:1fr}.footer-content{grid-template-columns:1fr 1fr;gap:30px}}
   </style>
 </head>
 <body>
@@ -133,11 +145,51 @@
     </div>
   </section>
 
-  <div class="footer">
+  <footer class="footer">
     <div class="container">
-      <p>Made with ❤ — Track your finances in Telegram</p>
+      <div class="footer-content">
+        <div class="footer-column">
+          <h3>Coins Bot</h3>
+          <p>Simple and convenient expense tracking right in Telegram. No complex apps or bank connections required.</p>
+          <div class="social-links">
+            <a href="https://t.me/showmecoinbot" target="_blank" class="social-link">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.40-.01.06.01.24 0 .38z"/>
+              </svg>
+            </a>
+          </div>
+        </div>
+        <div class="footer-column">
+          <h3>Product</h3>
+          <ul class="footer-links">
+            <li><a href="#features">Features</a></li>
+            <li><a href="#how">How it works</a></li>
+            <li><a href="#pricing">Pricing</a></li>
+            <li><a href="#demo">Demo</a></li>
+          </ul>
+        </div>
+        <div class="footer-column">
+          <h3>Support</h3>
+          <ul class="footer-links">
+            <li><a href="https://t.me/SMF_support" target="_blank">Telegram Support</a></li>
+            <li><a href="#faq">FAQ</a></li>
+            <li><a href="mailto:help@tbotsupport.ru">Email</a></li>
+          </ul>
+        </div>
+        <div class="footer-column">
+          <h3>Company</h3>
+          <ul class="footer-links">
+            <li><a href="#">About us</a></li>
+            <li><a href="privacy_en.html" target="_blank">Privacy Policy</a></li>
+            <li><a href="offer_en.html" target="_blank">Terms of Service</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <div class="footer-copy">© 2025 Coins Bot. All rights reserved.</div>
+      </div>
     </div>
-  </div>
+  </footer>
 
   <script>
     // Autoplay videos when visible on screen
