@@ -662,6 +662,8 @@
       text-transform: uppercase;
       letter-spacing: 1px;
       margin-bottom: 16px;
+      text-align: center;
+      line-height: 1.2;
     }
 
     .section-title {
@@ -3254,21 +3256,25 @@
         ];
         // Предзагруженные видео для быстрого переключения
         this.preloadedVideos = [];
+        // Получаем переводы из глобального объекта
+        const currentLang = document.documentElement.getAttribute('data-lang') || 'ru';
+        const t = window.translations && window.translations[currentLang] ? window.translations[currentLang] : window.translations.ru;
+
         this.slideTitles = [
-          'Умная категоризация',
-          'Последние траты',
-          'Аналитика расходов',
-          'Учет кэшбэка',
-          'PDF-отчеты',
-          'Вопросы боту'
+          t.slide_ai || 'Умная категоризация',
+          t.slide_recent || 'Последние траты',
+          t.slide_analytics || 'Аналитика расходов',
+          t.slide_cashback || 'Учет кэшбэка',
+          t.slide_pdf || 'PDF-отчеты',
+          t.slide_questions || 'Вопросы боту'
         ];
         this.slideDescriptions = [
-          'AI автоматически определяет категории',
-          'История всех расходов',
-          'Статистика и графики по категориям',
-          'Отслеживание кэшбэка от банков',
-          'Детальные отчеты для скачивания',
-          'Умный помощник отвечает на вопросы'
+          t.slide_ai_ph || 'AI категоризация',
+          t.slide_recent_ph || 'История расходов',
+          t.slide_analytics_ph || 'Топ категорий',
+          t.slide_cashback_ph || 'Кешбэк',
+          t.slide_pdf_ph || 'Отчеты',
+          t.slide_questions_ph || 'Диалог с ботом'
         ];
         this.init();
       }
