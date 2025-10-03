@@ -1524,7 +1524,18 @@
       margin-top: 12px;
       width: 100%;
       text-align: center;
-      display: block;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      background: var(--gradient-1);
+      color: var(--white) !important;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.25);
+    }
+
+    .mobile-menu .btn-primary svg {
+      color: var(--white) !important;
+      fill: currentColor;
     }
 
     @keyframes slideDown {
