@@ -227,6 +227,8 @@ git stash pop  # восстанавливаем локальные измене�
 - Я анализирую результаты и даю следующие команды
 
 ## Server Configuration
+
+### Primary Server (APP + Web)
 - Server IP: 80.66.87.178
 - Bot Domain: expensebot.duckdns.org
 - Landing Domain: www.coins-bot.ru
@@ -234,6 +236,48 @@ git stash pop  # восстанавливаем локальные измене�
 - Server OS: Ubuntu 22.04.5 LTS
 - SSL: Let's Encrypt certificate (expires 2025-11-07)
 - Web server: Nginx 1.18.0 with reverse proxy to Django on port 8000
+- User: batman
+
+### Backup Server (ПОЛНОСТЬЮ НАСТРОЕН)
+- **Server IP:** 72.56.67.202
+- **Server path:** `/home/batman/expense_bot_deploy/expense_bot/`
+- **User:** batman (с sudo правами)
+- **OS:** Ubuntu 24.04.1 LTS
+- **Docker:** Docker CE v28.4.0, Docker Compose v2.39.4
+- **SSL:** Let's Encrypt до 27.12.2025
+- **Домен:** https://expensebot.duckdns.org (тот же домен!)
+- **Webhook URL:** `https://expensebot.duckdns.org/webhook/` (унифицирован с основным сервером)
+- **Purpose:** Полнофункциональный резервный сервер с Docker
+- **База данных:** Локальная PostgreSQL в Docker (222 траты, 17 пользователей восстановлены)
+- **Redis:** Локальный в Docker
+- **Статус:** ✅ ГОТОВ К ЭКСТРЕННОЙ АКТИВАЦИИ
+
+#### Docker контейнеры на резервном сервере:
+- `expense_bot_app` - Telegram бот (порт 8001)
+- `expense_bot_web` - Django админка (порт 8000)
+- `expense_bot_db` - PostgreSQL
+- `expense_bot_redis` - Redis
+- `expense_bot_celery` - Celery воркер
+- `expense_bot_celery_beat` - Celery планировщик
+
+#### Процедура экстренной активации (1-2 минуты):
+1. **Изменить DNS:** На DuckDNS изменить IP expensebot с 80.66.87.178 на 72.56.67.202
+2. **Запустить резервный сервер:**
+   ```bash
+   ssh batman@72.56.67.202
+   cd /home/batman/expense_bot_deploy/expense_bot
+   docker compose start
+   docker compose ps
+   ```
+3. **Webhook переустанавливать НЕ нужно** (URL унифицирован!)
+
+#### Подробная документация:
+См. файл `docs/RESERVE_SERVER_72.56.67.202.md`
+
+### Database Server
+- Server IP: 5.129.251.120
+- Services: PostgreSQL 15, Redis
+- Note: Отдельный сервер только для БД
 
 ## Docker Containers
 - expense_bot_web - Django admin panel (port 8000)
