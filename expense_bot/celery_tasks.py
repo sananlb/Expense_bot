@@ -588,7 +588,7 @@ def system_health_check():
         telegram_api_response_time = None
         try:
             telegram_start = timezone.now()
-            bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') 
+            bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN')
             if bot_token:
                 response = requests.get(
                     f"https://api.telegram.org/bot{bot_token}/getMe",

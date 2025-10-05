@@ -1238,7 +1238,7 @@ class SystemHealthCheck(models.Model):
     
     telegram_api_status = models.BooleanField(default=True)
     telegram_api_response_time = models.FloatField(null=True)
-    
+
     openai_api_status = models.BooleanField(default=True)
     openai_api_response_time = models.FloatField(null=True)
     
