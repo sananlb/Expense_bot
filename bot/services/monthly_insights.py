@@ -42,7 +42,7 @@ class MonthlyInsightsService:
             # Get service using AISelector directly with provider type
             self.ai_service = AISelector(provider)
             self.ai_provider = provider
-            self.ai_model = get_model('default', provider)
+            self.ai_model = get_model('insights', provider)
             logger.info(f"Initialized AI service: {provider} with model {self.ai_model}")
 
     async def _collect_month_data(
@@ -417,8 +417,9 @@ class MonthlyInsightsService:
         from expenses.models import Subscription
         has_active_subscription = await asyncio.to_thread(
             lambda: Subscription.objects.filter(
-                Q(profile=profile, is_active=True, end_date__gt=timezone.now()) |
-                Q(profile=profile, is_trial=True, is_active=True)
+                profile=profile,
+                is_active=True,
+                end_date__gt=timezone.now()
             ).exists()
         )
 

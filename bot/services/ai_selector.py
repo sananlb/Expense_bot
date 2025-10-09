@@ -24,6 +24,13 @@ AI_PROVIDERS = {
             'openai': os.getenv('OPENAI_MODEL_CHAT', 'gpt-4o-mini')
         }
     },
+    'insights': {
+        'provider': os.getenv('AI_PROVIDER_INSIGHTS', 'google'),  # Google по умолчанию
+        'model': {
+            'google': os.getenv('GOOGLE_MODEL_INSIGHTS', 'gemini-2.5-flash'),
+            'openai': os.getenv('OPENAI_MODEL_INSIGHTS', 'gpt-4o-mini')
+        }
+    },
     'default': {
         'provider': os.getenv('AI_PROVIDER_DEFAULT', 'google'),  # Google по умолчанию
         'model': {
