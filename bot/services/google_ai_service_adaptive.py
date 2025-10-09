@@ -130,15 +130,15 @@ if IS_WINDOWS:
         try:
             import google.generativeai as genai
             genai.configure(api_key=api_key)
-            
+
             prompt = f"""
             Categorize the expense "{text}" (amount: {amount} {currency}) into one of these categories:
             {', '.join(categories)}
-            
+
             Return ONLY valid JSON:
             {{"category": "selected_category", "confidence": 0.8, "reasoning": "brief explanation"}}
             """
-            
+
             model = genai.GenerativeModel('gemini-2.5-flash')
 
             # Safety settings
@@ -151,20 +151,41 @@ if IS_WINDOWS:
 
             response = model.generate_content(prompt, safety_settings=safety_settings)
 
-            # Безопасная проверка response.text
+            # Безопасная проверка response.text с детальной обработкой safety блокировки
             try:
                 if not response or not response.parts:
-                    return None
+                    # Собираем информацию о блокировке
+                    blocked_info = {'safety_blocked': True, 'blocked_categories': []}
+
+                    if hasattr(response, 'candidates') and response.candidates:
+                        for candidate in response.candidates:
+                            if hasattr(candidate, 'finish_reason'):
+                                blocked_info['finish_reason'] = str(candidate.finish_reason)
+
+                            if hasattr(candidate, 'safety_ratings') and candidate.safety_ratings:
+                                for rating in candidate.safety_ratings:
+                                    if rating.probability.name != 'NEGLIGIBLE':
+                                        blocked_info['blocked_categories'].append(
+                                            f"{rating.category.name}={rating.probability.name}"
+                                        )
+
+                    return blocked_info
+
                 text_response = response.text.strip()
             except ValueError as e:
                 if "valid Part" in str(e):
-                    return None  # Blocked by safety filters
+                    return {
+                        'safety_blocked': True,
+                        'error': str(e),
+                        'blocked_categories': []
+                    }
                 raise
+
             if text_response.startswith('```'):
                 text_response = text_response[text_response.find('\n')+1:text_response.rfind('```')]
-            
+
             result = json.loads(text_response)
-            
+
             if result.get('category') in categories:
                 return {
                     'category': result['category'],
@@ -172,10 +193,10 @@ if IS_WINDOWS:
                     'reasoning': result.get('reasoning', ''),
                     'provider': 'google'
                 }
-                
+
         except Exception as e:
             return {'error': str(e)}
-        
+
         return None
 
 else:
@@ -243,7 +264,31 @@ class GoogleAIService(GoogleKeyRotationMixin):
                 
                 # Вычисляем время ответа
                 response_time = time.time() - start_time
-                
+
+                # Проверяем на safety блокировку
+                safety_blocked = result and result.get('safety_blocked', False)
+
+                if safety_blocked:
+                    logger.warning(f"[GoogleAI-Adaptive] Content '{text[:30]}' blocked by safety filters on Windows")
+                    if result.get('blocked_categories'):
+                        logger.warning(f"[GoogleAI-Adaptive] Blocked by: {', '.join(result['blocked_categories'])}")
+                    if result.get('finish_reason'):
+                        logger.warning(f"[GoogleAI-Adaptive] Finish reason: {result['finish_reason']}")
+
+                # Определяем тип ошибки и успешность
+                error_type = None
+                error_message = None
+                success = result is not None and 'error' not in result and not safety_blocked
+
+                if safety_blocked:
+                    error_type = 'safety_blocked'
+                    error_message = 'Content blocked by safety filters'
+                    if result.get('blocked_categories'):
+                        error_message += f": {', '.join(result['blocked_categories'])}"
+                elif result and 'error' in result:
+                    error_type = 'process_error'
+                    error_message = result.get('error')
+
                 # Логируем метрики в БД
                 try:
                     from expenses.models import AIServiceMetrics
@@ -252,20 +297,27 @@ class GoogleAIService(GoogleKeyRotationMixin):
                         service='google',
                         operation_type='categorize_expense',
                         response_time=response_time,
-                        success=result is not None and 'error' not in result,
+                        success=success,
                         model_used='gemini-2.5-flash',
                         characters_processed=len(text),
                         user_id=user_context.get('user_id') if user_context else None,
-                        error_type=('process_error' if result and 'error' in result else None)[:100] if (result and 'error' in result) else None,
-                        error_message=result.get('error')[:500] if result and 'error' in result else None
+                        error_type=error_type[:100] if error_type else None,
+                        error_message=error_message[:500] if error_message else None
                     )
                 except Exception as e:
                     logger.warning(f"Failed to log AI metrics: {e}")
-                
+
                 logger.info(f"Google AI (Windows) categorization took {response_time:.2f}s")
-                
+
+                # Обрабатываем различные типы ошибок
+                if safety_blocked:
+                    logger.warning(f"[GoogleAI-Adaptive] Safety block detected, will fallback to OpenAI")
+                    return None
+
                 if result and 'error' in result:
                     logger.error(f"[GoogleAI-Adaptive] Process error: {result['error']}")
+                    # Помечаем ключ как failed только при реальных ошибках, не при safety блокировке
+                    self.mark_key_failure(key_index, Exception(result['error']))
                     return None
                     
             else:
