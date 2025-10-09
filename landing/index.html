@@ -60,17 +60,17 @@
       --primary: #2563eb;
       --primary-dark: #1e40af;
       --primary-light: #60a5fa;
-      --secondary: #818cf8;
+      --secondary: #6b7eb8;
       --accent: #fbbf24;
       --success: #10b981;
       --dark: #0f172a;
       --gray: #64748b;
       --light: #f8fafc;
       --white: #ffffff;
-      --gradient-1: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+      --gradient-1: linear-gradient(135deg, #4a5f9d 0%, #6b7eb8 100%);
       --gradient-2: linear-gradient(135deg, #f472b6 0%, #fb7185 100%);
       --gradient-3: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-      --gradient-hero: linear-gradient(180deg, rgba(99,102,241,0.02) 0%, rgba(129,140,248,0.02) 100%);
+      --gradient-hero: linear-gradient(180deg, rgba(74,95,157,0.02) 0%, rgba(107,126,184,0.02) 100%);
       --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
       --shadow: 0 4px 6px rgba(0,0,0,0.04), 0 2px 4px rgba(0,0,0,0.06);
       --shadow-lg: 0 10px 15px rgba(0,0,0,0.04), 0 4px 6px rgba(0,0,0,0.08);
@@ -1324,7 +1324,7 @@
     .cta-section {
       padding: 80px 0;
       /* Яркий насыщенный фон CTA */
-      background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+      background: var(--gradient-1);
       position: relative;
       overflow: hidden;
     }
@@ -1929,7 +1929,7 @@
       }
 
       .cta-section {
-        background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%);
+        background: var(--gradient-1);
       }
 
       .logo {
@@ -2183,7 +2183,7 @@
       }
 
       .cta-section {
-        background: linear-gradient(135deg, #6366f1 0%, #818cf8 100%) !important;
+        background: var(--gradient-1) !important;
       }
 
       /* Скрываем элементы в секции "Бот в действии" на мобильных */
@@ -2583,7 +2583,7 @@
               <tr style="background: #f8fafc;">
                 <th style="padding: 12px 8px; text-align: left; font-size: 14px; width: 60%;" data-i18n="pricing_features">Возможности</th>
                 <th style="padding: 12px 8px; text-align: center; font-size: 14px; width: 20%;" data-i18n="pricing_free">Free</th>
-                <th style="padding: 12px 8px; text-align: center; font-size: 14px; width: 20%; color: #818cf8; font-weight: 600;" data-i18n="pricing_premium">Premium</th>
+                <th style="padding: 12px 8px; text-align: center; font-size: 14px; width: 20%; color: #6b7eb8; font-weight: 600;" data-i18n="pricing_premium">Premium</th>
               </tr>
             </thead>
             <tbody>
@@ -2877,6 +2877,8 @@
           faq_a4: 'Subscriptions are not auto‑renewed — no accidental charges! One day before the end you’ll get a reminder to renew. Premium access remains until the end of the paid period, then switches to Free. Your data stays intact.'
         }
       };
+
+      window.translations = dict;
 
       function applyLang(lang) {
         const d = dict[lang] || dict.ru;
@@ -3258,7 +3260,22 @@
         this.preloadedVideos = [];
         // Получаем переводы из глобального объекта
         const currentLang = document.documentElement.getAttribute('data-lang') || 'ru';
-        const t = window.translations && window.translations[currentLang] ? window.translations[currentLang] : window.translations.ru;
+        const translations = window.translations || {};
+        const fallbackTranslations = {
+          slide_ai: 'Умная категоризация',
+          slide_recent: 'Последние траты',
+          slide_analytics: 'Аналитика расходов',
+          slide_cashback: 'Учет кешбэка',
+          slide_pdf: 'PDF-отчеты',
+          slide_questions: 'Вопросы боту',
+          slide_ai_ph: 'AI категоризация',
+          slide_recent_ph: 'История расходов',
+          slide_analytics_ph: 'Топ категорий',
+          slide_cashback_ph: 'Кешбэк',
+          slide_pdf_ph: 'Отчеты',
+          slide_questions_ph: 'Диалог с ботом'
+        };
+        const t = translations[currentLang] || translations.ru || fallbackTranslations;
 
         this.slideTitles = [
           t.slide_ai || 'Умная категоризация',
