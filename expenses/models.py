@@ -1687,3 +1687,137 @@ class AffiliateCommission(models.Model):
         from datetime import timedelta
         return self.created_at + timedelta(days=21)
 from .models_campaigns import AdvertiserCampaign
+
+
+class MonthlyInsight(models.Model):
+    """AI-generated monthly insights about user's expenses"""
+    profile = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name='monthly_insights',
+        verbose_name='Профиль'
+    )
+
+    # Period information
+    year = models.IntegerField(
+        verbose_name='Год',
+        db_index=True
+    )
+    month = models.IntegerField(
+        verbose_name='Месяц',
+        validators=[MinValueValidator(1), MaxValueValidator(12)],
+        db_index=True
+    )
+
+    # Financial data for the period
+    total_expenses = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        verbose_name='Всего расходов'
+    )
+    total_incomes = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0'),
+        verbose_name='Всего доходов'
+    )
+    expenses_count = models.IntegerField(
+        default=0,
+        verbose_name='Количество трат'
+    )
+
+    # Top categories data (JSON structure)
+    top_categories = models.JSONField(
+        default=list,
+        verbose_name='Топ категорий',
+        help_text='[{"category": "name", "amount": 1000, "percentage": 25}]'
+    )
+
+    # AI-generated insights
+    ai_summary = models.TextField(
+        verbose_name='AI резюме месяца',
+        help_text='Краткое резюме трат за месяц от AI'
+    )
+    ai_analysis = models.TextField(
+        verbose_name='AI анализ',
+        help_text='Детальный анализ трат и паттернов'
+    )
+    ai_recommendations = models.TextField(
+        verbose_name='AI рекомендации',
+        help_text='Рекомендации по оптимизации бюджета'
+    )
+
+    # AI service info
+    ai_model_used = models.CharField(
+        max_length=100,
+        verbose_name='Использованная AI модель'
+    )
+    ai_provider = models.CharField(
+        max_length=50,
+        choices=[
+            ('openai', 'OpenAI'),
+            ('google', 'Google AI'),
+        ],
+        verbose_name='AI провайдер'
+    )
+
+    # Generation metadata
+    generated_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Дата генерации'
+    )
+    regeneration_count = models.IntegerField(
+        default=0,
+        verbose_name='Количество регенераций'
+    )
+    last_regenerated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Последняя регенерация'
+    )
+
+    # User interaction
+    is_viewed = models.BooleanField(
+        default=False,
+        verbose_name='Просмотрено'
+    )
+    viewed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Дата просмотра'
+    )
+    user_rating = models.IntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        verbose_name='Оценка пользователя'
+    )
+
+    class Meta:
+        db_table = 'monthly_insights'
+        verbose_name = 'Месячный инсайт'
+        verbose_name_plural = 'Месячные инсайты'
+        unique_together = ['profile', 'year', 'month']
+        ordering = ['-year', '-month']
+        indexes = [
+            models.Index(fields=['profile', '-year', '-month']),
+            models.Index(fields=['generated_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.profile} - {self.month:02d}.{self.year}"
+
+    @property
+    def period_display(self):
+        """Display period in human-readable format"""
+        months_ru = {
+            1: 'Январь', 2: 'Февраль', 3: 'Март', 4: 'Апрель',
+            5: 'Май', 6: 'Июнь', 7: 'Июль', 8: 'Август',
+            9: 'Сентябрь', 10: 'Октябрь', 11: 'Ноябрь', 12: 'Декабрь'
+        }
+        return f"{months_ru.get(self.month, self.month)} {self.year}"
+
+    @property
+    def balance(self):
+        """Calculate balance for the period"""
+        return self.total_incomes - self.total_expenses
