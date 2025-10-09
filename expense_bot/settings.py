@@ -312,7 +312,7 @@ try:
     # },
     'send-monthly-reports': {
         'task': 'expense_bot.celery_tasks.send_monthly_reports',
-        'schedule': crontab(hour=20, minute=0),  # Every day at 20:00
+        'schedule': crontab(day_of_month=1, hour=10, minute=0),  # First day of month at 10:00
         'options': {'queue': 'reports'}
     },
     'check-budget-limits': {

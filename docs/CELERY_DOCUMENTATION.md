@@ -51,8 +51,8 @@ USE_DB_BEAT=true  # Использовать БД для хранения рас
 
 #### 1. Ежемесячные отчеты
 - **Задача:** `send_monthly_reports`
-- **Время:** Ежедневно в 20:00
-- **Функция:** Отправка отчетов в последний день месяца
+- **Время:** 1-го числа каждого месяца в 10:00
+- **Функция:** Отправка отчетов за прошедший месяц
 - **Очередь:** reports
 
 #### 2. Проверка лимитов бюджета
@@ -325,12 +325,12 @@ PeriodicTask.objects.update_or_create(
 )
 
 # 3. Создаем другие периодические задачи
-# Ежемесячные отчеты (20:00)
-schedule_20pm, _ = CrontabSchedule.objects.get_or_create(
+# Ежемесячные отчеты (1-го числа в 10:00)
+schedule_monthly_1st, _ = CrontabSchedule.objects.get_or_create(
     minute=0,
-    hour=20,
+    hour=10,
     day_of_week='*',
-    day_of_month='*', 
+    day_of_month='1',  # Только 1-го числа
     month_of_year='*',
     timezone=timezone.get_current_timezone()
 )
@@ -338,8 +338,8 @@ schedule_20pm, _ = CrontabSchedule.objects.get_or_create(
 PeriodicTask.objects.update_or_create(
     task='expense_bot.celery_tasks.send_monthly_reports',
     defaults={
-        'crontab': schedule_20pm,
-        'name': 'Monthly Reports at 20:00',
+        'crontab': schedule_monthly_1st,
+        'name': 'Monthly Reports on 1st at 10:00',
         'queue': 'reports',
         'enabled': True
     }

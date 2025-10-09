@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 @shared_task
 def send_monthly_reports():
-    """Send monthly expense reports to all users on the last day at 20:00"""
+    """Send monthly expense reports to all users on the 1st day of month at 10:00 for previous month"""
     try:
         from expenses.models import Profile, Expense
         from bot.services.notifications import NotificationService
@@ -27,24 +27,38 @@ def send_monthly_reports():
         bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('MONITORING_BOT_TOKEN')
         bot = Bot(token=bot_token)
         service = NotificationService(bot)
-        
-        # Check if today is the last day of month and time is 20:00
-        today = datetime.now()
-        last_day = monthrange(today.year, today.month)[1]
-        
-        if today.day != last_day:
-            logger.info(f"Not the last day of month ({today.day}/{last_day}), skipping monthly reports")
+
+        # Check if today is the 1st day of month and time is 10:00
+        # Use timezone-aware datetime to match CELERY_TIMEZONE (Europe/Moscow)
+        now = timezone.now()  # Returns timezone-aware datetime in Europe/Moscow
+
+        if now.day != 1:
+            logger.info(f"Not the 1st day of month (day={now.day}), skipping monthly reports")
             return
-        
-        if today.hour != 20:
-            logger.info(f"Not 20:00 ({today.hour}:00), skipping monthly reports")
+
+        if now.hour != 10:
+            logger.info(f"Not 10:00 ({now.hour}:00), skipping monthly reports")
             return
-        
-        # Get all active profiles who have expenses this month
-        month_start = today.replace(day=1)
+
+        today = now.date()
+
+        # Calculate previous month period
+        if today.month == 1:
+            prev_month = 12
+            prev_year = today.year - 1
+        else:
+            prev_month = today.month - 1
+            prev_year = today.year
+
+        # Get first and last day of previous month
+        month_start = today.replace(year=prev_year, month=prev_month, day=1)
+        last_day_of_prev_month = monthrange(prev_year, prev_month)[1]
+        month_end = today.replace(year=prev_year, month=prev_month, day=last_day_of_prev_month)
+
+        # Get all active profiles who have expenses in previous month
         profiles_with_expenses = Expense.objects.filter(
             expense_date__gte=month_start,
-            expense_date__lte=today
+            expense_date__lte=month_end
         ).values_list('profile_id', flat=True).distinct()
         
         profiles = Profile.objects.filter(
