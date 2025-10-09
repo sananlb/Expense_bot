@@ -108,15 +108,7 @@ class NotificationService:
 
     def _format_insight_text(self, insight, month: int, year: int) -> str:
         """Format insight for display in message"""
-        # Месяцы на русском
-        months_ru = {
-            1: 'Январь', 2: 'Февраль', 3: 'Март', 4: 'Апрель',
-            5: 'Май', 6: 'Июнь', 7: 'Июль', 8: 'Август',
-            9: 'Сентябрь', 10: 'Октябрь', 11: 'Ноябрь', 12: 'Декабрь'
-        }
-        period = f"{months_ru.get(month, month)} {year}"
-
-        text = f"🤖 <b>AI анализ за {period}</b>\n\n"
+        text = ""
 
         # Финансовая сводка (компактный формат)
         text += f"💰 Расходы: {float(insight.total_expenses):,.0f} ₽".replace(',', ' ')
