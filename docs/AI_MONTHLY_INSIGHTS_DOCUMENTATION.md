@@ -741,6 +741,185 @@ Q(subscriptions__is_trial=True, subscriptions__is_active=True)
 
 ---
 
+## Критические исправления (Commit 8ec9b0b)
+
+### ⚠️ Обнаруженные блокеры после code review:
+
+#### 1. **❌ БЛОКЕР: AI Fallback не работал**
+
+**Проблема:**
+```python
+# БЫЛО (bot/services/monthly_insights.py:39):
+self.ai_service = get_service(provider)  # ❌ 'openai' воспринимался как ключ конфига
+
+# get_service('openai') → config = AI_PROVIDERS.get('openai')  # None!
+# Fallback на 'default' → всегда возвращал Google сервис
+```
+
+**Симптом:** При сбое Google Gemini, fallback на OpenAI возвращал тот же Google сервис, приводя к повторной ошибке вместо переключения.
+
+**Исправление:**
+```python
+# СТАЛО:
+from .ai_selector import AISelector
+AISelector.clear_cache()  # Очистка кеша
+self.ai_service = AISelector(provider)  # Прямое использование селектора
+self.ai_model = get_model('default', provider)
+```
+
+**Результат:** Fallback теперь корректно переключается с Google на OpenAI.
+
+---
+
+#### 2. **❌ БЛОКЕР: Админ уведомления не отправлялись**
+
+**Проблема:**
+```python
+# БЫЛО (monthly_insights.py:605, 646):
+from ..services.admin_notifier import notify_admin  # ❌ Функция не существует!
+
+await notify_admin(message, level='warning')  # ImportError проглатывался except
+```
+
+**Симптом:** При fallback или сбое AI админ НЕ получал уведомления, хотя код пытался их отправить.
+
+**Исправление:**
+```python
+# СТАЛО:
+from bot.services.admin_notifier import send_admin_alert, escape_markdown_v2
+
+message = (
+    f"⚠️ *AI Provider Fallback*\n\n"
+    f"*User:* `{user_id}`\n"
+    f"*Period:* {month}/{year}\n"
+    f"*Primary provider failed:* {escape_markdown_v2(primary_provider)}\n"
+    f"*Fallback used:* {escape_markdown_v2(fallback_provider)}\n\n"
+    f"Check logs for details\\."
+)
+
+await send_admin_alert(message)
+```
+
+**Результат:** Админ теперь получает уведомления о fallback и сбоях.
+
+---
+
+#### 3. **❌ БЛОКЕР: Нет проверки подписки в generate_insight**
+
+**Проблема:**
+```python
+# БЫЛО (monthly_insights.py:389):
+async def generate_insight(profile, ...):
+    # Сразу начинает генерацию без проверки подписки
+    month_data = await self._collect_month_data(...)
+```
+
+**Симптом:**
+- В Celery задаче (`celery_tasks.py:58-72`) ЕСТЬ фильтрация по подписке
+- Но в `NotificationService.send_monthly_report` вызывается `generate_insight` напрямую
+- Если вызвать сервис вручную - генерация идет без проверки подписки
+
+**Исправление:**
+```python
+# СТАЛО:
+async def generate_insight(profile, ...):
+    # Проверяем подписку
+    from expenses.models import Subscription
+    has_active_subscription = await asyncio.to_thread(
+        lambda: Subscription.objects.filter(
+            Q(profile=profile, is_active=True, end_date__gt=timezone.now()) |
+            Q(profile=profile, is_trial=True, is_active=True)
+        ).exists()
+    )
+
+    if not has_active_subscription:
+        logger.info(f"User {profile.telegram_id} doesn't have active subscription")
+        return None
+
+    # Продолжаем генерацию...
+```
+
+**Результат:** Двойная защита - и в Celery задаче, и в самом сервисе.
+
+---
+
+#### 4. **❌ БЛОКЕР: Нет Celery задачи для автоматической генерации**
+
+**Проблема:**
+- Задача `send_monthly_reports` отправляет PDF, но **НЕ генерирует инсайты заранее**
+- `NotificationService` вызывает `generate_insight` синхронно при отправке
+- Если AI медленный или недоступен - пользователь ждет или не получает инсайт
+
+**Исправление:**
+
+**Добавлена новая Celery задача** `generate_monthly_insights`:
+
+```python
+# expense_bot/celery_tasks.py:95-182
+@shared_task
+def generate_monthly_insights():
+    """Generate AI insights for all active subscribers on the 1st day of month at 09:00"""
+    # Запускается за час до send_monthly_reports (в 09:00)
+    # Генерирует инсайты для всех пользователей с подпиской
+    # При отправке в 10:00 инсайты уже готовы (из кеша)
+```
+
+**Добавлен маршрут в Celery:**
+```python
+# expense_bot/celery.py:54-58
+'expense_bot.celery_tasks.generate_monthly_insights': {
+    'queue': 'reports',
+    'routing_key': 'report.insights',
+    'priority': 6,
+}
+```
+
+**Добавлено расписание:**
+```python
+# expense_bot/settings.py:313-317
+'generate-monthly-insights': {
+    'task': 'expense_bot.celery_tasks.generate_monthly_insights',
+    'schedule': crontab(day_of_month=1, hour=9, minute=0),
+    'options': {'queue': 'reports'}
+}
+```
+
+**Результат:**
+- 09:00 - генерация инсайтов для всех пользователей
+- 10:00 - отправка отчетов с уже готовыми инсайтами (из БД кеша)
+
+---
+
+### 🔧 Файлы с исправлениями:
+
+1. **bot/services/monthly_insights.py:**
+   - Строки 35-46: Исправлен AI selector
+   - Строки 416-427: Добавлена проверка подписки
+   - Строки 608-623: Исправлены уведомления админу (fallback)
+   - Строки 649-664: Исправлены уведомления админу (failure)
+
+2. **expense_bot/celery_tasks.py:**
+   - Строки 95-182: Новая задача generate_monthly_insights
+
+3. **expense_bot/celery.py:**
+   - Строки 54-58: Маршрутизация новой задачи
+
+4. **expense_bot/settings.py:**
+   - Строки 313-317: Расписание для generate_monthly_insights
+
+---
+
+### ✅ Результаты тестирования:
+
+```bash
+# Компиляция Python (синтаксис)
+python -m py_compile bot/services/monthly_insights.py  # ✅ OK
+python -m py_compile expense_bot/celery_tasks.py       # ✅ OK
+python -m py_compile expense_bot/settings.py           # ✅ OK
+```
+
+---
+
 ## Итоги реализации
 
 ### ✅ Что сделано:
@@ -757,13 +936,15 @@ Q(subscriptions__is_trial=True, subscriptions__is_active=True)
 ### 📊 Статистика:
 
 - **Новые файлы:** 1 (`bot/services/monthly_insights.py`)
-- **Измененные файлы:** 3 (notifications.py, celery_tasks.py, models.py)
+- **Измененные файлы:** 4 (notifications.py, celery_tasks.py, models.py, settings.py, celery.py)
 - **Миграции БД:** 1 (`0048_monthlyinsight.py`)
 - **Строк кода:** ~640 (сервис) + интеграция
-- **Коммиты:** 3
+- **Коммиты:** 5
   - `9f160fc` - Основная функциональность
   - `0f984e1` - Рефакторинг Top-5
   - `39b28c5` - Улучшения (доходы/подписка)
+  - `346bfd1` - Финальная документация
+  - `8ec9b0b` - **Критические исправления (блокеры)**
 
 ### 🎯 Результат:
 
