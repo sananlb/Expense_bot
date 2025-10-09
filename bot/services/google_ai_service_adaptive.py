@@ -93,10 +93,26 @@ def _process_chat_wrapper(api_key: str, message: str, context_str: str, user_inf
 Дай полезный и точный ответ на вопрос пользователя."""
         
         model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content(prompt)
-        
-        if response and response.text:
-            return response.text.strip()
+
+        # Safety settings
+        safety_settings = [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+        ]
+
+        response = model.generate_content(prompt, safety_settings=safety_settings)
+
+        # Безопасная проверка response.text
+        try:
+            if response and response.parts and response.text:
+                return response.text.strip()
+        except ValueError as e:
+            if "valid Part" in str(e):
+                return "Извините, не могу обработать этот запрос."
+            raise
+
         return "Не удалось получить ответ от AI"
     except Exception as e:
         return f"Ошибка AI: {str(e)}"
@@ -124,12 +140,26 @@ if IS_WINDOWS:
             """
             
             model = genai.GenerativeModel('gemini-2.5-flash')
-            response = model.generate_content(prompt)
-            
-            if not response or not response.text:
-                return None
-                
-            text_response = response.text.strip()
+
+            # Safety settings
+            safety_settings = [
+                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}
+            ]
+
+            response = model.generate_content(prompt, safety_settings=safety_settings)
+
+            # Безопасная проверка response.text
+            try:
+                if not response or not response.parts:
+                    return None
+                text_response = response.text.strip()
+            except ValueError as e:
+                if "valid Part" in str(e):
+                    return None  # Blocked by safety filters
+                raise
             if text_response.startswith('```'):
                 text_response = text_response[text_response.find('\n')+1:text_response.rfind('```')]
             
@@ -290,7 +320,43 @@ class GoogleAIService(GoogleKeyRotationMixin):
                 
                 # Вычисляем время ответа
                 response_time = time.time() - start_time
-                
+
+                # Проверяем блокировку по safety_ratings
+                response_text = None
+                safety_blocked = False
+
+                try:
+                    # Проверяем наличие parts перед обращением к response.text
+                    if not response or not response.parts:
+                        safety_blocked = True
+                        logger.warning("[GoogleAI-Adaptive] Response has no parts - likely blocked by safety filters")
+
+                        # Логируем детали блокировки
+                        if hasattr(response, 'candidates') and response.candidates:
+                            for i, candidate in enumerate(response.candidates):
+                                if hasattr(candidate, 'finish_reason'):
+                                    logger.warning(f"[GoogleAI-Adaptive] Candidate {i} finish_reason: {candidate.finish_reason}")
+
+                                if hasattr(candidate, 'safety_ratings') and candidate.safety_ratings:
+                                    blocked_categories = []
+                                    for rating in candidate.safety_ratings:
+                                        if rating.probability.name != 'NEGLIGIBLE':
+                                            blocked_categories.append(f"{rating.category.name}={rating.probability.name}")
+
+                                    if blocked_categories:
+                                        logger.warning(f"[GoogleAI-Adaptive] Blocked by: {', '.join(blocked_categories)}")
+                    else:
+                        response_text = response.text.strip()
+
+                except ValueError as e:
+                    if "valid Part" in str(e):
+                        safety_blocked = True
+                        logger.warning(f"[GoogleAI-Adaptive] Response blocked by safety filters: {e}")
+                    else:
+                        logger.error(f"[GoogleAI-Adaptive] ValueError getting response text: {e}")
+                except Exception as e:
+                    logger.error(f"[GoogleAI-Adaptive] Unexpected error getting response text: {e}")
+
                 # Логируем метрики в БД
                 try:
                     from expenses.models import AIServiceMetrics
@@ -299,21 +365,26 @@ class GoogleAIService(GoogleKeyRotationMixin):
                         service='google',
                         operation_type='categorize_expense',
                         response_time=response_time,
-                        success=response is not None and response.text is not None,
+                        success=response_text is not None,
                         model_used='gemini-2.5-flash',
                         characters_processed=len(text),
-                        user_id=user_context.get('user_id') if user_context else None
+                        user_id=user_context.get('user_id') if user_context else None,
+                        error_type='safety_blocked' if safety_blocked else None,
+                        error_message='Content blocked by safety filters' if safety_blocked else None
                     )
                 except Exception as e:
                     logger.warning(f"Failed to log AI metrics: {e}")
-                
+
                 logger.info(f"Google AI (async) categorization took {response_time:.2f}s")
-                
-                if not response or not response.text:
+
+                if not response_text:
+                    # Помечаем ключ как требующий fallback при safety блокировке
+                    if safety_blocked:
+                        logger.warning(f"[GoogleAI-Adaptive] Content '{text[:30]}' blocked by safety filters, will fallback to OpenAI")
                     return None
-                    
+
                 # Парсим ответ
-                text_response = response.text.strip()
+                text_response = response_text
                 if text_response.startswith('```'):
                     text_response = text_response[text_response.find('\n')+1:text_response.rfind('```')]
                 
