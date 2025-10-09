@@ -106,21 +106,18 @@ def calculate_top5_sync(profile: Profile, window_start: date, window_end: date) 
     # Оставляем только группы с count >= 2
     candidates = [v for v in groups.values() if v['count'] >= 2]
 
-    # Делим на расходы/доходы с сортировкой
+    # Сортируем все операции вместе (расходы и доходы) по count, last_at, title
     def sort_key(it):
         return (-it['count'], -(it['last_at'].timestamp() if it['last_at'] else 0), it['title_norm'])
 
-    expenses_sorted = sorted([g for g in candidates if g['op_type'] == 'expense'], key=sort_key)
-    incomes_sorted = sorted([g for g in candidates if g['op_type'] == 'income'], key=sort_key)
+    all_sorted = sorted(candidates, key=sort_key)
 
-    # Слияние: сначала расходы, затем доходы, максимум 5
+    # Берем первые 5 операций (расходы и доходы вместе)
     final: List[Dict] = []
-    for lst in (expenses_sorted, incomes_sorted):
-        for g in lst:
-            if len(final) < 5:
-                g_copy = dict(g)
-                g_copy['id'] = _make_id(g['title_norm'], g['category_id'], g['amount_norm'], g['currency'], g['op_type'])
-                final.append(g_copy)
+    for g in all_sorted[:5]:
+        g_copy = dict(g)
+        g_copy['id'] = _make_id(g['title_norm'], g['category_id'], g['amount_norm'], g['currency'], g['op_type'])
+        final.append(g_copy)
 
     # Разрешаем коллизии категорий: найдём множества с одинаковыми (title_norm, amount_norm, currency, op_type)
     key_counts: Dict[Tuple, int] = {}
@@ -131,15 +128,33 @@ def calculate_top5_sync(profile: Profile, window_start: date, window_end: date) 
         kk = (it['title_norm'], str(it['amount_norm']), it['currency'], it['op_type'])
         it['needs_category_hint'] = key_counts[kk] > 1
 
-    # Подготовка к сериализации для JSONField
+    # Подготовка к сериализации для JSONField с предзагрузкой эмодзи категорий
     serialized: List[Dict] = []
     for it in final:
+        # Получаем эмодзи и название категории для сохранения в снепшот
+        category_emoji = None
+        category_name = None
+        try:
+            if it['category_kind'] == 'expense' and it['category_id']:
+                cat = ExpenseCategory.objects.filter(id=it['category_id']).first()
+            elif it['category_kind'] == 'income' and it['category_id']:
+                cat = IncomeCategory.objects.filter(id=it['category_id']).first()
+            else:
+                cat = None
+            if cat:
+                category_emoji = get_category_emoji(cat)
+                category_name = get_category_display_name(cat)
+        except Exception:
+            pass
+
         serialized.append({
             'id': it['id'],
             'title_display': it.get('title_display') or '',
             'title_norm': it.get('title_norm') or '',
             'category_id': int(it.get('category_id') or 0),
             'category_kind': it.get('category_kind') or 'expense',
+            'category_emoji': category_emoji,  # Сохраняем эмодзи в снепшот
+            'category_name': category_name,     # Сохраняем название в снепшот
             'amount': float(it.get('amount_norm') or 0),  # используем нормализованную сумму
             'amount_norm': float(it.get('amount_norm') or 0),
             'currency': (it.get('currency') or 'RUB').upper(),
@@ -173,7 +188,7 @@ def save_snapshot(profile: Profile, window_start: date, window_end: date, items:
 
 def build_top5_keyboard(items: List[Dict], lang: str = 'ru') -> InlineKeyboardMarkup:
     rows = []
-    # Предварительно соберём подсказки категорий
+    # Используем предзагруженные данные из снепшота
     for it in items:
         title = it.get('title_display') or ''
         if len(title) > 30:
@@ -192,22 +207,13 @@ def build_top5_keyboard(items: List[Dict], lang: str = 'ru') -> InlineKeyboardMa
         # Между названием и суммой с тире
         btn_text = f"{title} — {amt_vis}"
         if it.get('needs_category_hint'):
-            # Добавляем эмодзи категории, если есть; иначе краткое имя в скобках
-            cat_emoji = None
-            try:
-                if it['category_kind'] == 'expense' and it['category_id']:
-                    cat = ExpenseCategory.objects.filter(id=it['category_id']).first()
-                elif it['category_kind'] == 'income' and it['category_id']:
-                    cat = IncomeCategory.objects.filter(id=it['category_id']).first()
-                else:
-                    cat = None
-                cat_emoji = get_category_emoji(cat) if cat else None
-                if cat_emoji:
-                    btn_text += f" {cat_emoji}"
-                elif cat:
-                    btn_text += f" ({get_category_display_name(cat)})"
-            except Exception:
-                pass
+            # Используем сохраненные в снепшоте эмодзи и название
+            cat_emoji = it.get('category_emoji')
+            cat_name = it.get('category_name')
+            if cat_emoji:
+                btn_text += f" {cat_emoji}"
+            elif cat_name:
+                btn_text += f" ({cat_name})"
 
         rows.append([InlineKeyboardButton(text=btn_text, callback_data=f"t5:{it['id']}")])
 

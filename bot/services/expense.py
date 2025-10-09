@@ -100,10 +100,19 @@ def create_expense(
             ai_categorized=ai_categorized,
             ai_confidence=ai_confidence
         )
-        
+
         # Обновляем объект с загруженным profile для корректной работы
         expense.profile = profile
-        
+
+        # Если категория определена AI с высокой уверенностью, обучаем систему
+        if ai_categorized and category_id and description and ai_confidence and ai_confidence >= 0.8:
+            from expense_bot.celery_tasks import learn_keywords_on_create
+            learn_keywords_on_create.delay(
+                expense_id=expense.id,
+                category_id=category_id
+            )
+            logger.info(f"Triggered keywords learning for new expense {expense.id}")
+
         logger.info(f"Created expense {expense.id} for user {user_id}")
         return expense
     except ValueError:

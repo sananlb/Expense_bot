@@ -1273,6 +1273,68 @@ def update_keywords_weights(expense_id: int, old_category_id: int, new_category_
         logger.error(f"Error in update_keywords_weights task: {e}")
 
 
+@shared_task
+def learn_keywords_on_create(expense_id: int, category_id: int):
+    """
+    Обучение системы при создании новой траты с AI-категоризацией.
+    Запускается если AI определил категорию с высокой уверенностью (>= 0.8).
+    """
+    try:
+        from expenses.models import Expense, ExpenseCategory, CategoryKeyword
+
+        # Попробуем импортировать spellchecker, если не получится - используем без проверки
+        try:
+            from bot.utils.spellchecker import check_and_correct_text
+        except ImportError:
+            def check_and_correct_text(text):
+                return text  # Возвращаем текст без изменений
+
+        # Получаем объекты
+        expense = Expense.objects.get(id=expense_id)
+        category = ExpenseCategory.objects.get(id=category_id)
+
+        # Извлекаем и очищаем слова из описания
+        words = extract_words_from_description(expense.description)
+
+        # Проверяем правописание
+        corrected_words = []
+        for word in words:
+            corrected = check_and_correct_text(word)
+            if corrected and len(corrected) >= 3:  # Минимум 3 буквы
+                corrected_words.append(corrected.lower())
+
+        words = corrected_words
+
+        # Добавляем ключевые слова для категории
+        for word in words:
+            keyword, created = CategoryKeyword.objects.get_or_create(
+                category=category,
+                keyword=word,
+                defaults={'normalized_weight': 1.0, 'usage_count': 0}
+            )
+
+            # Увеличиваем счетчик использований (но меньше чем при ручном исправлении)
+            # При AI-категоризации увеличиваем на 0.5, при ручном на 1.0
+            if created:
+                keyword.usage_count = 0.5
+            else:
+                keyword.usage_count += 0.5
+            keyword.save()
+
+            logger.info(f"Learned keyword '{word}' for category '{category.name}' from AI (user {expense.profile.telegram_id})")
+
+        # Пересчитываем нормализованные веса для конфликтующих слов
+        recalculate_normalized_weights(expense.profile.id, words)
+
+        # Проверяем лимит 50 слов на категорию
+        check_category_keywords_limit(category)
+
+        logger.info(f"Successfully learned keywords from AI for expense {expense_id}")
+
+    except Exception as e:
+        logger.error(f"Error in learn_keywords_on_create task: {e}")
+
+
 def extract_words_from_description(description: str) -> List[str]:
     """Извлекает значимые слова из описания расхода"""
     # Удаляем числа, валюту, знаки препинания

@@ -159,33 +159,23 @@ async def send_message_with_cleanup(
     # Если это callback query, отвечаем на него
     if isinstance(message, CallbackQuery):
         await message.answer()
-        # Если старое меню совпадает с текущим сообщением callback, редактируем его
-        if old_menu_id == message.message.message_id:
-            try:
-                edited_msg = await message.message.edit_text(
-                    text=text,
-                    reply_markup=reply_markup,
-                    **kwargs
-                )
-                # Важно: обновляем ID сообщения в состоянии даже при редактировании
-                if not keep_message:
-                    await state.update_data(last_menu_message_id=edited_msg.message_id)
-                return edited_msg
-            except Exception:
-                # Если не удалось отредактировать, отправляем новое
-                pass
+        # НЕ редактируем старое сообщение - всегда создаем новое и удаляем старое
+        # Это обеспечивает правильный порядок: новое появляется, потом старое исчезает
     
-    # Отправляем новое сообщение
+    # Отправляем новое сообщение СНАЧАЛА
     sent_message = await bot.send_message(
         chat_id=chat_id,
         text=text,
         reply_markup=reply_markup,
         **kwargs
     )
-    
-    # Удаляем старое меню после успешной отправки нового (только если это не сообщение о трате)
+
+    # Удаляем старое меню ПОСЛЕ успешной отправки нового (без задержки)
     if old_menu_id and old_menu_id != sent_message.message_id and not keep_message:
-        asyncio.create_task(delete_message_with_effect(bot, chat_id, old_menu_id))
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=old_menu_id)
+        except Exception as e:
+            logger.debug(f"Не удалось удалить старое меню {old_menu_id}: {e}")
     
     # Сохраняем ID нового сообщения, если есть клавиатура и не надо сохранять сообщение
     if reply_markup is not None and not keep_message:

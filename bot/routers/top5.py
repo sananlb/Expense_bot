@@ -42,13 +42,12 @@ async def show_top5(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'
             await callback.answer(get_text('error_occurred', lang), show_alert=True)
             return
 
-        # Пытаемся взять снепшот, иначе считаем
+        # Всегда пересчитываем топ-5 для актуальности данных
+        items, digest = await calculate_top5_sync(profile, window_start, window_end)
+
+        # Проверяем нужно ли обновить снепшот
         snapshot = await sync_to_async(Top5Snapshot.objects.filter(profile=profile).first)()
-        items = []
-        if snapshot and snapshot.window_start == window_start and snapshot.window_end == window_end:
-            items = snapshot.items or []
-        else:
-            items, digest = await calculate_top5_sync(profile, window_start, window_end)
+        if not snapshot or snapshot.hash != digest or snapshot.window_start != window_start or snapshot.window_end != window_end:
             await save_snapshot(profile, window_start, window_end, items, digest)
 
         # Формируем текст
@@ -76,7 +75,7 @@ async def show_top5(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'
 async def handle_top5_click(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """
     Обработка нажатия на кнопку топ-5.
-    Эмулирует отправку текстового сообщения пользователем для полной идентичности обработки.
+    Создает сообщение от пользователя и обрабатывает его стандартным парсером.
     """
     try:
         key = callback.data.split(':', 1)[1]
@@ -101,29 +100,36 @@ async def handle_top5_click(callback: CallbackQuery, state: FSMContext, lang: st
         title = item.get('title_display') or ''
         amount = Decimal(str(item.get('amount_norm')))
 
+        # Форматируем сумму (убираем .0 для целых чисел)
+        if amount == amount.to_integral_value():
+            amount_str = str(int(amount))
+        else:
+            amount_str = str(amount)
+
         # Формируем текст сообщения как если бы пользователь сам его написал
         # Для дохода добавляем "+" в начале
         if op_type == 'income':
-            message_text = f"+{amount} {title}"
+            message_text = f"+{amount_str} {title}"
         else:
-            message_text = f"{amount} {title}"
-
-        # Создаем эмулированное сообщение от пользователя
-        # ВАЖНО: Копируем существующее сообщение чтобы сохранить привязку к боту
-        fake_message = callback.message.model_copy(
-            update={
-                'message_id': callback.message.message_id + 1,
-                'text': message_text
-            }
-        )
+            message_text = f"{amount_str} {title}"
 
         # Подтверждаем нажатие кнопки
         await callback.answer()
 
+        # Создаем копию сообщения от пользователя (копируем callback.message чтобы сохранить bot)
+        # Меняем from_user на реального пользователя и text на наш текст
+        user_message = callback.message.model_copy(
+            update={
+                'message_id': callback.message.message_id + 1,
+                'from_user': callback.from_user,
+                'text': message_text
+            }
+        )
+
         # Вызываем основной обработчик текстовых сообщений
         from bot.routers.expense import handle_text_expense
         await handle_text_expense(
-            message=fake_message,
+            message=user_message,
             state=state,
             text=message_text,
             lang=lang
