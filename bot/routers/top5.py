@@ -4,18 +4,14 @@ Router for Top-5 quick operations
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
-from datetime import date, timedelta
-from calendar import monthrange
+from datetime import date
 from decimal import Decimal
 import logging
 
-from bot.utils import get_text, format_amount
+from bot.utils import get_text
 from bot.utils.message_utils import send_message_with_cleanup
-from bot.services.expense import create_expense
-from bot.services.income import create_income
 from bot.services.top5 import (
     calculate_top5_sync, build_top5_keyboard, save_snapshot,
-    get_current_cashback_amount,
 )
 from expenses.models import Profile, Top5Snapshot, Top5Pin
 from asgiref.sync import sync_to_async
@@ -77,7 +73,11 @@ async def show_top5(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'
 
 
 @router.callback_query(F.data.startswith("t5:"))
-async def handle_top5_click(callback: CallbackQuery, lang: str = 'ru'):
+async def handle_top5_click(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """
+    Обработка нажатия на кнопку топ-5.
+    Эмулирует отправку текстового сообщения пользователем для полной идентичности обработки.
+    """
     try:
         key = callback.data.split(':', 1)[1]
         # Находим профиль и актуальный снепшот
@@ -96,61 +96,39 @@ async def handle_top5_click(callback: CallbackQuery, lang: str = 'ru'):
             await callback.answer(get_text('top5_empty', lang), show_alert=True)
             return
 
-        # Создаём операцию
+        # Извлекаем данные операции
         op_type = item.get('op_type')
         title = item.get('title_display') or ''
-        category_id = item.get('category_id') or None
         amount = Decimal(str(item.get('amount_norm')))
-        currency = (item.get('currency') or 'RUB').upper()
 
+        # Формируем текст сообщения как если бы пользователь сам его написал
+        # Для дохода добавляем "+" в начале
         if op_type == 'income':
-            income = await create_income(
-                user_id=callback.from_user.id,
-                amount=amount,
-                category_id=category_id,
-                description=title,
-                currency=currency
-            )
-            if income:
-                # Подтверждение в стиле обычной записи дохода
-                from expenses.models import Income as IncomeModel
-                income_obj = await sync_to_async(IncomeModel.objects.select_related('category','profile').get)(id=income.id)
-                from bot.utils.expense_messages import format_income_added_message
-                msg = await format_income_added_message(income_obj, income_obj.category, lang=lang)
-                await callback.message.answer(msg, parse_mode='HTML')
-            else:
-                await callback.answer("Не удалось создать доход", show_alert=True)
+            message_text = f"+{amount} {title}"
         else:
-            expense = await create_expense(
-                user_id=callback.from_user.id,
-                amount=amount,
-                category_id=category_id,
-                description=title,
-                currency=currency
-            )
-            if expense:
-                # Подтверждение в стиле обычной записи расхода, с кешбэком
-                cb_amount = await get_current_cashback_amount(profile, category_id or 0, amount, date.today())
-                from expenses.models import Expense as ExpenseModel
-                expense_obj = await sync_to_async(ExpenseModel.objects.select_related('category','profile').get)(id=expense.id)
-                cashback_text = ""
-                if cb_amount and cb_amount > 0:
-                    cb_text = format_amount(float(cb_amount), currency=currency, lang=lang)
-                    parts = cb_text.split(' ')
-                    if len(parts) == 2:
-                        cashback_text = f" (+{parts[0]} {parts[1]})"
-                    else:
-                        cashback_text = f" (+{cb_text})"
-                from bot.utils.expense_messages import format_expense_added_message
-                msg = await format_expense_added_message(
-                    expense=expense_obj,
-                    category=expense_obj.category,
-                    cashback_text=cashback_text,
-                    lang=lang
-                )
-                await callback.message.answer(msg, parse_mode='HTML')
-            else:
-                await callback.answer("Не удалось создать расход", show_alert=True)
+            message_text = f"{amount} {title}"
+
+        # Создаем эмулированное сообщение от пользователя
+        # ВАЖНО: Копируем существующее сообщение чтобы сохранить привязку к боту
+        fake_message = callback.message.model_copy(
+            update={
+                'message_id': callback.message.message_id + 1,
+                'text': message_text
+            }
+        )
+
+        # Подтверждаем нажатие кнопки
+        await callback.answer()
+
+        # Вызываем основной обработчик текстовых сообщений
+        from bot.routers.expense import handle_text_expense
+        await handle_text_expense(
+            message=fake_message,
+            state=state,
+            text=message_text,
+            lang=lang
+        )
+
     except Exception as e:
         logger.error(f"Error handling Top-5 click: {e}")
         await callback.answer("Ошибка обработки кнопки", show_alert=True)
