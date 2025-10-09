@@ -102,22 +102,41 @@ class OpenAIService(AIBaseService):
             start_time = time.time()
             
             # Асинхронный вызов
-            response = await asyncio.to_thread(
-                client.chat.completions.create,
-                model=model_name,
-                messages=[
+            # Для новых моделей используем специальные параметры
+            completion_params = {
+                "model": model_name,
+                "messages": [
                     {
-                        "role": "system", 
+                        "role": "system",
                         "content": "Ты помощник для категоризации расходов. Отвечай только валидным JSON."
                     },
                     {
-                        "role": "user", 
+                        "role": "user",
                         "content": prompt
                     }
                 ],
-                max_tokens=1000,  # Увеличиваем до 1000
-                temperature=0.1,
-                response_format={"type": "json_object"}
+                "response_format": {"type": "json_object"}
+            }
+
+            # Настройки для разных типов моделей
+            is_reasoning_model = 'o1' in model_name or 'o3' in model_name
+            is_gpt5 = 'gpt-5' in model_name
+
+            if is_reasoning_model or is_gpt5:
+                # Новые модели используют max_completion_tokens
+                completion_params["max_completion_tokens"] = 1000
+
+                # Только gpt-5 не поддерживает кастомный temperature
+                if not is_gpt5:
+                    completion_params["temperature"] = 0.1
+            else:
+                # Старые модели (gpt-4, gpt-3.5)
+                completion_params["max_tokens"] = 1000
+                completion_params["temperature"] = 0.1
+
+            response = await asyncio.to_thread(
+                client.chat.completions.create,
+                **completion_params
             )
             
             # Вычисляем время ответа
