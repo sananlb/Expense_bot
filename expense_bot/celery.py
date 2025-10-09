@@ -48,8 +48,13 @@ else:  # Linux and other Unix systems
 app.conf.task_routes = {
     'expense_bot.celery_tasks.send_monthly_reports': {
         'queue': 'reports',
-        'routing_key': 'report.monthly', 
+        'routing_key': 'report.monthly',
         'priority': 5,
+    },
+    'expense_bot.celery_tasks.generate_monthly_insights': {
+        'queue': 'reports',
+        'routing_key': 'report.insights',
+        'priority': 6,
     },
     'expense_bot.celery_tasks.check_budget_limits': {
         'queue': 'notifications',

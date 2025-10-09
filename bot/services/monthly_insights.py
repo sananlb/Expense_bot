@@ -35,10 +35,14 @@ class MonthlyInsightsService:
     def _initialize_ai(self, provider: str = 'google'):
         """Initialize AI service based on provider"""
         if not self.ai_service or self.ai_provider != provider:
-            # Use provider-specific service instead of always 'default'
-            self.ai_service = get_service(provider)
+            # Clear cache to force new provider
+            from .ai_selector import AISelector
+            AISelector.clear_cache()
+
+            # Get service using AISelector directly with provider type
+            self.ai_service = AISelector(provider)
             self.ai_provider = provider
-            self.ai_model = get_model(provider, provider)
+            self.ai_model = get_model('default', provider)
             logger.info(f"Initialized AI service: {provider} with model {self.ai_model}")
 
     async def _collect_month_data(
@@ -409,6 +413,19 @@ class MonthlyInsightsService:
             year = year or now.year
             month = month or now.month
 
+        # Check if user has active subscription
+        from expenses.models import Subscription
+        has_active_subscription = await asyncio.to_thread(
+            lambda: Subscription.objects.filter(
+                Q(profile=profile, is_active=True, end_date__gt=timezone.now()) |
+                Q(profile=profile, is_trial=True, is_active=True)
+            ).exists()
+        )
+
+        if not has_active_subscription:
+            logger.info(f"User {profile.telegram_id} doesn't have active subscription, skipping insight generation")
+            return None
+
         # Check if insight already exists
         existing_insight = await asyncio.to_thread(
             lambda: MonthlyInsight.objects.filter(
@@ -602,18 +619,18 @@ class MonthlyInsightsService:
         _last_fallback_notification[key] = now
 
         try:
-            from ..services.admin_notifier import notify_admin
+            from bot.services.admin_notifier import send_admin_alert, escape_markdown_v2
 
             message = (
-                f"⚠️ <b>AI Provider Fallback</b>\n\n"
-                f"<b>User:</b> {user_id}\n"
-                f"<b>Period:</b> {month}/{year}\n"
-                f"<b>Primary provider failed:</b> {primary_provider}\n"
-                f"<b>Fallback used:</b> {fallback_provider}\n\n"
-                f"Check logs for details."
+                f"⚠️ *AI Provider Fallback*\n\n"
+                f"*User:* `{user_id}`\n"
+                f"*Period:* {month}/{year}\n"
+                f"*Primary provider failed:* {escape_markdown_v2(primary_provider)}\n"
+                f"*Fallback used:* {escape_markdown_v2(fallback_provider)}\n\n"
+                f"Check logs for details\\."
             )
 
-            await notify_admin(message, level='warning')
+            await send_admin_alert(message)
             logger.info(f"Admin notified about fallback from {primary_provider} to {fallback_provider}")
         except Exception as e:
             logger.error(f"Failed to notify admin about fallback: {e}")
@@ -643,18 +660,18 @@ class MonthlyInsightsService:
         _last_failure_notification[key] = now
 
         try:
-            from ..services.admin_notifier import notify_admin
+            from bot.services.admin_notifier import send_admin_alert, escape_markdown_v2
 
             message = (
-                f"🔴 <b>AI Insights Generation Failed</b>\n\n"
-                f"<b>User:</b> {user_id}\n"
-                f"<b>Period:</b> {month}/{year}\n"
-                f"<b>Status:</b> All AI providers failed\n\n"
-                f"User will receive monthly report without AI insights.\n"
-                f"Check logs and AI service status."
+                f"🔴 *AI Insights Generation Failed*\n\n"
+                f"*User:* `{user_id}`\n"
+                f"*Period:* {month}/{year}\n"
+                f"*Status:* All AI providers failed\n\n"
+                f"User will receive monthly report without AI insights\\.\n"
+                f"Check logs and AI service status\\."
             )
 
-            await notify_admin(message, level='critical')
+            await send_admin_alert(message)
             logger.info(f"Admin notified about complete AI failure for {user_id} {month}/{year}")
         except Exception as e:
             logger.error(f"Failed to notify admin about failure: {e}")

@@ -70,13 +70,13 @@ def send_monthly_reports():
             Q(subscriptions__is_active=True, subscriptions__end_date__gt=timezone.now()) |
             Q(subscriptions__is_trial=True, subscriptions__is_active=True)
         ).distinct()
-        
+
         logger.info(f"Sending monthly reports to {profiles.count()} users with expenses")
-        
+
         # Run async function in sync context
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         for profile in profiles:
             try:
                 loop.run_until_complete(
@@ -85,11 +85,101 @@ def send_monthly_reports():
                 logger.info(f"Monthly report sent to user {profile.telegram_id}")
             except Exception as e:
                 logger.error(f"Error sending monthly report to user {profile.telegram_id}: {e}")
-        
+
         loop.close()
-        
+
     except Exception as e:
         logger.error(f"Error in send_monthly_reports task: {e}")
+
+
+@shared_task
+def generate_monthly_insights():
+    """Generate AI insights for all active subscribers on the 1st day of month at 09:00 for previous month"""
+    try:
+        from expenses.models import Profile, Expense, Subscription
+        from bot.services.monthly_insights import MonthlyInsightsService
+        from calendar import monthrange
+
+        # Check if today is the 1st day of month and time is 09:00
+        now = timezone.now()
+
+        if now.day != 1:
+            logger.info(f"Not the 1st day of month (day={now.day}), skipping insights generation")
+            return
+
+        if now.hour != 9:
+            logger.info(f"Not 09:00 ({now.hour}:00), skipping insights generation")
+            return
+
+        today = now.date()
+
+        # Calculate previous month period
+        if today.month == 1:
+            prev_month = 12
+            prev_year = today.year - 1
+        else:
+            prev_month = today.month - 1
+            prev_year = today.year
+
+        # Get first and last day of previous month
+        month_start = today.replace(year=prev_year, month=prev_month, day=1)
+        last_day_of_prev_month = monthrange(prev_year, prev_month)[1]
+        month_end = today.replace(year=prev_year, month=prev_month, day=last_day_of_prev_month)
+
+        # Get profiles with expenses in previous month AND active subscription
+        profiles_with_expenses = Expense.objects.filter(
+            expense_date__gte=month_start,
+            expense_date__lte=month_end
+        ).values_list('profile_id', flat=True).distinct()
+
+        # Filter profiles with active subscription
+        profiles = Profile.objects.filter(
+            id__in=profiles_with_expenses
+        ).filter(
+            Q(subscriptions__is_active=True, subscriptions__end_date__gt=timezone.now()) |
+            Q(subscriptions__is_trial=True, subscriptions__is_active=True)
+        ).distinct()
+
+        logger.info(f"Generating AI insights for {profiles.count()} users with active subscriptions")
+
+        # Initialize service
+        service = MonthlyInsightsService()
+
+        # Run async function in sync context
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        success_count = 0
+        fail_count = 0
+
+        for profile in profiles:
+            try:
+                insight = loop.run_until_complete(
+                    service.generate_insight(
+                        profile=profile,
+                        year=prev_year,
+                        month=prev_month,
+                        provider='google',
+                        force_regenerate=False
+                    )
+                )
+
+                if insight:
+                    success_count += 1
+                    logger.info(f"Generated insight for user {profile.telegram_id} for {prev_month}/{prev_year}")
+                else:
+                    logger.info(f"Skipped insight for user {profile.telegram_id} (insufficient data or no subscription)")
+
+            except Exception as e:
+                fail_count += 1
+                logger.error(f"Error generating insight for user {profile.telegram_id}: {e}")
+
+        loop.close()
+
+        logger.info(f"Insights generation completed: {success_count} successful, {fail_count} failed")
+
+    except Exception as e:
+        logger.error(f"Error in generate_monthly_insights task: {e}")
 
 
 @shared_task
