@@ -55,15 +55,21 @@ def send_monthly_reports():
         last_day_of_prev_month = monthrange(prev_year, prev_month)[1]
         month_end = today.replace(year=prev_year, month=prev_month, day=last_day_of_prev_month)
 
-        # Get all active profiles who have expenses in previous month
+        # Get all active profiles who have expenses in previous month AND active subscription
+        from expenses.models import Subscription
+
         profiles_with_expenses = Expense.objects.filter(
             expense_date__gte=month_start,
             expense_date__lte=month_end
         ).values_list('profile_id', flat=True).distinct()
-        
+
+        # Filter profiles with active subscription
         profiles = Profile.objects.filter(
             id__in=profiles_with_expenses
-        )
+        ).filter(
+            Q(subscriptions__is_active=True, subscriptions__end_date__gt=timezone.now()) |
+            Q(subscriptions__is_trial=True, subscriptions__is_active=True)
+        ).distinct()
         
         logger.info(f"Sending monthly reports to {profiles.count()} users with expenses")
         

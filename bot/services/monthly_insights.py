@@ -174,6 +174,8 @@ class MonthlyInsightsService:
 
         # Build comparison section if previous month data exists
         comparison_section = ""
+        has_income = month_data['total_incomes'] > 0
+
         if prev_month_data:
             # Calculate previous month
             prev_month = month - 1 if month > 1 else 12
@@ -183,21 +185,38 @@ class MonthlyInsightsService:
             expense_change = month_data['total_expenses'] - prev_month_data['total_expenses']
             expense_change_pct = (expense_change / prev_month_data['total_expenses'] * 100) if prev_month_data['total_expenses'] > 0 else 0
 
-            comparison_section = f"""
+            # Include income comparison only if current month has income
+            if has_income:
+                comparison_section = f"""
 СРАВНЕНИЕ С ПРЕДЫДУЩИМ МЕСЯЦЕМ ({prev_month_name}):
 - Расходы в прошлом месяце: {float(prev_month_data['total_expenses']):.2f} ₽
 - Изменение расходов: {float(expense_change):+.2f} ₽ ({expense_change_pct:+.1f}%)
 - Доходы в прошлом месяце: {float(prev_month_data['total_incomes']):.2f} ₽
 - Количество трат в прошлом месяце: {len(prev_month_data['expenses'])}
 """
+            else:
+                comparison_section = f"""
+СРАВНЕНИЕ С ПРЕДЫДУЩИМ МЕСЯЦЕМ ({prev_month_name}):
+- Расходы в прошлом месяце: {float(prev_month_data['total_expenses']):.2f} ₽
+- Изменение расходов: {float(expense_change):+.2f} ₽ ({expense_change_pct:+.1f}%)
+- Количество трат в прошлом месяце: {len(prev_month_data['expenses'])}
+"""
 
-        prompt = f"""Ты финансовый аналитик. Проанализируй траты пользователя за {month_name} {year} года.
-
-ДАННЫЕ ЗА ТЕКУЩИЙ МЕСЯЦ:
+        # Build financial summary section (only expenses if no income)
+        if has_income:
+            finance_section = f"""ДАННЫЕ ЗА ТЕКУЩИЙ МЕСЯЦ:
 - Всего потрачено: {float(month_data['total_expenses']):.2f} ₽
 - Всего доходов: {float(month_data['total_incomes']):.2f} ₽
 - Баланс: {float(month_data['balance']):.2f} ₽
-- Количество трат: {len(month_data['expenses'])}
+- Количество трат: {len(month_data['expenses'])}"""
+        else:
+            finance_section = f"""ДАННЫЕ ЗА ТЕКУЩИЙ МЕСЯЦ:
+- Всего потрачено: {float(month_data['total_expenses']):.2f} ₽
+- Количество трат: {len(month_data['expenses'])}"""
+
+        prompt = f"""Ты финансовый аналитик. Проанализируй траты пользователя за {month_name} {year} года.
+
+{finance_section}
 
 РАСХОДЫ ПО КАТЕГОРИЯМ:
 {chr(10).join(category_details)}
@@ -216,6 +235,7 @@ class MonthlyInsightsService:
 - Пиши на русском языке, кратко и по делу
 - Используй конкретные цифры из данных
 - {"ОБЯЗАТЕЛЬНО указывай сравнение с предыдущим месяцем" if prev_month_data else ""}
+- {"НЕ упоминай доходы и баланс в анализе, фокусируйся только на расходах" if not has_income else ""}
 - Тон дружелюбный и мотивирующий
 - Формат ответа: JSON с полями "summary", "analysis"
 - В поле "analysis" используй массив из 3 коротких строк
