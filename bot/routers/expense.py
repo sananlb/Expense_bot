@@ -1632,17 +1632,28 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: s
     # Проверяем, есть ли кешбек (только для расходов)
     from bot.services.cashback import calculate_expense_cashback
     from datetime import datetime
-    
+    from expenses.models import Profile
+
     has_cashback = False
     if not is_income and not expense.cashback_excluded:  # Только для расходов
-        current_month = datetime.now().month
-        cashback = await calculate_expense_cashback(
-            user_id=user_id,
-            category_id=expense.category.id if expense.category else None,
-            amount=float(expense.amount),
-            month=current_month
-        )
-        has_cashback = cashback > 0
+        # Получаем валюту пользователя
+        try:
+            profile = await Profile.objects.aget(telegram_id=user_id)
+            user_currency = profile.currency if profile else 'RUB'
+        except Profile.DoesNotExist:
+            user_currency = 'RUB'
+
+        # Кешбек начисляется только для трат в валюте пользователя
+        expense_currency = expense.currency if hasattr(expense, 'currency') else 'RUB'
+        if expense_currency == user_currency:
+            current_month = datetime.now().month
+            cashback = await calculate_expense_cashback(
+                user_id=user_id,
+                category_id=expense.category.id if expense.category else None,
+                amount=float(expense.amount),
+                month=current_month
+            )
+            has_cashback = cashback > 0
     
     # Показываем меню выбора поля для редактирования
     translated_category = get_category_display_name(expense.category, lang) if expense.category else ('Прочие доходы' if is_income else 'Без категории')
@@ -1915,18 +1926,23 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext, lang: str 
         if not is_income:
             has_subscription = await check_subscription(callback.from_user.id)
             if has_subscription and expense.category and not expense.cashback_excluded:
-                current_month = datetime.now().month
-                cashback = await calculate_expense_cashback(
-                    user_id=callback.from_user.id,
-                    category_id=expense.category.id,
-                    amount=expense.amount,
-                    month=current_month
-                )
-                if cashback > 0:
-                    cashback_text = f" (+{cashback:.0f} ₽)"
-                    # Сохраняем кешбек в базе данных
-                    expense.cashback_amount = Decimal(str(cashback))
-                    await expense.asave()
+                # Получаем валюту пользователя из профиля
+                user_currency = expense.profile.currency if expense.profile else 'RUB'
+                # Кешбек начисляется только для трат в валюте пользователя
+                expense_currency = expense.currency if hasattr(expense, 'currency') else 'RUB'
+                if expense_currency == user_currency:
+                    current_month = datetime.now().month
+                    cashback = await calculate_expense_cashback(
+                        user_id=callback.from_user.id,
+                        category_id=expense.category.id,
+                        amount=expense.amount,
+                        month=current_month
+                    )
+                    if cashback > 0:
+                        cashback_text = f" (+{cashback:.0f} ₽)"
+                        # Сохраняем кешбек в базе данных
+                        expense.cashback_amount = Decimal(str(cashback))
+                        await expense.asave()
         
         # Формируем сообщение
         if is_income:
@@ -2197,18 +2213,23 @@ async def show_updated_expense(message: types.Message, state: FSMContext, item_i
             cashback_text = ""
             has_subscription = await check_subscription(message.from_user.id)
             if has_subscription and expense.category:
-                current_month = datetime.now().month
-                cashback = await calculate_expense_cashback(
-                    user_id=message.from_user.id,
-                    category_id=expense.category.id,
-                    amount=expense.amount,
-                    month=current_month
-                )
-                if cashback > 0:
-                    cashback_text = f" (+{cashback:.0f} ₽)"
-                    # Сохраняем кешбек в базе данных
-                    expense.cashback_amount = Decimal(str(cashback))
-                    await expense.asave()
+                # Получаем валюту пользователя из профиля
+                user_currency = expense.profile.currency if expense.profile else 'RUB'
+                # Кешбек начисляется только для трат в валюте пользователя
+                expense_currency = expense.currency if hasattr(expense, 'currency') else 'RUB'
+                if expense_currency == user_currency:
+                    current_month = datetime.now().month
+                    cashback = await calculate_expense_cashback(
+                        user_id=message.from_user.id,
+                        category_id=expense.category.id,
+                        amount=expense.amount,
+                        month=current_month
+                    )
+                    if cashback > 0:
+                        cashback_text = f" (+{cashback:.0f} ₽)"
+                        # Сохраняем кешбек в базе данных
+                        expense.cashback_amount = Decimal(str(cashback))
+                        await expense.asave()
             
             message_text = await format_expense_added_message(
                 expense=expense,
@@ -2273,18 +2294,23 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
             cashback_text = ""
             has_subscription = await check_subscription(callback.from_user.id)
             if has_subscription and expense.category and not expense.cashback_excluded:
-                current_month = datetime.now().month
-                cashback = await calculate_expense_cashback(
-                    user_id=callback.from_user.id,
-                    category_id=expense.category.id,
-                    amount=expense.amount,
-                    month=current_month
-                )
-                if cashback > 0:
-                    cashback_text = f" (+{cashback:.0f} ₽)"
-                    # Сохраняем кешбек в базе данных
-                    expense.cashback_amount = Decimal(str(cashback))
-                    await expense.asave()
+                # Получаем валюту пользователя из профиля
+                user_currency = expense.profile.currency if expense.profile else 'RUB'
+                # Кешбек начисляется только для трат в валюте пользователя
+                expense_currency = expense.currency if hasattr(expense, 'currency') else 'RUB'
+                if expense_currency == user_currency:
+                    current_month = datetime.now().month
+                    cashback = await calculate_expense_cashback(
+                        user_id=callback.from_user.id,
+                        category_id=expense.category.id,
+                        amount=expense.amount,
+                        month=current_month
+                    )
+                    if cashback > 0:
+                        cashback_text = f" (+{cashback:.0f} ₽)"
+                        # Сохраняем кешбек в базе данных
+                        expense.cashback_amount = Decimal(str(cashback))
+                        await expense.asave()
             
             message_text = await format_expense_added_message(
                 expense=expense,
