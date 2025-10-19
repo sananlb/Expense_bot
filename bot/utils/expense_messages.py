@@ -87,7 +87,7 @@ async def format_expense_added_message(
                 date_label = f"Потрачено {expense_date.strftime('%d.%m.%Y')}"
         
         if today_summary and today_summary.get('currency_totals'):
-            message += "\n\n━━━━━━━━━━━━━━━━"
+            message += "\n\n_________________________"
             message += f"\n💸 <b>{date_label}:</b>"
             
             # Показываем все валюты, в которых были траты
@@ -116,7 +116,10 @@ async def format_expense_added_message(
                         message += f"\n  {formatted}"
                     else:
                         message += f"\n  {formatted}"
-    
+
+            # Добавляем отступ в конце
+            message += "\n"
+
     except Exception as e:
         # Если не удалось получить сводку, просто не добавляем эту информацию
         import logging
@@ -188,7 +191,7 @@ async def format_income_added_message(
                 date_label = f"Получено {income_date.strftime('%d.%m.%Y')}"
         
         if today_summary and today_summary.get('currency_totals'):
-            message += "\n\n━━━━━━━━━━━━━━━━"
+            message += "\n\n_________________________"
             message += f"\n💵 <b>{date_label}:</b>"
             
             # Показываем все валюты, в которых были доходы
@@ -213,7 +216,10 @@ async def format_income_added_message(
                 if amount > 0:
                     formatted = format_currency(amount, curr)
                     message += f"\n  +{formatted}"
-    
+
+            # Добавляем отступ в конце
+            message += "\n"
+
     except Exception as e:
         # Если не удалось получить сводку, просто не добавляем эту информацию
         import logging
