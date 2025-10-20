@@ -597,10 +597,10 @@
     .floating-card {
       position: absolute;
       background: transparent;
-      backdrop-filter: blur(10px);
-      border-radius: 12px;
-      padding: 8px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      backdrop-filter: none;
+      border-radius: 0;
+      padding: 0;
+      box-shadow: none;
       animation: float-card 3s infinite ease-in-out;
       transition: opacity 0.3s ease;
       opacity: 1; /* по умолчанию полностью непрозрачные */
@@ -1851,7 +1851,7 @@
 
       /* Уменьшаем плавающие карточки на планшетах */
       .floating-card {
-        padding: 6px;
+        padding: 0;
       }
 
       .floating-card img {
@@ -1985,7 +1985,7 @@
       /* Показываем и адаптируем плавающие карточки на мобильных */
       .floating-card {
         display: block;
-        padding: 6px;
+        padding: 0;
         opacity: 1;
       }
 
