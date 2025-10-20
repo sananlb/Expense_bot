@@ -492,12 +492,12 @@
     }
 
     .demo-window {
-      background: rgba(255,255,255,0.9);
-      backdrop-filter: blur(20px);
-      border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-lg);
-      padding: 20px;
-      border: 1px solid rgba(0,0,0,0.05);
+      background: transparent;
+      backdrop-filter: none;
+      border-radius: 0;
+      box-shadow: none;
+      padding: 0;
+      border: none;
       transform: perspective(1000px) rotateY(-10deg);
       transition: transform 0.3s ease;
     }
@@ -611,11 +611,9 @@
     .floating-card img {
       width: 220px;
       height: auto;
-      border-radius: 0;
+      border-radius: 8px;
       display: block;
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      object-fit: cover;
-      clip-path: inset(2% 2% 2% 2%);
     }
 
     .floating-card-1 {
@@ -1882,7 +1880,7 @@
 
       .demo-window {
         transform: perspective(1000px) rotateY(-5deg);
-        padding: 12px;
+        padding: 0;
       }
 
       .demo-window:hover {
@@ -2076,7 +2074,7 @@
       }
 
       .demo-window {
-        padding: 8px;
+        padding: 0;
         /* Наклон по умолчанию как в десктоп-версии */
         transform: perspective(1000px) rotateY(-10deg);
       }
