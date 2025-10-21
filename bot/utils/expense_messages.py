@@ -87,7 +87,7 @@ async def format_expense_added_message(
                 date_label = f"Потрачено {expense_date.strftime('%d.%m.%Y')}"
         
         if today_summary and today_summary.get('currency_totals'):
-            message += "\n\n_________________________"
+            message += "\n\n_______________________"
             message += f"\n💸 <b>{date_label}:</b>"
             
             # Показываем все валюты, в которых были траты
@@ -191,7 +191,7 @@ async def format_income_added_message(
                 date_label = f"Получено {income_date.strftime('%d.%m.%Y')}"
         
         if today_summary and today_summary.get('currency_totals'):
-            message += "\n\n_________________________"
+            message += "\n\n_______________________"
             message += f"\n💵 <b>{date_label}:</b>"
             
             # Показываем все валюты, в которых были доходы
