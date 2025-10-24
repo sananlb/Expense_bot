@@ -349,6 +349,17 @@ docker image prune -f
 - offer.html (RU)
 - offer_en.html (EN)
 
+## Telegram Channel
+**Channel name:** Coins
+**Channel handle:** @showmecoins
+**URL:** https://t.me/showmecoins
+
+**Purpose:** Короткие советы по финансам, обновления бота, новые функции
+
+**Где упоминается:**
+- Приветственное сообщение /start (в конце)
+- Можно добавить в меню "О боте" или "Помощь"
+
 ## Recent Changes
 - Added grocery store keywords (КБ, Красное белое, ВВ) to product category
 - Made description optional for recurring payments (uses category name if empty)

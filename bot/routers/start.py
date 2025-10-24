@@ -58,7 +58,9 @@ View the history of all transactions for any period in a convenient format.
 Get beautiful PDF reports with charts
 
 <b>🏠 Household:</b>
-Track finances together with your family. Switch between personal and family views."""
+Track finances together with your family. Switch between personal and family views.
+
+📢 <i>Want to get short tips and updates? Subscribe to our channel</i> @showmecoins"""
     else:
         text = """<b>🪙 Coins - умный учет ваших финансов</b>
 
@@ -79,7 +81,9 @@ Track finances together with your family. Switch between personal and family vie
 Получайте красивые PDF отчеты с графиками
 
 <b>🏠 Семейный бюджет:</b>
-Ведите общий учет с семьёй. Переключайтесь между личным и семейным режимом просмотра."""
+Ведите общий учет с семьёй. Переключайтесь между личным и семейным режимом просмотра.
+
+📢 <i>Хочешь получать короткие советы и обновления? Подпишись на канал</i> @showmecoins"""
 
     # Добавляем реферальное сообщение, если есть
     if referral_message:
