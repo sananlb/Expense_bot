@@ -1,5 +1,5 @@
 """
-Роутер для партнерской программы
+Роутер для реферальной программы и шаринга бота
 """
 from aiogram import Router, F, types
 from aiogram.types import Message, CallbackQuery
@@ -23,7 +23,7 @@ router = Router(name='referral')
 
 
 def get_referral_keyboard(lang: str = 'ru'):
-    """Клавиатура для партнерской программы"""
+    """Клавиатура для реферальной программы"""
     builder = InlineKeyboardBuilder()
 
     builder.button(
@@ -35,6 +35,10 @@ def get_referral_keyboard(lang: str = 'ru'):
         callback_data="referral_rewards"
     )
     builder.button(
+        text=get_text('back', lang),
+        callback_data="menu_subscription"
+    )
+    builder.button(
         text=get_text('close', lang),
         callback_data="close"
     )
@@ -44,8 +48,8 @@ def get_referral_keyboard(lang: str = 'ru'):
 
 
 async def get_referral_info_text(profile: Profile, bot_username: str, lang: str = 'ru') -> tuple[str, bool]:
-    """Получить текст с информацией о партнерской программе"""
-    # Получаем или создаем партнерскую ссылку
+    """Получить текст для шаринга бота с реферальной ссылкой"""
+    # Получаем или создаем реферальную ссылку
     affiliate_link = await get_or_create_affiliate_link(profile.telegram_id, bot_username)
 
     # Получаем статистику
@@ -53,20 +57,30 @@ async def get_referral_info_text(profile: Profile, bot_username: str, lang: str 
 
     rewards_months = stats['rewarded_months']
     if lang == 'en':
+        share_message = (
+            "Try Coins Bot — I've used it to get my budget in order! "
+            "Track expenses easily right in Telegram."
+        )
         text = (
-            "🌟 <b>Partner Program</b>\n\n"
-            "Your referral link:\n"
-            f"<code>{affiliate_link.telegram_link}</code>\n\n"
-            "🎁 <b>How it works</b>\n"
-            "Invite a friend: when they buy their first paid plan, your subscription is extended for the same duration once."
+            "🔗 <b>Share with friends</b>\n\n"
+            "Send this message to your friends:\n\n"
+            f"<i>{share_message}</i>\n"
+            f"{affiliate_link.telegram_link}\n\n"
+            "🎁 <b>Bonus</b>\n"
+            "When a friend buys their first subscription, we'll extend yours for the same period (one time)."
         )
     else:
+        share_message = (
+            "Попробуй Coins Bot — я с его помощью навёл порядок в бюджете! "
+            "Легко веду учёт трат прямо в Telegram."
+        )
         text = (
-            "🌟 <b>Партнёрская программа</b>\n\n"
-            "Ваша реферальная ссылка:\n"
-            f"<code>{affiliate_link.telegram_link}</code>\n\n"
-            "🎁 <b>Как это работает</b>\n"
-            "Приглашайте друзей: когда приглашённый оплатит первую подписку, мы продлим вашу на такой же срок (один раз)."
+            "🔗 <b>Поделитесь с друзьями</b>\n\n"
+            "Отправьте это сообщение своим друзьям:\n\n"
+            f"<i>{share_message}</i>\n"
+            f"{affiliate_link.telegram_link}\n\n"
+            "🎁 <b>Бонус</b>\n"
+            "Когда друг купит первую подписку, мы продлим вашу на такой же срок (один раз)."
         )
 
     return text, True  # Всегда есть код, так как создаём автоматически
@@ -74,7 +88,7 @@ async def get_referral_info_text(profile: Profile, bot_username: str, lang: str 
 
 @router.callback_query(F.data == "menu_referral")
 async def show_referral_menu(callback: CallbackQuery, state: FSMContext):
-    """Показать меню партнерской программы"""
+    """Показать меню для шаринга бота"""
     # Проверяем подписку
     has_subscription = await check_subscription(callback.from_user.id)
     if not has_subscription:
@@ -114,7 +128,7 @@ async def show_referral_menu(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "referral_stats")
 async def show_referral_stats(callback: CallbackQuery, state: FSMContext):
-    """Показать детальную статистику партнерской программы"""
+    """Показать детальную статистику реферальной программы"""
     user_id = callback.from_user.id
     lang = await get_user_language(user_id)
 
@@ -243,7 +257,7 @@ async def show_referral_rewards(callback: CallbackQuery, state: FSMContext):
 
 @router.message(Command("referral"))
 async def cmd_referral(message: Message, state: FSMContext):
-    """Команда для просмотра партнерской программы"""
+    """Команда для шаринга бота и реферальной программы"""
     # Проверяем подписку
     has_subscription = await check_subscription(message.from_user.id)
     if not has_subscription:

@@ -101,9 +101,9 @@ def get_subscription_keyboard(is_beta_tester: bool = False, lang: str = 'ru'):
             text=get_text('have_promocode', lang),
             callback_data="subscription_promo"
         )
-        # Добавляем кнопку партнёрской программы
+        # Добавляем кнопку для шаринга бота
         builder.button(
-            text="💼 Партнёрская программа" if lang == 'ru' else "💼 Affiliate Program",
+            text="🔗 Поделиться ботом" if lang == 'ru' else "🔗 Share the bot",
             callback_data="menu_referral"
         )
     
