@@ -2,11 +2,12 @@
 Роутер для реферальной программы и шаринга бота
 """
 from aiogram import Router, F, types
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
+from urllib.parse import quote
 from expenses.models import Profile, AffiliateLink, AffiliateReferral
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.services.subscription import check_subscription
@@ -22,9 +23,19 @@ logger = logging.getLogger(__name__)
 router = Router(name='referral')
 
 
-def get_referral_keyboard(lang: str = 'ru'):
+def get_referral_keyboard(lang: str = 'ru', share_url: str = None, share_text: str = None):
     """Клавиатура для реферальной программы"""
     builder = InlineKeyboardBuilder()
+
+    # Кнопка "Поделиться" - открывает нативное меню Telegram
+    if share_url and share_text:
+        share_link = f"https://t.me/share/url?url={quote(share_url)}&text={quote(share_text)}"
+        builder.row(
+            InlineKeyboardButton(
+                text="📤 Поделиться" if lang == 'ru' else "📤 Share",
+                url=share_link
+            )
+        )
 
     builder.button(
         text="📊 Статистика" if lang == 'ru' else "📊 Statistics",
@@ -47,8 +58,12 @@ def get_referral_keyboard(lang: str = 'ru'):
     return builder.as_markup()
 
 
-async def get_referral_info_text(profile: Profile, bot_username: str, lang: str = 'ru') -> tuple[str, bool]:
-    """Получить текст для шаринга бота с реферальной ссылкой"""
+async def get_referral_info_text(profile: Profile, bot_username: str, lang: str = 'ru') -> tuple[str, bool, str, str]:
+    """Получить текст для шаринга бота с реферальной ссылкой
+
+    Returns:
+        tuple: (display_text, has_code, share_text, share_url)
+    """
     # Получаем или создаем реферальную ссылку
     affiliate_link = await get_or_create_affiliate_link(profile.telegram_id, bot_username)
 
@@ -83,7 +98,8 @@ async def get_referral_info_text(profile: Profile, bot_username: str, lang: str 
             "Когда друг купит первую подписку, мы продлим вашу на такой же срок (один раз)."
         )
 
-    return text, True  # Всегда есть код, так как создаём автоматически
+    # Возвращаем текст для отображения, флаг наличия кода, текст для шаринга и URL
+    return text, True, share_message, affiliate_link.telegram_link
 
 
 @router.callback_query(F.data == "menu_referral")
@@ -106,12 +122,12 @@ async def show_referral_menu(callback: CallbackQuery, state: FSMContext):
     bot_username = bot_info.username
 
     lang = await get_user_language(callback.from_user.id)
-    text, has_code = await get_referral_info_text(profile, bot_username, lang)
+    text, has_code, share_text, share_url = await get_referral_info_text(profile, bot_username, lang)
 
     try:
         await callback.message.edit_text(
             text=text,
-            reply_markup=get_referral_keyboard(lang),
+            reply_markup=get_referral_keyboard(lang, share_url, share_text),
             parse_mode="HTML"
         )
     except Exception:
@@ -119,7 +135,7 @@ async def show_referral_menu(callback: CallbackQuery, state: FSMContext):
             callback,
             state,
             text,
-            reply_markup=get_referral_keyboard(lang),
+            reply_markup=get_referral_keyboard(lang, share_url, share_text),
             parse_mode="HTML"
         )
 
@@ -275,12 +291,12 @@ async def cmd_referral(message: Message, state: FSMContext):
     bot_username = bot_info.username
 
     lang = await get_user_language(message.from_user.id)
-    text, _ = await get_referral_info_text(profile, bot_username, lang)
+    text, _, share_text, share_url = await get_referral_info_text(profile, bot_username, lang)
 
     await send_message_with_cleanup(
         message,
         state,
         text,
-        reply_markup=get_referral_keyboard(lang),
+        reply_markup=get_referral_keyboard(lang, share_url, share_text),
         parse_mode="HTML"
     )
