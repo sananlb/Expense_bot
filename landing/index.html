@@ -1485,32 +1485,6 @@
       transform: rotate(-45deg) translate(5px, -5px);
     }
 
-    /* Mobile Telegram Icon Button */
-    .mobile-telegram-icon {
-      display: none;
-      width: 38px;
-      height: 38px;
-      background: var(--gradient-1);
-      border-radius: 8px;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 3px 12px rgba(99, 102, 241, 0.25);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-      z-index: 1001;
-    }
-
-    .mobile-telegram-icon:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 16px rgba(99, 102, 241, 0.35);
-    }
-
-    .mobile-telegram-icon svg {
-      width: 20px;
-      height: 20px;
-      color: white;
-      fill: white;
-    }
-
     .mobile-actions {
       display: none;
       align-items: center;
@@ -1629,10 +1603,6 @@
       }
 
       .mobile-actions {
-        display: flex;
-      }
-
-      .mobile-telegram-icon {
         display: flex;
       }
 
@@ -2415,11 +2385,6 @@
           </a>
         </div>
         <div class="mobile-actions">
-          <a href="https://t.me/showmecoinbot?start=organic_landing" target="_blank" class="mobile-telegram-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.40-.01.06.01.24 0 .38z"/>
-            </svg>
-          </a>
           <div class="mobile-menu-toggle">
             <span></span>
             <span></span>
@@ -2464,6 +2429,14 @@
               <div class="badge-icon">✓</div>
               <span data-i18n="trust_no_banks">Без привязки к банкам</span>
             </div>
+          </div>
+          <div class="hero-buttons">
+            <a href="https://t.me/showmecoinbot?start=organic_landing" target="_blank" class="btn btn-primary">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.40-.01.06.01.24 0 .38z"/>
+              </svg>
+              <span data-i18n="btn_go_to_bot">Перейти в бота</span>
+            </a>
           </div>
         </div>
         <div class="hero-demo reveal">
@@ -2737,6 +2710,7 @@
           nav_pricing: 'Тарифы',
           nav_faq: 'FAQ',
           btn_launch: 'Запустить бота',
+          btn_go_to_bot: 'Перейти в бота',
           btn_demo: 'Посмотреть демо',
           hero_title: 'Вести бюджет — просто',
           hero_subtitle: 'Скажите "кофе 200" или "такси 500". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.',
@@ -2835,6 +2809,7 @@
           nav_pricing: 'Pricing',
           nav_faq: 'FAQ',
           btn_launch: 'Launch the bot',
+          btn_go_to_bot: 'Go to Bot',
           btn_demo: 'Watch demo',
           hero_title: '<span>Simple money</span><br><span>management</span>',
           hero_subtitle: 'Say "coffee 200" or "taxi 500".<br>AI recognizes, categorizes, and builds reports.<br>No banks, no complex apps.',
