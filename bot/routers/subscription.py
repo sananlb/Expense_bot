@@ -172,7 +172,6 @@ async def show_subscription_menu(callback: CallbackQuery, state: FSMContext, lan
     # Получаем сохраненные ID сообщений
     data = await state.get_data()
     invoice_msg_id = data.get('invoice_msg_id')
-    subscription_back_msg_id = data.get('subscription_back_msg_id')
 
     # Удаляем сообщение с инвойсом, если оно есть
     if invoice_msg_id:
@@ -184,32 +183,22 @@ async def show_subscription_menu(callback: CallbackQuery, state: FSMContext, lan
         except (TelegramBadRequest, TelegramNotFound):
             pass  # Сообщение уже удалено или не найдено
 
-    # Удаляем сообщение с кнопкой "Назад"
-    if subscription_back_msg_id:
-        try:
-            await callback.bot.delete_message(
-                chat_id=callback.from_user.id,
-                message_id=subscription_back_msg_id
-            )
-        except (TelegramBadRequest, TelegramNotFound):
-            pass  # Сообщение уже удалено или не найдено
+    # Очищаем сохраненный ID
+    await state.update_data(invoice_msg_id=None)
 
-    # Очищаем сохраненные ID
-    await state.update_data(invoice_msg_id=None, subscription_back_msg_id=None)
-    
     profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
-    
+
     text = await get_subscription_info_text(profile, lang)
-    
+
     # Отправляем новое сообщение с меню подписки
     await send_message_with_cleanup(
-        callback.message, 
-        state, 
-        text, 
-        reply_markup=get_subscription_keyboard(is_beta_tester=profile.is_beta_tester, lang=lang), 
+        callback.message,
+        state,
+        text,
+        reply_markup=get_subscription_keyboard(is_beta_tester=profile.is_beta_tester, lang=lang),
         parse_mode="HTML"
     )
-    
+
     await callback.answer()
 
 
@@ -238,20 +227,8 @@ async def send_stars_invoice(callback: CallbackQuery, state: FSMContext, sub_typ
         is_flexible=False
     )
 
-    # Кнопка назад
-    builder = InlineKeyboardBuilder()
-    builder.button(text="← Назад в меню", callback_data="menu_subscription")
-    back_msg = await callback.bot.send_message(
-        chat_id=callback.from_user.id,
-        text="↩️ Вернуться в меню подписки",
-        reply_markup=builder.as_markup()
-    )
-
-    # Сохраняем ID сообщений для удаления
-    await state.update_data(
-        invoice_msg_id=invoice_msg.message_id,
-        subscription_back_msg_id=back_msg.message_id
-    )
+    # Сохраняем ID сообщения с инвойсом для удаления
+    await state.update_data(invoice_msg_id=invoice_msg.message_id)
     await callback.answer()
 
 
@@ -813,22 +790,9 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
         is_flexible=False
     )
 
-    # Отправляем отдельное сообщение с кнопкой "Назад"
-    builder = InlineKeyboardBuilder()
-    builder.button(text="← Назад в меню", callback_data="menu_subscription")
+    # Сохраняем ID сообщения с инвойсом для удаления после оплаты или при новой команде
+    await state.update_data(invoice_msg_id=invoice_msg.message_id)
 
-    back_msg = await callback.bot.send_message(
-        chat_id=callback.from_user.id,
-        text="↩️ Вернуться в меню подписки",
-        reply_markup=builder.as_markup()
-    )
-
-    # Сохраняем ID сообщений для удаления после оплаты или при новой команде
-    await state.update_data(
-        invoice_msg_id=invoice_msg.message_id,
-        subscription_back_msg_id=back_msg.message_id
-    )
-    
     await callback.answer()
 
 
@@ -865,22 +829,7 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     """Обработка успешной оплаты"""
     # Логируем успешную оплату
     logger.info(f"Successful payment from user {message.from_user.id}")
-    
-    # Получаем сохраненные ID сообщений перед очисткой состояния
-    data = await state.get_data()
-    invoice_msg_id = data.get('invoice_msg_id')
-    subscription_back_msg_id = data.get('subscription_back_msg_id')
-    
-    # Удаляем сообщение с кнопкой "Назад", если оно есть
-    if subscription_back_msg_id:
-        try:
-            await message.bot.delete_message(
-                chat_id=message.from_user.id,
-                message_id=subscription_back_msg_id
-            )
-        except (TelegramBadRequest, TelegramNotFound):
-            pass  # Сообщение уже удалено или не найдено
-    
+
     # Очищаем состояние после оплаты
     await state.clear()
     
