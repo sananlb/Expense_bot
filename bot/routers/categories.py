@@ -77,7 +77,7 @@ async def _show_expense_edit_list(message_or_cb: types.Message | types.CallbackQ
 
     if not editable:
         if isinstance(message_or_cb, types.CallbackQuery):
-            await message_or_cb.answer("У вас нет категорий для редактирования", show_alert=True)
+            await message_or_cb.answer(get_text('no_categories_to_edit', lang), show_alert=True)
         return
 
     keyboard_buttons = []
@@ -90,7 +90,7 @@ async def _show_expense_edit_list(message_or_cb: types.Message | types.CallbackQ
         keyboard_buttons.append(row)
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="expense_categories_menu")])
 
-    text = "✏️ Выберите категорию для редактирования:"
+    text = get_text('choose_category_to_edit', lang)
     await send_message_with_cleanup(message_or_cb, state, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons))
 
 
@@ -102,7 +102,7 @@ async def _show_income_edit_list(message_or_cb: types.Message | types.CallbackQu
 
     if not categories:
         if isinstance(message_or_cb, types.CallbackQuery):
-            await message_or_cb.answer("У вас нет категорий доходов для редактирования", show_alert=True)
+            await message_or_cb.answer(get_text('no_income_categories_to_edit', lang), show_alert=True)
         return
 
     keyboard_buttons = []
@@ -110,7 +110,7 @@ async def _show_income_edit_list(message_or_cb: types.Message | types.CallbackQu
         keyboard_buttons.append([InlineKeyboardButton(text=get_category_display_name(cat, lang), callback_data=f"edit_income_cat_{cat.id}")])
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="income_categories_menu")])
 
-    text = "✏️ Выберите категорию доходов для редактирования:"
+    text = get_text('choose_income_category_to_edit', lang)
     await send_message_with_cleanup(message_or_cb, state, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons))
 
 
@@ -337,7 +337,7 @@ async def show_income_categories_menu(message: types.Message | types.CallbackQue
             if i < len(income_categories) - 1:
                 text += "\n"
     else:
-        text += get_text('no_income_categories_yet', lang) if lang == 'en' else "У вас пока нет категорий доходов."
+        text += get_text('no_income_categories_yet', lang)
     
     # Формируем клавиатуру в зависимости от подписки
     if has_subscription:
@@ -425,7 +425,7 @@ async def add_category_start(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         get_text('adding_category', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data="expense_categories_menu")]
+            [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="expense_categories_menu")]
         ])
     )
     # Обновляем контекст состояния (единый контракт)
@@ -478,10 +478,10 @@ async def process_category_name(message: types.Message, state: FSMContext):
         # Если эмодзи нет, сразу показываем выбор иконок
         name = name.capitalize()
         await state.update_data(name=name, operation='create', cat_type='expense')
-        kb = build_icon_keyboard(back_callback="cancel_category_creation")
+        kb = build_icon_keyboard(back_callback="cancel_category_creation", lang=lang)
         await send_message_with_cleanup(
             message, state,
-            f"🎨 Выберите иконку для категории «{name}»:",
+            get_text('choose_icon_for_category', lang).format(name=name),
             reply_markup=kb
         )
         await state.set_state(CategoryForm.waiting_for_icon)
@@ -587,29 +587,29 @@ async def edit_categories_list(callback: types.CallbackQuery, state: FSMContext)
             editable_categories.append(cat)
     
     if not editable_categories:
-        await callback.answer("У вас нет категорий для редактирования", show_alert=True)
+        await callback.answer(get_text('no_categories_to_edit', lang), show_alert=True)
         return
-    
+
     keyboard_buttons = []
     # Группируем категории по 2 в строке
     for i in range(0, len(editable_categories), 2):
         # Переводим название категории
         translated_name = get_category_display_name(editable_categories[i], lang)
         row = [InlineKeyboardButton(
-            text=translated_name, 
+            text=translated_name,
             callback_data=f"edit_cat_{editable_categories[i].id}"
         )]
         if i + 1 < len(editable_categories):
             translated_name_2 = get_category_display_name(editable_categories[i + 1], lang)
             row.append(InlineKeyboardButton(
-                text=translated_name_2, 
+                text=translated_name_2,
                 callback_data=f"edit_cat_{editable_categories[i + 1].id}"
             ))
         keyboard_buttons.append(row)
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="expense_categories_menu")])
-    
+
     await callback.message.edit_text(
-        "✏️ Выберите категорию для редактирования:",
+        get_text('choose_category_to_edit', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
     # Обновляем ID сообщения в состоянии
@@ -644,7 +644,7 @@ async def delete_categories_list(callback: types.CallbackQuery, state: FSMContex
             deletable_categories.append(cat)
     
     if not deletable_categories:
-        await callback.answer("У вас нет категорий для удаления", show_alert=True)
+        await callback.answer(get_text('no_categories_to_delete', lang), show_alert=True)
         return
     
     keyboard_buttons = []
@@ -664,9 +664,9 @@ async def delete_categories_list(callback: types.CallbackQuery, state: FSMContex
             ))
         keyboard_buttons.append(row)
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="expense_categories_menu")])
-    
+
     await callback.message.edit_text(
-        "🗑 Выберите категорию для удаления:",
+        get_text('choose_category_to_delete', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
     # Обновляем ID сообщения в состоянии
@@ -724,12 +724,11 @@ async def edit_category(callback: types.CallbackQuery, state: FSMContext):
         # Показываем меню выбора что редактировать
         try:
             await callback.message.edit_text(
-                f"✏️ Редактирование категории «{category_display}»\n\n"
-                "Что вы хотите изменить?",
+                get_text('editing_category_header', lang).format(name=category_display),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="📝 Название", callback_data=f"edit_cat_name_{cat_id}")],
                     [InlineKeyboardButton(text="🎨 Иконку", callback_data=f"edit_cat_icon_{cat_id}")],
-                    [InlineKeyboardButton(text="⬅️ Назад", callback_data="edit_categories")]
+                    [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="edit_categories")]
                 ])
             )
         except TelegramBadRequest:
@@ -759,9 +758,9 @@ async def edit_category_name_start(callback: types.CallbackQuery, state: FSMCont
 
         try:
             await callback.message.edit_text(
-                f"📝 Введите новое название для категории «{category.name}»:",
+                get_text('enter_new_category_name', lang).format(name=category.name),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"edit_cat_{cat_id}")]
+                    [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data=f"edit_cat_{cat_id}")]
                 ])
             )
         except TelegramBadRequest:
@@ -797,10 +796,10 @@ async def edit_category_icon_start(callback: types.CallbackQuery, state: FSMCont
         )
 
         # Показываем выбор иконок (единый набор)
-        kb = build_icon_keyboard(back_callback=f"edit_cat_{cat_id}")
+        kb = build_icon_keyboard(back_callback=f"edit_cat_{cat_id}", lang=lang)
         try:
             await callback.message.edit_text(
-                f"🎨 Выберите новую иконку для категории «{name_without_emoji}»:",
+                get_text('choose_icon_for_category', lang).format(name=name_without_emoji),
                 reply_markup=kb
             )
         except TelegramBadRequest:
@@ -923,9 +922,9 @@ async def add_income_category_start(callback: types.CallbackQuery, state: FSMCon
     # Сбрасываем предыдущее состояние, чтобы не потянуть старые editing_* значения
     await state.clear()
     await callback.message.edit_text(
-        "📝 Введите название категории доходов:",
+        get_text('adding_income_category', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data="income_categories_menu")]
+            [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="income_categories_menu")]
         ])
     )
     await state.update_data(last_menu_message_id=callback.message.message_id, operation='create', cat_type='income')
@@ -975,11 +974,12 @@ async def process_income_category_name(message: types.Message, state: FSMContext
         # Капитализируем название
         name = name.capitalize()
         await state.update_data(name=name, operation='create', cat_type='income')
-        
-        kb = build_icon_keyboard(back_callback="cancel_income_category_creation")
+
+        lang = await get_user_language(message.from_user.id)
+        kb = build_icon_keyboard(back_callback="cancel_income_category_creation", lang=lang)
         await send_message_with_cleanup(
             message, state,
-            f"🎨 Выберите иконку для категории доходов «{name}»:",
+            get_text('choose_icon_for_income_category', lang).format(name=name),
             reply_markup=kb
         )
         await state.set_state(IncomeCategoryForm.waiting_for_icon)
@@ -1087,7 +1087,7 @@ async def delete_income_categories_start(callback: types.CallbackQuery, state: F
     categories = await get_user_income_categories(user_id)
     
     if not categories:
-        await callback.answer("У вас нет категорий доходов для удаления", show_alert=True)
+        await callback.answer(get_text('no_income_categories_to_delete', lang), show_alert=True)
         return
     
     # Создаем клавиатуру с категориями
@@ -1103,9 +1103,9 @@ async def delete_income_categories_start(callback: types.CallbackQuery, state: F
     keyboard_buttons.append([
         InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="income_categories_menu")
     ])
-    
+
     await callback.message.edit_text(
-        "🗑 Выберите категорию доходов для удаления:",
+        get_text('choose_income_category_to_delete', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
     await state.set_state(IncomeCategoryForm.waiting_for_delete_choice)
@@ -1148,9 +1148,9 @@ async def edit_income_categories_start(callback: types.CallbackQuery, state: FSM
     categories = await get_user_income_categories(user_id)
     
     if not categories:
-        await callback.answer("У вас нет категорий доходов для редактирования", show_alert=True)
+        await callback.answer(get_text('no_income_categories_to_edit', lang), show_alert=True)
         return
-    
+
     # Создаем клавиатуру с категориями
     keyboard_buttons = []
     for cat in categories:
@@ -1160,13 +1160,13 @@ async def edit_income_categories_start(callback: types.CallbackQuery, state: FSM
                 callback_data=f"edit_income_cat_{cat.id}"
             )
         ])
-    
+
     keyboard_buttons.append([
         InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="income_categories_menu")
     ])
-    
+
     await callback.message.edit_text(
-        "✏️ Выберите категорию доходов для редактирования:",
+        get_text('choose_income_category_to_edit', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
     await state.set_state(IncomeCategoryForm.waiting_for_edit_choice)
@@ -1192,16 +1192,15 @@ async def edit_income_category(callback: types.CallbackQuery, state: FSMContext)
         
         # Показываем меню выбора что редактировать
         await callback.message.edit_text(
-            f"✏️ Редактирование категории доходов «{category_display_name}»\n\n"
-            "Что вы хотите изменить?",
+            get_text('editing_income_category_header', lang).format(name=category_display_name),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="📝 Название", callback_data=f"edit_income_name_{category_id}")],
                 [InlineKeyboardButton(text="🎨 Иконку", callback_data=f"edit_income_icon_{category_id}")],
-                [InlineKeyboardButton(text="⬅️ Назад", callback_data="edit_income_categories")]
+                [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="edit_income_categories")]
             ])
         )
     else:
-        await callback.answer("❌ Категория не найдена", show_alert=True)
+        await callback.answer(get_text('error_category_not_found', lang), show_alert=True)
     
     await callback.answer()
 
@@ -1223,9 +1222,9 @@ async def edit_income_category_name_start(callback: types.CallbackQuery, state: 
         await state.set_state(IncomeCategoryForm.waiting_for_new_name)
         
         await callback.message.edit_text(
-            f"📝 Введите новое название для категории доходов «{category.name}»:",
+            get_text('enter_new_income_category_name', lang).format(name=category.name),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⬅️ Назад", callback_data=f"edit_income_cat_{category_id}")]
+                [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data=f"edit_income_cat_{category_id}")]
             ])
         )
     await callback.answer()
@@ -1260,9 +1259,9 @@ async def edit_income_category_icon_start(callback: types.CallbackQuery, state: 
         )
         
         # Показываем выбор иконок (единый набор)
-        kb = build_icon_keyboard(back_callback=f"edit_income_cat_{category_id}")
+        kb = build_icon_keyboard(back_callback=f"edit_income_cat_{category_id}", lang=lang)
         await callback.message.edit_text(
-            f"🎨 Выберите новую иконку для категории доходов «{name_without_emoji}»:",
+            get_text('choose_icon_for_income_category', lang).format(name=name_without_emoji),
             reply_markup=kb
         )
         await state.set_state(IncomeCategoryForm.waiting_for_icon)

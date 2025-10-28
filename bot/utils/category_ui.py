@@ -1,5 +1,6 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from typing import List
+from bot.texts import get_text
 
 
 # Shared default icon grid for categories (used for both expense and income)
@@ -24,6 +25,7 @@ def get_default_icons() -> List[List[str]]:
 def build_icon_keyboard(
     *,
     back_callback: str,
+    lang: str = 'ru',
     include_no_icon: bool = True,
     include_custom_icon: bool = True,
 ) -> InlineKeyboardMarkup:
@@ -40,11 +42,11 @@ def build_icon_keyboard(
         keyboard_buttons.append(buttons_row)
 
     if include_no_icon:
-        keyboard_buttons.append([InlineKeyboardButton(text="➡️ Без иконки", callback_data="no_icon")])
+        keyboard_buttons.append([InlineKeyboardButton(text=get_text('no_icon_button', lang), callback_data="no_icon")])
     if include_custom_icon:
-        keyboard_buttons.append([InlineKeyboardButton(text="✏️ Ввести свой эмодзи", callback_data="custom_icon")])
+        keyboard_buttons.append([InlineKeyboardButton(text=get_text('custom_icon_button', lang), callback_data="custom_icon")])
 
-    keyboard_buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data=back_callback)])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data=back_callback)])
 
     return InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
 
