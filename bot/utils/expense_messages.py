@@ -8,8 +8,14 @@ from ..utils.formatters import format_currency
 from ..utils.category_helpers import get_category_display_name
 from ..utils import get_text
 
-# Константа для разделительной линии (одинаковая для всех сообщений)
-SEPARATOR_LINE = "_______________________"
+# Константы для разделительных линий (зависят от языка)
+SEPARATOR_LINE_RU = "_______________________"  # 23 символа для русского
+SEPARATOR_LINE_EN = "__________________"        # 18 символов для английского
+
+
+def get_separator_line(lang: str = 'ru') -> str:
+    """Возвращает разделительную линию подходящей длины для языка"""
+    return SEPARATOR_LINE_EN if lang == 'en' else SEPARATOR_LINE_RU
 
 
 async def format_expense_added_message(
@@ -92,7 +98,7 @@ async def format_expense_added_message(
                 date_label = f"{spent_on} {expense_date.strftime('%d.%m.%Y')}"
         
         if today_summary and today_summary.get('currency_totals'):
-            message += f"\n\n{SEPARATOR_LINE}"
+            message += f"\n\n{get_separator_line(lang)}"
             message += f"\n💸 <b>{date_label}:</b>"
             
             # Показываем все валюты, в которых были траты
@@ -197,7 +203,7 @@ async def format_income_added_message(
                 date_label = f"{received_on} {income_date.strftime('%d.%m.%Y')}"
         
         if today_summary and today_summary.get('currency_totals'):
-            message += f"\n\n{SEPARATOR_LINE}"
+            message += f"\n\n{get_separator_line(lang)}"
             message += f"\n💵 <b>{date_label}:</b>"
             
             # Показываем все валюты, в которых были доходы
