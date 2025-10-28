@@ -117,6 +117,13 @@ TEXTS = {
         'limit': 'лимит',
         'edit': '✏️ Редактировать',
         'all_categories': '🌐 Все категории',
+
+        # Сводки по датам
+        'spent_today': 'Потрачено сегодня',
+        'spent_yesterday': 'Потрачено вчера',
+        'received_today': 'Получено сегодня',
+        'received_yesterday': 'Получено вчера',
+
         'choose_bank_or_enter': '🏦 Выберите банк или введите название:',
         'cashback_editing': '✏️ Редактирование кешбэка',
         'choose_cashback_to_edit': '✏️ Выберите кешбэк для редактирования:',
@@ -550,6 +557,7 @@ TEXTS = {
         'receipt_processing_future': '📸 Обработка чеков будет добавлена в следующей версии.',
         'edit_future': 'Редактирование будет добавлено в следующей версии',
         'editing_expense': 'Редактирование траты',
+        'editing_income': 'Редактирование дохода',
         'choose_field_to_edit': 'Выберите поле для изменения:',
         'choose_new_category': 'Выберите новую категорию',
         'learning_message': 'Меняя категорию вы обучаете систему, с каждым редактированием подбор категорий становится точнее для вас',
@@ -813,6 +821,13 @@ TEXTS = {
         'cashback_menu': 'Cashback',
         'edit': '✏️ Edit',
         'all_categories': '🌐 All categories',
+
+        # Date summaries
+        'spent_today': 'Spent today',
+        'spent_yesterday': 'Spent yesterday',
+        'received_today': 'Received today',
+        'received_yesterday': 'Received yesterday',
+
         'choose_bank_or_enter': '🏦 Choose bank or enter name:',
         'cashback_editing': '✏️ Editing cashback',
         'choose_cashback_to_edit': '✏️ Choose cashback to edit:',
@@ -1227,6 +1242,7 @@ Thank you for participating in testing! Your feedback helps improve the bot.''',
         'receipt_processing_future': '📸 Receipt processing will be added in the next version.',
         'edit_future': 'Editing will be added in the next version',
         'editing_expense': 'Editing expense',
+        'editing_income': 'Editing income',
         'choose_field_to_edit': 'Choose field to edit:',
         'choose_new_category': 'Choose new category',
         'learning_message': 'By changing the category you train the system, with each edit category selection becomes more accurate for you',

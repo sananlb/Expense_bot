@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 from ..services.expense import get_today_summary
 from ..utils.formatters import format_currency
 from ..utils.category_helpers import get_category_display_name
+from ..utils import get_text
 
 
 async def format_expense_added_message(
@@ -75,16 +76,17 @@ async def format_expense_added_message(
         # Если операция за сегодня - используем get_today_summary
         if expense_date == today:
             today_summary = await get_today_summary(expense.profile.telegram_id)
-            date_label = "Потрачено сегодня"
+            date_label = get_text('spent_today', lang)
         else:
             # Для операций задним числом получаем итоги за ту дату
             from ..services.expense import get_date_summary
             today_summary = await get_date_summary(expense.profile.telegram_id, expense_date)
             # Форматируем дату для отображения
             if expense_date == today.replace(day=today.day - 1) if today.day > 1 else None:
-                date_label = "Потрачено вчера"
+                date_label = get_text('spent_yesterday', lang)
             else:
-                date_label = f"Потрачено {expense_date.strftime('%d.%m.%Y')}"
+                spent_on = "Потрачено" if lang == 'ru' else "Spent on"
+                date_label = f"{spent_on} {expense_date.strftime('%d.%m.%Y')}"
         
         if today_summary and today_summary.get('currency_totals'):
             message += "\n\n_______________________"
@@ -179,16 +181,17 @@ async def format_income_added_message(
         if income_date == today:
             from ..services.income import get_today_income_summary
             today_summary = await get_today_income_summary(income.profile.telegram_id)
-            date_label = "Получено сегодня"
+            date_label = get_text('received_today', lang)
         else:
             # Для операций задним числом получаем итоги за ту дату
             from ..services.income import get_date_income_summary
             today_summary = await get_date_income_summary(income.profile.telegram_id, income_date)
             # Форматируем дату для отображения
             if income_date == today.replace(day=today.day - 1) if today.day > 1 else None:
-                date_label = "Получено вчера"
+                date_label = get_text('received_yesterday', lang)
             else:
-                date_label = f"Получено {income_date.strftime('%d.%m.%Y')}"
+                received_on = "Получено" if lang == 'ru' else "Received on"
+                date_label = f"{received_on} {income_date.strftime('%d.%m.%Y')}"
         
         if today_summary and today_summary.get('currency_totals'):
             message += "\n\n_______________________"

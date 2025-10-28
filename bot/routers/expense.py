@@ -14,7 +14,12 @@ import logging
 
 from ..services.expense import add_expense
 from ..services.cashback import calculate_potential_cashback, calculate_expense_cashback
-from ..services.category import get_or_create_category
+from ..services.category import get_or_create_category, create_default_income_categories
+from bot.utils.income_category_definitions import (
+    get_income_category_display_name as get_income_category_display_for_key,
+    normalize_income_category_key,
+    strip_leading_emoji,
+)
 from ..services.subscription import check_subscription
 from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect
 from ..utils import get_text
@@ -778,7 +783,7 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
         message_text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [
-                InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
+                InlineKeyboardButton(text=get_text('edit_button', lang), callback_data=f"edit_expense_{expense.id}")
             ]
         ]),
         parse_mode="HTML",
@@ -1035,7 +1040,11 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         try:
             profile = await Profile.objects.aget(telegram_id=user_id)
         except Profile.DoesNotExist:
-            profile = None
+            profile = await Profile.objects.acreate(telegram_id=user_id)
+            try:
+                await create_default_income_categories(user_id)
+            except Exception as e:
+                logger.debug(f"Failed to create default income categories: {e}")
 
         # Парсим доход
         parsed_income = await parse_income_message(text, user_id=user_id, profile=profile, use_ai=True)
@@ -1047,28 +1056,50 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             
             # Получаем или создаем категорию дохода
             category = None
+            category_key = parsed_income.get('category_key') or normalize_income_category_key(parsed_income.get('category'))
+            candidate_names = set()
+
             if parsed_income.get('category'):
-                # Ищем существующую категорию
+                candidate_names.add(parsed_income['category'])
+                candidate_names.add(strip_leading_emoji(parsed_income['category']))
+
+            if category_key:
+                for lang_code_candidate in ('ru', 'en'):
+                    display_name = get_income_category_display_for_key(category_key, lang_code_candidate)
+                    candidate_names.add(display_name)
+                    candidate_names.add(strip_leading_emoji(display_name))
+
+            candidate_names = {name for name in candidate_names if name}
+
+            if candidate_names:
+                from django.db.models import Q
+                query = Q()
+                for name in candidate_names:
+                    query |= Q(name__iexact=name) | Q(name_ru__iexact=name) | Q(name_en__iexact=name)
+
                 try:
                     category = await IncomeCategory.objects.filter(
                         profile=profile,
-                        name=parsed_income['category']
-                    ).afirst()
+                        is_active=True
+                    ).filter(query).afirst()
                 except (DatabaseError, AttributeError) as e:
-                    logger.debug(f"Error finding income category: {e}")
-                    pass
-            
-            # Если категория не найдена, ищем категорию по умолчанию "💰 Прочие доходы"
+                    logger.debug(f"Error matching income category by normalized name: {e}")
+                    category = None
+
             if not category:
                 try:
+                    default_names = [
+                        get_income_category_display_for_key('other', 'ru'),
+                        get_income_category_display_for_key('other', 'en'),
+                        '💰 Прочие доходы',
+                    ]
                     category = await IncomeCategory.objects.filter(
                         profile=profile,
-                        name='💰 Прочие доходы',
                         is_active=True
-                    ).afirst()
+                    ).filter(name__in=default_names).afirst()
                 except (DatabaseError, AttributeError) as e:
-                    logger.debug(f"Error finding income category: {e}")
-                    pass
+                    logger.debug(f"Error finding default income category: {e}")
+                    category = None
             
             # Создаем доход
             try:
@@ -1104,7 +1135,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [
-                        InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_income_{income.id}")
+                        InlineKeyboardButton(text=get_text('edit_button', lang), callback_data=f"edit_income_{income.id}")
                     ]
                 ])
                 
@@ -1247,7 +1278,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
                         keyboard = InlineKeyboardMarkup(inline_keyboard=[
                             [
-                                InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_income_{income.id}")
+                                InlineKeyboardButton(text=get_text('edit_button', lang), callback_data=f"edit_income_{income.id}")
                             ]
                         ])
 
@@ -1320,7 +1351,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
                             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                                 [
-                                    InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_income_{income.id}")
+                                    InlineKeyboardButton(text=get_text('edit_button', lang), callback_data=f"edit_income_{income.id}")
                                 ]
                             ])
                             
@@ -1409,7 +1440,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     message_text,
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                         [
-                            InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
+                            InlineKeyboardButton(text=get_text('edit_button', lang), callback_data=f"edit_expense_{expense.id}")
                         ]
                     ]),
                     parse_mode="HTML",
@@ -1522,7 +1553,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         message_text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
             [
-                types.InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
+                types.InlineKeyboardButton(text=get_text('edit_button', lang), callback_data=f"edit_expense_{expense.id}")
             ]
         ]),
         parse_mode="HTML",
@@ -1676,14 +1707,14 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: s
     # Для удаления используем правильный префикс
     delete_callback = f"delete_income_{item_id}" if is_income else f"delete_expense_{item_id}"
     buttons.extend([
-        [InlineKeyboardButton(text=f"🗑 Удалить", callback_data=delete_callback)],
+        [InlineKeyboardButton(text=get_text('delete_button', lang), callback_data=delete_callback)],
         [InlineKeyboardButton(text=f"✅ {get_text('edit_done', lang)}", callback_data="edit_done")]
     ])
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
     
     # Меняем заголовок в зависимости от типа
-    title = "Редактирование дохода" if is_income else get_text('editing_expense', lang)
+    title = get_text('editing_income', lang) if is_income else get_text('editing_expense', lang)
     await callback.message.edit_text(
         f"✏️ <b>{title}</b>\n\n"
         f"{get_text('choose_field_to_edit', lang)}",
@@ -1735,7 +1766,7 @@ async def remove_cashback(callback: types.CallbackQuery, state: FSMContext, lang
             message_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="✏️  Редактировать", callback_data=f"edit_expense_{expense.id}")
+                    InlineKeyboardButton(text=get_text('edit_button', lang), callback_data=f"edit_expense_{expense.id}")
                 ]
             ]),
             parse_mode="HTML"
@@ -1970,7 +2001,7 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext, lang: str 
             message_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="✏️  Редактировать", callback_data=edit_callback)
+                    InlineKeyboardButton(text=get_text('edit_button', lang), callback_data=edit_callback)
                 ]
             ]),
             parse_mode="HTML"
@@ -2243,7 +2274,7 @@ async def show_updated_expense(message: types.Message, state: FSMContext, item_i
             message_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="✏️  Редактировать", callback_data=edit_callback)
+                    InlineKeyboardButton(text=get_text('edit_button', lang), callback_data=edit_callback)
                 ]
             ]),
             parse_mode="HTML",
@@ -2324,7 +2355,7 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
             message_text,
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="✏️  Редактировать", callback_data=edit_callback)
+                    InlineKeyboardButton(text=get_text('edit_button', lang), callback_data=edit_callback)
                 ]
             ]),
             parse_mode="HTML"
