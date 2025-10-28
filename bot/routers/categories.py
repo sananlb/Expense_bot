@@ -134,6 +134,13 @@ async def _apply_icon_and_finalize(event: types.CallbackQuery | types.Message, s
         # Fallback to expense if not set (backward compatibility)
         cat_type = 'expense'
 
+    # Отвечаем на callback чтобы убрать "часики" на кнопке
+    if isinstance(event, types.CallbackQuery):
+        try:
+            await event.answer()
+        except Exception:
+            pass
+
     try:
         if cat_type == 'income':
             if operation == 'edit':
@@ -153,8 +160,16 @@ async def _apply_icon_and_finalize(event: types.CallbackQuery | types.Message, s
             else:
                 await create_category(user_id, name.capitalize(), icon)
     finally:
-        await state.clear()
+        # Показываем новое меню ПЕРЕД очисткой state, чтобы send_message_with_cleanup
+        # могла удалить старое меню выбора иконок из last_menu_message_id
         await _finalize_after_change(event, state, operation or 'create', cat_type)
+
+        # Очищаем только поля связанные с категориями, но сохраняем last_menu_message_id
+        data = await state.get_data()
+        await state.set_data({
+            'last_menu_message_id': data.get('last_menu_message_id'),
+            'cashback_menu_ids': data.get('cashback_menu_ids', [])
+        })
 
 
 @router.message(Command("categories"))
@@ -444,12 +459,15 @@ async def process_category_name(message: types.Message, state: FSMContext):
     # Игнорируем команды - они обработаются в middleware
     if message.text.startswith('/'):
         return
-    
+
     # Дополнительная проверка что мы все еще в правильном состоянии
     current_state = await state.get_state()
     if current_state != CategoryForm.waiting_for_name.state:
         return
-    
+
+    # Получаем язык пользователя
+    lang = await get_user_language(message.from_user.id)
+
     name = message.text.strip()
     
     if len(name) > 50:
@@ -461,6 +479,12 @@ async def process_category_name(message: types.Message, state: FSMContext):
     emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]'
     has_emoji = bool(re.match(emoji_pattern, name))
     
+    # Удаляем сообщение пользователя
+    try:
+        await message.delete()
+    except Exception:
+        pass  # Сообщение уже удалено
+
     if has_emoji:
         # Если эмодзи уже есть, сразу создаем категорию
         user_id = message.from_user.id
@@ -542,7 +566,13 @@ async def process_custom_icon(message: types.Message, state: FSMContext):
     if not re.match(emoji_pattern, custom_icon) or len(custom_icon) > 24:
         await send_message_with_cleanup(message, state, "❌ Пожалуйста, отправьте один или несколько эмодзи без текста.")
         return
-    
+
+    # Удаляем сообщение пользователя
+    try:
+        await message.delete()
+    except Exception:
+        pass  # Сообщение уже удалено
+
     # Применяем иконку через общий обработчик
     await _apply_icon_and_finalize(message, state, custom_icon)
 
@@ -551,7 +581,6 @@ async def process_custom_icon(message: types.Message, state: FSMContext):
 async def no_icon_selected(callback: types.CallbackQuery, state: FSMContext):
     """Создать категорию без иконки"""
     await _apply_icon_and_finalize(callback, state, '')
-    await callback.answer()
 
 
 
@@ -561,7 +590,6 @@ async def set_category_icon(callback: types.CallbackQuery, state: FSMContext):
     """Установить выбранную иконку"""
     icon = callback.data.replace("set_icon_", "")
     await _apply_icon_and_finalize(callback, state, icon)
-    await callback.answer()
 
 
 @router.callback_query(lambda c: c.data == "edit_categories")
@@ -726,8 +754,8 @@ async def edit_category(callback: types.CallbackQuery, state: FSMContext):
             await callback.message.edit_text(
                 get_text('editing_category_header', lang).format(name=category_display),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="📝 Название", callback_data=f"edit_cat_name_{cat_id}")],
-                    [InlineKeyboardButton(text="🎨 Иконку", callback_data=f"edit_cat_icon_{cat_id}")],
+                    [InlineKeyboardButton(text=get_text('edit_name_button', lang), callback_data=f"edit_cat_name_{cat_id}")],
+                    [InlineKeyboardButton(text=get_text('edit_icon_button', lang), callback_data=f"edit_cat_icon_{cat_id}")],
                     [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="edit_categories")]
                 ])
             )
@@ -954,7 +982,13 @@ async def process_income_category_name(message: types.Message, state: FSMContext
     import re
     emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]'
     has_emoji = bool(re.match(emoji_pattern, name))
-    
+
+    # Удаляем сообщение пользователя
+    try:
+        await message.delete()
+    except Exception:
+        pass  # Сообщение уже удалено
+
     if has_emoji:
         # Если эмодзи уже есть, сразу создаем категорию
         user_id = message.from_user.id
@@ -997,7 +1031,6 @@ async def set_income_category_icon(callback: types.CallbackQuery, state: FSMCont
         category_id=data.get('category_id') or data.get('editing_income_category_id')
     )
     await _apply_icon_and_finalize(callback, state, icon)
-    await callback.answer()
 
 
 @router.callback_query(lambda c: c.data == "no_income_icon", IncomeCategoryForm.waiting_for_icon)
@@ -1011,7 +1044,6 @@ async def no_income_icon(callback: types.CallbackQuery, state: FSMContext):
         category_id=data.get('category_id') or data.get('editing_income_category_id')
     )
     await _apply_icon_and_finalize(callback, state, '')
-    await callback.answer()
 
 
 @router.callback_query(lambda c: c.data == "custom_income_icon")
@@ -1059,12 +1091,18 @@ async def process_custom_income_icon(message: types.Message, state: FSMContext):
     
     data = await state.get_data()
     name = data.get('name')
-    
+
     if not name:
         await send_message_with_cleanup(message, state, "❌ Ошибка: название категории не найдено")
         await state.clear()
         return
-    
+
+    # Удаляем сообщение пользователя
+    try:
+        await message.delete()
+    except Exception:
+        pass  # Сообщение уже удалено
+
     await state.update_data(name=name, operation='create', cat_type='income')
     await _apply_icon_and_finalize(message, state, custom_icon)
 
@@ -1194,8 +1232,8 @@ async def edit_income_category(callback: types.CallbackQuery, state: FSMContext)
         await callback.message.edit_text(
             get_text('editing_income_category_header', lang).format(name=category_display_name),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📝 Название", callback_data=f"edit_income_name_{category_id}")],
-                [InlineKeyboardButton(text="🎨 Иконку", callback_data=f"edit_income_icon_{category_id}")],
+                [InlineKeyboardButton(text=get_text('edit_name_button', lang), callback_data=f"edit_income_name_{category_id}")],
+                [InlineKeyboardButton(text=get_text('edit_icon_button', lang), callback_data=f"edit_income_icon_{category_id}")],
                 [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="edit_income_categories")]
             ])
         )
@@ -1314,12 +1352,18 @@ async def process_new_income_category_name(message: types.Message, state: FSMCon
     else:
         # Если нет эмодзи ни в старом, ни в новом - оставляем без иконки
         final_name = new_name.strip()
-    
+
+    # Удаляем сообщение пользователя
+    try:
+        await message.delete()
+    except Exception:
+        pass  # Сообщение уже удалено
+
     try:
         from bot.services.income import update_income_category
         # Обновляем категорию с финальным названием
         await update_income_category(message.from_user.id, category_id, final_name)
-        
+
         await state.clear()
         await show_income_categories_menu(message, state)
     except ValueError as e:

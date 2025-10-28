@@ -45,7 +45,7 @@ AMOUNT_PATTERNS = [
 # Паттерны для определения валюты
 CURRENCY_PATTERNS = {
     # Major world currencies
-    'USD': [r'\$', r'\busd\b', r'\bдолл', r'\bдоллар'],
+    'USD': [r'\$', r'\busd\b', r'\bдолл', r'\bдоллар', r'\bdollars?\b'],
     'EUR': [r'€', r'\beur\b', r'\bевро', r'\beuro'],
     'GBP': [r'£', r'\bgbp\b', r'\bфунт', r'\bsterling', r'\bpounds?\b'],
     'CNY': [r'¥', r'\bcny\b', r'\bюан', r'\byuan', r'\brenminbi', r'\brmb\b'],

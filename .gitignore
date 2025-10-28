@@ -20,6 +20,7 @@ pip-delete-this-directory.txt
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+expense_bot.db
 media/
 staticfiles/
 static/
@@ -84,3 +85,7 @@ docker-compose.override.yml
 tmp/
 temp/
 *.tmp
+nul
+
+# Claude Code
+.claude/

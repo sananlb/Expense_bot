@@ -578,24 +578,89 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
 @router.message(EditExpenseForm.editing_amount)
 async def process_edit_amount(message: types.Message, state: FSMContext, lang: str = 'ru'):
     """Обработка новой суммы"""
+    import re
+    from ..utils.expense_parser import detect_currency, CURRENCY_PATTERNS
+
+    text = (message.text or "").strip()
+    text_no_spaces = re.sub(r"\s+", "", text)
+
+    # Получаем валюту пользователя для определения валюты по умолчанию
+    from ..services.profile import get_or_create_profile
+    profile = await get_or_create_profile(message.from_user.id)
+    user_currency = (profile.currency or 'RUB').upper()
+
+    inline_currency = None
+    inline_amount = None
+    currency_explicit = False
+
+    # Формат вида "100usd"
+    inline_trailing = re.fullmatch(r'([+-]?\d+(?:[.,]\d+)?)([a-z]{2,4})', text_no_spaces, flags=re.IGNORECASE)
+    if inline_trailing:
+        code_candidate = inline_trailing.group(2).upper()
+        if code_candidate in CURRENCY_PATTERNS or code_candidate == user_currency:
+            inline_currency = code_candidate
+            inline_amount = inline_trailing.group(1)
+            currency_explicit = True
+
+    # Формат вида "usd100"
+    if inline_currency is None:
+        inline_leading = re.fullmatch(r'([a-z]{2,4})([+-]?\d+(?:[.,]\d+)?)', text_no_spaces, flags=re.IGNORECASE)
+        if inline_leading:
+            code_candidate = inline_leading.group(1).upper()
+            if code_candidate in CURRENCY_PATTERNS or code_candidate == user_currency:
+                inline_currency = code_candidate
+                inline_amount = inline_leading.group(2)
+                currency_explicit = True
+
+    detected_currency = inline_currency or detect_currency(text, user_currency)
+    currency = (detected_currency or user_currency).upper()
+
+    if inline_amount is not None:
+        cleaned_text = inline_amount
+    else:
+        cleaned_text = text
+        for curr_patterns in CURRENCY_PATTERNS.values():
+            for pattern in curr_patterns:
+                new_text = re.sub(pattern, '', cleaned_text, flags=re.IGNORECASE)
+                if new_text != cleaned_text:
+                    currency_explicit = True
+                    cleaned_text = new_text
+
+        cleaned_no_spaces = re.sub(r"\s+", "", cleaned_text)
+        tail_match = re.fullmatch(r'([+-]?\d+(?:[.,]\d+)?)([a-z]{2,4})', cleaned_no_spaces, flags=re.IGNORECASE)
+        if tail_match:
+            cleaned_text = tail_match.group(1)
+            currency_explicit = True
+        else:
+            head_match = re.fullmatch(r'([a-z]{2,4})([+-]?\d+(?:[.,]\d+)?)', cleaned_no_spaces, flags=re.IGNORECASE)
+            if head_match:
+                cleaned_text = head_match.group(2)
+                currency_explicit = True
+
+        cleaned_text = cleaned_text.strip()
+
     try:
-        amount = await validate_amount(message.text)
+        amount = await validate_amount(cleaned_text)
     except ValueError as e:
         await message.answer(f"❌ {str(e)}")
         return
-    
+
     data = await state.get_data()
     item_id = data.get('editing_expense_id')
     is_income = data.get('editing_type') == 'income'
-    
-    # Обновляем операцию
+
+    update_kwargs = {'amount': amount}
+    if currency_explicit:
+        update_kwargs['currency'] = currency
+
+    # Обновляем операцию с новой валютой (если указана явно)
     if is_income:
         from ..services.income import update_income
-        success = await update_income(message.from_user.id, item_id, amount=amount)
+        success = await update_income(message.from_user.id, item_id, **update_kwargs)
     else:
         from ..services.expense import update_expense
-        success = await update_expense(message.from_user.id, item_id, amount=amount)
-    
+        success = await update_expense(message.from_user.id, item_id, **update_kwargs)
+
     if success:
         # Показываем обновленную операцию
         await show_updated_expense(message, state, item_id, lang)

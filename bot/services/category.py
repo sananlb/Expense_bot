@@ -7,6 +7,7 @@ from asgiref.sync import sync_to_async
 from django.db.models import Sum, Count, Q
 from bot.utils.db_utils import get_or_create_user_profile_sync
 from bot.utils.category_helpers import get_category_display_name, get_category_name_without_emoji
+from difflib import get_close_matches
 import logging
 import re
 
@@ -28,6 +29,7 @@ def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCate
     """Получить категорию по имени или вернуть категорию 'Прочие расходы'"""
     original_category_name = category_name or ''
     category_name = EMOJI_PREFIX_RE.sub('', original_category_name).strip()
+    normalized_category_name = category_name.lower() if category_name else ""
     if original_category_name and original_category_name != category_name:
         if category_name:
             logger.debug(
@@ -153,6 +155,27 @@ def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCate
                 logger.info(f"Found category '{safe_name}' by cafe/restaurant keyword")
                 return cat
     
+    # Дополнительная попытка: ищем ближайшее совпадение по названию
+    if normalized_category_name:
+        candidate_map = {}
+        for cat in all_categories:
+            for field_name in ('name_ru', 'name_en', 'name'):
+                field_value = getattr(cat, field_name, None)
+                if not field_value:
+                    continue
+                sanitized_value = EMOJI_PREFIX_RE.sub('', field_value).strip().lower()
+                if sanitized_value:
+                    candidate_map[sanitized_value] = cat
+        if candidate_map:
+            close_matches = get_close_matches(normalized_category_name, list(candidate_map.keys()), n=1, cutoff=0.72)
+            if close_matches:
+                matched_key = close_matches[0]
+                category = candidate_map[matched_key]
+                display_name = get_category_display_name(category, 'ru')
+                safe_name = display_name.encode('ascii', 'ignore').decode('ascii').strip() or f"category id={category.id}"
+                logger.info(f"Found category '{safe_name}' by fuzzy match (input='{original_category_name}', matched='{matched_key}')")
+                return category
+
     # Если категория не найдена, возвращаем "Прочие расходы" / "Other Expenses"
     logger.warning(f"Category '{category_name}' not found for user {user_id}, using default")
 

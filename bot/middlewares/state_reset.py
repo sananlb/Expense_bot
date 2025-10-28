@@ -32,16 +32,17 @@ class StateResetMiddleware(BaseMiddleware):
             
             # Проверяем, является ли сообщение командой
             if event.text.startswith('/'):
-                # Сохраняем данные о персистентном меню кешбека перед очисткой
+                # Сохраняем данные о персистентном меню кешбека и clarification message перед очисткой
                 state_data = await state.get_data()
                 persistent_cashback = state_data.get('persistent_cashback_menu', False)
                 cashback_menu_ids = state_data.get('cashback_menu_ids', [])
                 cashback_menu_month = state_data.get('cashback_menu_month')
-                
+                clarification_message_id = state_data.get('clarification_message_id')
+
                 # Сбрасываем состояние при любой команде
                 await state.clear()
                 logger.info(f"State cleared for user {event.from_user.id} on command {event.text}")
-                
+
                 # Восстанавливаем флаг персистентного меню кешбека и список ID
                 if persistent_cashback and cashback_menu_ids:
                     # Используем последний ID из списка для совместимости
@@ -54,6 +55,11 @@ class StateResetMiddleware(BaseMiddleware):
                         last_menu_message_id=last_id  # ВАЖНО: сохраняем ID как last_menu для защиты от удаления
                     )
                     logger.info(f"Restored persistent cashback menus ({len(cashback_menu_ids)} menus) for user {event.from_user.id}")
+
+                # Восстанавливаем clarification_message_id чтобы menu_cleanup мог его удалить
+                if clarification_message_id:
+                    await state.update_data(clarification_message_id=clarification_message_id)
+                    logger.info(f"Restored clarification_message_id={clarification_message_id} for cleanup")
             
             # Проверяем состояние ожидания процента кешбэка (при добавлении или редактировании)
             elif current_state in [CashbackForm.waiting_for_percent.state, CashbackForm.editing_percent.state]:

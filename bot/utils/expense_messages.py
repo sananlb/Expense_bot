@@ -10,7 +10,7 @@ from ..utils import get_text
 
 # Константы для разделительных линий (зависят от языка)
 SEPARATOR_LINE_RU = "_______________________"  # 23 символа для русского
-SEPARATOR_LINE_EN = "__________________"        # 18 символов для английского
+SEPARATOR_LINE_EN = "_____________________"     # 21 символ для английского
 
 
 def get_separator_line(lang: str = 'ru') -> str:

@@ -21,19 +21,46 @@ class MenuCleanupMiddleware(BaseMiddleware):
         event: Message,
         data: Dict[str, Any]
     ) -> Any:
-        # Пропускаем callback queries
+        # Для callback queries удаляем только clarification_message_id
         if isinstance(event, CallbackQuery):
-            return await handler(event, data)
+            state: FSMContext = data.get('state')
+            old_clarification_id = None
+
+            if state:
+                state_data = await state.get_data()
+                old_clarification_id = state_data.get('clarification_message_id')
+
+            result = await handler(event, data)
+
+            # Удаляем сообщение с вопросом если оно есть
+            if old_clarification_id and state:
+                try:
+                    asyncio.create_task(
+                        delete_message_with_effect(
+                            event.bot,
+                            event.message.chat.id,
+                            old_clarification_id,
+                            delay=0.1
+                        )
+                    )
+                    await state.update_data(clarification_message_id=None)
+                    logger.info(f"Scheduled deletion of clarification message {old_clarification_id} (callback) for user {event.from_user.id}")
+                except Exception as e:
+                    logger.debug(f"Failed to delete clarification message in callback: {e}")
+
+            return result
             
         # Получаем состояние из контекста
         state: FSMContext = data.get('state')
         
         # Сохраняем информацию о старом меню для удаления после обработки
         old_menu_id = None
+        old_clarification_id = None
         if state and isinstance(event, Message):
             state_data = await state.get_data()
             old_menu_id = state_data.get('last_menu_message_id')
-            logger.info(f"MenuCleanup: Found old_menu_id={old_menu_id} for user {event.from_user.id}")
+            old_clarification_id = state_data.get('clarification_message_id')
+            logger.info(f"MenuCleanup: Found old_menu_id={old_menu_id}, clarification_id={old_clarification_id} for user {event.from_user.id}")
         
         # Сначала вызываем обработчик (он отправит новое меню)
         result = await handler(event, data)
@@ -98,5 +125,28 @@ class MenuCleanupMiddleware(BaseMiddleware):
                     logger.info(f"Scheduled deletion of old menu {old_menu_id} for user {event.from_user.id}")
             except Exception as e:
                 logger.debug(f"Failed to delete old menu: {e}")
-        
+
+        # Удаляем сообщение с вопросом (clarification_message_id) если оно есть
+        if old_clarification_id and state:
+            try:
+                # Проверяем, что сообщение все еще есть в state
+                state_data = await state.get_data()
+                current_clarification_id = state_data.get('clarification_message_id')
+
+                # Удаляем если ID не изменился (т.е. обработчик не обновил его)
+                if current_clarification_id == old_clarification_id:
+                    asyncio.create_task(
+                        delete_message_with_effect(
+                            event.bot,
+                            event.chat.id,
+                            old_clarification_id,
+                            delay=0.1
+                        )
+                    )
+                    # Очищаем ID из состояния
+                    await state.update_data(clarification_message_id=None)
+                    logger.info(f"Scheduled deletion of clarification message {old_clarification_id} for user {event.from_user.id}")
+            except Exception as e:
+                logger.debug(f"Failed to delete clarification message: {e}")
+
         return result
