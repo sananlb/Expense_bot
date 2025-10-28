@@ -33,10 +33,11 @@ echo -e "${YELLOW}ℹ️  Обновляется только контейнер
 echo -e "${YELLOW}ℹ️  Веб, Celery, Redis и лендинг не затрагиваются${NC}"
 echo ""
 
-# Шаг 1: Остановка контейнера бота
-echo -e "${YELLOW}[1/7] 🛑 Останавливаю контейнер бота...${NC}"
+# Шаг 1: Остановка и удаление контейнера бота
+echo -e "${YELLOW}[1/7] 🛑 Останавливаю и удаляю контейнер бота...${NC}"
 docker-compose stop bot
-echo -e "${GREEN}✓ Контейнер bot остановлен${NC}"
+docker-compose rm -f bot
+echo -e "${GREEN}✓ Контейнер bot остановлен и удален${NC}"
 echo ""
 
 # Шаг 2: Удаление старого образа бота
@@ -71,7 +72,7 @@ echo ""
 
 # Шаг 5: Запуск контейнера бота
 echo -e "${YELLOW}[5/7] 🚀 Запускаю контейнер бота...${NC}"
-docker-compose up -d --force-recreate bot
+docker-compose up -d bot
 echo -e "${GREEN}✓ Контейнер bot запущен${NC}"
 echo ""
 
@@ -118,7 +119,7 @@ echo -e "${YELLOW}🔍 Проверяю логи контейнера bot...${NC
 echo -e "${YELLOW}═══════════════════════════════════════════════════${NC}"
 # Не прерываем выполнение если логи недоступны
 set +e
-docker-compose logs bot --tail 20
+docker-compose logs --tail=20 bot
 set -e
 echo -e "${YELLOW}═══════════════════════════════════════════════════${NC}"
 echo ""
