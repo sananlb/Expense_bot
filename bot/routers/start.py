@@ -44,6 +44,7 @@ def get_welcome_message(lang: str = 'ru', referral_message: str = '') -> str:
 <b>💸 Adding expenses and income:</b>
 Send a text or voice message:
 "Coffee", "Gas 4050", "Bonus +40000"
+To add income, put a "+" sign before the amount.
 
 <b>📁 Categories:</b>
 Customize categories for yourself - add your own, delete unnecessary ones. AI will automatically determine the category for each entry.
@@ -67,6 +68,7 @@ Track finances together with your family. Switch between personal and family vie
 <b>💸 Добавление расходов и доходов:</b>
 Отправьте текст или голосовое сообщение:
 "Кофе", "Дизель 4050", "Премия +40000"
+Для ввода доходов поставьте знак "+" перед суммой.
 
 <b>📁 Категории:</b>
 Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. ИИ автоматически определит категорию для каждой записи.
