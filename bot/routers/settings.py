@@ -125,11 +125,11 @@ async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: st
     """Показать меню настроек по callback"""
     from bot.utils.state_utils import clear_state_keep_cashback
     await clear_state_keep_cashback(state)
-    
+
     try:
         profile = await get_or_create_profile(callback.from_user.id)
         settings = await sync_to_async(lambda: profile.settings)()
-        
+
         # Обновляем команды бота для пользователя
         await update_user_commands(callback.bot, callback.from_user.id)
         
