@@ -74,8 +74,8 @@ TEXTS = {
         'add_button': '➕ Добавить',
         'edit_button': '✏️ Редактировать',
         'delete_button': '➖ Удалить',
-        'adding_category': '📔 Добавление новой категории\n\nВведите название категории:',
-        'adding_income_category': '📔 Добавление категории доходов\n\nВведите название категории доходов:',
+        'adding_category': '📝 Добавление новой категории\n\nВведите название категории:',
+        'adding_income_category': '📝 Добавление категории доходов\n\nВведите название категории доходов:',
         'choose_icon_for_category': '🎨 Выберите иконку для категории «{name}»:',
         'choose_icon_for_income_category': '🎨 Выберите иконку для категории доходов «{name}»:',
         'send_your_emoji': '✏️ Отправьте свой эмодзи для категории:',
@@ -793,8 +793,8 @@ TEXTS = {
         'add_button': '➕ Add',
         'edit_button': '✏️ Edit',
         'delete_button': '➖ Delete',
-        'adding_category': '📔 Adding new category\n\nEnter category name:',
-        'adding_income_category': '📔 Adding income category\n\nEnter income category name:',
+        'adding_category': '📝 Adding new category\n\nEnter category name:',
+        'adding_income_category': '📝 Adding income category\n\nEnter income category name:',
         'choose_icon_for_category': '🎨 Choose icon for category «{name}»:',
         'choose_icon_for_income_category': '🎨 Choose icon for income category «{name}»:',
         'send_your_emoji': '✏️ Send your emoji for category:',
