@@ -153,34 +153,45 @@ def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCate
                 logger.info(f"Found category '{safe_name}' by cafe/restaurant keyword")
                 return cat
     
-    # Если категория не найдена, возвращаем "Прочие расходы"
+    # Если категория не найдена, возвращаем "Прочие расходы" / "Other Expenses"
     logger.warning(f"Category '{category_name}' not found for user {user_id}, using default")
-    
-    # Сначала пытаемся найти существующую категорию "Прочие расходы"
+
+    # Сначала пытаемся найти существующую категорию "Прочие расходы" / "Other Expenses"
     other_category = ExpenseCategory.objects.filter(
         profile=profile
     ).filter(
-        Q(name_ru__icontains='прочие') | 
+        Q(name_ru__icontains='прочие') |
         Q(name_en__icontains='other') |
-        Q(name__icontains='прочие')  # Fallback
+        Q(name__icontains='прочие') |  # Fallback на старое поле
+        Q(name__icontains='other')     # Fallback на старое поле для EN
     ).first()
-    
+
     if not other_category:
-        # Если нет категории "Прочие расходы", создаем её
+        # Если нет категории "Прочие расходы" / "Other Expenses", создаем её
+        # Определяем язык пользователя для правильного имени категории
+        user_lang = profile.language_code or 'ru'
+
+        if user_lang == 'en':
+            category_name_display = '💰 Other Expenses'
+            original_lang = 'en'
+        else:
+            category_name_display = '💰 Прочие расходы'
+            original_lang = 'ru'
+
         other_category, created = ExpenseCategory.objects.get_or_create(
-            name='💰 Прочие расходы',
+            name=category_name_display,
             profile=profile,
             defaults={
                 'icon': '💰',
                 'name_ru': 'Прочие расходы',
                 'name_en': 'Other Expenses',
-                'original_language': 'ru',
+                'original_language': original_lang,
                 'is_translatable': True
             }
         )
         if created:
-            logger.info(f"Created default category 'Прочие расходы' for user {user_id}")
-    
+            logger.info(f"Created default category '{category_name_display}' for user {user_id} (lang: {user_lang})")
+
     return other_category
 
 
@@ -568,7 +579,11 @@ def create_default_categories_sync(user_id: int) -> bool:
     if created:
         logger.info(f"Created new profile for user {user_id}")
 
-    if ExpenseCategory.objects.filter(profile=profile).exists():
+    # Проверяем количество категорий - должно быть минимум 16 для считать инициализированным
+    # Это защищает от race condition когда создалась только "Прочие расходы"
+    existing_count = ExpenseCategory.objects.filter(profile=profile).count()
+    if existing_count >= 16:
+        logger.debug(f"User {user_id} already has {existing_count} categories, skipping default creation")
         return False
 
     try:
@@ -597,17 +612,45 @@ def create_default_categories_sync(user_id: int) -> bool:
             from expenses.models import DEFAULT_CATEGORIES
             default_categories = DEFAULT_CATEGORIES
 
-        categories = [
-            ExpenseCategory(
-                profile=profile,
-                name=f"{icon} {name}",
-                icon='',
-                is_active=True
+        # Если есть несколько категорий (например только "Прочие расходы" от fallback),
+        # все равно создаем все остальные
+        if existing_count > 0:
+            logger.info(f"User {user_id} has only {existing_count} categories (likely from fallback), creating remaining defaults")
+            # Получаем названия уже существующих категорий
+            existing_names = set(
+                ExpenseCategory.objects.filter(profile=profile)
+                .values_list('name', flat=True)
             )
-            for name, icon in default_categories
-        ]
+            # Создаем только те категории, которых еще нет
+            categories_to_create = []
+            for name, icon in default_categories:
+                full_name = f"{icon} {name}"
+                if full_name not in existing_names:
+                    categories_to_create.append(
+                        ExpenseCategory(
+                            profile=profile,
+                            name=full_name,
+                            icon='',
+                            is_active=True
+                        )
+                    )
+            if categories_to_create:
+                ExpenseCategory.objects.bulk_create(categories_to_create)
+                logger.info(f"Created {len(categories_to_create)} missing default categories for user {user_id}")
+        else:
+            # Создаем все категории с нуля
+            categories = [
+                ExpenseCategory(
+                    profile=profile,
+                    name=f"{icon} {name}",
+                    icon='',
+                    is_active=True
+                )
+                for name, icon in default_categories
+            ]
+            ExpenseCategory.objects.bulk_create(categories)
+            logger.info(f"Created all {len(categories)} default categories for user {user_id}")
 
-        ExpenseCategory.objects.bulk_create(categories)
         return True
     except Exception as exc:
         logger.error(f"Failed to create default categories for {user_id}: {exc}")
@@ -621,30 +664,33 @@ create_default_categories = sync_to_async(create_default_categories_sync)
 def create_default_income_categories(user_id: int) -> bool:
     """
     Создать базовые категории доходов для нового пользователя
-    
+
     Args:
         user_id: ID пользователя в Telegram
-        
+
     Returns:
         True если категории созданы, False если уже существуют
     """
     from expenses.models import IncomeCategory, Profile, DEFAULT_INCOME_CATEGORIES
-    
+
     try:
         profile = Profile.objects.get(telegram_id=user_id)
     except Profile.DoesNotExist:
         # Создаем профиль если его нет
         profile = Profile.objects.create(telegram_id=user_id)
         logger.info(f"Created new profile for user {user_id}")
-    
+
     try:
-        # Проверяем, есть ли уже категории доходов у пользователя
-        if IncomeCategory.objects.filter(profile=profile).exists():
+        # Проверяем количество категорий доходов - должно быть минимум 10 для считать инициализированным
+        # Это защищает от race condition когда создалась только одна категория как fallback
+        existing_count = IncomeCategory.objects.filter(profile=profile).count()
+        if existing_count >= 10:
+            logger.debug(f"User {user_id} already has {existing_count} income categories, skipping default creation")
             return False
-            
+
         # Определяем язык пользователя
         lang = profile.language_code or 'ru'
-        
+
         # Базовые категории доходов с переводами
         if lang == 'en':
             default_income_categories = [
@@ -662,30 +708,65 @@ def create_default_income_categories(user_id: int) -> bool:
         else:
             # Используем категории по умолчанию из модели
             default_income_categories = DEFAULT_INCOME_CATEGORIES
-        
-        # Создаем категории доходов
-        categories = []
-        for name, icon in default_income_categories:
-            # Для английских категорий эмодзи уже включен в name
-            # Для русских категорий нужно добавить эмодзи к названию
-            if lang == 'en':
-                category_name = name  # Эмодзи уже включен
-            else:
-                category_name = f"{icon} {name}"  # Добавляем эмодзи к русскому названию
 
-            category = IncomeCategory(
-                profile=profile,
-                name=category_name,
-                icon=icon,
-                is_active=True,
-                is_default=False
+        # Если есть несколько категорий (например только fallback категория),
+        # все равно создаем все остальные
+        if existing_count > 0:
+            logger.info(f"User {user_id} has only {existing_count} income categories (likely from fallback), creating remaining defaults")
+            # Получаем названия уже существующих категорий
+            existing_names = set(
+                IncomeCategory.objects.filter(profile=profile)
+                .values_list('name', flat=True)
             )
-            categories.append(category)
-            
-        IncomeCategory.objects.bulk_create(categories)
-        logger.info(f"Created {len(categories)} default income categories for user {user_id}")
+            # Создаем только те категории, которых еще нет
+            categories_to_create = []
+            for name, icon in default_income_categories:
+                # Для английских категорий эмодзи уже включен в name
+                # Для русских категорий нужно добавить эмодзи к названию
+                if lang == 'en':
+                    category_name = name  # Эмодзи уже включен
+                else:
+                    category_name = f"{icon} {name}"  # Добавляем эмодзи к русскому названию
+
+                if category_name not in existing_names:
+                    categories_to_create.append(
+                        IncomeCategory(
+                            profile=profile,
+                            name=category_name,
+                            icon=icon,
+                            is_active=True,
+                            is_default=False
+                        )
+                    )
+
+            if categories_to_create:
+                IncomeCategory.objects.bulk_create(categories_to_create)
+                logger.info(f"Created {len(categories_to_create)} missing default income categories for user {user_id}")
+        else:
+            # Создаем все категории доходов с нуля
+            categories = []
+            for name, icon in default_income_categories:
+                # Для английских категорий эмодзи уже включен в name
+                # Для русских категорий нужно добавить эмодзи к названию
+                if lang == 'en':
+                    category_name = name  # Эмодзи уже включен
+                else:
+                    category_name = f"{icon} {name}"  # Добавляем эмодзи к русскому названию
+
+                category = IncomeCategory(
+                    profile=profile,
+                    name=category_name,
+                    icon=icon,
+                    is_active=True,
+                    is_default=False
+                )
+                categories.append(category)
+
+            IncomeCategory.objects.bulk_create(categories)
+            logger.info(f"Created all {len(categories)} default income categories for user {user_id}")
+
         return True
-        
+
     except Exception as e:
         logger.error(f"Error creating default income categories: {e}")
         return False
