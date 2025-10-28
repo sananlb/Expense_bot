@@ -33,6 +33,10 @@ echo ""
 
 # Шаг 2: Очистка Docker
 echo -e "${YELLOW}[2/8] 🧹 Очищаю Docker систему...${NC}"
+# Удаляем старые образы expense_bot
+echo -e "${YELLOW}  Удаляю старые образы expense_bot...${NC}"
+docker rmi $(docker images -q 'expense_bot*') 2>/dev/null || true
+# Очищаем неиспользуемые данные
 docker system prune -af --volumes=false
 echo -e "${GREEN}✓ Docker очищен${NC}"
 echo ""
