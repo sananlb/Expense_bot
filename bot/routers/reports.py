@@ -266,12 +266,12 @@ async def show_expenses_summary(
             
             # Показываем расходы если они есть
             if has_expenses:
-                text += f"💸 Расходы: {expense_amount}\n"
-            
-            # Показываем доходы если они есть  
+                text += f"💸 {get_text('expenses_label', lang)}: {expense_amount}\n"
+
+            # Показываем доходы если они есть
             if has_incomes:
-                text += f"💰 Доходы: {income_amount}\n"
-            
+                text += f"💰 {get_text('income_label', lang)}: {income_amount}\n"
+
             # Показываем баланс только если есть и доходы и расходы
             if has_expenses and has_incomes:
                 # Форматируем баланс с + или - в зависимости от знака
@@ -279,16 +279,13 @@ async def show_expenses_summary(
                     balance_text = f"+{format_amount(balance, summary['currency'], lang)}"
                 else:
                     balance_text = format_amount(balance, summary['currency'], lang)
-                text += f"⚖️ Баланс: {balance_text}\n"
+                text += f"⚖️ {get_text('balance_label', lang)}: {balance_text}\n"
             
             text += "\n"
             
             # По категориям расходов (если есть)
             if summary['by_category'] and has_expenses:
-                if lang == 'en':
-                    text += f"📊 <b>Expenses by category:</b>\n"
-                else:
-                    text += f"📊 <b>Расходы по категориям:</b>\n"
+                text += f"📊 <b>{get_text('expenses_by_category', lang)}:</b>\n"
                 total_categories = len(summary['by_category'])
                 
                 # Логика отображения: если 22 или меньше - показываем все, если 23+ показываем 20 + остальные
@@ -297,7 +294,7 @@ async def show_expenses_summary(
                     for cat in summary['by_category']:
                         # Формируем название с эмодзи
                         icon = cat.get('icon', '')
-                        name = cat.get('name', 'Без категории')
+                        name = cat.get('name', get_text('no_category', lang))
                         category_display = f"{icon} {name}" if icon else name
                         text += f"  {category_display}: {format_amount(cat['total'], summary['currency'], lang)}\n"
                 else:
@@ -305,7 +302,7 @@ async def show_expenses_summary(
                     for cat in summary['by_category'][:20]:
                         # Формируем название с эмодзи
                         icon = cat.get('icon', '')
-                        name = cat.get('name', 'Без категории')
+                        name = cat.get('name', get_text('no_category', lang))
                         category_display = f"{icon} {name}" if icon else name
                         text += f"  {category_display}: {format_amount(cat['total'], summary['currency'], lang)}\n"
                     
@@ -325,10 +322,7 @@ async def show_expenses_summary(
             
             # По категориям доходов (если есть)
             if summary.get('by_income_category') and has_incomes:
-                if lang == 'en':
-                    text += f"💵 <b>Income by category:</b>\n"
-                else:
-                    text += f"💵 <b>Доходы по категориям:</b>\n"
+                text += f"💵 <b>{get_text('income_by_category', lang)}:</b>\n"
                 income_categories = summary.get('by_income_category', [])
                 total_income_categories = len(income_categories)
                 
@@ -515,7 +509,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                     'time': exp.expense_time or exp.created_at.time(),
                     'amount': exp.amount,
                     'currency': exp.currency,
-                    'category': get_category_display_name(exp.category, lang) if exp.category else ('Без категории' if lang == 'ru' else 'No Category'),
+                    'category': get_category_display_name(exp.category, lang) if exp.category else get_text('no_category', lang),
                     'description': exp.description,
                     'object': exp
                 })
@@ -527,7 +521,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                     'time': inc.income_time or inc.created_at.time(),
                     'amount': inc.amount,
                     'currency': inc.currency,
-                    'category': get_category_display_name(inc.category, lang) if inc.category else ('Прочие доходы' if lang == 'ru' else 'Other Income'),
+                    'category': get_category_display_name(inc.category, lang) if inc.category else get_text('other_income', lang),
                     'description': inc.description,
                     'object': inc
                 })
@@ -539,9 +533,9 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
         operations = await get_recent_operations()
         
         if not operations:
-            text = "📋 <b>Дневник</b>\n\n<i>Операций не найдено</i>"
+            text = f"📋 <b>{get_text('diary', lang)}</b>\n\n<i>{get_text('no_operations', lang)}</i>"
         else:
-            text = "📋 <b>Дневник</b>\n\n"
+            text = f"📋 <b>{get_text('diary', lang)}</b>\n\n"
             
             # Сортируем операции по дате (от старых к новым) для группировки по дням
             operations = sorted(operations, key=lambda x: (x['date'], x['time']))
@@ -574,7 +568,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                 # Форматируем время, описание и сумму
                 time_str = operation['time'].strftime('%H:%M') if operation['time'] else '00:00'
                 
-                description = operation['description'] or "Без описания"
+                description = operation['description'] or get_text('no_description', lang)
                 if len(description) > 30:
                     description = description[:27] + "..."
                 
@@ -637,16 +631,20 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
             for i, day_data in enumerate(all_days_data):
                 # Форматируем дату
                 if day_data['date'] == end_date:
-                    date_str = "Сегодня"
+                    date_str = get_text('today', lang)
                 else:
-                    months_ru = {
-                        1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
-                        5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
-                        9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
+                    month_keys = {
+                        1: 'month_january', 2: 'month_february', 3: 'month_march', 4: 'month_april',
+                        5: 'month_may', 6: 'month_june', 7: 'month_july', 8: 'month_august',
+                        9: 'month_september', 10: 'month_october', 11: 'month_november', 12: 'month_december'
                     }
                     day = day_data['date'].day
-                    month_name = months_ru.get(day_data['date'].month, day_data['date'].strftime('%B'))
-                    date_str = f"{day} {month_name}"
+                    month_key = month_keys.get(day_data['date'].month, 'month_january')
+                    month_name = get_text(month_key, lang)
+                    if lang == 'en':
+                        date_str = f"{month_name} {day}"
+                    else:
+                        date_str = f"{day} {month_name}"
                 
                 text += f"\n<b>📅 {date_str}</b>\n"
                 
@@ -679,7 +677,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                     has_incomes = any(total.get('incomes', 0) > 0 for total in day_data['totals'].values())
                     
                     if has_expenses:
-                        text += "  💸 <b>Расходы:</b> "
+                        text += f"  💸 <b>{get_text('expenses_label', lang)}:</b> "
                         expenses_list = []
                         for currency, total in day_data['totals'].items():
                             if total.get('expenses', 0) > 0:
@@ -689,7 +687,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                         text += ", ".join(expenses_list) + "\n"
                     
                     if has_incomes:
-                        text += "  💰 <b>Доходы:</b> "
+                        text += f"  💰 <b>{get_text('income_label', lang)}:</b> "
                         incomes_list = []
                         for currency, total in day_data['totals'].items():
                             if total.get('incomes', 0) > 0:
@@ -699,7 +697,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                         text += ", ".join(incomes_list) + "\n"
         
         # Добавляем вопрос в конце
-        text += "\n<i>💡 Показать траты в другие дни?</i>"
+        text += f"\n<i>💡 {get_text('show_other_days', lang)}</i>"
         
         # Добавляем кнопку "Назад"
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
