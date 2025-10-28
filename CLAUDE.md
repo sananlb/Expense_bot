@@ -287,6 +287,50 @@ git stash pop  # восстанавливаем локальные измене�
 - expense_bot_db - PostgreSQL 15
 - expense_bot_redis - Redis cache
 
+### 🔴 ВАЖНО: Правильный синтаксис docker-compose команд
+
+**На PRIMARY SERVER (80.66.87.178) - СТАРАЯ версия docker-compose:**
+```bash
+# ИМЕНА СЕРВИСОВ В docker-compose.yml:
+# - bot (контейнер: expense_bot_app)
+# - web (контейнер: expense_bot_web)
+# - celery (контейнер: expense_bot_celery)
+# - celery-beat (контейнер: expense_bot_celery_beat)
+# - db (контейнер: expense_bot_db)
+# - redis (контейнер: expense_bot_redis)
+
+# ✅ ПРАВИЛЬНЫЕ КОМАНДЫ (флаги ПОСЛЕ команды):
+docker-compose logs --tail=50 bot          # Посмотреть логи бота
+docker-compose logs --tail=100 web         # Посмотреть логи веб
+docker-compose logs --follow bot           # Следить за логами в реальном времени
+docker-compose ps                          # Статус всех контейнеров
+docker-compose restart bot                 # Перезапустить бот
+docker-compose stop bot                    # Остановить бот
+docker-compose up -d bot                   # Запустить бот
+
+# ❌ НЕПРАВИЛЬНЫЕ КОМАНДЫ (НЕ РАБОТАЮТ на старой версии):
+docker-compose logs bot --tail=50          # ❌ ERROR: No such service: --tail
+docker-compose logs bot --follow           # ❌ ERROR: No such service: --follow
+
+# 🔄 АЛЬТЕРНАТИВА - напрямую через docker (работает везде):
+docker logs --tail 50 expense_bot_app      # Логи бота
+docker logs --tail 50 expense_bot_web      # Логи веб
+docker logs -f expense_bot_app             # Следить за логами (-f = follow)
+docker ps                                  # Статус всех контейнеров
+docker restart expense_bot_app             # Перезапустить бот
+```
+
+**На BACKUP SERVER (72.56.67.202) - НОВАЯ версия docker compose:**
+```bash
+# ✅ Новый синтаксис (docker compose БЕЗ дефиса):
+docker compose logs bot --tail 50          # Логи бота
+docker compose logs --follow bot           # Следить за логами
+docker compose ps                          # Статус
+docker compose restart bot                 # Перезапустить
+```
+
+**ВСЕГДА используй правильный синтаксис для PRIMARY SERVER!**
+
 ## Database
 - Type: PostgreSQL 15 (Alpine)
 - Database name: expense_bot
