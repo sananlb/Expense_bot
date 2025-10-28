@@ -1009,10 +1009,12 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         logger.info(f"Skipping expense handler due to active state: {current_state}")
         return
 
-    # Также пропускаем, если есть любое состояние, кроме нашего состояния ожидания суммы
+    # Если есть состояние из другого модуля (не ExpenseForm), очищаем его
     if current_state and current_state != "ExpenseForm:waiting_for_amount_clarification" and not current_state.startswith("ExpenseForm:"):
-        logger.info(f"Skipping expense handler due to active state: {current_state}")
-        return
+        logger.info(f"Auto-clearing foreign state '{current_state}' to process expense")
+        from bot.utils.state_utils import clear_state_keep_cashback
+        await clear_state_keep_cashback(state)
+        # Продолжаем обработку траты
 
     user_id = message.from_user.id
 
@@ -1028,7 +1030,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             privacy_text = get_text('must_accept_privacy', lang) if lang == 'ru' else "You must accept the privacy policy to use the bot."
             kb = InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(
-                    text=get_text('privacy_policy', lang),
+                    text=get_text('privacy_policy_header', lang),
                     url=privacy_url
                 )
             ]])
