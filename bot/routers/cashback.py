@@ -464,30 +464,31 @@ async def process_cashback_category(callback: types.CallbackQuery, state: FSMCon
 
 
 @router.callback_query(lambda c: c.data.startswith("cashback_bank_"), CashbackForm.waiting_for_bank)
-async def process_cashback_bank(callback: types.CallbackQuery, state: FSMContext, lang: str):
+async def process_cashback_bank(callback: types.CallbackQuery, state: FSMContext):
     """Обработка выбора банка"""
+    lang = await get_user_language(callback.from_user.id)
     bank = callback.data.replace("cashback_bank_", "")
     bank_canon = await _canonicalize_bank_for_user(callback.from_user.id, bank)
     await state.update_data(bank_name=bank_canon)
-    
+
     # Запрашиваем процент и описание
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=get_text('back_button', lang), callback_data="cashback_add")],
         [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu")]
     ])
-    
+
     await callback.message.edit_text(
-        f"💳 <b>Банк:</b> {bank}\n\n"
-        "💰 Введите описание (необязательно) и процент кешбэка:\n\n"
-        "<b>Примеры:</b>\n"
+        f"💳 <b>{get_text('cashback_bank', lang)}:</b> {bank}\n\n"
+        f"💰 {get_text('cashback_enter_percent', lang)}:\n\n"
+        f"<b>{get_text('cashback_examples', lang)}:</b>\n"
         "• 5\n"
-        "• Все покупки 3.5\n"
-        "• Только онлайн 10%\n"
-        "• В супермаркетах 7",
+        f"• {get_text('cashback_example_1', lang)}\n"
+        f"• {get_text('cashback_example_2', lang)}\n"
+        f"• {get_text('cashback_example_3', lang)}",
         reply_markup=keyboard,
         parse_mode="HTML"
     )
-    
+
     await state.set_state(CashbackForm.waiting_for_percent)
     await callback.answer()
 
@@ -495,34 +496,34 @@ async def process_cashback_bank(callback: types.CallbackQuery, state: FSMContext
 @router.message(CashbackForm.waiting_for_bank)
 async def process_bank_text(message: types.Message, state: FSMContext):
     """Обработка ввода названия банка текстом"""
+    lang = await get_user_language(message.from_user.id)
     bank_name = message.text.strip()
-    
+
     if len(bank_name) > 100:
-        error_msg = "❌ Bank name is too long. Maximum 100 characters." if lang == 'en' else "❌ Название банка слишком длинное. Максимум 100 символов."
-        await message.answer(error_msg)
+        await message.answer(get_text('cashback_bank_too_long', lang))
         return
-    
+
     bank_name = await _canonicalize_bank_for_user(message.from_user.id, bank_name)
     await state.update_data(bank_name=bank_name)
-    
+
     # Запрашиваем процент и описание
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=get_text('back_button', lang), callback_data="cashback_add")],
         [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu")]
     ])
-    
+
     await message.answer(
-        f"💳 <b>Банк:</b> {bank_name}\n\n"
-        "💰 Введите описание (необязательно) и процент кешбэка:\n\n"
-        "<b>Примеры:</b>\n"
+        f"💳 <b>{get_text('cashback_bank', lang)}:</b> {bank_name}\n\n"
+        f"💰 {get_text('cashback_enter_percent', lang)}:\n\n"
+        f"<b>{get_text('cashback_examples', lang)}:</b>\n"
         "• 5\n"
-        "• Все покупки 3.5\n"
-        "• Только онлайн 10%\n"
-        "• В супермаркетах 7",
+        f"• {get_text('cashback_example_1', lang)}\n"
+        f"• {get_text('cashback_example_2', lang)}\n"
+        f"• {get_text('cashback_example_3', lang)}",
         reply_markup=keyboard,
         parse_mode="HTML"
     )
-    
+
     await state.set_state(CashbackForm.waiting_for_percent)
 
 
@@ -559,28 +560,28 @@ async def process_percent_text(message: types.Message, state: FSMContext):
         else:
             await message.answer(get_text('incorrect_format_percent', lang))
             return
-    
+
     try:
         percent = float(percent_str)
     except ValueError:
-        await message.answer("❌ Некорректный процент. Попробуйте еще раз.")
+        await message.answer(get_text('cashback_invalid_percent', lang))
         return
-    
+
     # Проверяем разумность процента
     if percent > 100:
-        await message.answer("❌ Процент не может быть больше 100%")
+        await message.answer(get_text('cashback_percent_too_high', lang))
         return
-    
+
     if percent <= 0:
-        await message.answer("❌ Процент должен быть больше 0")
+        await message.answer(get_text('cashback_percent_zero', lang))
         return
-    
+
     # Получаем данные из состояния
     data = await state.get_data()
     user_id = message.from_user.id
     current_month = date.today().month
     bank_name = await _canonicalize_bank_for_user(user_id, data.get('bank_name', ''))
-    
+
     # Сразу сохраняем кешбэк с описанием
     try:
         cashback = await add_cashback(
@@ -592,32 +593,33 @@ async def process_percent_text(message: types.Message, state: FSMContext):
             limit_amount=None,  # Без лимита
             description=description  # Используем введенное описание
         )
-        
+
         await state.clear()
-        
+
         # Сразу показываем меню кешбэков без подтверждения
         await show_cashback_menu(message, state)
-        
+
     except Exception as e:
         logger.error(f"Error saving cashback for user {message.from_user.id}: {e}")
-        await message.answer("❌ Ошибка при сохранении кешбэка. Попробуйте позже.")
+        await message.answer(get_text('cashback_save_error', lang))
         await state.clear()
 
 
 # Обработчики редактирования кешбека
 
 @router.callback_query(lambda c: c.data == "cashback_edit")
-async def edit_cashback_list(callback: types.CallbackQuery, state: FSMContext, lang: str):
+async def edit_cashback_list(callback: types.CallbackQuery, state: FSMContext):
     """Показать список кешбеков для редактирования"""
     user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
     current_month = date.today().month
-    
+
     cashbacks = await get_user_cashbacks(user_id, current_month)
-    
+
     if not cashbacks:
-        await callback.answer("У вас нет кешбэков для редактирования", show_alert=True)
+        await callback.answer(get_text('cashback_no_to_edit', lang), show_alert=True)
         return
-    
+
     keyboard_buttons = []
     for cb in cashbacks:
         if cb.category:
@@ -625,38 +627,39 @@ async def edit_cashback_list(callback: types.CallbackQuery, state: FSMContext, l
             text = f"{category_name} - {cb.bank_name} {cb.cashback_percent}%"
         else:
             text = f"{get_text('all_categories', lang)} - {cb.bank_name} {cb.cashback_percent}%"
-        
+
         # Добавляем описание, если есть
         if cb.description:
             text += f" ({cb.description})"
-            
+
         keyboard_buttons.append([
             InlineKeyboardButton(text=text, callback_data=f"edit_cb_{cb.id}")
         ])
-    
+
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_button', lang), callback_data="cashback_menu")])
-    
+
     await callback.message.edit_text(
-        "✏️ Выберите кешбэк для редактирования:",
+        get_text('cashback_choose_to_edit', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
-    
+
     await state.set_state(CashbackForm.choosing_cashback_to_edit)
     await callback.answer()
 
 
 @router.callback_query(lambda c: c.data.startswith("edit_cb_"), CashbackForm.choosing_cashback_to_edit)
-async def edit_cashback_selected(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+async def edit_cashback_selected(callback: types.CallbackQuery, state: FSMContext):
     """Кешбэк выбран для редактирования - показываем выбор банка"""
+    lang = await get_user_language(callback.from_user.id)
     cashback_id = int(callback.data.split("_")[-1])
-    
+
     # Получаем информацию о кешбэке
     cashback = await get_cashback_by_id(callback.from_user.id, cashback_id)
-    
+
     if not cashback:
-        await callback.answer("Кешбэк не найден", show_alert=True)
+        await callback.answer(get_text('cashback_not_found', lang), show_alert=True)
         return
-    
+
     # Сохраняем данные кешбэка в состоянии
     await state.update_data(
         editing_cashback_id=cashback_id,
@@ -665,49 +668,45 @@ async def edit_cashback_selected(callback: types.CallbackQuery, state: FSMContex
         current_description=cashback.description or '',
         current_category_id=cashback.category_id
     )
-    
+
     # Показываем список банков с кнопкой "Пропустить"
     keyboard_buttons = []
-    
-    if lang == 'en':
-        # Для английского языка не показываем предустановленные банки
-        text = f"💳 <b>Edit Cashback</b>\n\n"
-        text += f"Current bank: {cashback.bank_name}\n\n"
-        text += "Enter the new bank name:"
-    else:
-        # Для русского языка показываем российские банки
+
+    # Для русского языка показываем российские банки
+    if lang == 'ru':
         banks = [
-            "Т-Банк", "Альфа-Банк", "ВТБ", "Сбер", 
+            "Т-Банк", "Альфа-Банк", "ВТБ", "Сбер",
             "Райффайзенбанк", "Яндекс", "Озон"
         ]
-        
+
         for i in range(0, len(banks), 2):
             row = [InlineKeyboardButton(text=banks[i], callback_data=f"edit_bank_{banks[i]}")]
             if i + 1 < len(banks):
                 row.append(InlineKeyboardButton(text=banks[i + 1], callback_data=f"edit_bank_{banks[i + 1]}"))
             keyboard_buttons.append(row)
-        
-        text = f"💳 <b>Редактирование кешбэка</b>\n\n"
-        text += f"Текущий банк: {cashback.bank_name}\n\n"
-        text += "Выберите новый банк или введите название:"
-    
+
+    text = f"💳 <b>{get_text('cashback_edit_title', lang)}</b>\n\n"
+    text += f"{get_text('cashback_current_bank', lang)}: {cashback.bank_name}\n\n"
+    text += get_text('cashback_enter_new_bank', lang)
+
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('skip', lang), callback_data="skip_edit_bank")])
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_button', lang), callback_data="cashback_edit")])
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu")])
-    
+
     await callback.message.edit_text(
         text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons),
         parse_mode="HTML"
     )
-    
+
     await state.set_state(CashbackForm.editing_bank)
     await callback.answer()
 
 
 @router.callback_query(lambda c: c.data.startswith("edit_bank_"), CashbackForm.editing_bank)
-async def process_edit_bank(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+async def process_edit_bank(callback: types.CallbackQuery, state: FSMContext):
     """Обработка выбора нового банка"""
+    lang = await get_user_language(callback.from_user.id)
     bank = callback.data.replace("edit_bank_", "")
     bank_canon = await _canonicalize_bank_for_user(callback.from_user.id, bank)
     await state.update_data(new_bank=bank_canon)
@@ -716,8 +715,9 @@ async def process_edit_bank(callback: types.CallbackQuery, state: FSMContext, la
 
 
 @router.callback_query(lambda c: c.data == "skip_edit_bank", CashbackForm.editing_bank)
-async def skip_edit_bank(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+async def skip_edit_bank(callback: types.CallbackQuery, state: FSMContext):
     """Пропустить изменение банка"""
+    lang = await get_user_language(callback.from_user.id)
     data = await state.get_data()
     await state.update_data(new_bank=data['current_bank'])  # Оставляем текущий банк
     await show_edit_percent_prompt(callback, state, lang)
@@ -725,15 +725,15 @@ async def skip_edit_bank(callback: types.CallbackQuery, state: FSMContext, lang:
 
 
 @router.message(CashbackForm.editing_bank)
-async def process_edit_bank_text(message: types.Message, state: FSMContext, lang: str = 'ru'):
+async def process_edit_bank_text(message: types.Message, state: FSMContext):
     """Обработка ввода названия банка текстом при редактировании"""
+    lang = await get_user_language(message.from_user.id)
     bank_name = message.text.strip()
-    
+
     if len(bank_name) > 100:
-        error_msg = "❌ Bank name is too long. Maximum 100 characters." if lang == 'en' else "❌ Название банка слишком длинное. Максимум 100 символов."
-        await message.answer(error_msg)
+        await message.answer(get_text('cashback_bank_too_long', lang))
         return
-    
+
     bank_name = await _canonicalize_bank_for_user(message.from_user.id, bank_name)
     await state.update_data(new_bank=bank_name)
     await show_edit_percent_prompt(message, state, lang)
@@ -742,35 +742,23 @@ async def process_edit_bank_text(message: types.Message, state: FSMContext, lang
 async def show_edit_percent_prompt(message_or_callback, state: FSMContext, lang: str = 'ru'):
     """Показать запрос на ввод описания и процента при редактировании"""
     data = await state.get_data()
-    
+
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=get_text('back_button', lang), callback_data="back_to_edit_list")],
         [InlineKeyboardButton(text=get_text('cancel', lang), callback_data="cashback_menu")]
     ])
-    
-    if lang == 'en':
-        text = f"💳 <b>Edit Cashback</b>\n\n"
-        text += f"Bank: {data.get('new_bank', data['current_bank'])}\n"
-        text += f"Current percent: {data['current_percent']}%\n"
-        if data['current_description']:
-            text += f"Current description: {data['current_description']}\n"
-        text += "\n💰 Enter new description (optional) and percent:\n\n"
-        text += "<b>Examples:</b>\n"
-        text += "• 5\n"
-        text += "• All purchases 3.5\n"
-        text += "• Online only 10%"
-    else:
-        text = f"💳 <b>Редактирование кешбэка</b>\n\n"
-        text += f"Банк: {data.get('new_bank', data['current_bank'])}\n"
-        text += f"Текущий процент: {data['current_percent']}%\n"
-        if data['current_description']:
-            text += f"Текущее описание: {data['current_description']}\n"
-        text += "\n💰 Введите новое описание (необязательно) и процент:\n\n"
-        text += "<b>Примеры:</b>\n"
-        text += "• 5\n"
-        text += "• Все покупки 3.5\n"
-        text += "• Только онлайн 10%"
-    
+
+    text = f"💳 <b>{get_text('cashback_edit_title', lang)}</b>\n\n"
+    text += f"{get_text('cashback_bank', lang)}: {data.get('new_bank', data['current_bank'])}\n"
+    text += f"{get_text('cashback_current_percent', lang)}: {data['current_percent']}%\n"
+    if data['current_description']:
+        text += f"{get_text('cashback_current_description', lang)}: {data['current_description']}\n"
+    text += f"\n💰 {get_text('cashback_enter_new_percent', lang)}:\n\n"
+    text += f"<b>{get_text('cashback_examples', lang)}:</b>\n"
+    text += "• 5\n"
+    text += f"• {get_text('cashback_example_1', lang)}\n"
+    text += f"• {get_text('cashback_example_2', lang)}"
+
     if isinstance(message_or_callback, types.CallbackQuery):
         await message_or_callback.message.edit_text(
             text,
@@ -783,14 +771,14 @@ async def show_edit_percent_prompt(message_or_callback, state: FSMContext, lang:
             reply_markup=keyboard,
             parse_mode="HTML"
         )
-    
+
     await state.set_state(CashbackForm.editing_percent)
 
 
 @router.callback_query(lambda c: c.data == "back_to_edit_list", CashbackForm.editing_percent)
-async def back_to_edit_list(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+async def back_to_edit_list(callback: types.CallbackQuery, state: FSMContext):
     """Вернуться к списку кешбеков для редактирования"""
-    await edit_cashback_list(callback, state, lang)
+    await edit_cashback_list(callback, state)
     await callback.answer()
 
 
@@ -798,13 +786,14 @@ async def back_to_edit_list(callback: types.CallbackQuery, state: FSMContext, la
 async def process_edit_percent(message: types.Message, state: FSMContext):
     """Обработка ввода нового описания и процента"""
     import re
-    
+
+    lang = await get_user_language(message.from_user.id)
     text = message.text.strip()
-    
+
     # Используем тот же парсинг, что и при добавлении
     only_percent_pattern = r'^(\d+(?:[.,]\d+)?)\s*%?$'
     match = re.match(only_percent_pattern, text)
-    
+
     if match:
         # Только процент, без описания
         percent_str = match.group(1).replace(',', '.')
@@ -813,33 +802,33 @@ async def process_edit_percent(message: types.Message, state: FSMContext):
         # Ищем число в конце строки (описание + процент)
         percent_at_end = r'^(.*?)\s+(\d+(?:[.,]\d+)?)\s*%?$'
         match = re.match(percent_at_end, text)
-        
+
         if match:
             description = match.group(1).strip()
             percent_str = match.group(2).replace(',', '.')
         else:
             await message.answer(get_text('incorrect_format_percent', lang))
             return
-    
+
     try:
         percent = float(percent_str)
     except ValueError:
-        await message.answer("❌ Некорректный процент. Попробуйте еще раз.")
+        await message.answer(get_text('cashback_invalid_percent', lang))
         return
-    
+
     # Проверяем разумность процента
     if percent > 100:
-        await message.answer("❌ Процент не может быть больше 100%")
+        await message.answer(get_text('cashback_percent_too_high', lang))
         return
-    
+
     if percent <= 0:
-        await message.answer("❌ Процент должен быть больше 0")
+        await message.answer(get_text('cashback_percent_zero', lang))
         return
-    
+
     # Получаем данные из состояния
     data = await state.get_data()
     user_id = message.from_user.id
-    
+
     # Обновляем кешбэк
     try:
         # Нормализуем банк на случай изменения
@@ -851,15 +840,15 @@ async def process_edit_percent(message: types.Message, state: FSMContext):
             cashback_percent=percent,
             description=description
         )
-        
+
         await state.clear()
-        
+
         # Сразу показываем меню кешбэков без подтверждения
         await show_cashback_menu(message, state)
-        
+
     except Exception as e:
         logger.error(f"Error saving cashback for user {message.from_user.id}: {e}")
-        await message.answer("❌ Ошибка при сохранении кешбэка. Попробуйте позже.")
+        await message.answer(get_text('cashback_save_error', lang))
         await state.clear()
 
 
@@ -1061,11 +1050,11 @@ async def remove_cashback_list(callback: types.CallbackQuery, state: FSMContext)
     
     cashbacks = await get_user_cashbacks(user_id, current_month)
     logger.info(f"Found {len(cashbacks) if cashbacks else 0} cashbacks for user {user_id}")
-    
+
     if not cashbacks:
-        await callback.answer("У вас нет кешбэков для удаления", show_alert=True)
+        await callback.answer(get_text('cashback_no_to_remove', lang), show_alert=True)
         return
-    
+
     keyboard_buttons = []
     for cb in cashbacks:
         if cb.category:
@@ -1076,11 +1065,11 @@ async def remove_cashback_list(callback: types.CallbackQuery, state: FSMContext)
         keyboard_buttons.append([
             InlineKeyboardButton(text=text, callback_data=f"remove_cb_{cb.id}")
         ])
-    
+
     # Убрали кнопку "Назад" по требованию пользователя
-    
+
     await callback.message.edit_text(
-        "➖ Выберите кешбэк для удаления:",
+        get_text('cashback_choose_to_remove', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
     # Обновляем ID сообщения в состоянии
@@ -1265,14 +1254,14 @@ async def handle_cashback_remove(callback: types.CallbackQuery, state: FSMContex
     user_id = callback.from_user.id
     lang = await get_user_language(user_id)
     current_month = date.today().month
-    
+
     cashbacks = await get_user_cashbacks(user_id, current_month)
     logger.info(f"Found {len(cashbacks) if cashbacks else 0} cashbacks for user {user_id}")
-    
+
     if not cashbacks:
-        await callback.answer("У вас нет кешбэков для удаления", show_alert=True)
+        await callback.answer(get_text('cashback_no_to_remove', lang), show_alert=True)
         return
-    
+
     keyboard_buttons = []
     for cb in cashbacks:
         if cb.category:
@@ -1283,9 +1272,9 @@ async def handle_cashback_remove(callback: types.CallbackQuery, state: FSMContex
         keyboard_buttons.append([
             InlineKeyboardButton(text=text, callback_data=f"remove_cb_{cb.id}")
         ])
-    
+
     await callback.message.edit_text(
-        "➖ Выберите кешбэк для удаления:",
+        get_text('cashback_choose_to_remove', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     )
     await state.update_data(last_menu_message_id=callback.message.message_id)

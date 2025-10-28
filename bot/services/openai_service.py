@@ -278,6 +278,9 @@ class OpenAIService(AIBaseService):
                                 if result.get('success'):
                                     try:
                                         from bot.services.response_formatter import format_function_result
+                                        # Add user_id to result for language detection
+                                        if user_context and 'user_id' in user_context:
+                                            result['user_id'] = user_context['user_id']
                                         return format_function_result(func_name, result)
                                     except Exception:
                                         import json as _json
@@ -332,6 +335,9 @@ class OpenAIService(AIBaseService):
                         if result.get('success'):
                             try:
                                 from bot.services.response_formatter import format_function_result
+                                # Add user_id to result for language detection
+                                if user_context and 'user_id' in user_context:
+                                    result['user_id'] = user_context['user_id']
                                 return format_function_result(func_name, result)
                             except Exception:
                                 import json as _json

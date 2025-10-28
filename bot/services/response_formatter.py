@@ -3,7 +3,21 @@ Unified formatter for function-call results used by AI services.
 """
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, Optional
+from bot.utils.language import get_text
+
+
+def _get_user_language(result: Dict) -> str:
+    """Extract user language from result or default to 'ru'"""
+    user_id = result.get('user_id')
+    if user_id:
+        try:
+            from expenses.models import Profile
+            profile = Profile.objects.get(telegram_id=user_id)
+            return getattr(profile, 'language_code', 'ru')
+        except Exception:
+            pass
+    return 'ru'
 
 
 def _format_expenses_list(result: Dict, title: str, subtitle: str) -> str:
@@ -28,14 +42,14 @@ def _format_incomes_list(result: Dict, title: str, subtitle: str) -> str:
     )
 
 
-def _format_operations_list(result: Dict, title: str, subtitle: str) -> str:
+def _format_operations_list(result: Dict, title: str, subtitle: str, lang: str = 'ru') -> str:
     """Форматирует список операций (расходы и доходы) в стиле дневника"""
     from datetime import datetime, date
     from collections import defaultdict
 
     operations = result.get('operations', [])
     if not operations:
-        return f"<b>{title}</b>\n\nОпераций не найдено"
+        return f"<b>{title}</b>\n\n{get_text('no_operations', lang)}"
 
     # Группируем по датам
     grouped_ops = defaultdict(list)
@@ -53,22 +67,29 @@ def _format_operations_list(result: Dict, title: str, subtitle: str) -> str:
         result_parts.append(f"<i>{subtitle}</i>")
 
     today = date.today()
-    months_ru = {
-        1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
-        5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
-        9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
-    }
+
+    # Маппинг месяцев на ключи
+    month_keys = [
+        'month_january', 'month_february', 'month_march', 'month_april',
+        'month_may', 'month_june', 'month_july', 'month_august',
+        'month_september', 'month_october', 'month_november', 'month_december'
+    ]
 
     for date_str in sorted_dates:
         # Парсим дату для красивого вывода
         try:
             op_date = datetime.fromisoformat(date_str).date()
             if op_date == today:
-                formatted_date = "Сегодня"
+                formatted_date = get_text('today', lang)
             else:
                 day = op_date.day
-                month_name = months_ru.get(op_date.month, op_date.strftime('%B'))
-                formatted_date = f"{day} {month_name}"
+                month_key = month_keys[op_date.month - 1]
+                month_name = get_text(month_key, lang)
+                # Для английского: "January 15", для русского: "15 января"
+                if lang == 'en':
+                    formatted_date = f"{month_name} {day}"
+                else:
+                    formatted_date = f"{day} {month_name}"
         except:
             formatted_date = date_str
 
@@ -80,7 +101,7 @@ def _format_operations_list(result: Dict, title: str, subtitle: str) -> str:
 
         for op in grouped_ops[date_str]:
             time_str = op.get('time', '00:00')
-            description = op.get('description', 'Без описания')
+            description = op.get('description', get_text('no_description', lang))
             amount = op.get('amount', 0)
             op_type = op.get('type', 'expense')
 
@@ -97,10 +118,12 @@ def _format_operations_list(result: Dict, title: str, subtitle: str) -> str:
         # Итоги за день
         if day_expenses > 0:
             exp_str = f"{day_expenses:,.0f}".replace(',', ' ')
-            result_parts.append(f"  💸 <b>Расходы:</b> {exp_str} ₽")
+            expenses_label = get_text('expenses_label', lang)
+            result_parts.append(f"  💸 <b>{expenses_label}:</b> {exp_str} ₽")
         if day_incomes > 0:
             inc_str = f"{day_incomes:,.0f}".replace(',', ' ')
-            result_parts.append(f"  💰 <b>Доходы:</b> +{inc_str} ₽")
+            income_label = get_text('income_label', lang)
+            result_parts.append(f"  💰 <b>{income_label}:</b> +{inc_str} ₽")
 
     # Предупреждение о лимите
     if len(operations) > 100:
@@ -154,11 +177,12 @@ def format_function_result(func_name: str, result: Dict) -> str:
         return f"Ошибка: {result.get('message','Не удалось получить данные')}"
 
     if func_name == 'get_expenses_list':
+        lang = _get_user_language(result)
         total = result.get('total', 0)
         count = result.get('count', len(result.get('expenses', [])))
         start = result.get('start_date', '')
         end = result.get('end_date', '')
-        title = f"📋 Траты {start}{(' — ' + end) if end and end != start else ''}"
+        title = f"📋 {get_text('expenses_title', lang)} {start}{(' — ' + end) if end and end != start else ''}"
         subtitle = f"Найдено: {count} трат на сумму {total:,.0f} ₽"
         return _format_expenses_list(result, title, subtitle)
 
@@ -217,11 +241,12 @@ def format_function_result(func_name: str, result: Dict) -> str:
         return _format_expenses_list({'expenses': expenses}, title, subtitle)
 
     if func_name == 'get_incomes_list':
+        lang = _get_user_language(result)
         total = result.get('total', 0)
         count = result.get('count', len(result.get('incomes', [])))
         start = result.get('start_date', '')
         end = result.get('end_date', '')
-        title = f"📋 Доходы {start}{(' — ' + end) if end and end != start else ''}"
+        title = f"📋 {get_text('incomes_title', lang)} {start}{(' — ' + end) if end and end != start else ''}"
         subtitle = f"Найдено: {count} доходов на сумму {total:,.0f} ₽"
         return _format_incomes_list(result, title, subtitle)
 
@@ -249,6 +274,7 @@ def format_function_result(func_name: str, result: Dict) -> str:
         )
 
     if func_name == 'get_category_total_by_dates':
+        lang = _get_user_language(result)
         category = result.get('category', '')
         total = result.get('total', 0)
         count = result.get('count', 0)
@@ -264,12 +290,13 @@ def format_function_result(func_name: str, result: Dict) -> str:
             s = datetime.fromisoformat(start_date)
             e = datetime.fromisoformat(end_date)
             if s.month == e.month and s.year == e.year:
-                months_ru = {
-                    1: 'январь', 2: 'февраль', 3: 'март', 4: 'апрель',
-                    5: 'май', 6: 'июнь', 7: 'июль', 8: 'август',
-                    9: 'сентябрь', 10: 'октябрь', 11: 'ноябрь', 12: 'декабрь'
-                }
-                period_desc = f"за {months_ru[s.month]} {s.year}"
+                month_keys = [
+                    'month_january', 'month_february', 'month_march', 'month_april',
+                    'month_may', 'month_june', 'month_july', 'month_august',
+                    'month_september', 'month_october', 'month_november', 'month_december'
+                ]
+                month_name = get_text(month_keys[s.month - 1], lang)
+                period_desc = f"за {month_name} {s.year}"
             else:
                 period_desc = f"с {start_date} по {end_date}"
         except Exception:
@@ -349,16 +376,18 @@ def format_function_result(func_name: str, result: Dict) -> str:
         return "\n".join(lines)
 
     if func_name == 'get_weekday_statistics':
+        lang = _get_user_language(result)
         stats = result.get('statistics') or result.get('weekday_statistics') or {}
-        lines = ["📅 Расходы по дням недели"]
+        lines = [f"📅 {get_text('expenses_weekday_stats', lang)}"]
         for day, data in stats.items():
             total = (data.get('total') if isinstance(data, dict) else data) or 0
             lines.append(f"• {day}: {float(total):,.0f} ₽")
         return "\n".join(lines)
 
     if func_name == 'get_income_weekday_statistics':
+        lang = _get_user_language(result)
         stats = result.get('weekday_statistics') or {}
-        lines = ["📅 Доходы по дням недели"]
+        lines = [f"📅 {get_text('income_weekday_stats', lang)}"]
         for day, data in stats.items():
             total = (data.get('total') if isinstance(data, dict) else data) or 0
             lines.append(f"• {day}: {float(total):,.0f} ₽")
@@ -479,23 +508,25 @@ def format_function_result(func_name: str, result: Dict) -> str:
         return _format_category_stats(result)
 
     if func_name == 'get_daily_income_totals':
+        lang = _get_user_language(result)
         daily = result.get('daily_totals', [])
         total = result.get('grand_total', 0)
-        lines = [f"Доходы по дням (всего: {total:,.0f} ₽)\n"]
+        lines = [f"{get_text('incomes_title', lang)} по дням (всего: {total:,.0f} ₽)\n"]
         for d in daily[:30]:
             lines.append(f"• {d.get('date','')}: {d.get('total',0):,.0f} ₽")
         return "\n".join(lines)
 
     if func_name == 'get_all_operations':
+        lang = _get_user_language(result)
         ops = result.get('operations', [])
         total_expense = result.get('total_expense', 0)
         total_income = result.get('total_income', 0)
         count = result.get('count', len(ops))
         start = result.get('start_date', '')
         end = result.get('end_date', '')
-        title = f"📊 Операции {start}{(' — ' + end) if end and end != start else ''}"
+        title = f"📊 {get_text('operations', lang)} {start}{(' — ' + end) if end and end != start else ''}"
         subtitle = f"Найдено: {count} операций (расходы: {total_expense:,.0f} ₽, доходы: {total_income:,.0f} ₽)"
-        return _format_operations_list({'operations': ops}, title, subtitle)
+        return _format_operations_list({'operations': ops}, title, subtitle, lang)
 
     if func_name == 'get_financial_summary':
         period = result.get('period', '')
@@ -513,6 +544,7 @@ def format_function_result(func_name: str, result: Dict) -> str:
 
     # Analytics query fallback formatting
     if func_name == 'analytics_query':
+        lang = _get_user_language(result)
         if not result.get('success'):
             return f"Ошибка выполнения аналитического запроса: {result.get('message','не удалось выполнить запрос')}"
         entity = result.get('entity', 'expenses')
@@ -520,9 +552,9 @@ def format_function_result(func_name: str, result: Dict) -> str:
         items = result.get('results', []) or []
 
         title_map = {
-            'expenses': 'Траты',
-            'incomes': 'Доходы',
-            'operations': 'Операции',
+            'expenses': get_text('expenses_title', lang),
+            'incomes': get_text('incomes_title', lang),
+            'operations': get_text('operations', lang),
         }
         title = title_map.get(entity, 'Данные')
 
@@ -578,6 +610,8 @@ def format_function_result(func_name: str, result: Dict) -> str:
 
 def _format_analytics_query_result(result: Dict) -> str:
     """Format analytics query results."""
+    lang = _get_user_language(result)
+
     if not result.get('success'):
         return f"❌ {result.get('message', 'Не удалось выполнить запрос')}"
 
@@ -620,7 +654,12 @@ def _format_analytics_query_result(result: Dict) -> str:
     # List of items
     if group_by == 'none':
         entity_emoji = '💸' if entity == 'expenses' else '💰' if entity == 'incomes' else '📊'
-        entity_name = 'Траты' if entity == 'expenses' else 'Доходы' if entity == 'incomes' else 'Операции'
+        if entity == 'expenses':
+            entity_name = get_text('expenses_title', lang)
+        elif entity == 'incomes':
+            entity_name = get_text('incomes_title', lang)
+        else:
+            entity_name = get_text('operations', lang)
         lines.append(f"{entity_emoji} {entity_name} (найдено: {count})\n")
 
         for i, item in enumerate(results[:20], 1):

@@ -72,7 +72,7 @@ def format_expenses_diary_style(
         else:
             time_str = expense.created_at.strftime('%H:%M') if expense.created_at else '00:00'
         
-        description = expense.description or "Без описания"
+        description = expense.description or get_text('no_description', lang)
         if len(description) > 30:
             description = description[:27] + "..."
         
@@ -104,16 +104,21 @@ def format_expenses_diary_style(
     for day_data in all_days_data:
         # Форматируем дату
         if day_data['date'] == today:
-            date_str = "Сегодня"
+            date_str = get_text('today', lang)
         else:
-            months_ru = {
-                1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
-                5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
-                9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
-            }
             day = day_data['date'].day
-            month_name = months_ru.get(day_data['date'].month, day_data['date'].strftime('%B'))
-            date_str = f"{day} {month_name}"
+            month = day_data['date'].month
+            month_keys = {
+                1: 'month_january', 2: 'month_february', 3: 'month_march', 4: 'month_april',
+                5: 'month_may', 6: 'month_june', 7: 'month_july', 8: 'month_august',
+                9: 'month_september', 10: 'month_october', 11: 'month_november', 12: 'month_december'
+            }
+            month_name = get_text(month_keys.get(month, 'month_january'), lang)
+
+            if lang == 'en':
+                date_str = f"{month_name} {day}"
+            else:
+                date_str = f"{day} {month_name}"
         
         text += f"\n<b>📅 {date_str}</b>\n"
         
@@ -133,7 +138,7 @@ def format_expenses_diary_style(
         
         # Добавляем итог дня
         if day_data['totals']:
-            text += "  💰 <b>Итого за день:</b> "
+            text += f"  💰 <b>{get_text('total_for_day', lang)}:</b> "
             totals_list = []
             for currency, total in day_data['totals'].items():
                 total_str = f"{total:,.0f}".replace(',', ' ')
@@ -175,7 +180,7 @@ def format_expenses_list(
     if period_description and expenses:
         text = text.replace(
             get_text('diary_title', lang),
-            f"📋 <b>Траты {period_description}</b>"
+            f"📋 <b>{get_text('expenses_title', lang)} {period_description}</b>"
         )
     
     return text
@@ -236,20 +241,25 @@ def format_expenses_from_dict_list(
 
     # Форматируем расходы по дням
     today = date.today()
-    months_ru = {
-        1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
-        5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
-        9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
+    month_keys = {
+        1: 'month_january', 2: 'month_february', 3: 'month_march', 4: 'month_april',
+        5: 'month_may', 6: 'month_june', 7: 'month_july', 8: 'month_august',
+        9: 'month_september', 10: 'month_october', 11: 'month_november', 12: 'month_december'
     }
 
     for expense_date in sorted_dates:
         # Форматируем дату
         if expense_date == today:
-            date_str = "Сегодня"
+            date_str = get_text('today', lang)
         else:
             day = expense_date.day
-            month_name = months_ru.get(expense_date.month, expense_date.strftime('%B'))
-            date_str = f"{day} {month_name}"
+            month = expense_date.month
+            month_name = get_text(month_keys.get(month, 'month_january'), lang)
+
+            if lang == 'en':
+                date_str = f"{month_name} {day}"
+            else:
+                date_str = f"{day} {month_name}"
 
         result_parts.append(f"\n<b>📅 {date_str}</b>")
 
@@ -262,7 +272,7 @@ def format_expenses_from_dict_list(
             if not time_str:
                 time_str = '00:00'
 
-            description = exp_data.get('description', 'Без описания')
+            description = exp_data.get('description') or get_text('no_description', lang)
             amount = exp_data.get('amount', 0)
             currency = exp_data.get('currency', 'RUB')
 
@@ -282,7 +292,7 @@ def format_expenses_from_dict_list(
 
         # Добавляем итог за день
         day_total_str = f"{day_total:,.0f}".replace(',', ' ')
-        result_parts.append(f"  💸 <b>Итого:</b> {day_total_str} ₽")
+        result_parts.append(f"  💸 <b>{get_text('grand_total', lang)}:</b> {day_total_str} ₽")
 
     # Предупреждение о лимите
     if show_warning or len(expenses_data) > max_expenses:

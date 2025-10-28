@@ -173,7 +173,7 @@ async def recognize_voice(message, bot, user_language: str = 'ru') -> Optional[s
     """
     Распознавание голосового сообщения с fallback цепочкой:
     Для русского: Yandex -> Google -> OpenAI Whisper
-    Для английского: Google -> OpenAI Whisper -> Yandex
+    Для английского: OpenAI Whisper -> Google
     """
     try:
         # Показываем индикатор "печатает..."
@@ -214,22 +214,16 @@ async def recognize_voice(message, bot, user_language: str = 'ru') -> Optional[s
         else:
             # Для английского и других языков
             lang = 'en-US' if user_language == 'en' else f'{user_language}-{user_language.upper()}'
-            # Оптимальная цепочка для английского: Google -> Whisper -> Yandex
+            # Оптимальная цепочка для английского: Whisper -> Google
             
-            # 1. Пробуем Google Speech Recognition (лучший для английского)
+            # 1. Пробуем OpenAI Whisper (лучший для английского в нашем кейсе)
+            text = await OpenAIWhisper.transcribe(audio_bytes, lang)
+            if text:
+                return text
+            logger.info("OpenAI Whisper не смог распознать, пробуем Google")
+            
+            # 2. Пробуем Google Speech Recognition
             text = await recognize_with_google(audio_bytes, lang)
-            if text:
-                return text
-            logger.info("Google Speech не смог распознать, пробуем OpenAI Whisper")
-            
-            # 2. Пробуем OpenAI Whisper
-            text = await OpenAIWhisper.transcribe(audio_bytes, user_language)
-            if text:
-                return text
-            logger.info("OpenAI Whisper не смог распознать, пробуем Yandex")
-            
-            # 3. Пробуем Yandex (может работать с английским)
-            text = await YandexSpeechKit.transcribe(audio_bytes)
             if text:
                 return text
         

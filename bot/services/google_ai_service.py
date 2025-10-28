@@ -256,6 +256,9 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                             if result.get('success'):
                                 try:
                                     from bot.services.response_formatter import format_function_result
+                                    # Add user_id to result for language detection
+                                    if user_context and 'user_id' in user_context:
+                                        result['user_id'] = user_context['user_id']
                                     return format_function_result(func_name, result)
                                 except Exception as _fmt_err:
                                     logger.error(f"[GoogleAI] Error formatting result for {func_name}: {_fmt_err}")
@@ -315,6 +318,9 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                             # Используем универсальный форматтер
                             try:
                                 from bot.services.response_formatter import format_function_result
+                                # Add user_id to result for language detection
+                                if user_context and 'user_id' in user_context:
+                                    result['user_id'] = user_context['user_id']
                                 return format_function_result(func_name, result)
                             except Exception as _fmt_err:
                                 logger.error(f"[GoogleAI] Error formatting result for {func_name}: {_fmt_err}")

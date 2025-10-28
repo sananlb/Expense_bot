@@ -22,7 +22,7 @@ from bot.utils.income_category_definitions import (
 )
 from ..services.subscription import check_subscription
 from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect
-from ..utils import get_text
+from ..utils import get_text, get_user_language
 from ..utils.expense_parser import parse_expense_message
 from ..utils.formatters import format_currency, format_expenses_summary, format_date
 from ..utils.validators import validate_amount, parse_description_amount
@@ -1452,18 +1452,22 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 await state.set_state(ExpenseForm.waiting_for_amount_clarification)
                 
                 # Язык пользователя берём из middleware или используем русский по умолчанию
-                lang = 'ru'
+                stored_lang = None
+                try:
+                    stored_lang = await get_user_language(message.from_user.id)
+                except Exception:
+                    stored_lang = None
+                user_lang = stored_lang or lang or getattr(message, 'user_language', 'ru') or 'ru'
                 
                 await cancel_typing()
                 
                 # Создаем inline клавиатуру с кнопкой отмены
                 cancel_keyboard = types.InlineKeyboardMarkup(inline_keyboard=[
-                    [types.InlineKeyboardButton(text="❌ Отмена", callback_data="cancel_expense_input")]
+                    [types.InlineKeyboardButton(text=get_text('cancel', user_lang), callback_data="cancel_expense_input")]
                 ])
                 
                 sent_message = await message.answer(
-                    f"💰 Вы хотите внести трату/доход \"{text}\"?\n\n"
-                    f"Укажите сумму:",
+                    get_text('want_to_add_expense', user_lang).format(text=text),
                     reply_markup=cancel_keyboard
                 )
                 
@@ -1571,7 +1575,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
 # Обработчик голосовых сообщений
 @router.message(F.voice)
 @rate_limit(max_calls=10, period=60)  # 10 голосовых в минуту
-async def handle_voice_expense(message: types.Message, state: FSMContext):
+async def handle_voice_expense(message: types.Message, state: FSMContext, lang: str = 'ru'):
     """Обработка голосовых сообщений"""
     # Проверяем подписку
     from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
@@ -1585,8 +1589,14 @@ async def handle_voice_expense(message: types.Message, state: FSMContext):
         )
         return
     
-    # Получаем язык пользователя из middleware
-    user_language = getattr(message, 'user_language', 'ru')
+    # Получаем язык пользователя из middleware/настроек
+    stored_lang = None
+    try:
+        stored_lang = await get_user_language(message.from_user.id)
+    except Exception:
+        stored_lang = None
+
+    user_language = stored_lang or lang or getattr(message, 'user_language', 'ru') or 'ru'
     bot = message.bot
     
     try:
@@ -1608,7 +1618,7 @@ async def handle_voice_expense(message: types.Message, state: FSMContext):
     
     # Вызываем обработчик текстовых сообщений напрямую с распознанным текстом
     # Как это сделано в nutrition_bot
-    await handle_text_expense(message, state, text=text)
+    await handle_text_expense(message, state, text=text, lang=user_language)
 
 
 # Обработчик фото (чеков)

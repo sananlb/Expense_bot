@@ -32,14 +32,14 @@ def format_incomes_diary_style(
     """
     if not incomes:
         if not title:
-            title = "💰 Дневник доходов"
-        return f"{title}\n\nДоходов не найдено"
-    
+            title = f"💰 {get_text('income_diary', lang)}"
+        return f"{title}\n\n{get_text('no_incomes_found', lang)}"
+
     if today is None:
         today = date.today()
-    
+
     if not title:
-        title = "💰 Дневник доходов"
+        title = f"💰 {get_text('income_diary', lang)}"
     
     text = f"{title}\n\n"
     
@@ -80,13 +80,13 @@ def format_incomes_diary_style(
         time_str = income.created_at.strftime('%H:%M') if income.created_at else '00:00'
         
         # Описание дохода
-        default_desc = get_category_display_name(income.category, lang) if income.category else "Доход"
+        default_desc = get_category_display_name(income.category, lang) if income.category else get_text('income_default_desc', lang)
         description = income.description or default_desc
         if len(description) > 30:
             description = description[:27] + "..."
-        
-        # Категория  
-        category_name = get_category_display_name(income.category, lang) if income.category else "Без категории"
+
+        # Категория
+        category_name = get_category_display_name(income.category, lang) if income.category else get_text('no_category', lang)
         
         currency = 'RUB'  # Доходы всегда в рублях
         amount = float(income.amount)
@@ -117,18 +117,26 @@ def format_incomes_diary_style(
     for day_data in all_days_data:
         # Форматируем дату
         if day_data['date'] == today:
-            date_str = "Сегодня"
+            date_str = get_text('today', lang)
         elif day_data['date'] == today.replace(day=today.day - 1) if today.day > 1 else None:
-            date_str = "Вчера"
+            date_str = get_text('yesterday', lang)
         else:
-            months_ru = {
-                1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
-                5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
-                9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
-            }
             day = day_data['date'].day
-            month_name = months_ru.get(day_data['date'].month, day_data['date'].strftime('%B'))
-            date_str = f"{day} {month_name}"
+            month_num = day_data['date'].month
+
+            # Получаем название месяца через get_text
+            month_keys = [
+                'month_january', 'month_february', 'month_march', 'month_april',
+                'month_may', 'month_june', 'month_july', 'month_august',
+                'month_september', 'month_october', 'month_november', 'month_december'
+            ]
+            month_name = get_text(month_keys[month_num - 1], lang)
+
+            # Формат даты зависит от языка
+            if lang == 'en':
+                date_str = f"{month_name} {day}"
+            else:
+                date_str = f"{day} {month_name}"
         
         text += f"\n<b>📅 {date_str}</b>\n"
         
@@ -142,17 +150,17 @@ def format_incomes_diary_style(
         
         # Добавляем итог дня
         if day_data['totals']:
-            text += "  💰 <b>Итого за день:</b> "
+            text += f"  💰 <b>{get_text('total_for_day', lang)}:</b> "
             totals_list = []
             for currency, total in day_data['totals'].items():
                 total_str = f"{total:,.0f}".replace(',', ' ')
                 currency_symbol = '₽'
                 totals_list.append(f"+{total_str} {currency_symbol}")
             text += ", ".join(totals_list) + "\n"
-    
+
     # Общий итог
     grand_total = sum(income.amount for income in incomes_to_show)
-    text += f"\n<b>💎 Всего доходов: {grand_total:,.0f} ₽</b>"
+    text += f"\n<b>💎 {get_text('total_income', lang)}: {grand_total:,.0f} ₽</b>"
     
     # Если было ограничение по количеству
     if is_limited and show_warning:
@@ -166,7 +174,8 @@ def format_incomes_from_dict_list(
     incomes_data: List[Dict[str, Any]],
     title: str = None,
     subtitle: str = None,
-    max_incomes: int = 100
+    max_incomes: int = 100,
+    lang: str = 'ru'
 ) -> str:
     """
     Форматирует список доходов из словарей (результат функций)
@@ -176,12 +185,14 @@ def format_incomes_from_dict_list(
         title: Заголовок
         subtitle: Подзаголовок с общей информацией
         max_incomes: Максимальное количество для показа
+        lang: Язык
 
     Returns:
         Отформатированная строка в HTML формате
     """
     if not incomes_data:
-        return f"<b>{title or '💰 Доходы'}</b>\n\nДоходов не найдено"
+        default_title = f'💰 {get_text("incomes_title", lang)}'
+        return f"<b>{title or default_title}</b>\n\n{get_text('no_incomes_found', lang)}"
 
     from collections import defaultdict
 
@@ -192,7 +203,8 @@ def format_incomes_from_dict_list(
 
     # Начинаем формировать результат
     result_parts = []
-    result_parts.append(f"<b>{title or '💰 Доходы'}</b>")
+    default_title = f'💰 {get_text("incomes_title", lang)}'
+    result_parts.append(f"<b>{title or default_title}</b>")
     if subtitle:
         result_parts.append(f"<i>{subtitle}</i>")
 
@@ -206,11 +218,13 @@ def format_incomes_from_dict_list(
     sorted_dates = sorted(grouped_by_date.keys())
 
     today = date.today()
-    months_ru = {
-        1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
-        5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
-        9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
-    }
+
+    # Ключи для получения названий месяцев
+    month_keys = [
+        'month_january', 'month_february', 'month_march', 'month_april',
+        'month_may', 'month_june', 'month_july', 'month_august',
+        'month_september', 'month_october', 'month_november', 'month_december'
+    ]
 
     for date_str in sorted_dates:
         # Парсим дату для красивого вывода
@@ -218,11 +232,16 @@ def format_incomes_from_dict_list(
             income_date = datetime.strptime(date_str, '%Y-%m-%d').date()
 
             if income_date == today:
-                formatted_date = "Сегодня"
+                formatted_date = get_text('today', lang)
             else:
                 day = income_date.day
-                month_name = months_ru.get(income_date.month, income_date.strftime('%B'))
-                formatted_date = f"{day} {month_name}"
+                month_name = get_text(month_keys[income_date.month - 1], lang)
+
+                # Формат даты зависит от языка
+                if lang == 'en':
+                    formatted_date = f"{month_name} {day}"
+                else:
+                    formatted_date = f"{day} {month_name}"
         except:
             formatted_date = date_str
 
@@ -232,7 +251,7 @@ def format_incomes_from_dict_list(
         for income in grouped_by_date[date_str]:
             time_str = income.get('time', '00:00')
             amount = income.get('amount', 0)
-            description = income.get('description', 'Доход')
+            description = income.get('description', get_text('income_default_desc', lang))
 
             # Форматируем сумму
             amount_str = f"{amount:,.0f}".replace(',', ' ')
@@ -243,7 +262,7 @@ def format_incomes_from_dict_list(
 
         # Итог за день
         day_total_str = f"{day_total:,.0f}".replace(',', ' ')
-        result_parts.append(f"  💰 <b>Итого:</b> +{day_total_str} ₽")
+        result_parts.append(f"  💰 <b>{get_text('total_for_day', lang)}:</b> +{day_total_str} ₽")
 
     # Если было ограничение
     if is_limited:
