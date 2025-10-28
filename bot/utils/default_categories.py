@@ -1,4 +1,18 @@
 """
+⚠️ WARNING - FOR MIGRATION SCRIPTS ONLY ⚠️
+
+This file is ONLY used by migration/fix scripts (fix_*.py, migrate_*.py, comprehensive_category_migration.py)
+and should NOT be imported in production code.
+
+For production category creation, use:
+- expenses/models.py::DEFAULT_CATEGORIES (16 unified categories)
+- bot/services/category.py::create_default_categories_sync()
+
+This file was updated to match the new 16-category structure but is kept only
+for backward compatibility with existing migration scripts.
+
+DO NOT use UNIFIED_CATEGORIES for creating new categories in production!
+
 Единые категории по умолчанию для мультиязычной поддержки
 """
 
@@ -8,7 +22,7 @@ UNIFIED_CATEGORIES = [
         'id': 'products',
         'icon': '🛒',
         'name_ru': 'Продукты',
-        'name_en': 'Products',
+        'name_en': 'Groceries',
         'keywords_ru': ['магазин', 'супермаркет', 'продукты', 'еда', 'пятерочка', 'перекресток', 'ашан', 'лента', 'магнит', 'дикси', 'вкусвилл'],
         'keywords_en': ['store', 'supermarket', 'groceries', 'food', 'market', 'grocery']
     },
@@ -19,14 +33,6 @@ UNIFIED_CATEGORIES = [
         'name_en': 'Cafes and Restaurants',
         'keywords_ru': ['ресторан', 'кафе', 'бар', 'пиццерия', 'суши', 'бургер', 'кофейня', 'столовая', 'фастфуд', 'макдоналдс', 'kfc'],
         'keywords_en': ['restaurant', 'cafe', 'bar', 'pizza', 'sushi', 'burger', 'coffee', 'diner', 'fastfood', 'mcdonalds']
-    },
-    {
-        'id': 'gas',
-        'icon': '⛽',
-        'name_ru': 'АЗС',
-        'name_en': 'Gas Stations',
-        'keywords_ru': ['азс', 'бензин', 'топливо', 'заправка', 'газпром', 'лукойл', 'роснефть', 'шелл'],
-        'keywords_en': ['gas', 'fuel', 'petrol', 'gasoline', 'shell', 'bp', 'station']
     },
     {
         'id': 'transport',
@@ -41,8 +47,8 @@ UNIFIED_CATEGORIES = [
         'icon': '🚗',
         'name_ru': 'Автомобиль',
         'name_en': 'Car',
-        'keywords_ru': ['автомобиль', 'машина', 'авто', 'сто', 'ремонт', 'запчасти', 'мойка', 'страховка', 'осаго', 'каско'],
-        'keywords_en': ['car', 'auto', 'vehicle', 'repair', 'parts', 'wash', 'insurance', 'service']
+        'keywords_ru': ['автомобиль', 'машина', 'авто', 'сто', 'ремонт', 'запчасти', 'мойка', 'страховка', 'осаго', 'каско', 'бензин', 'топливо', 'заправка', 'азс', 'дизель'],
+        'keywords_en': ['car', 'auto', 'vehicle', 'repair', 'parts', 'wash', 'insurance', 'service', 'gas', 'fuel', 'petrol', 'gasoline', 'diesel', 'station']
     },
     {
         'id': 'housing',
@@ -125,20 +131,12 @@ UNIFIED_CATEGORIES = [
         'keywords_en': ['travel', 'vacation', 'tickets', 'flight', 'train', 'hotel', 'tourism', 'visa', 'trip']
     },
     {
-        'id': 'relatives',
-        'icon': '👪',
-        'name_ru': 'Родственники',
-        'name_en': 'Relatives',
-        'keywords_ru': ['родители', 'дети', 'семья', 'родственники', 'мама', 'папа', 'жена', 'муж', 'ребенок'],
-        'keywords_en': ['parents', 'children', 'family', 'relatives', 'mother', 'father', 'wife', 'husband', 'kid']
-    },
-    {
         'id': 'subscriptions',
         'icon': '📱',
-        'name_ru': 'Подписки и услуги',
-        'name_en': 'Subscriptions and Services',
-        'keywords_ru': ['подписка', 'интернет', 'телефон', 'связь', 'netflix', 'spotify', 'яндекс', 'облако', 'хостинг'],
-        'keywords_en': ['subscription', 'internet', 'phone', 'mobile', 'netflix', 'spotify', 'cloud', 'hosting']
+        'name_ru': 'Коммунальные услуги и подписки',
+        'name_en': 'Utilities and Subscriptions',
+        'keywords_ru': ['подписка', 'интернет', 'телефон', 'связь', 'коммуналка', 'жкх', 'электричество', 'вода', 'газ', 'netflix', 'spotify', 'яндекс', 'облако', 'хостинг'],
+        'keywords_en': ['subscription', 'internet', 'phone', 'mobile', 'utilities', 'electricity', 'water', 'gas', 'netflix', 'spotify', 'cloud', 'hosting']
     },
     {
         'id': 'other',

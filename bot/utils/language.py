@@ -258,9 +258,8 @@ def translate_category_name(category_name: str, to_lang: str = 'en') -> str:
     # Словарь переводов стандартных категорий
     translations = {
         # Русский -> Английский (только стандартные категории из DEFAULT_CATEGORIES)
-        'Продукты': 'Products',
-        'Кафе и рестораны': 'Restaurants and Cafes',
-        'АЗС': 'Gas Stations',
+        'Продукты': 'Groceries',
+        'Кафе и рестораны': 'Cafes and Restaurants',
         'Транспорт': 'Transport',
         'Автомобиль': 'Car',
         'Жилье': 'Housing',
@@ -273,7 +272,6 @@ def translate_category_name(category_name: str, to_lang: str = 'en') -> str:
         'Образование': 'Education',
         'Подарки': 'Gifts',
         'Путешествия': 'Travel',
-        'Родственники': 'Relatives',
         'Коммунальные услуги и подписки': 'Utilities and Subscriptions',
         'Прочие расходы': 'Other Expenses',
         # Дополнительные категории
@@ -300,9 +298,8 @@ def translate_category_name(category_name: str, to_lang: str = 'en') -> str:
         'Документы': 'Documents',
         'Прочее': 'Other',
         # Английский -> Русский (обратные переводы)
-        'Products': 'Продукты',
-        'Restaurants and Cafes': 'Кафе и рестораны',
-        'Gas Stations': 'АЗС',
+        'Groceries': 'Продукты',
+        'Cafes and Restaurants': 'Кафе и рестораны',
         'Transport': 'Транспорт',
         'Car': 'Автомобиль',
         'Housing': 'Жилье',
@@ -315,7 +312,6 @@ def translate_category_name(category_name: str, to_lang: str = 'en') -> str:
         'Education': 'Образование',
         'Gifts': 'Подарки',
         'Travel': 'Путешествия',
-        'Relatives': 'Родственники',
         'Utilities and Subscriptions': 'Коммунальные услуги и подписки',
         'Other Expenses': 'Прочие расходы',
         # Дополнительные обратные переводы

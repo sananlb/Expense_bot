@@ -65,17 +65,17 @@ TYPO_CORRECTIONS = {
 # Расширенный словарь ключевых слов с точными словами
 CATEGORY_KEYWORDS_EXACT = {
     'продукты': {
-        'products': ['хлеб', 'молоко', 'яйца', 'мясо', 'рыба', 'курица', 'сыр', 'масло', 
+        'products': ['хлеб', 'молоко', 'яйца', 'мясо', 'рыба', 'курица', 'сыр', 'масло',
                     'колбаса', 'сосиски', 'овощи', 'фрукты', 'картошка', 'морковь', 'лук',
                     'помидоры', 'огурцы', 'яблоки', 'бананы', 'апельсины', 'мандарины'],
         'drinks': ['вода', 'сок', 'молоко', 'кефир', 'йогурт', 'ряженка', 'пиво', 'вино'],
         'sweets': ['конфеты', 'шоколад', 'печенье', 'торт', 'пирожное', 'мороженое'],
         'grocery': ['крупа', 'макароны', 'рис', 'гречка', 'сахар', 'соль', 'мука', 'специи'],
-        'stores': ['магазин', 'супермаркет', 'гипермаркет', 'пятерочка', 'перекресток', 
+        'stores': ['магазин', 'супермаркет', 'гипермаркет', 'пятерочка', 'перекресток',
                   'дикси', 'магнит', 'лента', 'ашан', 'metro', 'spar', 'окей'],
         'keywords': ['продукты', 'еда', 'покушать', 'пища']
     },
-    'кафе': {
+    'кафе и рестораны': {
         'drinks': ['кофе', 'чай', 'капучино', 'латте', 'эспрессо', 'американо', 'какао'],
         'fastfood': ['бургер', 'пицца', 'суши', 'роллы', 'шаурма', 'чебурек', 'беляш',
                     'самса', 'хачапури', 'блины', 'сэндвич'],
@@ -87,25 +87,47 @@ CATEGORY_KEYWORDS_EXACT = {
     'транспорт': {
         'public': ['такси', 'метро', 'автобус', 'троллейбус', 'трамвай', 'маршрутка',
                   'электричка', 'поезд', 'самолет'],
-        'fuel': ['бензин', 'дизель', 'газ', 'заправка', 'азс', 'топливо'],
         'parking': ['парковка', 'стоянка', 'паркинг'],
         'brands': ['яндекс', 'uber', 'gett', 'ситимобил', 'везет', 'bolt'],
         'keywords': ['транспорт', 'поездка', 'доехать', 'добраться', 'проезд']
     },
-    'развлечения': {
-        'activities': ['кино', 'театр', 'концерт', 'выставка', 'музей', 'цирк', 'зоопарк'],
-        'sports': ['боулинг', 'бильярд', 'каток', 'бассейн', 'фитнес', 'спортзал', 'йога'],
-        'nightlife': ['клуб', 'бар', 'караоке', 'дискотека'],
-        'games': ['игры', 'квест', 'аттракционы', 'парк'],
-        'keywords': ['развлечения', 'отдых', 'досуг', 'веселье']
+    'автомобиль': {
+        'fuel': ['бензин', 'дизель', 'газ', 'заправка', 'азс', 'топливо'],
+        'service': ['то', 'техобслуживание', 'ремонт', 'шиномонтаж', 'автосервис', 'сто', 'мойка'],
+        'parts': ['масло', 'фильтр', 'тормоза', 'колодки', 'свечи', 'аккумулятор', 'шины'],
+        'other': ['страховка', 'осаго', 'каско', 'налог', 'штраф'],
+        'keywords': ['автомобиль', 'машина', 'авто', 'автомобиль']
     },
-    'здоровье': {
-        'medical': ['аптека', 'лекарства', 'таблетки', 'витамины', 'бады', 'мазь', 'капли'],
-        'doctors': ['врач', 'доктор', 'поликлиника', 'больница', 'клиника', 'медцентр'],
-        'procedures': ['анализы', 'узи', 'рентген', 'мрт', 'кт', 'осмотр', 'прием'],
-        'keywords': ['здоровье', 'лечение', 'болезнь', 'медицина']
+    'жилье': {
+        'rent': ['аренда', 'квартплата', 'коммуналка', 'жкх'],
+        'utilities': ['свет', 'электричество', 'вода', 'газ', 'отопление', 'домофон'],
+        'household': ['ремонт', 'мебель', 'посуда', 'бытовая техника', 'уборка'],
+        'keywords': ['жилье', 'дом', 'квартира', 'жилплощадь']
     },
-    'одежда': {
+    'аптеки': {
+        'medical': ['аптека', 'лекарства', 'таблетки', 'витамины', 'бады', 'мазь', 'капли',
+                   'сироп', 'антибиотик', 'обезболивающее', 'жаропонижающее'],
+        'keywords': ['аптека', 'медикаменты', 'препараты']
+    },
+    'медицина': {
+        'doctors': ['врач', 'доктор', 'поликлиника', 'больница', 'клиника', 'медцентр',
+                   'стоматолог', 'окулист', 'терапевт', 'хирург', 'педиатр'],
+        'procedures': ['анализы', 'узи', 'рентген', 'мрт', 'кт', 'осмотр', 'прием', 'консультация'],
+        'keywords': ['медицина', 'лечение', 'болезнь', 'здоровье']
+    },
+    'красота': {
+        'services': ['салон', 'парикмахерская', 'маникюр', 'педикюр', 'стрижка', 'окрашивание',
+                    'укладка', 'массаж', 'косметолог', 'визажист', 'эпиляция'],
+        'products': ['косметика', 'крем', 'шампунь', 'лак', 'помада', 'тушь', 'духи'],
+        'keywords': ['красота', 'уход', 'бьюти']
+    },
+    'спорт и фитнес': {
+        'activities': ['фитнес', 'спортзал', 'тренажерный зал', 'йога', 'бассейн', 'тренировка',
+                      'пилатес', 'кроссфит', 'бокс', 'единоборства', 'танцы'],
+        'equipment': ['спортивное питание', 'протеин', 'гантели', 'коврик', 'форма', 'кроссовки'],
+        'keywords': ['спорт', 'фитнес', 'тренировка', 'зал']
+    },
+    'одежда и обувь': {
         'clothes': ['джинсы', 'футболка', 'рубашка', 'платье', 'юбка', 'брюки', 'шорты',
                    'куртка', 'пальто', 'свитер', 'кофта', 'костюм', 'пиджак'],
         'shoes': ['кроссовки', 'ботинки', 'туфли', 'сапоги', 'босоножки', 'кеды', 'тапки'],
@@ -113,22 +135,38 @@ CATEGORY_KEYWORDS_EXACT = {
         'brands': ['zara', 'hm', 'uniqlo', 'reserved', 'bershka', 'mango', 'nike', 'adidas'],
         'keywords': ['одежда', 'обувь', 'гардероб', 'шоппинг']
     },
-    'связь': {
-        'services': ['интернет', 'телефон', 'мобильный', 'связь', 'тариф', 'пополнение'],
-        'brands': ['мтс', 'билайн', 'мегафон', 'теле2', 'yota', 'ростелеком'],
-        'keywords': ['связь', 'оплата связи', 'счет за телефон']
+    'развлечения': {
+        'activities': ['кино', 'театр', 'концерт', 'выставка', 'музей', 'цирк', 'зоопарк'],
+        'sports': ['боулинг', 'бильярд', 'каток', 'бассейн'],
+        'nightlife': ['клуб', 'бар', 'караоке', 'дискотека'],
+        'games': ['игры', 'квест', 'аттракционы', 'парк'],
+        'keywords': ['развлечения', 'отдых', 'досуг', 'веселье']
     },
-    'дом': {
-        'utilities': ['коммуналка', 'квартплата', 'жкх', 'свет', 'электричество', 'вода',
-                     'газ', 'отопление', 'домофон', 'интернет'],
-        'household': ['ремонт', 'мебель', 'посуда', 'бытовая техника', 'уборка'],
-        'keywords': ['дом', 'квартира', 'жилье', 'коммунальные']
+    'образование': {
+        'institutions': ['школа', 'университет', 'институт', 'колледж', 'курсы', 'академия'],
+        'materials': ['учебник', 'книга', 'тетрадь', 'ручка', 'карандаш', 'рюкзак'],
+        'services': ['репетитор', 'обучение', 'курс', 'семинар', 'тренинг', 'мастер-класс'],
+        'keywords': ['образование', 'учеба', 'обучение', 'курсы']
     },
     'подарки': {
         'occasions': ['день рождения', 'новый год', 'рождество', '8 марта', '23 февраля',
                      'свадьба', 'юбилей'],
-        'items': ['подарок', 'сюрприз', 'букет', 'цветы', 'открытка'],
+        'items': ['подарок', 'сюрприз', 'букет', 'цветы', 'открытка', 'сувенир'],
         'keywords': ['подарки', 'праздник', 'поздравление']
+    },
+    'путешествия': {
+        'transport': ['билет', 'авиабилет', 'поезд', 'самолет', 'автобус'],
+        'accommodation': ['отель', 'гостиница', 'хостел', 'аренда', 'airbnb', 'booking'],
+        'activities': ['экскурсия', 'тур', 'гид', 'музей', 'достопримечательность'],
+        'keywords': ['путешествия', 'отпуск', 'поездка', 'туризм']
+    },
+    'коммунальные услуги и подписки': {
+        'utilities': ['коммуналка', 'квартплата', 'жкх', 'свет', 'электричество', 'вода',
+                     'газ', 'отопление', 'домофон'],
+        'communication': ['интернет', 'телефон', 'мобильный', 'связь', 'тариф', 'пополнение'],
+        'subscriptions': ['подписка', 'netflix', 'spotify', 'youtube', 'сервис', 'абонемент'],
+        'brands': ['мтс', 'билайн', 'мегафон', 'теле2', 'yota', 'ростелеком'],
+        'keywords': ['коммуналка', 'связь', 'подписка', 'услуги']
     }
 }
 
@@ -137,42 +175,96 @@ CATEGORY_KEYWORDS_EN = {
     'groceries': {
         'products': ['bread', 'milk', 'eggs', 'meat', 'fish', 'chicken', 'cheese', 'butter',
                     'vegetables', 'fruits', 'potatoes', 'carrots', 'onions', 'tomatoes'],
-        'drinks': ['water', 'juice', 'soda', 'beer', 'wine', 'coffee', 'tea'],
+        'drinks': ['water', 'juice', 'soda', 'beer', 'wine'],
         'stores': ['grocery', 'supermarket', 'store', 'market', 'walmart', 'target', 'costco'],
         'keywords': ['groceries', 'food', 'shopping']
     },
-    'cafe': {
+    'cafes and restaurants': {
         'drinks': ['coffee', 'tea', 'latte', 'cappuccino', 'espresso', 'americano'],
-        'food': ['burger', 'pizza', 'sandwich', 'pasta', 'salad', 'soup'],
+        'food': ['burger', 'pizza', 'sandwich', 'pasta', 'salad', 'soup', 'sushi'],
         'places': ['cafe', 'restaurant', 'bar', 'starbucks', 'mcdonalds', 'subway'],
         'keywords': ['breakfast', 'lunch', 'dinner', 'meal']
     },
     'transport': {
         'types': ['taxi', 'uber', 'lyft', 'bus', 'metro', 'subway', 'train', 'flight'],
-        'fuel': ['gas', 'gasoline', 'petrol', 'fuel', 'diesel'],
+        'parking': ['parking', 'park'],
         'keywords': ['transport', 'transportation', 'ride', 'trip']
     },
+    'car': {
+        'fuel': ['gas', 'gasoline', 'petrol', 'fuel', 'diesel', 'station'],
+        'service': ['maintenance', 'repair', 'service', 'tire', 'oil change', 'car wash'],
+        'parts': ['oil', 'filter', 'brakes', 'battery', 'tires'],
+        'other': ['insurance', 'tax', 'fine', 'ticket'],
+        'keywords': ['car', 'vehicle', 'automobile']
+    },
+    'housing': {
+        'rent': ['rent', 'lease', 'mortgage'],
+        'utilities': ['electricity', 'water', 'gas', 'heating'],
+        'household': ['repair', 'furniture', 'appliance', 'cleaning'],
+        'keywords': ['housing', 'home', 'apartment']
+    },
+    'pharmacies': {
+        'medical': ['pharmacy', 'medicine', 'pills', 'vitamins', 'drugs', 'supplements',
+                   'prescription', 'painkiller', 'antibiotic'],
+        'keywords': ['pharmacy', 'drugstore', 'medications']
+    },
+    'medicine': {
+        'doctors': ['doctor', 'hospital', 'clinic', 'dentist', 'physician', 'specialist'],
+        'procedures': ['checkup', 'consultation', 'test', 'xray', 'mri', 'scan'],
+        'keywords': ['medicine', 'medical', 'health', 'treatment']
+    },
+    'beauty': {
+        'services': ['salon', 'haircut', 'manicure', 'pedicure', 'massage', 'spa',
+                    'hairdresser', 'barber', 'styling', 'coloring'],
+        'products': ['cosmetics', 'cream', 'shampoo', 'perfume', 'makeup'],
+        'keywords': ['beauty', 'grooming', 'personal care']
+    },
+    'sports and fitness': {
+        'activities': ['gym', 'fitness', 'yoga', 'swimming', 'workout', 'training',
+                      'pilates', 'crossfit', 'boxing', 'martial arts', 'dance'],
+        'equipment': ['protein', 'supplements', 'dumbbells', 'mat', 'sportswear'],
+        'keywords': ['sports', 'fitness', 'workout', 'gym']
+    },
+    'clothes and shoes': {
+        'clothes': ['jeans', 'shirt', 'dress', 'pants', 'shorts', 'jacket', 'coat',
+                   'sweater', 'suit', 't-shirt'],
+        'shoes': ['sneakers', 'boots', 'shoes', 'sandals', 'slippers'],
+        'accessories': ['bag', 'backpack', 'belt', 'scarf', 'hat', 'gloves', 'socks'],
+        'brands': ['zara', 'hm', 'uniqlo', 'nike', 'adidas', 'reserved'],
+        'keywords': ['clothes', 'clothing', 'shoes', 'apparel', 'fashion']
+    },
     'entertainment': {
-        'activities': ['cinema', 'movie', 'theater', 'concert', 'museum', 'park'],
-        'services': ['netflix', 'spotify', 'youtube', 'gaming', 'subscription'],
+        'activities': ['cinema', 'movie', 'theater', 'concert', 'museum', 'exhibition', 'zoo'],
+        'sports': ['bowling', 'billiards', 'skating', 'pool'],
+        'nightlife': ['club', 'bar', 'karaoke', 'disco'],
+        'games': ['games', 'quest', 'park'],
         'keywords': ['entertainment', 'fun', 'leisure']
     },
-    'health': {
-        'medical': ['pharmacy', 'medicine', 'pills', 'vitamins', 'drugs'],
-        'services': ['doctor', 'hospital', 'clinic', 'dentist'],
-        'keywords': ['health', 'medical', 'treatment']
+    'education': {
+        'institutions': ['school', 'university', 'college', 'courses', 'academy'],
+        'materials': ['book', 'notebook', 'pen', 'pencil', 'backpack', 'textbook'],
+        'services': ['tutor', 'course', 'training', 'seminar', 'workshop'],
+        'keywords': ['education', 'learning', 'study', 'courses']
     },
-    'clothes': {
-        'items': ['shirt', 'pants', 'dress', 'shoes', 'jacket', 'coat'],
-        'stores': ['zara', 'hm', 'uniqlo', 'nike', 'adidas'],
-        'keywords': ['clothes', 'clothing', 'apparel', 'shopping']
+    'gifts': {
+        'occasions': ['birthday', 'christmas', 'wedding', 'anniversary', 'holiday'],
+        'items': ['gift', 'present', 'flowers', 'bouquet', 'card', 'souvenir'],
+        'keywords': ['gifts', 'presents', 'celebration']
     },
-    'utilities': {
-        'services': ['internet', 'phone', 'electricity', 'water', 'gas', 'heating'],
-        'keywords': ['utilities', 'bills', 'subscription']
+    'travel': {
+        'transport': ['ticket', 'flight', 'train', 'bus'],
+        'accommodation': ['hotel', 'hostel', 'airbnb', 'booking', 'rent'],
+        'activities': ['tour', 'excursion', 'guide', 'museum', 'attraction'],
+        'keywords': ['travel', 'trip', 'vacation', 'tourism']
     },
-    'other': {
-        'keywords': ['other', 'misc', 'miscellaneous']
+    'utilities and subscriptions': {
+        'utilities': ['utilities', 'electricity', 'water', 'gas', 'heating'],
+        'communication': ['internet', 'phone', 'mobile', 'plan', 'topup'],
+        'subscriptions': ['subscription', 'netflix', 'spotify', 'youtube', 'service'],
+        'keywords': ['utilities', 'bills', 'subscription', 'services']
+    },
+    'other expenses': {
+        'keywords': ['other', 'misc', 'miscellaneous', 'various']
     }
 }
 

@@ -78,9 +78,7 @@ async def get_referral_info_text(profile: Profile, bot_username: str, lang: str 
         )
         text = (
             "🔗 <b>Share with friends</b>\n\n"
-            "Send this message to your friends:\n\n"
-            f"<i>{share_message}</i>\n"
-            f"{affiliate_link.telegram_link}\n\n"
+            "Click the 'Share' button below to invite friends!\n\n"
             "🎁 <b>Bonus</b>\n"
             "When a friend buys their first subscription, we'll extend yours for the same period (one time)."
         )
@@ -91,9 +89,7 @@ async def get_referral_info_text(profile: Profile, bot_username: str, lang: str 
         )
         text = (
             "🔗 <b>Поделитесь с друзьями</b>\n\n"
-            "Отправьте это сообщение своим друзьям:\n\n"
-            f"<i>{share_message}</i>\n"
-            f"{affiliate_link.telegram_link}\n\n"
+            "Нажмите кнопку «Поделиться» ниже, чтобы пригласить друзей!\n\n"
             "🎁 <b>Бонус</b>\n"
             "Когда друг купит первую подписку, мы продлим вашу на такой же срок (один раз)."
         )

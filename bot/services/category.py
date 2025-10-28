@@ -8,34 +8,58 @@ from django.db.models import Sum, Count, Q
 from bot.utils.db_utils import get_or_create_user_profile_sync
 from bot.utils.category_helpers import get_category_display_name, get_category_name_without_emoji
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
+EMOJI_PREFIX_RE = re.compile(
+    r"[\U0001F000-\U0001F9FF"
+    r"\U00002600-\U000027BF"
+    r"\U0001F300-\U0001F64F"
+    r"\U0001F680-\U0001F6FF"
+    r"\u2600-\u27BF"
+    r"\u2300-\u23FF"
+    r"\u2B00-\u2BFF"
+    r"\u26A0-\u26FF"
+    r"]+\s*"
+)
 
 def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCategory:
     """Получить категорию по имени или вернуть категорию 'Прочие расходы'"""
-    logger.info(f"Looking for category '{category_name}' for user {user_id}")
-    
+    original_category_name = category_name or ''
+    category_name = EMOJI_PREFIX_RE.sub('', original_category_name).strip()
+    if original_category_name and original_category_name != category_name:
+        if category_name:
+            logger.debug(
+                f"Normalized category name from '{original_category_name}' to '{category_name}'"
+            )
+        else:
+            logger.debug(
+                f"Category name '{original_category_name}' normalized to empty string"
+            )
+    effective_name = category_name or original_category_name
+    logger.info(f"Looking for category '{effective_name}' for user {user_id}")
+
     profile = get_or_create_user_profile_sync(user_id)
     
     # Словарь для сопоставления категорий из парсера с реальными категориями
     category_mapping = {
-        'азс': ['азс', 'заправка', 'топливо'],
-        'супермаркеты': ['супермаркет', 'продукты', 'магазин'],
-        'продукты': ['продукты', 'еда', 'супермаркет', 'другие продукты'],
-        'кафе и рестораны': ['кафе', 'ресторан', 'рестораны', 'еда', 'обед', 'кофе'],
-        'кафе': ['кафе', 'ресторан', 'рестораны'],  # Добавляем отдельное сопоставление для "кафе"
-        'транспорт': ['транспорт', 'такси', 'метро', 'автобус'],
-        'здоровье': ['здоровье', 'аптека', 'медицина', 'лекарства'],
-        'одежда и обувь': ['одежда', 'обувь', 'вещи'],
-        'развлечения': ['развлечения', 'кино', 'театр', 'отдых'],
-        'дом и жкх': ['жкх', 'квартира', 'коммуналка', 'дом'],
-        'связь и интернет': ['связь', 'интернет', 'телефон', 'мобильный'],
-        'образование': ['образование', 'курсы', 'учеба', 'обучение'],
-        'автомобиль': ['автомобиль', 'машина', 'авто', 'бензин'],
-        'подарки': ['подарки', 'подарок', 'цветы'],
-        'путешествия': ['путешествия', 'отпуск', 'поездка', 'тур'],
-        'другое': ['другое', 'прочее', 'разное'],  # Добавляем сопоставление для "другое"
+        'продукты': ['продукты', 'еда', 'супермаркет', 'магазин', 'groceries'],
+        'кафе и рестораны': ['кафе', 'ресторан', 'рестораны', 'обед', 'кофе', 'cafe', 'restaurant'],
+        'транспорт': ['транспорт', 'такси', 'метро', 'автобус', 'транспорт', 'transport', 'taxi', 'bus'],
+        'автомобиль': ['автомобиль', 'машина', 'авто', 'бензин', 'дизель', 'заправка', 'азс', 'топливо', 'car'],
+        'жилье': ['жилье', 'квартира', 'дом', 'аренда', 'housing'],
+        'аптеки': ['аптека', 'аптеки', 'лекарства', 'таблетки', 'витамины', 'pharmacy'],
+        'медицина': ['медицина', 'врач', 'доктор', 'больница', 'клиника', 'medicine', 'doctor'],
+        'красота': ['красота', 'салон', 'парикмахерская', 'косметика', 'маникюр', 'beauty'],
+        'спорт и фитнес': ['спорт', 'фитнес', 'тренажерный зал', 'йога', 'бассейн', 'sports', 'fitness'],
+        'одежда и обувь': ['одежда', 'обувь', 'вещи', 'одежда', 'clothes', 'shoes'],
+        'развлечения': ['развлечения', 'кино', 'театр', 'концерт', 'отдых', 'entertainment'],
+        'образование': ['образование', 'курсы', 'учеба', 'обучение', 'education'],
+        'подарки': ['подарки', 'подарок', 'цветы', 'букет', 'gifts'],
+        'путешествия': ['путешествия', 'отпуск', 'поездка', 'тур', 'travel'],
+        'коммунальные услуги и подписки': ['коммуналка', 'жкх', 'квартплата', 'свет', 'вода', 'газ', 'интернет', 'связь', 'телефон', 'подписка', 'utilities'],
+        'прочие расходы': ['другое', 'прочее', 'разное', 'other'],
     }
     
     # Ищем среди категорий пользователя
@@ -441,10 +465,10 @@ def update_default_categories_language(user_id: int, new_lang: str) -> bool:
         # Создаем список стандартных категорий для сравнения
         default_names_ru = {name for name, _ in DEFAULT_CATEGORIES}
         default_names_en = {
-            'Products', 'Restaurants and Cafes', 'Gas Stations', 'Transport',
+            'Groceries', 'Cafes and Restaurants', 'Transport',
             'Car', 'Housing', 'Pharmacies', 'Medicine', 'Beauty',
             'Sports and Fitness', 'Clothes and Shoes', 'Entertainment',
-            'Education', 'Gifts', 'Travel', 'Relatives',
+            'Education', 'Gifts', 'Travel',
             'Utilities and Subscriptions', 'Other Expenses'
         }
         
@@ -470,19 +494,57 @@ def update_default_categories_language(user_id: int, new_lang: str) -> bool:
                         # У нас уже есть русское название, просто меняем язык по умолчанию
                         category.original_language = 'ru'
                     else:
-                        # Переводим из английского если нужно
-                        translated_name = translate_category_name(text, 'ru')
-                        category.name_ru = translated_name.replace(category.icon, '').strip() if category.icon else translated_name
+                        # Переводим из английского если нужно (text уже без эмодзи)
+                        translated_text = translate_category_name(text, 'ru')
+                        # Убираем эмодзи из перевода если он там есть (функция может вернуть с эмодзи)
+                        import re
+                        emoji_strip_pattern = re.compile(
+                            r'^['
+                            r'\U0001F000-\U0001F9FF'
+                            r'\U00002600-\U000027BF'
+                            r'\U0001F300-\U0001F5FF'
+                            r'\U0001F600-\U0001F64F'
+                            r'\U0001F680-\U0001F6FF'
+                            r'\u2600-\u27BF'
+                            r'\u2300-\u23FF'
+                            r'\u2B00-\u2BFF'
+                            r'\u26A0-\u26FF'
+                            r']+\s*'
+                        )
+                        translated_text = emoji_strip_pattern.sub('', translated_text).strip()
+                        category.name_ru = translated_text
+                        # Сохраняем эмодзи если его нет
+                        if not category.icon and emoji:
+                            category.icon = emoji
                         category.original_language = 'ru'
                 else:
-                    # Меняем на английский  
+                    # Меняем на английский
                     if category.name_en:
                         # У нас уже есть английское название
                         category.original_language = 'en'
                     else:
-                        # Переводим из русского если нужно
-                        translated_name = translate_category_name(text, 'en')
-                        category.name_en = translated_name.replace(category.icon, '').strip() if category.icon else translated_name
+                        # Переводим из русского если нужно (text уже без эмодзи)
+                        translated_text = translate_category_name(text, 'en')
+                        # Убираем эмодзи из перевода если он там есть
+                        import re
+                        emoji_strip_pattern = re.compile(
+                            r'^['
+                            r'\U0001F000-\U0001F9FF'
+                            r'\U00002600-\U000027BF'
+                            r'\U0001F300-\U0001F5FF'
+                            r'\U0001F600-\U0001F64F'
+                            r'\U0001F680-\U0001F6FF'
+                            r'\u2600-\u27BF'
+                            r'\u2300-\u23FF'
+                            r'\u2B00-\u2BFF'
+                            r'\u26A0-\u26FF'
+                            r']+\s*'
+                        )
+                        translated_text = emoji_strip_pattern.sub('', translated_text).strip()
+                        category.name_en = translated_text
+                        # Сохраняем эмодзи если его нет
+                        if not category.icon and emoji:
+                            category.icon = emoji
                         category.original_language = 'en'
                 
                 category.save()
@@ -514,25 +576,21 @@ def create_default_categories_sync(user_id: int) -> bool:
 
         if lang == 'en':
             default_categories = [
-                ('Supermarkets', '🛒'),
-                ('Other Products', '🫑'),
-                ('Restaurants and Cafes', '🍽️'),
-                ('Gas Stations', '⛽'),
-                ('Taxi', '🚕'),
-                ('Public Transport', '🚌'),
+                ('Groceries', '🛒'),
+                ('Cafes and Restaurants', '🍽️'),
+                ('Transport', '🚕'),
                 ('Car', '🚗'),
                 ('Housing', '🏠'),
                 ('Pharmacies', '💊'),
                 ('Medicine', '🏥'),
-                ('Sports', '🏃'),
-                ('Sports Goods', '🏀'),
+                ('Beauty', '💄'),
+                ('Sports and Fitness', '🏃'),
                 ('Clothes and Shoes', '👔'),
-                ('Flowers', '🌹'),
                 ('Entertainment', '🎭'),
                 ('Education', '📚'),
                 ('Gifts', '🎁'),
                 ('Travel', '✈️'),
-                ('Communication and Internet', '📱'),
+                ('Utilities and Subscriptions', '📱'),
                 ('Other Expenses', '💰')
             ]
         else:
