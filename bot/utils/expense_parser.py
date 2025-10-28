@@ -104,6 +104,13 @@ from expenses.models import CATEGORY_KEYWORDS as MODEL_CATEGORY_KEYWORDS
 
 # Импортируем helper функцию для работы с категориями
 from bot.utils.category_helpers import get_category_display_name
+from bot.utils.income_category_definitions import (
+    DEFAULT_INCOME_CATEGORY_KEY,
+    detect_income_category_key,
+    get_income_category_display_name as get_income_category_display_for_key,
+    get_income_type,
+    normalize_income_category_key,
+)
 
 def extract_date_from_text(text: str) -> Tuple[Optional[date], str]:
     """
@@ -773,67 +780,49 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     ai_categorized = False
     ai_confidence = None
     
-    # Категории доходов по ключевым словам
-    income_categories = {
-        '💼 Зарплата': ['зарплата', 'зп', 'salary', 'оклад', 'заработная плата'],
-        '🎁 Премии и бонусы': ['премия', 'бонус', 'bonus', 'надбавка', 'премиальные'],
-        '💻 Фриланс': ['фриланс', 'freelance', 'заказ', 'проект', 'гонорар', 'подработка'],
-        '📈 Инвестиции': ['инвестиции', 'дивиденд', 'акции', 'облигации', 'прибыль', 'процент'],
-        '🏦 Проценты по вкладам': ['процент', 'вклад', 'депозит', 'накопления'],
-        '🏠 Аренда недвижимости': ['аренда', 'квартира', 'сдача', 'арендатор', 'найм'],
-        '💸 Возвраты и компенсации': ['возврат', 'компенсация', 'возмещение', 'refund'],
-        '💳 Кешбэк': ['кешбек', 'кешбэк', 'кэшбек', 'кэшбэк', 'cashback'],
-        '🎉 Подарки': ['подарок', 'подарили', 'дарение', 'gift'],
-        '💰 Прочие доходы': ['аванс', 'получил', 'заработал', 'доход', 'прочее']
-    }
-    
-    # Мапинг категорий на типы доходов
-    category_to_type = {
-        '💼 Зарплата': 'salary',
-        '🎁 Премии и бонусы': 'bonus',
-        '💻 Фриланс': 'freelance',
-        '📈 Инвестиции': 'investment',
-        '💸 Возвраты и компенсации': 'refund',
-        '💳 Кешбэк': 'cashback',
-        '🎉 Подарки': 'gift',
-    }
-    
-    # Проверяем ключевые слова
-    for cat_name, keywords in income_categories.items():
-        for keyword in keywords:
-            if keyword.lower() in text_lower:
-                category = cat_name
-                income_type = category_to_type.get(cat_name, 'other')
-                break
-        if category:
-            break
-    
+    # Определяем язык пользователя для отображения категорий
+    lang_code = 'ru'
+    if profile and hasattr(profile, 'language_code') and profile.language_code:
+        candidate_lang = profile.language_code.lower()
+        if candidate_lang in ('ru', 'en'):
+            lang_code = candidate_lang
+
+    category_key = None
+
+    detected_key = detect_income_category_key(text_lower)
+    if detected_key:
+        category_key = detected_key
+        category = get_income_category_display_for_key(category_key, lang_code)
+        income_type = get_income_type(category_key)
+
     # Если категорию не нашли, пытаемся определить через AI (если есть пользовательские категории)
     if not category and profile and use_ai:
         from bot.services.income_categorization import categorize_income
-        
-        # Пытаемся категоризировать через AI (отправляем текст без даты)
+
         ai_result = await categorize_income(text_without_date if text_without_date else original_text, user_id, profile)
-        
+
         if ai_result:
-            category = ai_result.get('category')
-            # Если AI предложил лучшее описание, используем его
+            ai_category_label = ai_result.get('category')
+            ai_category_key = normalize_income_category_key(ai_category_label)
+            if ai_category_key:
+                category_key = ai_category_key
+                category = get_income_category_display_for_key(ai_category_key, lang_code)
+                income_type = get_income_type(ai_category_key)
+            elif ai_category_label:
+                category = ai_category_label
             if ai_result.get('description') and len(ai_result.get('description', '')) > 0:
                 description = ai_result['description']
-            # Если AI уверен в сумме больше чем мы
             if not amount and ai_result.get('amount'):
                 amount = Decimal(str(ai_result['amount']))
-            
-            # Сохраняем информацию об AI категоризации
+
             ai_categorized = True
             ai_confidence = ai_result.get('confidence', 0.5)
-    
+
     # Если AI не сработал, пытаемся найти по ключевым словам пользователя
     if not category and profile:
         from expenses.models import IncomeCategory, IncomeCategoryKeyword
         from asgiref.sync import sync_to_async
-        
-        # Сначала проверяем ключевые слова
+
         try:
             @sync_to_async
             def get_income_keywords():
@@ -843,40 +832,319 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
                         category__is_active=True
                     ).select_related('category')
                 )
-            
+
             keywords = await get_income_keywords()
-            
+
             best_match = None
             best_weight = 0
-            
+
             for keyword_obj in keywords:
                 if keyword_obj.keyword.lower() in text_lower:
                     if keyword_obj.normalized_weight > best_weight:
-                        # Сохраняем объект категории, а не имя
                         best_match = keyword_obj.category
                         best_weight = keyword_obj.normalized_weight
-            
+
             if best_match:
-                # Используем язык пользователя для отображения категории
-                lang_code = profile.language_code if profile and hasattr(profile, 'language_code') else 'ru'
                 category = get_category_display_name(best_match, lang_code)
+                normalized_key = normalize_income_category_key(category)
+                if normalized_key:
+                    category_key = normalized_key
+                    income_type = get_income_type(category_key)
         except Exception as e:
             logger.warning(f"Error checking income keywords: {e}")
-        
-        # Если не нашли по ключевым словам, получаем категории доходов пользователя
+
         if not category:
             @sync_to_async
             def get_income_category_names():
                 return list(IncomeCategory.objects.filter(profile=profile).values_list('name', flat=True))
-            
+
             user_income_categories = await get_income_category_names()
-            
+
             if user_income_categories:
-                # Проверяем прямое вхождение названия категории
                 for user_cat in user_income_categories:
-                    if user_cat.lower() in text_lower or any(word in user_cat.lower() for word in text_lower.split()):
+                    lowered = user_cat.lower()
+                    if lowered in text_lower or any(word in lowered for word in text_lower.split()):
                         category = user_cat
+                        normalized_key = normalize_income_category_key(user_cat)
+                        if normalized_key:
+                            category_key = normalized_key
+                            category = get_income_category_display_for_key(category_key, lang_code)
+                            income_type = get_income_type(category_key)
                         break
+
+    if category and not category_key:
+        normalized_key = normalize_income_category_key(category)
+        if normalized_key:
+            category_key = normalized_key
+            category = get_income_category_display_for_key(category_key, lang_code)
+            income_type = get_income_type(category_key)
+
+    if not category:
+        category_key = category_key or DEFAULT_INCOME_CATEGORY_KEY
+        category = get_income_category_display_for_key(category_key, lang_code)
+        income_type = get_income_type(category_key)
+
+    # Формируем описание (текст без суммы и без даты)
+    description = text_without_amount if text_without_amount is not None else text_without_date
+    
+    # Убираем слова-маркеры времени из описания, даже если они не были обработаны как даты
+    time_words = ['вчера', 'позавчера', 'сегодня', 'завтра']
+    for word in time_words:
+        description = re.sub(r'\b' + word + r'\b', '', description, flags=re.IGNORECASE)
+    
+    # Убираем лишние пробелы
+    description = ' '.join(description.split())
+    
+    # Капитализируем только первую букву, не меняя регистр остальных
+    if description and len(description) > 0:
+        description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
+    
+    # Определяем валюту
+    user_currency = (profile.currency if profile else 'RUB') or 'RUB'
+    user_currency = user_currency.upper()
+    currency = detect_currency(original_text, user_currency)
+    
+    # Базовый результат (НЕ заполняем category если не найдена)
+    result = {
+        'amount': float(amount),
+        'description': description or 'Расход',
+        'category': category,  # Оставляем None если не найдено
+        'currency': currency,
+        'confidence': 0.5 if category else 0.2,
+        'expense_date': expense_date  # Добавляем дату, если она была указана
+    }
+    
+    # Попробуем улучшить с помощью AI, если:
+    # 1. Не нашли категорию по ключевым словам
+    # 2. Или нашли, но её нет у пользователя
+    if use_ai and user_id and profile:
+        should_use_ai = False
+        
+        # Проверяем, нужно ли использовать AI
+        if not category:
+            should_use_ai = True
+            logger.info(f"No category found by keywords for '{text}', will use AI")
+        else:
+            # Проверяем, есть ли такая категория у пользователя
+            from expenses.models import ExpenseCategory
+            from asgiref.sync import sync_to_async
+            @sync_to_async
+            def get_user_category_names():
+                return list(ExpenseCategory.objects.filter(profile=profile).values_list('name', flat=True))
+            
+            user_categories = await get_user_category_names()
+            
+            # Проверяем точное и частичное совпадение
+            category_exists = any(
+                category.lower() in cat.lower() or cat.lower() in category.lower() 
+                for cat in user_categories
+            )
+            
+            if not category_exists:
+                should_use_ai = True
+                logger.info(f"Category '{category}' not found in user categories, will use AI")
+        
+        if should_use_ai:
+            try:
+                from bot.services.ai_selector import get_service
+                
+                # Получаем категории пользователя
+                @sync_to_async
+                def get_profile_categories():
+                    return list(ExpenseCategory.objects.filter(profile=profile).values_list('name', flat=True))
+                
+                user_categories = await get_profile_categories()
+                
+                if user_categories:
+                    # Получаем контекст пользователя (недавние категории)
+                    user_context = {}
+                    @sync_to_async
+                    def get_recent_expenses():
+                        return list(
+                            profile.expenses.select_related('category')
+                            .order_by('-created_at')[:10]
+                        )
+                    
+                    recent_expenses = await get_recent_expenses()
+                    if recent_expenses:
+                        # Используем язык пользователя для отображения категорий
+                        lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
+                        recent_categories = list(set([
+                            get_category_display_name(exp.category, lang_code) for exp in recent_expenses 
+                            if exp.category
+                        ]))[:3]
+                        if recent_categories:
+                            user_context['recent_categories'] = recent_categories
+                    
+                    # Пробуем сначала основной AI сервис с таймаутом
+                    try:
+                        logger.info(f"Getting AI service for categorization...")
+                        ai_service = get_service('categorization')
+                        logger.info(f"AI service obtained: {type(ai_service).__name__}")
+                        logger.info(f"Calling categorize_expense with timeout=15s...")
+                        ai_result = await asyncio.wait_for(
+                            ai_service.categorize_expense(
+                                text=text_without_date,  # Отправляем текст без даты
+                                amount=amount,
+                                currency=currency,
+                                categories=user_categories,
+                                user_context=user_context
+                            ),
+                            timeout=15.0  # 15 секунд общий таймаут для изолированного процесса
+                        )
+                        logger.info(f"AI categorization completed")
+                    except asyncio.TimeoutError:
+                        logger.warning(f"AI categorization timeout for '{original_text}'")
+                        ai_result = None
+                    except Exception as e:
+                        logger.error(f"AI categorization error: {e}")
+                        ai_result = None
+                    
+                    # Если Google AI не сработал, пробуем OpenAI
+                    if not ai_result:
+                        logger.warning(f"Primary AI failed, trying fallback to OpenAI")
+                        from bot.services.ai_selector import AISelector
+                        try:
+                            openai_service = AISelector('openai')
+                            ai_result = await asyncio.wait_for(
+                                openai_service.categorize_expense(
+                                    text=text_without_date,  # Отправляем текст без даты
+                                    amount=amount,
+                                    currency=currency,
+                                    categories=user_categories,
+                                    user_context=user_context
+                                ),
+                                timeout=5.0  # 5 секунд таймаут для fallback
+                            )
+                            if ai_result:
+                                logger.info(f"OpenAI fallback successful")
+                        except asyncio.TimeoutError:
+                            logger.error(f"OpenAI fallback timeout")
+                        except Exception as e:
+                            logger.error(f"OpenAI fallback failed: {e}")
+                    
+                    if ai_result:
+                        # Обновляем только категорию из AI
+                        result['category'] = ai_result.get('category', result['category'])
+                        result['confidence'] = ai_result.get('confidence', result['confidence'])
+                        result['ai_enhanced'] = True
+                        result['ai_provider'] = ai_result.get('provider', 'unknown')
+                        
+                        # Безопасное логирование без Unicode
+                        try:
+                            # Оставляем эмодзи но убираем их из лога
+                            if result['category']:
+                                cat_clean = ''.join(c for c in result['category'] if ord(c) < 128).strip()
+                                if not cat_clean and result['category']:
+                                    cat_clean = 'category with emoji'
+                                logger.info(f"AI enhanced result for user {user_id}: category='{cat_clean}', confidence={result['confidence']}, provider={result['ai_provider']}")
+                        except (AttributeError, KeyError, TypeError) as e:
+                            logger.debug(f"Error logging AI result: {e}")
+                            pass
+                    
+            except Exception as e:
+                logger.error(f"AI categorization failed: {e}")
+    
+    # Финальный fallback - если категория все еще не определена
+    if not result['category']:
+        result['category'] = 'Прочие расходы'
+        logger.info(f"Using default category 'Прочие расходы' for '{original_text}'")
+    
+    return result
+
+
+async def parse_income_message(text: str, user_id: Optional[int] = None, profile=None, use_ai: bool = True) -> Optional[Dict[str, Any]]:
+    """
+    Парсит текстовое сообщение и извлекает информацию о доходе
+    
+    Примеры:
+    - "+5000" -> {'amount': 5000, 'description': 'Доход', 'is_income': True}
+    - "зарплата 100000" -> {'amount': 100000, 'description': 'Зарплата', 'category': '💼 Зарплата'}
+    - "получил премию 50000" -> {'amount': 50000, 'description': 'Получил премию', 'category': '🎁 Премии и бонусы'}
+    """
+    if not text:
+        return None
+    
+    # Сохраняем оригинальный текст
+    original_text = text.strip()
+    
+    # Убираем символ + в начале для парсинга суммы
+    text_for_parsing = original_text
+    if text_for_parsing.startswith('+'):
+        text_for_parsing = text_for_parsing[1:].strip()
+    
+    # Сначала извлекаем дату, если она есть
+    expense_date, text_without_date = extract_date_from_text(text_for_parsing)
+    
+    # Используем текст без даты для дальнейшего парсинга
+    text_to_parse = text_without_date
+    text_lower = text_to_parse.lower()
+    
+    # Ищем сумму
+    amount = None
+    amount_str = None
+    text_without_amount = None
+    
+    for pattern in AMOUNT_PATTERNS:
+        match = re.search(pattern, text_lower, re.IGNORECASE)
+        if match:
+            amount_str = match.group(1).replace(',', '.')
+            try:
+                amount = Decimal(amount_str)
+                # Убираем найденную сумму из текста для получения описания
+                match_start = match.start()
+                match_end = match.end()
+                text_without_amount = (text_to_parse[:match_start] + ' ' + text_to_parse[match_end:]).strip()
+                break
+            except (ValueError, InvalidOperation) as e:
+                logger.debug(f"Ошибка при парсинге суммы дохода '{amount_str}': {e}")
+                continue
+    
+    # Если не нашли сумму, пытаемся найти последний доход с таким же названием
+    if not amount or amount <= 0:
+        if user_id:
+            from bot.services.income import get_last_income_by_description
+            # Пытаемся найти последний доход с похожим описанием
+            last_income = await get_last_income_by_description(user_id, original_text)
+            if last_income:
+                amount = last_income.amount
+                # Используем язык пользователя для отображения категории дохода
+                if last_income.category:
+                    lang_code = profile.language_code if profile and hasattr(profile, 'language_code') else 'ru'
+                    category = get_category_display_name(last_income.category, lang_code)
+                else:
+                    category = None
+                # Используем текст без даты как описание
+                description = text_without_date if text_without_date else original_text
+                
+                # Убираем символ + из описания если он есть
+                if description and description.startswith('+'):
+                    description = description[1:].strip()
+                
+                result = {
+                    'amount': float(amount),
+                    'description': description,
+                    'income_date': expense_date or date.today(),
+                    'income_type': last_income.income_type if hasattr(last_income, 'income_type') else 'other',
+                    'currency': last_income.currency or 'RUB',
+                    'is_income': True,
+                    'similar_income': True,
+                    'ai_enhanced': False
+                }
+                if category:
+                    result['category'] = category
+                
+                logger.info(f"Found similar income for '{original_text}': amount={amount}, category={category}")
+                return result
+        
+        # Если не нашли похожий доход, возвращаем None
+        return None
+    
+    # Определяем категорию дохода
+    category = None
+    income_type = 'other'
+    ai_categorized = False
+    ai_confidence = None
     
     # Формируем описание (используем текст без даты и без суммы)
     description = text_without_amount if text_without_amount else (text_without_date if text_without_date else 'Доход')
@@ -897,17 +1165,33 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
             description = re.sub(r'[^\w\s]', '', category).strip()
         elif income_type != 'other':
             type_descriptions = {
-                'salary': 'Зарплата',
-                'bonus': 'Премия',
-                'freelance': 'Фриланс',
-                'investment': 'Инвестиции',
-                'refund': 'Возврат',
-                'cashback': 'Кешбэк',
-                'gift': 'Подарок'
+                'ru': {
+                    'salary': 'Зарплата',
+                    'bonus': 'Премия',
+                    'freelance': 'Фриланс',
+                    'investment': 'Инвестиции',
+                    'interest': 'Проценты',
+                    'refund': 'Возврат',
+                    'cashback': 'Кешбэк',
+                    'gift': 'Подарок',
+                    'other': 'Доход',
+                },
+                'en': {
+                    'salary': 'Salary',
+                    'bonus': 'Bonus',
+                    'freelance': 'Freelance',
+                    'investment': 'Investments',
+                    'interest': 'Interest',
+                    'refund': 'Refund',
+                    'cashback': 'Cashback',
+                    'gift': 'Gift',
+                    'other': 'Income',
+                },
             }
-            description = type_descriptions.get(income_type, 'Доход')
+            localized_map = type_descriptions['en'] if lang_code == 'en' else type_descriptions['ru']
+            description = localized_map.get(income_type, localized_map['other'])
         else:
-            description = 'Доход'
+            description = 'Income' if lang_code == 'en' else 'Доход'
     
     # Определяем валюту
     user_currency = (profile.currency if profile else 'RUB') or 'RUB'

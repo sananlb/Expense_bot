@@ -9,6 +9,11 @@ from asgiref.sync import sync_to_async
 from expenses.models import IncomeCategory, Income, IncomeCategoryKeyword, Profile
 from .ai_categorization import categorizer as base_categorizer
 from bot.utils.category_helpers import get_category_display_name
+from bot.utils.income_category_definitions import (
+    get_income_category_display_name as get_income_category_display_for_key,
+    normalize_income_category_key,
+    strip_leading_emoji,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -56,13 +61,9 @@ async def categorize_income(text: str, user_id: int, profile: Optional[Profile] 
         result = await base_categorizer.categorize(text, user_id, profile)
         
         if result:
-            # Проверяем что категория существует у пользователя
-            if result.get('category') not in categories:
-                # Находим наиболее подходящую категорию
-                result['category'] = await find_best_matching_category(
-                    result.get('category', ''), categories
-                )
-            
+            result['category'] = await find_best_matching_category(
+                result.get('category', ''), categories
+            )
             return result
             
     finally:
@@ -139,49 +140,44 @@ def build_user_context(profile: Profile) -> Dict[str, Any]:
 
 
 async def find_best_matching_category(suggested: str, available: List[str]) -> str:
-    """
-    Поиск наиболее подходящей категории из доступных
-    """
-    suggested_lower = suggested.lower()
-    
-    # Прямое совпадение
-    for cat in available:
-        if cat.lower() == suggested_lower:
-            return cat
-    
-    # Частичное совпадение
-    for cat in available:
-        if suggested_lower in cat.lower() or cat.lower() in suggested_lower:
-            return cat
-    
-    # По умолчанию для доходов
-    default_mappings = {
-        'зарплата': 'Зарплата',
-        'премия': 'Премии и бонусы',
-        'бонус': 'Премии и бонусы',
-        'фриланс': 'Фриланс',
-        'инвестиц': 'Инвестиции',
-        'дивиденд': 'Инвестиции',
-        'процент': 'Проценты по вкладам',
-        'аренда': 'Аренда недвижимости',
-        'возврат': 'Возвраты и компенсации',
-        'кешбек': 'Кешбэк',
-        'кэшбэк': 'Кешбэк',
-        'подарок': 'Подарки',
-        'подар': 'Подарки'
-    }
-    
-    for key, value in default_mappings.items():
-        if key in suggested_lower and value in available:
-            return value
-    
-    # Если ничего не подошло, возвращаем "Прочие доходы"
-    if 'Прочие доходы' in available:
-        return 'Прочие доходы'
-    
-    # Возвращаем первую доступную категорию
-    return available[0] if available else 'Прочие доходы'
+    """Поиск наиболее подходящей категории из доступных"""
+    if not available:
+        return suggested or get_income_category_display_for_key('other', 'ru')
 
+    normalized_suggested_key = normalize_income_category_key(suggested)
+    available_map = {}
+    for cat in available:
+        key = normalize_income_category_key(cat)
+        if key and key not in available_map:
+            available_map[key] = cat
+
+    if normalized_suggested_key:
+        if normalized_suggested_key in available_map:
+            return available_map[normalized_suggested_key]
+        for lang in ('ru', 'en'):
+            candidate_name = get_income_category_display_for_key(normalized_suggested_key, lang)
+            if candidate_name in available:
+                return candidate_name
+
+    cleaned_suggested = strip_leading_emoji(suggested).lower()
+    if cleaned_suggested:
+        for cat in available:
+            if cleaned_suggested == strip_leading_emoji(cat).lower():
+                return cat
+        for cat in available:
+            cleaned_cat = strip_leading_emoji(cat).lower()
+            if cleaned_suggested in cleaned_cat or cleaned_cat in cleaned_suggested:
+                return cat
+
+    other_candidates = [
+        get_income_category_display_for_key('other', 'ru'),
+        get_income_category_display_for_key('other', 'en'),
+    ]
+    for candidate in other_candidates:
+        if candidate in available:
+            return candidate
+
+    return available[0] if available else suggested or get_income_category_display_for_key('other', 'ru')
 
 @sync_to_async
 def learn_from_income_category_change_sync(
