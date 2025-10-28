@@ -1013,8 +1013,32 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     if current_state and current_state != "ExpenseForm:waiting_for_amount_clarification" and not current_state.startswith("ExpenseForm:"):
         logger.info(f"Skipping expense handler due to active state: {current_state}")
         return
-    
+
     user_id = message.from_user.id
+
+    # Проверяем принятие политики конфиденциальности
+    from expenses.models import Profile
+    try:
+        profile = await Profile.objects.aget(telegram_id=user_id)
+        if not profile.accepted_privacy:
+            logger.warning(f"User {user_id} tried to add expense without accepting privacy policy")
+            # Отправляем сообщение с предложением принять политику
+            from bot.constants import get_privacy_url_for
+            privacy_url = get_privacy_url_for(lang)
+            privacy_text = get_text('must_accept_privacy', lang) if lang == 'ru' else "You must accept the privacy policy to use the bot."
+            kb = InlineKeyboardMarkup(inline_keyboard=[[
+                InlineKeyboardButton(
+                    text=get_text('privacy_policy', lang),
+                    url=privacy_url
+                )
+            ]])
+            await message.answer(privacy_text, reply_markup=kb, parse_mode='HTML')
+            return
+    except Profile.DoesNotExist:
+        logger.warning(f"Profile not found for user {user_id} when trying to add expense")
+        # Профиль должен быть создан через /start, но если нет - отправляем к началу
+        await message.answer(get_text('start_bot_first', lang) if get_text('start_bot_first', lang) else "Please start the bot with /start command first.")
+        return
     
     # Создаем задачу для отправки индикатора "печатает..." с задержкой 2 секунды
     typing_task = None

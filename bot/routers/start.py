@@ -18,7 +18,7 @@ from bot.utils.message_utils import send_message_with_cleanup, delete_message_wi
 from bot.utils.commands import update_user_commands
 from bot.services.affiliate import process_referral_link  # Новая реферальная система Telegram Stars
 from bot.services.utm_tracking import parse_utm_source, save_utm_data  # UTM-метки
-from expenses.models import Subscription, Profile, Expense, Income
+from expenses.models import Subscription, Profile
 from django.utils import timezone
 from datetime import timedelta
 
@@ -139,21 +139,15 @@ async def cmd_start(
 
     if profile_exists:
         # Проверяем, новый ли это пользователь
-        # Считаем пользователя новым, если у него:
-        # 1. Нет записей о тратах
-        # 2. Нет записей о доходах
-        # 3. Нет истории подписок (включая истёкшие)
-        has_expenses = await Expense.objects.filter(profile=profile).aexists()
-        has_incomes = await Income.objects.filter(profile=profile).aexists()
+        # Считаем пользователя новым, если у него нет истории подписок
+        # Траты/доходы могли быть добавлены до принятия политики, поэтому не учитываем их
         has_subscription_history = await Subscription.objects.filter(profile=profile).aexists()
 
-        is_new_user = not has_expenses and not has_incomes and not has_subscription_history
+        is_new_user = not has_subscription_history
 
         logger.info(
-            "[START] User %s status: has_expenses=%s, has_incomes=%s, has_subscription_history=%s, is_new_user=%s, is_beta_tester=%s",
+            "[START] User %s status: has_subscription_history=%s, is_new_user=%s, is_beta_tester=%s",
             user_id,
-            has_expenses,
-            has_incomes,
             has_subscription_history,
             is_new_user,
             profile.is_beta_tester,
@@ -397,17 +391,15 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
         await create_default_categories(user_id)
         await create_default_income_categories(user_id)
 
-        has_expenses = await Expense.objects.filter(profile=profile).aexists()
-        has_incomes = await Income.objects.filter(profile=profile).aexists()
         has_subscription_history = await Subscription.objects.filter(profile=profile).aexists()
 
-        is_new_user = not has_expenses and not has_incomes and not has_subscription_history
+        # is_new_user определяется только по истории подписок
+        # Траты/доходы могли быть добавлены до принятия политики (из-за бага), поэтому не учитываем их
+        is_new_user = not has_subscription_history
 
         logger.info(
-            "[PRIVACY_ACCEPT] User %s status: has_expenses=%s, has_incomes=%s, has_subscription_history=%s, is_new_user=%s, is_beta_tester=%s",
+            "[PRIVACY_ACCEPT] User %s status: has_subscription_history=%s, is_new_user=%s, is_beta_tester=%s",
             user_id,
-            has_expenses,
-            has_incomes,
             has_subscription_history,
             is_new_user,
             profile.is_beta_tester,
