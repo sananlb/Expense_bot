@@ -12,7 +12,7 @@ from typing import Optional
 from bot.utils import get_text
 from bot.constants import get_privacy_url_for
 from bot.services.profile import get_or_create_profile, get_user_settings
-from bot.keyboards import main_menu_keyboard, back_close_keyboard
+from bot.keyboards import back_close_keyboard
 from bot.services.category import create_default_categories, create_default_income_categories
 from bot.utils.message_utils import send_message_with_cleanup, delete_message_with_effect
 from bot.utils.commands import update_user_commands
@@ -344,24 +344,6 @@ async def cmd_start(
 
 
 
-@router.callback_query(F.data == "menu")
-async def callback_menu(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Показать главное меню по callback"""
-    text = f"{get_text('main_menu', lang)}\n\n{get_text('choose_action', lang)}"
-    
-    # Получаем настройки кешбэка
-    user_settings = await get_user_settings(callback.from_user.id)
-    cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
-    
-    sent_message = await send_message_with_cleanup(
-        callback, state, text,
-        reply_markup=main_menu_keyboard(lang, cashback_enabled)
-    )
-    
-    # Сохраняем, что это главное меню
-    await state.update_data(main_menu_message_id=sent_message.message_id)
-    
-    await callback.answer()
 
 
 @router.callback_query(F.data == 'privacy_accept')

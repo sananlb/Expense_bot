@@ -6,30 +6,6 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from bot.utils import get_text
 
 
-def main_menu_keyboard(lang: str = 'ru', cashback_enabled: bool = True) -> InlineKeyboardMarkup:
-    """Главное меню"""
-    keyboard = InlineKeyboardBuilder()
-    
-    keyboard.button(text=get_text('expenses_today', lang), callback_data="expenses_today")
-    
-    # Показываем кнопку кешбэка только если он включен
-    if cashback_enabled:
-        keyboard.button(text=get_text('cashback_menu', lang), callback_data="cashback_menu")
-    
-    keyboard.button(text=get_text('categories_menu', lang), callback_data="categories_menu")
-    keyboard.button(text=get_text('recurring_menu', lang), callback_data="recurring_menu")
-    keyboard.button(text=get_text('settings_menu', lang), callback_data="settings")
-    keyboard.button(text=get_text('info', lang), callback_data="start")
-    
-    # Адаптивная сетка в зависимости от количества кнопок
-    if cashback_enabled:
-        keyboard.adjust(2, 2, 2)  # 6 кнопок: 2-2-2
-    else:
-        keyboard.adjust(2, 2, 1)  # 5 кнопок: 2-2-1
-    
-    return keyboard.as_markup()
-
-
 def back_close_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     """Кнопка Закрыть"""
     keyboard = InlineKeyboardBuilder()

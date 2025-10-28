@@ -363,8 +363,6 @@ TEXTS = {
         'top5_empty': 'Пока нет часто повторяющихся операций за 3 месяца.',
         
         # Меню
-        'main_menu': '💰 Главное меню',
-        'main_menu_title': '💰 Главное меню\n\nВыберите действие:',
         'choose_action': 'Выберите действие:',
         'expenses_today': 'Бюджет',
         'expenses_button': '📊 Расходы',
@@ -1136,8 +1134,6 @@ Example: "alphabank 5% 2000 rub"''',
         'top5_empty': 'No frequently repeated operations for the last 3 months yet.',
         
         # Menu
-        'main_menu': '💰 Main menu',
-        'main_menu_title': '💰 Main menu\n\nChoose action:',
         'choose_action': 'Choose action:',
         'expenses_today': 'Budget',
         'expenses_button': '📊 Expenses',
@@ -1507,7 +1503,7 @@ Thank you for participating in testing! Your feedback helps improve the bot.''',
         # All members see shared expenses and income.
         #
         # <b>⚙️ Useful commands:</b>
-        # • /start - main menu
+        # • /start - bot information
         # • /help - this help
         # • /cashback - cashback setup
         # • /report - request report

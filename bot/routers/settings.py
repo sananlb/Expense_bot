@@ -248,15 +248,8 @@ async def handle_toggle_cashback(callback: CallbackQuery, state: FSMContext, lan
         else:
             await callback.answer(get_text('cashback_disabled_message', lang))
 
-        # Удаляем меню настроек
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
-
-        # Показываем обновленное главное меню с актуальным состоянием кешбека
-        from bot.routers.menu import show_main_menu
-        await show_main_menu(callback, state, lang)
+        # Обновляем меню настроек с новым состоянием кнопки кешбека
+        await callback_settings(callback, state, lang)
         
     except Exception as e:
         logger.error(f"Error toggling cashback: {e}")

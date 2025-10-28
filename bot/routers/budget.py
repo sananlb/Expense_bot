@@ -58,9 +58,8 @@ async def cmd_budget(message: Message, state: FSMContext, lang: str = 'ru'):
         keyboard = InlineKeyboardBuilder()
         keyboard.button(text=get_text('add_budget', lang), callback_data="add_budget")
         keyboard.button(text=get_text('delete_budget', lang), callback_data="delete_budget")
-        keyboard.button(text=get_text('back', lang), callback_data="menu")
         keyboard.button(text=get_text('close', lang), callback_data="close")
-        keyboard.adjust(2, 2)
+        keyboard.adjust(2, 1)
         
         await send_message_with_cleanup(message, state, text, reply_markup=keyboard.as_markup())
         
