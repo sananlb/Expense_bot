@@ -181,12 +181,14 @@ async def cmd_start(
         # остальных действий
         if not profile.accepted_privacy:
             await state.update_data(start_command_args=start_args)
+            header = get_text('privacy_policy_header', display_lang)
             short = get_text('short_privacy_for_acceptance', display_lang)
             policy_url = get_privacy_url_for(display_lang)
+            full_text_link = get_text('privacy_policy_full_text', display_lang).format(url=policy_url)
             text_priv = (
-                f"<b>📄 Политика конфиденциальности</b>\n\n"
+                f"<b>{header}</b>\n\n"
                 f"{short}\n\n"
-                f"Полный текст: <a href=\"{policy_url}\">по ссылке</a>"
+                f"{full_text_link}"
             )
             kb = InlineKeyboardMarkup(inline_keyboard=[
                 [
@@ -226,12 +228,14 @@ async def cmd_start(
             },
         )
 
+        header = get_text('privacy_policy_header', display_lang)
         short = get_text('short_privacy_for_acceptance', display_lang)
         policy_url = get_privacy_url_for(display_lang)
+        full_text_link = get_text('privacy_policy_full_text', display_lang).format(url=policy_url)
         text_priv = (
-            f"<b>📄 Политика конфиденциальности</b>\n\n"
+            f"<b>{header}</b>\n\n"
             f"{short}\n\n"
-            f"Полный текст: <a href=\"{policy_url}\">по ссылке</a>"
+            f"{full_text_link}"
         )
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [

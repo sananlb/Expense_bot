@@ -6,6 +6,8 @@ TEXTS = {
     'ru': {
         # Политики и оферта
         'short_privacy_for_acceptance': 'Для использования бота необходимо принять согласие на обработку персональных данных.',
+        'privacy_policy_header': '📄 Политика конфиденциальности',
+        'privacy_policy_full_text': 'Полный текст: <a href="{url}">по ссылке</a>',
         'btn_accept_privacy': '✅ Принимаю',
         'btn_decline_privacy': '✖️ Не принимаю',
         'privacy_decline_message': 'Без согласия на обработку персональных данных использование бота невозможно. Вы можете вернуться к началу командой /start.',
@@ -702,6 +704,8 @@ TEXTS = {
     'en': {
         # Policies and offer
         'short_privacy_for_acceptance': 'To use the bot, you need to accept the privacy consent.',
+        'privacy_policy_header': '📄 Privacy Policy',
+        'privacy_policy_full_text': 'Full text: <a href="{url}">by link</a>',
         'btn_accept_privacy': '✅ Accept',
         'btn_decline_privacy': '✖️ Decline',
         'privacy_decline_message': 'You cannot use the bot without accepting the privacy consent. You can come back with /start.',
