@@ -282,18 +282,6 @@ TEXTS = {
         'could_not_delete_cashback': '❌ Не удалось удалить кешбэк',
         'cashback_not_found': '❌ Кешбэк не найден',
         
-        # Бюджет
-        'budget': 'Бюджет',
-        'budget_exceeded': '⚠️ Превышен бюджет по категории "{category}"!',
-        'budget_set': '✅ Бюджет установлен',
-        'budget_removed': '❌ Бюджет удален',
-        'enter_budget_amount': 'Введите сумму бюджета:',
-        'no_budgets': 'У вас пока нет установленных бюджетов',
-        'add_budget': '➕ Добавить бюджет',
-        'delete_budget': '➖ Удалить бюджет',
-        'choose_category_for_budget': 'Выберите категорию для бюджета:',
-        'choose_budget_to_delete': 'Выберите бюджет для удаления:',
-        'confirm_delete_budget': 'Вы уверены, что хотите удалить этот бюджет?',
         'invalid_amount': '❌ Неверная сумма. Введите число больше 0',
         'no_categories': 'У вас пока нет категорий',
         
@@ -1065,18 +1053,6 @@ Example: "alphabank 5% 2000 rub"''',
         'could_not_delete_cashback': '❌ Could not delete cashback',
         'cashback_not_found': '❌ Cashback not found',
         
-        # Budget
-        'budget': 'Budget',
-        'budget_exceeded': '⚠️ Budget exceeded for category "{category}"!',
-        'budget_set': '✅ Budget set',
-        'budget_removed': '❌ Budget removed',
-        'enter_budget_amount': 'Enter budget amount:',
-        'no_budgets': 'You have no budgets set yet',
-        'add_budget': '➕ Add budget',
-        'delete_budget': '➖ Delete budget',
-        'choose_category_for_budget': 'Choose category for budget:',
-        'choose_budget_to_delete': 'Choose budget to delete:',
-        'confirm_delete_budget': 'Are you sure you want to delete this budget?',
         'invalid_amount': '❌ Invalid amount. Enter a number greater than 0',
         'no_categories': 'You have no categories yet',
         

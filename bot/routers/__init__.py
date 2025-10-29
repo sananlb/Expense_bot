@@ -11,7 +11,6 @@ from .info import router as info_router
 from .chat import router as chat_router
 from .subscription import router as subscription_router
 from .referral import router as referral_router
-from .budget import router as budget_router
 from .top5 import router as top5_router
 from .household import router as household_router
 from .blogger_stats import router as blogger_stats_router
@@ -30,7 +29,6 @@ __all__ = [
     "chat_router",
     "subscription_router",
     "referral_router",
-    "budget_router",
     "top5_router",
     "household_router",
     "blogger_stats_router",

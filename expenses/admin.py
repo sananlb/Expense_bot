@@ -379,26 +379,27 @@ class ExpenseAdmin(admin.ModelAdmin):
         return super().get_queryset(request).select_related('profile', 'category')
 
 
-@admin.register(Budget)
-class BudgetAdmin(admin.ModelAdmin):
-    list_display = ['profile', 'category', 'amount', 'period_type', 'start_date', 
-                    'end_date', 'is_active']
-    list_filter = ['period_type', 'is_active', 'start_date']
-    search_fields = ['profile__username', 'category__name']
-    date_hierarchy = 'start_date'
-    
-    fieldsets = (
-        ('Основная информация', {
-            'fields': ('profile', 'category', 'amount', 'period_type')
-        }),
-        ('Период', {
-            'fields': ('start_date', 'end_date')
-        }),
-        ('Статус', {
-            'fields': ('is_active', 'created_at', 'updated_at')
-        }),
-    )
-    readonly_fields = ['created_at', 'updated_at']
+# Функционал бюджетов отключен (30.10.2025)
+# @admin.register(Budget)
+# class BudgetAdmin(admin.ModelAdmin):
+#     list_display = ['profile', 'category', 'amount', 'period_type', 'start_date',
+#                     'end_date', 'is_active']
+#     list_filter = ['period_type', 'is_active', 'start_date']
+#     search_fields = ['profile__username', 'category__name']
+#     date_hierarchy = 'start_date'
+#
+#     fieldsets = (
+#         ('Основная информация', {
+#             'fields': ('profile', 'category', 'amount', 'period_type')
+#         }),
+#         ('Период', {
+#             'fields': ('start_date', 'end_date')
+#         }),
+#         ('Статус', {
+#             'fields': ('is_active', 'created_at', 'updated_at')
+#         }),
+#     )
+#     readonly_fields = ['created_at', 'updated_at']
 
 
 @admin.register(Cashback)

@@ -29,7 +29,6 @@ from .routers import (
     chat_router,
     subscription_router,
     referral_router,
-    budget_router,
     top5_router,
     household_router,
     blogger_stats_router,
@@ -185,7 +184,6 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(household_router)     # Роутер семейного бюджета (FSM состояния) - ДОЛЖЕН БЫТЬ ДО expense_router!
     dp.include_router(expense_router)  # Команды должны быть выше FSM состояний
     dp.include_router(reports_router)  # Команды должны быть выше FSM состояний
-    dp.include_router(budget_router)        # Роутер бюджетов
     dp.include_router(top5_router)
     dp.include_router(blogger_stats_router)  # Статистика для блогеров
     dp.include_router(settings_router)
