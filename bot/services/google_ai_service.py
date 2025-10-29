@@ -124,7 +124,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                         # Помечаем ключ как рабочий после успешного ответа
                         self.mark_key_success(key_index)
                         return {
-                            'category': result.get('category', categories[0] if categories else 'Прочое'),
+                            'category': result.get('category', categories[0] if categories else 'Прочие расходы'),
                             'confidence': float(result.get('confidence', 0.5))
                         }
                 except:
@@ -143,7 +143,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                 
                 # Если ничего не нашли, возвращаем первую категорию
                 result = {
-                    'category': categories[0] if categories else 'Прочее',
+                    'category': categories[0] if categories else 'Прочие расходы',
                     'confidence': 0.3
                 }
                 # Помечаем ключ как рабочий
