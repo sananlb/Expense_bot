@@ -460,20 +460,24 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     # Конвертируем числа словами в цифры (two -> 2, три -> 3)
     original_text = convert_words_to_numbers(original_text)
 
-    # Удаляем знак минус или слово "минус"/"minus" из начала текста, если они есть
-    # Это нужно для корректного парсинга суммы
+    # Убираем слова-маркеры операции (minus/минус/plus/плюс) ТОЛЬКО если после них идёт число
+    # Примеры:
+    # "Carat minus 2" -> "Carat 2" (удаляем, т.к. после "minus" идёт цифра)
+    # "Apple minus two" -> "Apple two" -> "Apple 2" (удаляем, т.к. после "minus" идёт слово-число)
+    # "Minus store" -> "Minus store" (НЕ удаляем, т.к. после "Minus" НЕТ числа)
     text_cleaned = original_text
-    for pattern in EXPENSE_PATTERNS:
-        match = re.search(pattern, text_cleaned.lower())
-        if match:
-            # Удаляем знак минус или слово "минус"/"minus"
-            if text_cleaned.lower().startswith('минус'):
-                text_cleaned = text_cleaned[5:].strip()
-            elif text_cleaned.lower().startswith('minus'):
-                text_cleaned = text_cleaned[5:].strip()
-            elif text_cleaned.startswith('-'):
-                text_cleaned = text_cleaned[1:].strip()
-            break
+
+    # Создаём паттерн из всех слов-чисел
+    number_words_pattern = '|'.join(re.escape(word) for word in WORD_TO_NUMBER.keys())
+
+    # Удаляем "minus/минус/plus/плюс" + пробелы, ТОЛЬКО если после них идёт цифра или слово-число
+    operation_pattern = r'\b(minus|минус|plus|плюс)\s+(?=\d|(?:' + number_words_pattern + r')\b)'
+    text_cleaned = re.sub(operation_pattern, '', text_cleaned, flags=re.IGNORECASE)
+    text_cleaned = ' '.join(text_cleaned.split())  # Убираем двойные пробелы
+
+    # Убираем знак "-" из начала если есть
+    if text_cleaned.startswith('-'):
+        text_cleaned = text_cleaned[1:].strip()
 
     # Сначала извлекаем дату, если она есть
     expense_date, text_without_date = extract_date_from_text(text_cleaned)
@@ -599,12 +603,17 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     for word in time_words:
         description = re.sub(r'\b' + word + r'\b', '', description, flags=re.IGNORECASE)
 
-    # Убираем слова-маркеры операции (plus/minus/плюс/минус), если они стоят перед суммой
-    operation_words = ['plus', 'minus', 'плюс', 'минус']
-    for word in operation_words:
-        description = re.sub(r'\b' + word + r'\b', '', description, flags=re.IGNORECASE)
+    # Убираем одиночный знак "-" из описания (может остаться после извлечения суммы)
+    # Важно: удаляем только одиночный дефис с пробелами, не внутри слов (WiFi-роутер)
+    if description:
+        description = re.sub(r'\s+-\s+', ' ', description)  # " - " → " "
+        description = re.sub(r'^\s*-\s*', '', description)  # "- " в начале → ""
+        description = re.sub(r'\s*-\s*$', '', description)  # " -" в конце → ""
+        description = description.strip()
 
     # Убираем лишние пробелы
+    # Примечание: слова-маркеры операции (plus/minus/плюс/минус) уже удалены
+    # на этапе предварительной обработки текста, если они стояли перед числом
     description = ' '.join(description.split())
     if description:
         description = re.sub(r'[.,:;!?]+$', '', description).strip()
@@ -690,15 +699,12 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         if recent_categories:
                             user_context['recent_categories'] = recent_categories
                     
-                    # Готовим текст для AI: убираем пунктуацию и служебные слова
+                    # Готовим текст для AI: убираем пунктуацию
+                    # Примечание: operation words (plus/minus/плюс/минус) уже удалены на этапе
+                    # предварительной обработки, если они стояли перед числом
                     ai_text = text_without_date or original_text
                     if ai_text:
                         ai_text = ''.join(ch if ch.isalnum() or ch.isspace() else ' ' for ch in ai_text)
-                        operation_tokens = {'plus', 'minus', 'плюс', 'минус'}
-                        ai_text = ' '.join(
-                            token for token in ai_text.split()
-                            if token.lower() not in operation_tokens
-                        )
                         ai_text = ' '.join(ai_text.split())
                         if not ai_text:
                             ai_text = text_without_date or original_text
@@ -798,14 +804,23 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     # Конвертируем числа словами в цифры (two -> 2, три -> 3)
     original_text = convert_words_to_numbers(original_text)
 
-    # Убираем символ + или слово "plus"/"плюс" в начале для парсинга суммы
+    # Убираем символ + в начале
     text_for_parsing = original_text
     if text_for_parsing.startswith('+'):
         text_for_parsing = text_for_parsing[1:].strip()
-    elif text_for_parsing.lower().startswith('plus'):
-        text_for_parsing = text_for_parsing[4:].strip()
-    elif text_for_parsing.lower().startswith('плюс'):
-        text_for_parsing = text_for_parsing[4:].strip()
+
+    # Убираем слова-маркеры операции (plus/плюс) ТОЛЬКО если после них идёт число
+    # Примеры:
+    # "Bonus plus 1000" -> "Bonus 1000" (удаляем, т.к. после "plus" идёт цифра)
+    # "Plus membership" -> "Plus membership" (НЕ удаляем, т.к. после "Plus" НЕТ числа)
+
+    # Создаём паттерн из всех слов-чисел (используем тот же словарь WORD_TO_NUMBER)
+    number_words_pattern = '|'.join(re.escape(word) for word in WORD_TO_NUMBER.keys())
+
+    # Удаляем "plus/плюс" + пробелы, ТОЛЬКО если после них идёт цифра или слово-число
+    operation_pattern = r'\b(plus|плюс)\s+(?=\d|(?:' + number_words_pattern + r')\b)'
+    text_for_parsing = re.sub(operation_pattern, '', text_for_parsing, flags=re.IGNORECASE)
+    text_for_parsing = ' '.join(text_for_parsing.split())  # Убираем двойные пробелы
     
     # Сначала извлекаем дату, если она есть
     expense_date, text_without_date = extract_date_from_text(text_for_parsing)
@@ -982,12 +997,9 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     if description:
         description = description.replace('+', '').strip()
 
-    # Убираем слова-маркеры операции (plus/minus/плюс/минус), если они есть
-    operation_words = ['plus', 'minus', 'плюс', 'минус']
-    for word in operation_words:
-        description = re.sub(r'\b' + word + r'\b', '', description, flags=re.IGNORECASE)
-
     # Убираем лишние пробелы и капитализируем
+    # Примечание: слова-маркеры операции (plus/плюс) уже удалены
+    # на этапе предварительной обработки текста, если они стояли перед числом
     description = ' '.join(description.split())
     if description and len(description) > 0:
         description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
