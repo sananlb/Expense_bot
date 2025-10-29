@@ -121,8 +121,10 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                     # Пробуем распарсить как JSON
                     if text_response.startswith('{'):
                         result = json.loads(text_response)
+                        # Помечаем ключ как рабочий после успешного ответа
+                        self.mark_key_success(key_index)
                         return {
-                            'category': result.get('category', categories[0] if categories else 'Прочее'),
+                            'category': result.get('category', categories[0] if categories else 'Прочое'),
                             'confidence': float(result.get('confidence', 0.5))
                         }
                 except:
@@ -132,6 +134,8 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                 text_lower = text_response.lower()
                 for category in categories:
                     if category.lower() in text_lower:
+                        # Помечаем ключ как рабочий после успешного ответа
+                        self.mark_key_success(key_index)
                         return {
                             'category': category,
                             'confidence': 0.7

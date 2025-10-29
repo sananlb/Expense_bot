@@ -336,13 +336,14 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                     
             else:
                 # Linux/Mac: используем нативный async
-                prompt = f"""
-                Categorize the expense "{text}" (amount: {amount} {currency}) into one of these categories:
-                {', '.join(categories)}
-                
-                Return ONLY valid JSON:
-                {{"category": "selected_category", "confidence": 0.8, "reasoning": "brief explanation"}}
-                """
+                # Формируем промпт из базового класса (единый для всех AI)
+                prompt = self.get_expense_categorization_prompt(
+                    text=text,
+                    amount=amount,
+                    currency=currency,
+                    categories=categories,
+                    user_context=user_context
+                )
                 
                 # Получаем следующий ключ для ротации
                 key_result = self.get_next_key()
@@ -455,9 +456,11 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                     text_response = text_response[text_response.find('\n')+1:text_response.rfind('```')]
                 
                 result = json.loads(text_response)
-                
+
                 if result.get('category') not in categories:
                     logger.warning(f"[GoogleAI-Adaptive] Invalid category: {result.get('category')}")
+                    # Помечаем ключ как рабочий - API запрос был успешным
+                    self.mark_key_success(key_index)
                     return None
             
             if result:
