@@ -92,6 +92,7 @@ IMPORTANT INSTRUCTIONS:
    - "cookie" or "cookies" or "печенье" or "biscuit" → food/groceries category
    - "coffee" or "кофе" or "café" → cafe/restaurant category
    - "gas" or "бензин" or "diesel" → transport/fuel category
+   - "carrot" or "carrots" or "vegetable" or "овощи" → groceries/produce category
    - "uber" or "taxi" or "такси" → transport category
 5. If the exact match isn't found, choose the most semantically similar category
 6. User-created custom categories (in any language) are equally valid as default ones

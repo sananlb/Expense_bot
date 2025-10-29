@@ -687,6 +687,19 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         if recent_categories:
                             user_context['recent_categories'] = recent_categories
                     
+                    # Готовим текст для AI: убираем пунктуацию и служебные слова
+                    ai_text = text_without_date or original_text
+                    if ai_text:
+                        ai_text = ''.join(ch if ch.isalnum() or ch.isspace() else ' ' for ch in ai_text)
+                        operation_tokens = {'plus', 'minus', 'плюс', 'минус'}
+                        ai_text = ' '.join(
+                            token for token in ai_text.split()
+                            if token.lower() not in operation_tokens
+                        )
+                        ai_text = ' '.join(ai_text.split())
+                        if not ai_text:
+                            ai_text = text_without_date or original_text
+
                     # Пробуем сначала основной AI сервис с таймаутом
                     try:
                         logger.info(f"Getting AI service for categorization...")
@@ -695,7 +708,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         logger.info(f"Calling categorize_expense with timeout=15s...")
                         ai_result = await asyncio.wait_for(
                             ai_service.categorize_expense(
-                                text=text_without_date,  # Отправляем текст без даты
+                                text=ai_text,  # Отправляем очищенный текст без даты
                                 amount=amount,
                                 currency=currency,
                                 categories=user_categories,
@@ -719,7 +732,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                             openai_service = AISelector('openai')
                             ai_result = await asyncio.wait_for(
                                 openai_service.categorize_expense(
-                                    text=text_without_date,  # Отправляем текст без даты
+                                    text=ai_text,  # Отправляем очищенный текст без даты
                                     amount=amount,
                                     currency=currency,
                                     categories=user_categories,
