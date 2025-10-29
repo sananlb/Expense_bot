@@ -56,7 +56,7 @@ class AIBaseService(ABC):
         pass
     
     def get_expense_categorization_prompt(
-        self, 
+        self,
         text: str,
         amount: float,
         currency: str,
@@ -64,35 +64,43 @@ class AIBaseService(ABC):
         user_context: Optional[Dict[str, Any]] = None
     ) -> str:
         """
-        Создает промпт для категоризации расхода
+        Создает универсальный языконезависимый промпт для категоризации расхода.
+        Работает с категориями на разных языках, с emoji и без.
         """
         context_info = ""
         if user_context:
             if 'recent_categories' in user_context:
-                context_info += f"\nЧасто используемые категории: {', '.join(user_context['recent_categories'][:3])}"
-        
-        categories_list = '\n'.join([f"- {cat}" for cat in categories])
-        
-        return f"""Ты помощник в боте для учета личных расходов и доходов. Твоя задача - определить категорию траты.
+                context_info += f"\nRecently used categories: {', '.join(user_context['recent_categories'][:3])}"
 
-Информация о трате:
-Описание: "{text}"
-Сумма: {amount} {currency}
+        categories_list = '\n'.join([f"- {cat}" for cat in categories])
+
+        return f"""You are an expense categorization assistant for a personal finance bot. Your task is to categorize the expense.
+
+Expense information:
+Description: "{text}"
+Amount: {amount} {currency}
 {context_info}
 
-Доступные категории пользователя:
+User's available categories:
 {categories_list}
 
-ВАЖНО:
-1. Выбери ТОЛЬКО из списка выше
-2. Учитывай контекст личных расходов
-3. Если не уверен, выбери наиболее подходящую общую категорию
+IMPORTANT INSTRUCTIONS:
+1. Choose ONLY from the list above - return the exact category name including emoji if present
+2. Categories may be in different languages (English, Russian, Spanish, etc.) - match semantically
+3. Some categories have emoji (🍔, 🚗, 💰), some don't - both are valid
+4. Match by meaning, not language:
+   - "cookie" or "cookies" or "печенье" or "biscuit" → food/groceries category
+   - "coffee" or "кофе" or "café" → cafe/restaurant category
+   - "gas" or "бензин" or "diesel" → transport/fuel category
+   - "uber" or "taxi" or "такси" → transport category
+5. If the exact match isn't found, choose the most semantically similar category
+6. User-created custom categories (in any language) are equally valid as default ones
 
-Верни JSON:
+Return JSON:
 {{
-    "category": "выбранная категория из списка",
-    "confidence": число от 0 до 1,
-    "reasoning": "краткое объяснение выбора"
+    "category": "exact category name from the list",
+    "confidence": number from 0 to 1,
+    "reasoning": "brief explanation of the choice"
 }}"""
     
     def get_chat_prompt(

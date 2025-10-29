@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Any
 from dotenv import load_dotenv
 from django.conf import settings
 from .key_rotation_mixin import GoogleKeyRotationMixin
+from .ai_base_service import AIBaseService
 
 load_dotenv()
 
@@ -125,19 +126,21 @@ if IS_WINDOWS:
     import multiprocessing as mp
     
     # Функция для выполнения в отдельном процессе (только для Windows)
-    def _process_categorization(api_key: str, text: str, amount: float, currency: str, categories: List[str]) -> Optional[Dict[str, Any]]:
+    def _process_categorization(api_key: str, text: str, amount: float, currency: str, categories: List[str], prompt: str = None) -> Optional[Dict[str, Any]]:
         """Выполняется в отдельном процессе, изолированно от основного event loop"""
         try:
             import google.generativeai as genai
             genai.configure(api_key=api_key)
 
-            prompt = f"""
-            Categorize the expense "{text}" (amount: {amount} {currency}) into one of these categories:
-            {', '.join(categories)}
+            # Используем переданный промпт или fallback к простому
+            if not prompt:
+                prompt = f"""
+                Categorize the expense "{text}" (amount: {amount} {currency}) into one of these categories:
+                {', '.join(categories)}
 
-            Return ONLY valid JSON:
-            {{"category": "selected_category", "confidence": 0.8, "reasoning": "brief explanation"}}
-            """
+                Return ONLY valid JSON:
+                {{"category": "selected_category", "confidence": 0.8, "reasoning": "brief explanation"}}
+                """
 
             model = genai.GenerativeModel('gemini-2.5-flash')
 
@@ -206,11 +209,12 @@ else:
     import google.generativeai as genai
 
 
-class GoogleAIService(GoogleKeyRotationMixin):
-    """Адаптивный сервис Google AI"""
+class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
+    """Адаптивный сервис Google AI с единым промптом из AIBaseService"""
     
     def __init__(self):
         """Инициализация сервиса"""
+        super().__init__()  # Инициализируем AIBaseService
         api_keys = self.get_api_keys()
         if not api_keys:
             raise ValueError("GOOGLE_API_KEYS not found in settings")
@@ -246,12 +250,21 @@ class GoogleAIService(GoogleKeyRotationMixin):
                     return None
                 api_key, key_index = key_result
                 key_name = self.get_key_name(key_index)
-                
+
+                # Формируем промпт из базового класса (единый для всех AI)
+                prompt = self.get_expense_categorization_prompt(
+                    text=text,
+                    amount=amount,
+                    currency=currency,
+                    categories=categories,
+                    user_context=user_context
+                )
+
                 loop = asyncio.get_event_loop()
-                
+
                 # Засекаем время перед вызовом
                 start_time = time.time()
-                
+
                 result = await loop.run_in_executor(
                     self.executor,
                     _process_categorization,
@@ -259,7 +272,8 @@ class GoogleAIService(GoogleKeyRotationMixin):
                     text,
                     amount,
                     currency,
-                    categories
+                    categories,
+                    prompt  # Передаем готовый промпт
                 )
                 
                 # Вычисляем время ответа
@@ -677,10 +691,8 @@ class GoogleAIService(GoogleKeyRotationMixin):
                 logger.error(f"[GoogleAI-Adaptive] Error in Linux branch: {e}", exc_info=True)
                 raise
     
-    def get_expense_categorization_prompt(self, text, amount, currency, categories, user_context):
-        """Для совместимости с AIBaseService"""
-        return f"Categorize expense: {text}"
-    
+    # get_expense_categorization_prompt теперь наследуется из AIBaseService
+
     def get_chat_prompt(self, message, context, user_context):
         """Для совместимости с AIBaseService"""
         return message
