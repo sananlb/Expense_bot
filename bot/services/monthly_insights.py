@@ -168,12 +168,17 @@ class MonthlyInsightsService:
 
         month_name = months_ru.get(month, str(month))
 
+        # Helper функция для форматирования сумм без лишних нулей
+        def format_amount(amount):
+            """Форматирует сумму: если целая, то без дробной части"""
+            return f"{int(amount)}" if amount == int(amount) else f"{float(amount):.2f}"
+
         # Prepare category details
         category_details = []
         for cat_name, cat_data in list(month_data['expenses_by_category'].items())[:10]:
             percentage = (cat_data['amount'] / month_data['total_expenses'] * 100) if month_data['total_expenses'] > 0 else 0
             category_details.append(
-                f"- {cat_name}: {float(cat_data['amount']):.2f} ₽ ({percentage:.1f}%, {cat_data['count']} трат)"
+                f"- {cat_name}: {format_amount(cat_data['amount'])} ₽ ({percentage:.1f}%, {cat_data['count']} трат)"
             )
 
         # Build comparison section if previous month data exists
@@ -190,32 +195,33 @@ class MonthlyInsightsService:
             expense_change_pct = (expense_change / prev_month_data['total_expenses'] * 100) if prev_month_data['total_expenses'] > 0 else 0
 
             # Include income comparison only if current month has income
+            expense_change_str = f"+{format_amount(expense_change)}" if expense_change >= 0 else format_amount(expense_change)
             if has_income:
                 comparison_section = f"""
 СРАВНЕНИЕ С ПРЕДЫДУЩИМ МЕСЯЦЕМ ({prev_month_name}):
-- Расходы в прошлом месяце: {float(prev_month_data['total_expenses']):.2f} ₽
-- Изменение расходов: {float(expense_change):+.2f} ₽ ({expense_change_pct:+.1f}%)
-- Доходы в прошлом месяце: {float(prev_month_data['total_incomes']):.2f} ₽
+- Расходы в прошлом месяце: {format_amount(prev_month_data['total_expenses'])} ₽
+- Изменение расходов: {expense_change_str} ₽ ({expense_change_pct:+.1f}%)
+- Доходы в прошлом месяце: {format_amount(prev_month_data['total_incomes'])} ₽
 - Количество трат в прошлом месяце: {len(prev_month_data['expenses'])}
 """
             else:
                 comparison_section = f"""
 СРАВНЕНИЕ С ПРЕДЫДУЩИМ МЕСЯЦЕМ ({prev_month_name}):
-- Расходы в прошлом месяце: {float(prev_month_data['total_expenses']):.2f} ₽
-- Изменение расходов: {float(expense_change):+.2f} ₽ ({expense_change_pct:+.1f}%)
+- Расходы в прошлом месяце: {format_amount(prev_month_data['total_expenses'])} ₽
+- Изменение расходов: {expense_change_str} ₽ ({expense_change_pct:+.1f}%)
 - Количество трат в прошлом месяце: {len(prev_month_data['expenses'])}
 """
 
         # Build financial summary section (only expenses if no income)
         if has_income:
             finance_section = f"""ДАННЫЕ ЗА ТЕКУЩИЙ МЕСЯЦ:
-- Всего потрачено: {float(month_data['total_expenses']):.2f} ₽
-- Всего доходов: {float(month_data['total_incomes']):.2f} ₽
-- Баланс: {float(month_data['balance']):.2f} ₽
+- Всего потрачено: {format_amount(month_data['total_expenses'])} ₽
+- Всего доходов: {format_amount(month_data['total_incomes'])} ₽
+- Баланс: {format_amount(month_data['balance'])} ₽
 - Количество трат: {len(month_data['expenses'])}"""
         else:
             finance_section = f"""ДАННЫЕ ЗА ТЕКУЩИЙ МЕСЯЦ:
-- Всего потрачено: {float(month_data['total_expenses']):.2f} ₽
+- Всего потрачено: {format_amount(month_data['total_expenses'])} ₽
 - Количество трат: {len(month_data['expenses'])}"""
 
         prompt = f"""Ты финансовый аналитик. Проанализируй траты пользователя за {month_name} {year} года.

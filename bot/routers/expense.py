@@ -831,12 +831,9 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
         cashback_text=cashback_text,
         lang=lang
     )
-    
-    # Удаляем старое меню перед отправкой
-    from bot.utils.message_utils import delete_last_menu
-    await delete_last_menu(state, message.bot, message.chat.id)
 
     # Отправляем подтверждение (сообщение о трате не должно исчезать)
+    # send_message_with_cleanup сама удалит старое меню после отправки нового
     await send_message_with_cleanup(message, state,
         message_text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -1222,12 +1219,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                         InlineKeyboardButton(text=get_text('edit_button', lang), callback_data=f"edit_income_{income.id}")
                     ]
                 ])
-                
-                # Удаляем старое меню перед отправкой
-                from bot.utils.message_utils import delete_last_menu
-                await delete_last_menu(state, message.bot, message.chat.id)
 
                 # Отправляем подтверждение (сообщение о доходе не должно исчезать)
+                # send_message_with_cleanup сама удалит старое меню после отправки нового
                 await send_message_with_cleanup(
                     message=message,
                     state=state,
@@ -1366,11 +1360,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                             ]
                         ])
 
-                        # Удаляем старое меню перед отправкой
-                        from bot.utils.message_utils import delete_last_menu
-                        await delete_last_menu(state, message.bot, message.chat.id)
-
                         # Отправляем подтверждение
+                        # send_message_with_cleanup сама удалит старое меню после отправки нового
                         await send_message_with_cleanup(
                             message=message,
                             state=state,
@@ -1438,12 +1429,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                                     InlineKeyboardButton(text=get_text('edit_button', lang), callback_data=f"edit_income_{income.id}")
                                 ]
                             ])
-                            
-                            # Удаляем старое меню перед отправкой
-                            from bot.utils.message_utils import delete_last_menu
-                            await delete_last_menu(state, message.bot, message.chat.id)
 
                             # Отправляем подтверждение
+                            # send_message_with_cleanup сама удалит старое меню после отправки нового
                             await send_message_with_cleanup(
                                 message=message,
                                 state=state,
@@ -1512,14 +1500,11 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     similar_expense=True,
                     lang=lang
                 )
-                
-                # Удаляем старое меню перед отправкой
-                from bot.utils.message_utils import delete_last_menu
-                await delete_last_menu(state, message.bot, message.chat.id)
 
                 # Отправляем подтверждение (сообщение о трате не должно исчезать)
                 await cancel_typing()
                 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+                # send_message_with_cleanup сама удалит старое меню после отправки нового
                 await send_message_with_cleanup(message, state,
                     message_text,
                     reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -1633,10 +1618,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     
     await cancel_typing()
 
-    # Удаляем старое меню перед отправкой сообщения о трате
-    from bot.utils.message_utils import delete_last_menu
-    await delete_last_menu(state, message.bot, message.chat.id)
-
+    # Отправляем сообщение о трате
+    # send_message_with_cleanup сама удалит старое меню после отправки нового
     await send_message_with_cleanup(message, state,
         message_text,
         reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[

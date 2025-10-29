@@ -303,10 +303,12 @@ async def notify_payment_received(user_id: int, amount: float, payment_type: str
         amount: Сумма платежа
         payment_type: Тип платежа
     """
+    # Форматируем сумму без лишних нулей
+    amount_str = f"{int(amount)}" if amount == int(amount) else f"{amount:.2f}"
     message = (
         f"💳 *Получен платеж!*\n\n"
         f"Пользователь: `{user_id}`\n"
-        f"Сумма: {amount:.2f} руб.\n"
+        f"Сумма: {amount_str} руб.\n"
         f"Тип: {payment_type}\n"
         f"Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )

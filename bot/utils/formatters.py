@@ -179,7 +179,12 @@ def format_currency(amount: Union[float, Decimal, int], currency: str = 'RUB') -
     if currency in ['RUB', 'JPY', 'KRW', 'CLP', 'ISK', 'TWD', 'HUF', 'COP', 'IDR', 'VND', 'KHR', 'LAK', 'MMK', 'PYG', 'BIF', 'XAF', 'XOF', 'XPF', 'CLP', 'DJF', 'GNF', 'KMF', 'MGA', 'RWF', 'VUV', 'XAF', 'XOF', 'XPF']:
         formatted_amount = f"{float(amount):,.0f}".replace(',', ' ')
     else:
-        formatted_amount = f"{float(amount):,.2f}".replace(',', ' ')
+        # Для остальных валют: если число целое, не показываем дробную часть
+        float_amount = float(amount)
+        if float_amount == int(float_amount):
+            formatted_amount = f"{int(float_amount):,}".replace(',', ' ')
+        else:
+            formatted_amount = f"{float_amount:,.2f}".replace(',', ' ')
     
     # Получаем символ валюты
     symbol = currency_symbols.get(currency, currency)
