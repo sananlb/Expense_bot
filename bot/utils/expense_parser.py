@@ -85,6 +85,9 @@ INCOME_PATTERNS = [
     r'^плюс\s+\d',  # Начинается со слова "плюс" и цифра (плюс 5000)
     r'\sплюс\s+\d',  # Пробел, затем "плюс" и цифры (зарплата плюс 1200)
     r'^плюс\s*\d',  # "плюс" и цифры с возможным пробелом
+    r'^plus\s+\d',  # Начинается со слова "plus" и цифра (plus 5000)
+    r'\splus\s+\d',  # Пробел, затем "plus" и цифры (bonus plus 1200)
+    r'^plus\s*\d',  # "plus" и цифры с возможным пробелом
 ]
 
 # Паттерны для явного определения траты - знак - или слово "минус"
@@ -96,6 +99,9 @@ EXPENSE_PATTERNS = [
     r'^минус\s+\d',  # Начинается со слова "минус" и цифра (минус 5000)
     r'\sминус\s+\d',  # Пробел, затем "минус" и цифры (кофе минус 200)
     r'^минус\s*\d',  # "минус" и цифры с возможным пробелом
+    r'^minus\s+\d',  # Начинается со слова "minus" и цифра (minus 5000)
+    r'\sminus\s+\d',  # Пробел, затем "minus" и цифры (coffee minus 200)
+    r'^minus\s*\d',  # "minus" и цифры с возможным пробелом
 ]
 
 # Импортируем словарь ключевых слов из models
@@ -526,7 +532,12 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     time_words = ['вчера', 'позавчера', 'сегодня', 'завтра']
     for word in time_words:
         description = re.sub(r'\b' + word + r'\b', '', description, flags=re.IGNORECASE)
-    
+
+    # Убираем слова-маркеры операции (plus/minus/плюс/минус), если они стоят перед суммой
+    operation_words = ['plus', 'minus', 'плюс', 'минус']
+    for word in operation_words:
+        description = re.sub(r'\b' + word + r'\b', '', description, flags=re.IGNORECASE)
+
     # Убираем лишние пробелы
     description = ' '.join(description.split())
     
@@ -878,11 +889,16 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
 
     # Формируем описание (используем текст без даты и без суммы)
     description = text_without_amount if text_without_amount else (text_without_date if text_without_date else 'Доход')
-    
+
     # Убираем знак "+" из описания
     if description:
         description = description.replace('+', '').strip()
-    
+
+    # Убираем слова-маркеры операции (plus/minus/плюс/минус), если они есть
+    operation_words = ['plus', 'minus', 'плюс', 'минус']
+    for word in operation_words:
+        description = re.sub(r'\b' + word + r'\b', '', description, flags=re.IGNORECASE)
+
     # Убираем лишние пробелы и капитализируем
     description = ' '.join(description.split())
     if description and len(description) > 0:
