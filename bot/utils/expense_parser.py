@@ -273,6 +273,7 @@ OLD_CATEGORY_KEYWORDS = {
     'продукты': [
         # Основные продукты
         'продукты', 'еда', 'молоко', 'хлеб', 'мясо', 'овощи', 'фрукты', 'рыба', 'курица',
+        'carrot', 'carrots', 'vegetable', 'vegetables',
         'яйца', 'масло', 'сыр', 'колбаса', 'сосиски', 'крупа', 'макароны', 'сахар',
         # Места покупки
         'рынок', 'базар', 'ярмарка', 'мясная лавка', 'булочная', 'пекарня',
@@ -605,6 +606,8 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
 
     # Убираем лишние пробелы
     description = ' '.join(description.split())
+    if description:
+        description = re.sub(r'[.,:;!?]+$', '', description).strip()
     
     # Капитализируем только первую букву, не меняя регистр остальных
     if description and len(description) > 0:
