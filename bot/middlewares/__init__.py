@@ -6,6 +6,7 @@ from .rate_limit import RateLimitMiddleware
 from .security_check import SecurityCheckMiddleware
 from .logging_middleware import LoggingMiddleware
 from .anti_spam import AntiSpamMiddleware
+from .privacy_check import PrivacyCheckMiddleware
 
 __all__ = [
     "DatabaseMiddleware",
@@ -14,5 +15,6 @@ __all__ = [
     "RateLimitMiddleware",
     "SecurityCheckMiddleware",
     "LoggingMiddleware",
-    "AntiSpamMiddleware"
+    "AntiSpamMiddleware",
+    "PrivacyCheckMiddleware"
 ]

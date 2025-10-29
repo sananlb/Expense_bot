@@ -55,9 +55,6 @@ gunicorn==22.0.0
 whitenoise==6.8.2
 dj-database-url==2.2.0
 
-# Monitoring
-sentry-sdk[django]==2.19.2
-
 # Voice Recognition
 SpeechRecognition==3.10.4
 pydub==0.25.1

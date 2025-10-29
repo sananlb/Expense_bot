@@ -20,12 +20,15 @@ class LoggingMiddleware(BaseMiddleware):
         super().__init__()
         self.request_count = 0
         self.start_time = time.time()
-        
+
         # Статистика по типам сообщений
         self.message_types = defaultdict(int)
-        
+
         # Логгер для аудита
         self.audit_logger = logging.getLogger('audit')
+
+        # Логгер для отслеживания callback (отдельный файл)
+        self.callback_logger = logging.getLogger('callback_tracking')
     
     async def __call__(
         self,
@@ -81,16 +84,49 @@ class LoggingMiddleware(BaseMiddleware):
                 log_data['voice_duration'] = event.voice.duration
                 log_data['voice_size'] = event.voice.file_size
         elif isinstance(event, CallbackQuery):
-            log_data['callback_data'] = event.data[:50]  # Первые 50 символов
+            # Полный callback_data без обрезания
+            callback_data = event.data or ""
+            log_data['callback_data'] = callback_data
+
+            # Умный парсинг: отделяем числовые параметры с конца
+            # edit_expense_456 -> action: edit_expense, params: 456
+            # set_category_15_42 -> action: set_category, params: 15_42
+            # expenses_today -> action: expenses_today, params: ""
+            parts = callback_data.split('_')
+
+            # Найти индекс первого числового параметра с конца
+            param_start_idx = len(parts)
+            for i in range(len(parts) - 1, -1, -1):
+                if parts[i].isdigit():
+                    param_start_idx = i
+                else:
+                    break
+
+            if param_start_idx < len(parts):
+                log_data['callback_action'] = '_'.join(parts[:param_start_idx])
+                log_data['callback_params'] = '_'.join(parts[param_start_idx:])
+            else:
+                log_data['callback_action'] = callback_data
+                log_data['callback_params'] = ""
+
+            # Дополнительные поля для отладки
+            log_data['callback_id'] = event.id
+            if event.message:
+                log_data['message_id'] = event.message.message_id
+
+            # Логируем в отдельный файл для callback
+            self.callback_logger.info(json.dumps(log_data, ensure_ascii=False))
         
         # Логируем
         logger.info(f"Request: {json.dumps(log_data, ensure_ascii=False)}")
         
         # Аудит лог для важных действий
         if message_type in ['photo', 'voice', 'callback_query', 'command']:
+            # Для callback используем callback_action для более детального логирования
+            action_detail = log_data.get('callback_action', message_type)
             self.audit_logger.info(
                 f"AUDIT: user={user.id if user else 'unknown'} "
-                f"action={message_type} "
+                f"action={action_detail} "
                 f"details={log_data}"
             )
         

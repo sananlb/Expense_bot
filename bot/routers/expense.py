@@ -1682,7 +1682,9 @@ async def handle_voice_expense(message: types.Message, state: FSMContext, lang: 
     
     if not text:
         return
-    
+
+    logger.info(f"[VOICE_EXPENSE] User {message.from_user.id} | Voice recognized successfully | Processing text: {text[:100]}")
+
     # Вызываем обработчик текстовых сообщений напрямую с распознанным текстом
     # Как это сделано в nutrition_bot
     await handle_text_expense(message, state, text=text, lang=user_language)

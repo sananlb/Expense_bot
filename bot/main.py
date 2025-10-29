@@ -36,12 +36,13 @@ from .routers import (
     # pdf_report_router  # Временно отключено
 )
 from .middlewares import (
-    DatabaseMiddleware, 
-    LocalizationMiddleware, 
+    DatabaseMiddleware,
+    LocalizationMiddleware,
     MenuCleanupMiddleware,
     RateLimitMiddleware,
     SecurityCheckMiddleware,
-    LoggingMiddleware
+    LoggingMiddleware,
+    PrivacyCheckMiddleware
 )
 from .middlewares.state_reset import StateResetMiddleware
 from .middleware import ActivityTrackerMiddleware, RateLimitMiddleware as AdminRateLimitMiddleware
@@ -158,6 +159,12 @@ def create_dispatcher() -> Dispatcher:
     # 7. Database - подключает БД
     dp.message.middleware(DatabaseMiddleware())
     dp.callback_query.middleware(DatabaseMiddleware())
+
+    # 7.5. Privacy Check - КРИТИЧЕСКИ ВАЖНО! Проверяет принятие политики (GDPR compliance)
+    # ДОЛЖЕН быть ПОСЛЕ DatabaseMiddleware (чтобы профиль был создан/получен)
+    # и ДО всех остальных (блокирует использование без принятия политики)
+    dp.message.middleware(PrivacyCheckMiddleware())
+    dp.callback_query.middleware(PrivacyCheckMiddleware())
 
     # 8. Localization - устанавливает язык
     dp.message.middleware(LocalizationMiddleware())

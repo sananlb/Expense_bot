@@ -94,8 +94,9 @@ IMPORTANT INSTRUCTIONS:
    - "gas" or "бензин" or "diesel" → transport/fuel category
    - "carrot" or "carrots" or "vegetable" or "овощи" → groceries/produce category
    - "uber" or "taxi" or "такси" → transport category
-5. If the exact match isn't found, choose the most semantically similar category
-6. User-created custom categories (in any language) are equally valid as default ones
+5. CRITICAL: "продукт", "продукты", "product" or "products" without additional medical/pharmaceutical context → ALWAYS means groceries/food
+6. If the exact match isn't found, choose the most semantically similar category
+7. User-created custom categories (in any language) are equally valid as default ones
 
 Return JSON:
 {{

@@ -189,42 +189,51 @@ async def recognize_voice(message, bot, user_language: str = 'ru') -> Optional[s
         file_bytes.seek(0)
         audio_bytes = file_bytes.read()
         
+        # Получаем user_id для логирования
+        user_id = message.from_user.id
+        duration = message.voice.duration
+
         # Определяем язык для распознавания
         if user_language == 'ru':
             lang = 'ru-RU'
             # Цепочка для русского: Yandex -> Google -> Whisper
-            
+
             # 1. Пробуем Yandex SpeechKit (лучший для русского)
             text = await YandexSpeechKit.transcribe(audio_bytes)
             if text:
+                logger.info(f"[VOICE_INPUT] User {user_id} | Service: Yandex SpeechKit | Duration: {duration}s | Recognized: {text}")
                 return text
             logger.info("Yandex SpeechKit не смог распознать, пробуем Google")
-            
+
             # 2. Пробуем Google Speech Recognition (бесплатный fallback)
             text = await recognize_with_google(audio_bytes, lang)
             if text:
+                logger.info(f"[VOICE_INPUT] User {user_id} | Service: Google Speech | Duration: {duration}s | Recognized: {text}")
                 return text
             logger.info("Google Speech не смог распознать, пробуем OpenAI Whisper")
-            
+
             # 3. Пробуем OpenAI Whisper (универсальный fallback)
             text = await OpenAIWhisper.transcribe(audio_bytes, lang)
             if text:
+                logger.info(f"[VOICE_INPUT] User {user_id} | Service: OpenAI Whisper | Duration: {duration}s | Recognized: {text}")
                 return text
                 
         else:
             # Для английского и других языков
             lang = 'en-US' if user_language == 'en' else f'{user_language}-{user_language.upper()}'
             # Оптимальная цепочка для английского: Whisper -> Google
-            
+
             # 1. Пробуем OpenAI Whisper (лучший для английского в нашем кейсе)
             text = await OpenAIWhisper.transcribe(audio_bytes, lang)
             if text:
+                logger.info(f"[VOICE_INPUT] User {user_id} | Service: OpenAI Whisper | Duration: {duration}s | Recognized: {text}")
                 return text
             logger.info("OpenAI Whisper не смог распознать, пробуем Google")
-            
+
             # 2. Пробуем Google Speech Recognition
             text = await recognize_with_google(audio_bytes, lang)
             if text:
+                logger.info(f"[VOICE_INPUT] User {user_id} | Service: Google Speech | Duration: {duration}s | Recognized: {text}")
                 return text
         
         logger.warning("Ни один сервис не смог распознать речь")
