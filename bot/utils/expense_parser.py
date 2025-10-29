@@ -12,6 +12,66 @@ from asgiref.sync import sync_to_async
 
 logger = logging.getLogger(__name__)
 
+# Словарь для конвертации чисел словами в цифры
+WORD_TO_NUMBER = {
+    # Английский
+    'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+    'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+    'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15,
+    'sixteen': 16, 'seventeen': 17, 'eighteen': 18, 'nineteen': 19, 'twenty': 20,
+    'thirty': 30, 'forty': 40, 'fifty': 50, 'sixty': 60, 'seventy': 70,
+    'eighty': 80, 'ninety': 90, 'hundred': 100, 'thousand': 1000,
+    # Русский
+    'ноль': 0, 'один': 1, 'одна': 1, 'два': 2, 'две': 2, 'три': 3, 'четыре': 4, 'пять': 5,
+    'шесть': 6, 'семь': 7, 'восемь': 8, 'девять': 9, 'десять': 10,
+    'одиннадцать': 11, 'двенадцать': 12, 'тринадцать': 13, 'четырнадцать': 14, 'пятнадцать': 15,
+    'шестнадцать': 16, 'семнадцать': 17, 'восемнадцать': 18, 'девятнадцать': 19, 'двадцать': 20,
+    'тридцать': 30, 'сорок': 40, 'пятьдесят': 50, 'шестьдесят': 60, 'семьдесят': 70,
+    'восемьдесят': 80, 'девяносто': 90, 'сто': 100, 'тысяча': 1000,
+}
+
+def convert_words_to_numbers(text: str) -> str:
+    """
+    Конвертирует числа словами в цифры
+    Примеры:
+    - "Apple minus two" -> "Apple minus 2"
+    - "кофе три" -> "кофе 3"
+    - "twenty five" -> "25"
+    - "двадцать пять" -> "25"
+    """
+    if not text:
+        return text
+
+    text_lower = text.lower()
+    words = text_lower.split()
+    result_words = []
+    i = 0
+
+    while i < len(words):
+        word = words[i].strip('.,!?;:')
+
+        # Проверяем, является ли слово числом
+        if word in WORD_TO_NUMBER:
+            number = WORD_TO_NUMBER[word]
+
+            # Проверяем следующее слово для составных чисел (twenty one -> 21)
+            if i + 1 < len(words):
+                next_word = words[i + 1].strip('.,!?;:')
+                if next_word in WORD_TO_NUMBER:
+                    next_number = WORD_TO_NUMBER[next_word]
+                    # Если следующее число меньше 10 и текущее кратно 10
+                    if next_number < 10 and number >= 10 and number < 100:
+                        number += next_number
+                        i += 1  # Пропускаем следующее слово
+
+            result_words.append(str(number))
+        else:
+            result_words.append(words[i])
+
+        i += 1
+
+    return ' '.join(result_words)
+
 # Вспомогательная функция для безопасного использования sync_to_async с Django ORM
 def make_sync_to_async(func):
     """Создает обертку для синхронной функции для использования в асинхронном контексте"""
@@ -396,14 +456,19 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     # Сохраняем оригинальный текст
     original_text = text.strip()
 
-    # Удаляем знак минус или слово "минус" из начала текста, если они есть
+    # Конвертируем числа словами в цифры (two -> 2, три -> 3)
+    original_text = convert_words_to_numbers(original_text)
+
+    # Удаляем знак минус или слово "минус"/"minus" из начала текста, если они есть
     # Это нужно для корректного парсинга суммы
     text_cleaned = original_text
     for pattern in EXPENSE_PATTERNS:
         match = re.search(pattern, text_cleaned.lower())
         if match:
-            # Удаляем знак минус или слово "минус"
+            # Удаляем знак минус или слово "минус"/"minus"
             if text_cleaned.lower().startswith('минус'):
+                text_cleaned = text_cleaned[5:].strip()
+            elif text_cleaned.lower().startswith('minus'):
                 text_cleaned = text_cleaned[5:].strip()
             elif text_cleaned.startswith('-'):
                 text_cleaned = text_cleaned[1:].strip()
@@ -710,14 +775,21 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     """
     if not text:
         return None
-    
+
     # Сохраняем оригинальный текст
     original_text = text.strip()
-    
-    # Убираем символ + в начале для парсинга суммы
+
+    # Конвертируем числа словами в цифры (two -> 2, три -> 3)
+    original_text = convert_words_to_numbers(original_text)
+
+    # Убираем символ + или слово "plus"/"плюс" в начале для парсинга суммы
     text_for_parsing = original_text
     if text_for_parsing.startswith('+'):
         text_for_parsing = text_for_parsing[1:].strip()
+    elif text_for_parsing.lower().startswith('plus'):
+        text_for_parsing = text_for_parsing[4:].strip()
+    elif text_for_parsing.lower().startswith('плюс'):
+        text_for_parsing = text_for_parsing[4:].strip()
     
     # Сначала извлекаем дату, если она есть
     expense_date, text_without_date = extract_date_from_text(text_for_parsing)
