@@ -21,7 +21,6 @@ def make_sync_to_async(func):
 DATE_PATTERNS = [
     r'(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})',  # дд.мм.гггг или дд/мм/гггг
     r'(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2})',    # дд.мм.гг или дд/мм/гг
-    r'(\d{1,2})[.\/-](\d{1,2})(?:\s|$)',        # дд.мм (текущий год) - пробел или конец строки
 ]
 
 # Паттерны для извлечения суммы
@@ -115,12 +114,11 @@ from bot.utils.income_category_definitions import (
 def extract_date_from_text(text: str) -> Tuple[Optional[date], str]:
     """
     Извлекает дату из текста и возвращает кортеж (дата, текст_без_даты)
-    Поддерживает только числовые даты в форматах: дд.мм.гггг, дд.мм.гг, дд.мм
+    Поддерживает только числовые даты в форматах: дд.мм.гггг или дд.мм.гг
     
     Примеры:
     - "Кофе 200 15.03.2024" -> (date(2024, 3, 15), "Кофе 200")
     - "25.12.2023 подарки 5000" -> (date(2023, 12, 25), "подарки 5000")
-    - "Продукты 1500 08.09" -> (date(current_year, 9, 8), "Продукты 1500")
     - "Продукты 1500" -> (None, "Продукты 1500")
     """
     # Проверяем числовые даты
@@ -150,27 +148,40 @@ def extract_date_from_text(text: str) -> Tuple[Optional[date], str]:
                         
                         return expense_date, text_without_date
                         
-                elif len(match.groups()) == 2:
-                    # Короткая дата дд.мм (используем текущий год)
-                    day = int(match.group(1))
-                    month = int(match.group(2))
-                    
-                    if 1 <= day <= 31 and 1 <= month <= 12:
-                        current_year = datetime.now().year
-                        expense_date = date(current_year, month, day)
-                        
-                        # Убираем дату из текста
-                        text_without_date = text[:match.start()] + text[match.end():]
-                        text_without_date = ' '.join(text_without_date.split())
-                        
-                        return expense_date, text_without_date
-                        
             except (ValueError, TypeError) as e:
                 logger.debug(f"Ошибка при парсинге даты из текста '{text}': {e}")
                 continue
     
     # Если дата не найдена, возвращаем None и оригинальный текст
     return None, text
+
+
+def extract_amount_from_patterns(text: str) -> Tuple[Optional[Decimal], Optional[str]]:
+    """
+    Извлекает сумму из текста, используя набор паттернов, и возвращает кортеж
+    (сумма, текст_без_суммы). Если сумму найти не удалось, возвращает (None, None).
+    """
+    if not text:
+        return None, None
+
+    for pattern in AMOUNT_PATTERNS:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if not match:
+            continue
+
+        amount_str = match.group(1).replace(',', '.')
+        try:
+            amount = Decimal(amount_str)
+        except (ValueError, InvalidOperation):
+            logger.debug(f"Ошибка при парсинге суммы '{amount_str}' с паттерном '{pattern}'")
+            continue
+
+        match_start = match.start()
+        match_end = match.end()
+        text_without_amount = (text[:match_start] + ' ' + text[match_end:]).strip()
+        return amount, text_without_amount
+
+    return None, None
 
 # Старый словарь для обратной совместимости
 OLD_CATEGORY_KEYWORDS = {
@@ -394,32 +405,22 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
 
     # Сначала извлекаем дату, если она есть
     expense_date, text_without_date = extract_date_from_text(text_cleaned)
+    date_removed = text_without_date != text_cleaned
 
     # Используем текст без даты для дальнейшего парсинга
     text_to_parse = text_without_date
     
     # Ищем сумму
-    amount = None
-    amount_str = None
-    text_without_amount = None
-    
-    for pattern in AMOUNT_PATTERNS:
-        # Ищем в тексте без даты (не в lowercase, чтобы позиции совпадали)
-        match = re.search(pattern, text_to_parse, re.IGNORECASE)
-        if match:
-            amount_str = match.group(1).replace(',', '.')
-            try:
-                amount = Decimal(amount_str)
-                # Убираем найденную сумму из текста без даты для получения описания
-                # Находим позицию совпадения в тексте без даты
-                match_start = match.start()
-                match_end = match.end()
-                text_without_amount = (text_to_parse[:match_start] + ' ' + text_to_parse[match_end:]).strip()
-                break
-            except (ValueError, InvalidOperation) as e:
-                logger.debug(f"Ошибка при парсинге суммы '{amount_str}': {e}")
-                continue
-    
+    amount, text_without_amount = extract_amount_from_patterns(text_to_parse)
+
+    if (not amount or amount <= 0) and date_removed:
+        amount_with_date, text_without_amount_with_date = extract_amount_from_patterns(text_cleaned)
+        if amount_with_date and amount_with_date > 0:
+            amount = amount_with_date
+            text_without_amount = text_without_amount_with_date
+            text_to_parse = text_cleaned
+            expense_date = None
+
     # Если не нашли сумму, пытаемся найти последнюю трату с таким же названием
     if not amount or amount <= 0:
         if user_id:
@@ -709,31 +710,21 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     
     # Сначала извлекаем дату, если она есть
     expense_date, text_without_date = extract_date_from_text(text_for_parsing)
-    
-    # Используем текст без даты для дальнейшего парсинга
+    date_removed = text_without_date != text_for_parsing
+
     text_to_parse = text_without_date
+    amount, text_without_amount = extract_amount_from_patterns(text_to_parse)
+
+    if (not amount or amount <= 0) and date_removed:
+        amount_with_date, text_without_amount_with_date = extract_amount_from_patterns(text_for_parsing)
+        if amount_with_date and amount_with_date > 0:
+            amount = amount_with_date
+            text_without_amount = text_without_amount_with_date
+            text_to_parse = text_for_parsing
+            expense_date = None
+
     text_lower = text_to_parse.lower()
-    
-    # Ищем сумму
-    amount = None
-    amount_str = None
-    text_without_amount = None
-    
-    for pattern in AMOUNT_PATTERNS:
-        match = re.search(pattern, text_lower, re.IGNORECASE)
-        if match:
-            amount_str = match.group(1).replace(',', '.')
-            try:
-                amount = Decimal(amount_str)
-                # Убираем найденную сумму из текста для получения описания
-                match_start = match.start()
-                match_end = match.end()
-                text_without_amount = (text_to_parse[:match_start] + ' ' + text_to_parse[match_end:]).strip()
-                break
-            except (ValueError, InvalidOperation) as e:
-                logger.debug(f"Ошибка при парсинге суммы дохода '{amount_str}': {e}")
-                continue
-    
+
     # Если не нашли сумму, пытаемся найти последний доход с таким же названием
     if not amount or amount <= 0:
         if user_id:

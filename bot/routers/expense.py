@@ -746,14 +746,7 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
     parsed_amount = await parse_expense_message(text, user_id=user_id, profile=profile, use_ai=False)
     
     if not parsed_amount or not parsed_amount.get('amount'):
-        await message.answer(
-            "❌ Не удалось распознать сумму.\n"
-            "Пожалуйста, введите число (например: 750 или 10.50):\n\n"
-            "💡 Подсказка: Если хотите посмотреть траты, используйте команды:\n"
-            "• /expenses - траты за сегодня\n"
-            "• \"покажи траты вчера\" - траты за вчера\n"
-            "• \"траты за неделю\" - траты за неделю"
-        )
+        await message.answer(get_text('could_not_recognize_amount', lang))
         return
     
     # Объединяем описание и сумму для полного парсинга с AI

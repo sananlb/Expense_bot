@@ -27,24 +27,34 @@ logger = logging.getLogger(__name__)
 router = Router(name="start")
 
 
-def get_welcome_message(lang: str = 'ru', referral_message: str = '') -> str:
+def get_welcome_message(lang: str = 'ru', referral_message: str = '', currency: Optional[str] = None) -> str:
     """
     Генерирует приветственное сообщение для бота
 
     Args:
         lang: Язык сообщения ('ru' или 'en')
         referral_message: Дополнительное сообщение о реферальной ссылке
+        currency: Код валюты пользователя (например, 'USD')
 
     Returns:
         Готовое приветственное сообщение
     """
-    if lang == 'en':
-        text = """<b>🪙 Coins - smart finance tracking</b>
+    currency_code = (currency or '').upper()
+    usd_examples_en = '"Coffee 3.5", "Gas 42", "Bonus +1500"'
+    default_examples_en = '"Coffee", "Gas 4050", "Bonus +40000"'
+    usd_examples_ru = '"Кофе 3.5", "Бензин 42", "Премия +1500"'
+    default_examples_ru = '"Кофе", "Дизель 4050", "Премия +40000"'
+    is_usd = currency_code == 'USD'
 
-<b>💸 Adding expenses and income:</b>
+    if lang == 'en':
+        expense_examples = usd_examples_en if is_usd else default_examples_en
+        text = f"""<b>🪙 Coins - smart finance tracking</b>
+
+<b>💡 How it works?</b>
 Send a text or voice message:
-"Coffee", "Gas 4050", "Bonus +40000"
+{expense_examples}
 To add income, put a "+" sign before the amount.
+All records are saved, you can view statistics and analytics of your transactions.
 
 <b>📁 Categories:</b>
 Customize categories for yourself - add your own, delete unnecessary ones. AI will automatically determine the category for each entry.
@@ -63,12 +73,14 @@ Track finances together with your family. Switch between personal and family vie
 
 📢 <i>Want to get short tips and updates? Subscribe to our channel</i> @showmecoins"""
     else:
-        text = """<b>🪙 Coins - умный учет ваших финансов</b>
+        expense_examples = usd_examples_ru if is_usd else default_examples_ru
+        text = f"""<b>🪙 Coins - умный учет ваших финансов</b>
 
-<b>💸 Добавление расходов и доходов:</b>
+<b>💡 Как это работает?</b>
 Отправьте текст или голосовое сообщение:
-"Кофе", "Дизель 4050", "Премия +40000"
+{expense_examples}
 Для ввода доходов поставьте знак "+" перед суммой.
+Все записи сохраняться, вы сможете просматривать статистику и аналитику по операциям.
 
 <b>📁 Категории:</b>
 Редактируйте категории под себя - добавляйте свои, удаляйте ненужные. ИИ автоматически определит категорию для каждой записи.
@@ -322,7 +334,7 @@ async def cmd_start(
     await update_user_commands(message.bot, user_id)
 
     # Получаем приветственное сообщение
-    text = get_welcome_message(display_lang, referral_message)
+    text = get_welcome_message(display_lang, referral_message, getattr(profile, "currency", None))
 
     # Добавляем кнопку справки
     help_button_text = "📖 Справка" if display_lang == 'ru' else "📖 Help"
@@ -511,7 +523,7 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
 
         await update_user_commands(callback.bot, user_id)
 
-        text = get_welcome_message(display_lang, referral_message)
+        text = get_welcome_message(display_lang, referral_message, getattr(profile, "currency", None))
         await callback.message.answer(text, parse_mode="HTML")
 
         await state.update_data(start_command_args=None, pending_profile_data=None)
@@ -546,7 +558,13 @@ async def callback_start(callback: types.CallbackQuery, state: FSMContext, lang:
     await update_user_commands(callback.bot, callback.from_user.id)
 
     # Получаем приветственное сообщение
-    text = get_welcome_message(lang)
+    try:
+        profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
+        currency = getattr(profile, "currency", None)
+    except Profile.DoesNotExist:
+        currency = None
+
+    text = get_welcome_message(lang, currency=currency)
 
     try:
         await callback.message.edit_text(text, parse_mode="HTML")
@@ -628,11 +646,13 @@ async def help_back_handler(callback: types.CallbackQuery, state: FSMContext, la
     try:
         profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
         display_lang = profile.language_code or lang
+        currency = getattr(profile, "currency", None)
     except Profile.DoesNotExist:
         display_lang = lang
+        currency = None
 
     # Получаем приветственное сообщение
-    text = get_welcome_message(display_lang)
+    text = get_welcome_message(display_lang, currency=currency)
 
     # Кнопка справки
     help_button_text = "📖 Справка" if display_lang == 'ru' else "📖 Help"
