@@ -333,11 +333,12 @@ try:
         'schedule': crontab(day_of_month=1, hour=10, minute=0),  # First day of month at 10:00
         'options': {'queue': 'reports'}
     },
-    'check-budget-limits': {
-        'task': 'expense_bot.celery_tasks.check_budget_limits',
-        'schedule': crontab(minute='*/30'),  # Every 30 minutes
-        'options': {'queue': 'notifications'}
-    },
+    # Отключено 30.10.2025 - функционал бюджетов удален
+    # 'check-budget-limits': {
+    #     'task': 'expense_bot.celery_tasks.check_budget_limits',
+    #     'schedule': crontab(minute='*/30'),  # Every 30 minutes
+    #     'options': {'queue': 'notifications'}
+    # },
     'cleanup-old-expenses': {
         'task': 'expense_bot.celery_tasks.cleanup_old_expenses',
         'schedule': crontab(day_of_week=0, hour=3, minute=0),  # Sunday 3 AM
@@ -364,11 +365,12 @@ try:
         'schedule': crontab(hour=3, minute=0),  # Daily at 03:00
         'options': {'queue': 'maintenance'}
     },
-    'system-health-check': {
-        'task': 'expense_bot.celery_tasks.system_health_check',
-        'schedule': crontab(minute='*/15'),  # Every 15 minutes
-        'options': {'queue': 'monitoring'}
-    },
+    # Отключено 30.10.2025 - требует psutil, не критично для работы
+    # 'system-health-check': {
+    #     'task': 'expense_bot.celery_tasks.system_health_check',
+    #     'schedule': crontab(minute='*/15'),  # Every 15 minutes
+    #     'options': {'queue': 'monitoring'}
+    # },
     'collect-daily-analytics': {
         'task': 'expense_bot.celery_tasks.collect_daily_analytics',
         'schedule': crontab(hour=2, minute=0),  # 2 AM daily
