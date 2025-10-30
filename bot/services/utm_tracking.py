@@ -20,6 +20,7 @@ async def parse_utm_source(start_args: str) -> Optional[Dict[str, Any]]:
     - ads_google_blackfriday - реклама в Google, кампания blackfriday
     - p_partner1 - партнер partner1
     - social_tg - соцсети, Telegram
+    - org_coins-bot.ru_landing - лендинг сайта coins-bot.ru, страница landing
     - organic - органический трафик
 
     Returns:
@@ -83,6 +84,23 @@ async def parse_utm_source(start_args: str) -> Optional[Dict[str, Any]]:
                 'campaign': network,
                 'details': {
                     'network': network
+                }
+            }
+
+        # Лендинг/органический трафик с сайта: org_DOMAIN_PAGE
+        # Например: org_coins-bot.ru_landing
+        elif start_args.startswith('org_'):
+            parts = start_args[4:].split('_', 1)
+            domain = parts[0]
+            page = parts[1] if len(parts) > 1 else 'unknown'
+
+            return {
+                'source': 'landing',
+                'campaign': f"{domain}_{page}",
+                'details': {
+                    'domain': domain,
+                    'page': page,
+                    'type': 'website_landing'
                 }
             }
 
