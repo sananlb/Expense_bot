@@ -54,6 +54,7 @@ def get_welcome_message(lang: str = 'ru', referral_message: str = '', currency: 
 Send a text or voice message:
 {expense_examples}
 To add income, put a "+" sign before the amount.
+Specify the currency for each transaction or change the default currency in settings.
 All records are saved, you can view statistics and analytics of your transactions.
 
 <b>📁 Categories:</b>
@@ -80,6 +81,7 @@ Track finances together with your family. Switch between personal and family vie
 Отправьте текст или голосовое сообщение:
 {expense_examples}
 Для ввода доходов поставьте знак "+" перед суммой.
+Указывайте валюту операции или меняйте валюту по умолчанию в настройках.
 Все записи сохраняться, вы сможете просматривать статистику и аналитику по операциям.
 
 <b>📁 Категории:</b>

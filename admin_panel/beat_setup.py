@@ -74,13 +74,14 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
         )
 
         # Отключено 30.10.2025 - функционал бюджетов удален
-        # */30 minutes — Check budget limits
-        # upsert(
-        #     name='check-budget-limits',
-        #     task='expense_bot.celery_tasks.check_budget_limits',
-        #     schedule=crontab(minute='*/30', hour='*'),
-        #     queue='notifications',
-        # )
+        # Явно выключаем задачу в БД (enabled=False)
+        upsert(
+            name='check-budget-limits',
+            task='expense_bot.celery_tasks.check_budget_limits',
+            schedule=crontab(minute='*/30', hour='*'),
+            queue='notifications',
+            enabled=False,  # Выключено
+        )
 
         # Sunday 03:00 — Cleanup
         upsert(
@@ -99,13 +100,14 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
         )
 
         # Отключено 30.10.2025 - требует psutil, не критично для работы
-        # Every 15 minutes — System health check
-        # upsert(
-        #     name='system-health-check',
-        #     task='expense_bot.celery_tasks.system_health_check',
-        #     schedule=crontab(minute='*/15', hour='*'),
-        #     queue='monitoring',
-        # )
+        # Явно выключаем задачу в БД (enabled=False)
+        upsert(
+            name='system-health-check',
+            task='expense_bot.celery_tasks.system_health_check',
+            schedule=crontab(minute='*/15', hour='*'),
+            queue='monitoring',
+            enabled=False,  # Выключено
+        )
 
         # 02:00 daily — Collect previous day analytics
         upsert(
