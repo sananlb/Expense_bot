@@ -54,13 +54,19 @@ async def callback_expenses_today(callback: CallbackQuery, state: FSMContext, la
 @router.callback_query(F.data == "show_month_start")
 async def callback_show_month_start(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать расходы с начала месяца"""
+    from calendar import monthrange
+
     today = date.today()
     start_date = today.replace(day=1)
-    
+
+    # Получаем последний день текущего месяца
+    _, last_day = monthrange(today.year, today.month)
+    end_date = date(today.year, today.month, last_day)
+
     await show_expenses_summary(
         callback.message,
         start_date,
-        today,
+        end_date,
         lang,
         state=state,
         edit=True,
@@ -211,11 +217,28 @@ async def show_expenses_summary(
         )
         
         logger.info(f"Summary result: total={summary.get('total', 0)}, count={summary.get('count', 0)}, categories={len(summary.get('by_category', []))}")
-        
-        # Формируем текст
+
+        # Определяем период для правильного заголовка и клавиатуры
+        today = date.today()
+        is_today = start_date == end_date == today
+        is_current_month = (start_date.day == 1 and
+                           start_date.month == today.month and
+                           start_date.year == today.year and
+                           end_date >= today)
+
+        if is_today:
+            period = 'today'
+        elif is_current_month or (start_date.day == 1 and end_date.month == start_date.month):
+            period = 'month'
+        else:
+            period = 'custom'
+
+        logger.info(f"Period determination: start_date={start_date}, end_date={end_date}, today={today}, is_today={is_today}, period={period}")
+
+        # Формируем текст периода
         if start_date == end_date:
-            if start_date == date.today():
-                period_text = "дня" if lang == 'ru' else ""
+            if start_date == today:
+                period_text = ""
             else:
                 period_text = start_date.strftime('%d.%m.%Y')
         else:
@@ -224,7 +247,13 @@ async def show_expenses_summary(
                 period_text = f"{month_name} {start_date.year}"
             else:
                 period_text = f"{start_date.strftime('%d.%m.%Y')} - {end_date.strftime('%d.%m.%Y')}"
-        
+
+        # Выбираем правильный ключ для заголовка в зависимости от периода
+        if period == 'today':
+            summary_key = 'summary'
+        else:
+            summary_key = 'summary_monthly'
+
         # Добавляем индикатор семейного бюджета
         if household_mode:
             # Получаем название домохозяйства через sync_to_async
@@ -237,18 +266,18 @@ async def show_expenses_summary(
                 except Profile.DoesNotExist:
                     pass
                 return "Семейный бюджет"
-            
+
             household_name = await sync_to_async(get_household_name)(user_id)
             text = f"🏠 <b>{household_name}</b>\n"
             if period_text:
-                text += f"📊 <b>{get_text('summary', lang)} {period_text}</b>\n\n"
+                text += f"📊 <b>{get_text(summary_key, lang)} {period_text}</b>\n\n"
             else:
-                text += f"📊 <b>{get_text('summary', lang)}</b>\n\n"
+                text += f"📊 <b>{get_text(summary_key, lang)}</b>\n\n"
         else:
             if period_text:
-                text = f"📊 <b>{get_text('summary', lang)} {period_text}</b>\n\n"
+                text = f"📊 <b>{get_text(summary_key, lang)} {period_text}</b>\n\n"
             else:
-                text = f"📊 <b>{get_text('summary', lang)}</b>\n\n"
+                text = f"📊 <b>{get_text(summary_key, lang)}</b>\n\n"
         
         # Проверяем есть ли операции вообще
         has_expenses = summary['total'] > 0
@@ -359,29 +388,14 @@ async def show_expenses_summary(
             text += "\n\n<i>💡 Show report for another period?</i>"
         else:
             text += "\n\n<i>💡 Показать отчет за другой период?</i>"
-        
-        # Определяем период для клавиатуры
-        today = date.today()
-        is_today = start_date == end_date == today
-        is_current_month = (start_date.day == 1 and 
-                           start_date.month == today.month and 
-                           start_date.year == today.year and
-                           end_date >= today)
-        
-        if is_today:
-            period = 'today'
+
+        # Определяем показывать ли кнопку PDF
+        if period == 'today':
             show_pdf = False
-        elif is_current_month or (start_date.day == 1 and end_date.month == start_date.month):
-            period = 'month'
-            show_pdf = True
         else:
-            period = 'custom'
             show_pdf = True
 
         show_pdf = show_pdf and has_subscription
-        
-        # Логирование для отладки
-        logger.info(f"Period determination: start_date={start_date}, end_date={end_date}, today={today}, is_today={is_today}, period={period}")
         
         # Сохраняем даты в состоянии для генерации PDF
         if state:

@@ -116,7 +116,8 @@ TEXTS = {
         
         # Отчеты
         'today_spent': 'Сегодня потрачено',
-        'summary': 'Итоги',
+        'summary': 'Итоги дня',
+        'summary_monthly': 'Итоги за',
         'total': 'Всего',
         'total_spent': 'Всего потрачено',
         'by_categories': 'По категориям',
@@ -892,6 +893,7 @@ TEXTS = {
         # Reports
         'today_spent': 'Spent today',
         'summary': 'Daily results',
+        'summary_monthly': 'Results for',
         'total': 'Total',
         'total_spent': 'Total spent',
         'by_categories': 'By categories',

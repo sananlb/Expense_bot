@@ -28,19 +28,11 @@ def send_monthly_reports():
         bot = Bot(token=bot_token)
         service = NotificationService(bot)
 
-        # Check if today is the 1st day of month and time is 10:00
         # Use timezone-aware datetime to match CELERY_TIMEZONE (Europe/Moscow)
         now = timezone.now()  # Returns timezone-aware datetime in Europe/Moscow
-
-        if now.day != 1:
-            logger.info(f"Not the 1st day of month (day={now.day}), skipping monthly reports")
-            return
-
-        if now.hour != 10:
-            logger.info(f"Not 10:00 ({now.hour}:00), skipping monthly reports")
-            return
-
         today = now.date()
+
+        logger.info(f"Starting monthly reports task for {today}")
 
         # Calculate previous month period
         if today.month == 1:
@@ -56,8 +48,6 @@ def send_monthly_reports():
         month_end = today.replace(year=prev_year, month=prev_month, day=last_day_of_prev_month)
 
         # Get all active profiles who have expenses in previous month AND active subscription
-        from expenses.models import Subscription
-
         profiles_with_expenses = Expense.objects.filter(
             expense_date__gte=month_start,
             expense_date__lte=month_end
@@ -96,22 +86,15 @@ def send_monthly_reports():
 def generate_monthly_insights():
     """Generate AI insights for all active subscribers on the 1st day of month at 09:00 for previous month"""
     try:
-        from expenses.models import Profile, Expense, Subscription
+        from expenses.models import Profile, Expense
         from bot.services.monthly_insights import MonthlyInsightsService
         from calendar import monthrange
 
-        # Check if today is the 1st day of month and time is 09:00
+        # Use timezone-aware datetime to match CELERY_TIMEZONE (Europe/Moscow)
         now = timezone.now()
-
-        if now.day != 1:
-            logger.info(f"Not the 1st day of month (day={now.day}), skipping insights generation")
-            return
-
-        if now.hour != 9:
-            logger.info(f"Not 09:00 ({now.hour}:00), skipping insights generation")
-            return
-
         today = now.date()
+
+        logger.info(f"Starting monthly insights generation for {today}")
 
         # Calculate previous month period
         if today.month == 1:
@@ -180,105 +163,6 @@ def generate_monthly_insights():
 
     except Exception as e:
         logger.error(f"Error in generate_monthly_insights task: {e}")
-
-
-@shared_task
-def check_budget_limits():
-    """Check budget limits and send warnings"""
-    try:
-        from expenses.models import Profile, Budget, Expense
-        from bot.services.notifications import NotificationService
-        from decimal import Decimal
-        # Use main bot token for user-facing notifications
-        bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('MONITORING_BOT_TOKEN')
-        bot = Bot(token=bot_token)
-        service = NotificationService(bot)
-        
-        # Get all active budgets
-        budgets = Budget.objects.filter(
-            is_active=True
-        ).select_related('profile', 'category')
-        
-        today = date.today()
-        
-        for budget in budgets:
-            try:
-                # Calculate spent amount based on period
-                if budget.period == 'daily':
-                    expenses = Expense.objects.filter(
-                        profile=budget.profile,
-                        date=today
-                    )
-                elif budget.period == 'weekly':
-                    from datetime import timedelta
-                    week_start = today - timedelta(days=today.weekday())
-                    expenses = Expense.objects.filter(
-                        profile=budget.profile,
-                        date__gte=week_start,
-                        date__lte=today
-                    )
-                elif budget.period == 'monthly':
-                    month_start = today.replace(day=1)
-                    expenses = Expense.objects.filter(
-                        profile=budget.profile,
-                        date__gte=month_start,
-                        date__lte=today
-                    )
-                else:
-                    continue
-                
-                # Filter by category if specified
-                if budget.category:
-                    expenses = expenses.filter(category=budget.category)
-                
-                # Calculate total spent
-                spent = sum(e.amount for e in expenses)
-                percent = (spent / budget.amount) * 100 if budget.amount > 0 else 0
-                
-                # Send warnings at 80%, 90%, and 100%
-                if percent >= 80:
-                    # Check if we should send notification
-                    should_notify = False
-                    
-                    if percent >= 100 and not budget.notified_exceeded:
-                        should_notify = True
-                        budget.notified_exceeded = True
-                    elif 90 <= percent < 100 and not budget.notified_90_percent:
-                        should_notify = True
-                        budget.notified_90_percent = True
-                    elif 80 <= percent < 90 and not budget.notified_80_percent:
-                        should_notify = True
-                        budget.notified_80_percent = True
-                    
-                    if should_notify:
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        
-                        loop.run_until_complete(
-                            service.send_budget_warning(
-                                budget.profile.telegram_id,
-                                budget,
-                                spent,
-                                percent
-                            )
-                        )
-                        
-                        loop.close()
-                        budget.save()
-                
-                # Reset notifications for new period
-                elif percent < 80:
-                    if budget.notified_80_percent or budget.notified_90_percent or budget.notified_exceeded:
-                        budget.notified_80_percent = False
-                        budget.notified_90_percent = False
-                        budget.notified_exceeded = False
-                        budget.save()
-                
-            except Exception as e:
-                logger.error(f"Error checking budget {budget.id}: {e}")
-        
-    except Exception as e:
-        logger.error(f"Error in check_budget_limits task: {e}")
 
 
 @shared_task

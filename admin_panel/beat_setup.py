@@ -65,22 +65,20 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
             queue='recurring',
         )
 
-        # 20:00 daily — Monthly reports (task self-checks last day)
+        # 09:00 on 1st day of month — Generate monthly AI insights
         upsert(
-            name='send-monthly-reports',
-            task='expense_bot.celery_tasks.send_monthly_reports',
-            schedule=crontab(minute='0', hour='20'),
+            name='generate-monthly-insights',
+            task='expense_bot.celery_tasks.generate_monthly_insights',
+            schedule=crontab(minute='0', hour='9', day_of_month='1'),
             queue='reports',
         )
 
-        # Отключено 30.10.2025 - функционал бюджетов удален
-        # Явно выключаем задачу в БД (enabled=False)
+        # 10:00 on 1st day of month — Send monthly reports to users
         upsert(
-            name='check-budget-limits',
-            task='expense_bot.celery_tasks.check_budget_limits',
-            schedule=crontab(minute='*/30', hour='*'),
-            queue='notifications',
-            enabled=False,  # Выключено
+            name='send-monthly-reports',
+            task='expense_bot.celery_tasks.send_monthly_reports',
+            schedule=crontab(minute='0', hour='10', day_of_month='1'),
+            queue='reports',
         )
 
         # Sunday 03:00 — Cleanup
@@ -100,7 +98,6 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
         )
 
         # Отключено 30.10.2025 - требует psutil, не критично для работы
-        # Явно выключаем задачу в БД (enabled=False)
         upsert(
             name='system-health-check',
             task='expense_bot.celery_tasks.system_health_check',
