@@ -226,7 +226,8 @@ class ExportService:
         household_mode: bool = False
     ) -> BytesIO:
         """
-        Генерация XLSX файла с операциями, сводкой и графиками.
+        Генерация XLSX файла с операциями, сводкой и графиками на одном листе.
+        Структура: Траты слева (A-G), Summary справа (I-N), Графики правее (P+)
 
         Args:
             expenses: Список трат
@@ -241,96 +242,86 @@ class ExportService:
             BytesIO объект с XLSX файлом
         """
         operations = ExportService.prepare_operations_data(expenses, incomes)
-
+        category_cashbacks = ExportService.calculate_category_cashbacks(expenses, user_id, month, household_mode)
         wb = Workbook()
+        ws = wb.active
 
-        # ЛИСТ 1: Детализация
-        ws_details = wb.active
-        ws_details.title = 'Детализация' if lang == 'ru' else 'Details'
+        # ==================== НАЗВАНИЕ ЛИСТА В ФОРМАТЕ Oct-2025 ====================
+        month_names_en = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        month_names_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
+                         'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
 
-        # Заголовки
-        if lang == 'en':
-            headers = ['Date', 'Time', 'Amount', 'Currency', 'Category', 'Description', 'Type']
+        if lang == 'ru':
+            ws.title = f"{month_names_ru[month-1]}-{year}"
         else:
-            headers = ['Дата', 'Время', 'Сумма', 'Валюта', 'Категория', 'Описание', 'Тип']
+            ws.title = f"{month_names_en[month-1]}-{year}"
 
-        ws_details.append(headers)
-
-        # Стили для заголовков
+        # Стили
         header_font = Font(bold=True, color="FFFFFF", size=11)
         header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
         header_alignment = Alignment(horizontal="center", vertical="center")
 
-        for cell in ws_details[1]:
+        # ==================== ЛЕВАЯ ЧАСТЬ: ТРАТЫ (Колонки A-G) ====================
+        if lang == 'en':
+            headers_left = ['Date', 'Time', 'Amount', 'Currency', 'Category', 'Description', 'Type']
+        else:
+            headers_left = ['Дата', 'Время', 'Сумма', 'Валюта', 'Категория', 'Описание', 'Тип']
+
+        for idx, header in enumerate(headers_left, start=1):
+            cell = ws.cell(row=1, column=idx, value=header)
             cell.font = header_font
             cell.fill = header_fill
             cell.alignment = header_alignment
 
-        # Данные
-        total_by_currency = {}
-
-        for op in operations:
-            type_text = 'Income' if op['type'] == 'income' else 'Expense'
-            if lang == 'ru':
-                type_text = 'Доход' if op['type'] == 'income' else 'Трата'
-
-            # Sanitize description and category - remove line breaks
-            description = str(op['description'] or '')
-            description = description.replace('\n', ' ').replace('\r', ' ').strip()
-
-            category = str(op['category'] or '')
-            category = category.replace('\n', ' ').replace('\r', ' ').strip()
-
-            row = [
-                op['date'].strftime('%d.%m.%Y'),
-                op['time'].strftime('%H:%M'),
-                op['amount'],
-                op['currency'],
-                category,
-                description,
-                type_text
-            ]
-            ws_details.append(row)
-
-            # Форматирование для доходов/расходов
-            row_num = ws_details.max_row
-            amount_cell = ws_details.cell(row=row_num, column=3)
-
-            if op['type'] == 'income':
-                amount_cell.font = Font(color="008000", bold=True)  # Зеленый для доходов
-            else:
-                amount_cell.font = Font(color="FF0000")  # Красный для трат
-
-            # Форматирование суммы
-            amount_cell.number_format = '#,##0.00'
-
-            # Подсчет итогов по валютам
-            currency = op['currency']
-            if currency not in total_by_currency:
-                total_by_currency[currency] = 0
-            total_by_currency[currency] += op['amount']
-
-        # Добавить итоговые строки (расходы, доходы, баланс отдельно)
-        ws_details.append([])  # Пустая строка
-
-        # Подсчет расходов и доходов отдельно по валютам
+        # Заполнение данных трат
+        current_row = 2
         expenses_by_currency = {}
         incomes_by_currency = {}
 
         for op in operations:
-            currency = op['currency']
-            amount = op['amount']
+            type_text = 'Доход' if op['type'] == 'income' else 'Трата'
+            if lang == 'en':
+                type_text = 'Income' if op['type'] == 'income' else 'Expense'
 
+            # Санитизация
+            description = str(op['description'] or '').replace('\n', ' ').replace('\r', ' ').strip()
+            category = str(op['category'] or '').replace('\n', ' ').replace('\r', ' ').strip()
+
+            # Заполняем колонки A-G
+            ws.cell(row=current_row, column=1, value=op['date'].strftime('%d.%m.%Y'))
+            ws.cell(row=current_row, column=2, value=op['time'].strftime('%H:%M'))
+            ws.cell(row=current_row, column=3, value=op['amount'])
+            ws.cell(row=current_row, column=4, value=op['currency'])
+            ws.cell(row=current_row, column=5, value=category)
+            ws.cell(row=current_row, column=6, value=description)
+            ws.cell(row=current_row, column=7, value=type_text)
+
+            # Форматирование
+            amount_cell = ws.cell(row=current_row, column=3)
+            if op['type'] == 'income':
+                amount_cell.font = Font(color="008000", bold=True)
+            else:
+                amount_cell.font = Font(color="FF0000")
+            amount_cell.number_format = '#,##0.00'
+
+            # Подсчет по валютам
+            currency = op['currency']
             if op['type'] == 'expense':
                 if currency not in expenses_by_currency:
                     expenses_by_currency[currency] = 0
-                expenses_by_currency[currency] += abs(amount)
-            else:  # income
+                expenses_by_currency[currency] += abs(op['amount'])
+            else:
                 if currency not in incomes_by_currency:
                     incomes_by_currency[currency] = 0
-                incomes_by_currency[currency] += amount
+                incomes_by_currency[currency] += op['amount']
 
-        # Объединяем все валюты
+            current_row += 1
+
+        expenses_data_end_row = current_row - 1
+
+        # Итоги (Расходы, Доходы, Баланс)
+        current_row += 1
         all_currencies = set(list(expenses_by_currency.keys()) + list(incomes_by_currency.keys()))
 
         for currency in sorted(all_currencies):
@@ -338,66 +329,62 @@ class ExportService:
             income_total = incomes_by_currency.get(currency, 0)
             balance = income_total - expense_total
 
-            # Сумма расходов
+            # Расходы
             if expense_total > 0:
-                label_exp = 'Расходы:' if lang == 'ru' else 'Expenses:'
-                ws_details.append([label_exp, '', -expense_total, currency, '', '', ''])
-                row_num = ws_details.max_row
-                ws_details.cell(row=row_num, column=1).font = Font(bold=True)
-                total_cell = ws_details.cell(row=row_num, column=3)
-                total_cell.font = Font(bold=True, color="FF0000")
-                total_cell.number_format = '#,##0.00'
+                label = 'Расходы:' if lang == 'ru' else 'Expenses:'
+                ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+                ws.cell(row=current_row, column=3, value=-expense_total)
+                ws.cell(row=current_row, column=4, value=currency)
+                ws.cell(row=current_row, column=3).font = Font(bold=True, color="FF0000")
+                ws.cell(row=current_row, column=3).number_format = '#,##0.00'
+                current_row += 1
 
-            # Сумма доходов
+            # Доходы
             if income_total > 0:
-                label_inc = 'Доходы:' if lang == 'ru' else 'Income:'
-                ws_details.append([label_inc, '', income_total, currency, '', '', ''])
-                row_num = ws_details.max_row
-                ws_details.cell(row=row_num, column=1).font = Font(bold=True)
-                total_cell = ws_details.cell(row=row_num, column=3)
-                total_cell.font = Font(bold=True, color="008000")
-                total_cell.number_format = '#,##0.00'
+                label = 'Доходы:' if lang == 'ru' else 'Income:'
+                ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+                ws.cell(row=current_row, column=3, value=income_total)
+                ws.cell(row=current_row, column=4, value=currency)
+                ws.cell(row=current_row, column=3).font = Font(bold=True, color="008000")
+                ws.cell(row=current_row, column=3).number_format = '#,##0.00'
+                current_row += 1
 
             # Баланс
-            label_bal = 'Баланс:' if lang == 'ru' else 'Balance:'
-            ws_details.append([label_bal, '', balance, currency, '', '', ''])
-            row_num = ws_details.max_row
-            ws_details.cell(row=row_num, column=1).font = Font(bold=True)
-            total_cell = ws_details.cell(row=row_num, column=3)
-            total_cell.font = Font(bold=True, color="0000FF")
-            total_cell.number_format = '#,##0.00'
+            label = 'Баланс:' if lang == 'ru' else 'Balance:'
+            ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+            ws.cell(row=current_row, column=3, value=balance)
+            ws.cell(row=current_row, column=4, value=currency)
+            ws.cell(row=current_row, column=3).font = Font(bold=True, color="0000FF")
+            ws.cell(row=current_row, column=3).number_format = '#,##0.00'
+            current_row += 2
 
-            ws_details.append([])  # Пустая строка между валютами
-
-        # Автоширина колонок
-        for column in ws_details.columns:
+        # Автоширина для колонок A-G
+        for col in range(1, 8):
             max_length = 0
-            column_letter = get_column_letter(column[0].column)
+            for row in range(1, current_row):
+                cell = ws.cell(row=row, column=col)
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 50)
 
-            for cell in column:
-                try:
-                    if cell.value:
-                        max_length = max(max_length, len(str(cell.value)))
-                except:
-                    pass
+        # ==================== ПРАВАЯ ЧАСТЬ: SUMMARY (Колонки I-N) ====================
+        # Заголовки Summary
+        if lang == 'en':
+            headers_right = ['Category', 'Currency', 'Total', 'Count', 'Average', 'Cashback']
+        else:
+            headers_right = ['Категория', 'Валюта', 'Всего', 'Количество', 'Средний чек', 'Кешбэк']
 
-            adjusted_width = min(max_length + 2, 50)
-            ws_details.column_dimensions[column_letter].width = adjusted_width
+        summary_start_col = 9  # Колонка I
+        for idx, header in enumerate(headers_right):
+            cell = ws.cell(row=1, column=summary_start_col + idx, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
 
-        # Закрепить первую строку (заголовки)
-        ws_details.freeze_panes = 'A2'
-
-        # ЛИСТ 2: Сводка + Графики
-        ws_summary = wb.create_sheet(title='Сводка' if lang == 'ru' else 'Summary')
-
-        # Рассчитываем кешбеки по категориям
-        category_cashbacks = ExportService.calculate_category_cashbacks(expenses, user_id, month, household_mode)
-
-        # Подсчитать статистику по категориям (только расходы для графиков)
+        # Подсчет статистики по категориям
         category_stats = {}
-
         for op in operations:
-            if op['type'] == 'expense':  # Только расходы
+            if op['type'] == 'expense':
                 category_name = op['category'] or ('Без категории' if lang == 'ru' else 'No category')
                 currency = op['currency']
                 amount = abs(op['amount'])
@@ -409,89 +396,69 @@ class ExportService:
                 category_stats[key]['total'] += amount
                 category_stats[key]['count'] += 1
 
-                # Сохраняем category_id для расчета кешбека
+                # Сохраняем category_id
                 if 'object' in op and hasattr(op['object'], 'category_id'):
                     category_stats[key]['category_id'] = op['object'].category_id
 
-        # Заголовки сводки с кешбэком
-        if lang == 'en':
-            summary_headers = ['Category', 'Currency', 'Total', 'Count', 'Average', 'Cashback']
-        else:
-            summary_headers = ['Категория', 'Валюта', 'Всего', 'Количество', 'Средний чек', 'Кешбэк']
-
-        ws_summary.append(summary_headers)
-
-        # Форматирование заголовков
-        for cell in ws_summary[1]:
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = header_alignment
-
-        # Данные сводки (ПОКАЗЫВАЕМ ВСЕ КАТЕГОРИИ с кешбэком)
-        total_cashback = 0
+        # Заполнение Summary
+        summary_row = 2
         for (category, currency), stats in sorted(category_stats.items(), key=lambda x: x[1]['total'], reverse=True):
             average = stats['total'] / stats['count'] if stats['count'] > 0 else 0
 
-            # Получаем кешбэк для этой категории
+            # Кешбэк
             category_id = stats.get('category_id')
             cashback = category_cashbacks.get(category_id, 0) if category_id else 0
-            total_cashback += cashback
 
-            row = [
-                category,
-                currency,
-                stats['total'],
-                stats['count'],
-                average,
-                cashback
-            ]
-            ws_summary.append(row)
+            # Заполняем колонки I-N
+            ws.cell(row=summary_row, column=9, value=category)
+            ws.cell(row=summary_row, column=10, value=currency)
+            ws.cell(row=summary_row, column=11, value=stats['total'])
+            ws.cell(row=summary_row, column=12, value=stats['count'])
+            ws.cell(row=summary_row, column=13, value=average)
+            ws.cell(row=summary_row, column=14, value=cashback)
 
-            # Форматирование чисел
-            row_num = ws_summary.max_row
-            ws_summary.cell(row=row_num, column=3).number_format = '#,##0.00'
-            ws_summary.cell(row=row_num, column=5).number_format = '#,##0.00'
-            ws_summary.cell(row=row_num, column=6).number_format = '#,##0.00'
+            # Форматирование
+            ws.cell(row=summary_row, column=11).number_format = '#,##0.00'
+            ws.cell(row=summary_row, column=13).number_format = '#,##0.00'
+            ws.cell(row=summary_row, column=14).number_format = '#,##0.00'
 
             # Кешбэк зеленым если > 0
             if cashback > 0:
-                ws_summary.cell(row=row_num, column=6).font = Font(color="008000", bold=True)
+                ws.cell(row=summary_row, column=14).font = Font(color="008000", bold=True)
 
-        summary_end_row = ws_summary.max_row
+            summary_row += 1
 
-        # Автоширина для сводки
-        for column in ws_summary.columns:
+        summary_end_row = summary_row - 1
+
+        # Автоширина для колонок I-N
+        for col in range(9, 15):
             max_length = 0
-            column_letter = get_column_letter(column[0].column)
+            for row in range(1, summary_row):
+                cell = ws.cell(row=row, column=col)
+                if cell.value:
+                    max_length = max(max_length, len(str(cell.value)))
+            ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 40)
 
-            for cell in column:
-                try:
-                    if cell.value:
-                        max_length = max(max_length, len(str(cell.value)))
-                except:
-                    pass
+        # ==================== ГРАФИКИ ====================
 
-            adjusted_width = min(max_length + 2, 40)
-            ws_summary.column_dimensions[column_letter].width = adjusted_width
-
-        # КРУГОВАЯ ДИАГРАММА ПО КАТЕГОРИЯМ (только если есть данные)
+        # КРУГОВАЯ ДИАГРАММА ПО КАТЕГОРИЯМ (колонка P)
         if summary_end_row > 1:
             pie = PieChart()
             pie.title = "Расходы по категориям" if lang == 'ru' else "Expenses by Category"
             pie.width = 15
             pie.height = 12
 
-            # Данные для диаграммы
-            labels = Reference(ws_summary, min_col=1, min_row=2, max_row=summary_end_row)
-            data = Reference(ws_summary, min_col=3, min_row=1, max_row=summary_end_row)
+            # Данные: колонка I (категории) и K (всего)
+            labels = Reference(ws, min_col=9, min_row=2, max_row=summary_end_row)
+            data = Reference(ws, min_col=11, min_row=1, max_row=summary_end_row)
             pie.add_data(data, titles_from_data=True)
             pie.set_categories(labels)
 
-            # Размещение диаграммы справа от таблицы
-            ws_summary.add_chart(pie, "G2")
+            # Размещение справа от summary (колонка P)
+            ws.add_chart(pie, "P2")
 
         # СТОЛБЧАТАЯ ДИАГРАММА ПО ДНЯМ
-        # Подсчитать расходы по дням
+        # Подсчет расходов по дням
         last_day = calendar.monthrange(year, month)[1]
         daily_expenses = {}
 
@@ -499,31 +466,27 @@ class ExportService:
             if op['type'] == 'expense':
                 day = op['date'].day
                 amount = abs(op['amount'])
-
                 if day not in daily_expenses:
                     daily_expenses[day] = 0
                 daily_expenses[day] += amount
 
-        # Создать таблицу дней (в колонке H-I)
-        ws_summary.cell(row=summary_end_row + 3, column=8).value = 'День' if lang == 'ru' else 'Day'
-        ws_summary.cell(row=summary_end_row + 3, column=9).value = 'Сумма' if lang == 'ru' else 'Amount'
+        # Данные по дням в колонках I-J (начиная после summary)
+        days_start_row = summary_end_row + 3
+        ws.cell(row=days_start_row - 1, column=9, value='День' if lang == 'ru' else 'Day')
+        ws.cell(row=days_start_row - 1, column=10, value='Сумма' if lang == 'ru' else 'Amount')
+        ws.cell(row=days_start_row - 1, column=9).font = header_font
+        ws.cell(row=days_start_row - 1, column=9).fill = header_fill
+        ws.cell(row=days_start_row - 1, column=10).font = header_font
+        ws.cell(row=days_start_row - 1, column=10).fill = header_fill
 
-        # Форматирование заголовков дней
-        ws_summary.cell(row=summary_end_row + 3, column=8).font = header_font
-        ws_summary.cell(row=summary_end_row + 3, column=8).fill = header_fill
-        ws_summary.cell(row=summary_end_row + 3, column=9).font = header_font
-        ws_summary.cell(row=summary_end_row + 3, column=9).fill = header_fill
-
-        # Заполнить данные по дням
-        days_start_row = summary_end_row + 4
         for day in range(1, last_day + 1):
-            ws_summary.cell(row=days_start_row + day - 1, column=8).value = day
-            ws_summary.cell(row=days_start_row + day - 1, column=9).value = daily_expenses.get(day, 0)
-            ws_summary.cell(row=days_start_row + day - 1, column=9).number_format = '#,##0.00'
+            ws.cell(row=days_start_row + day - 1, column=9, value=day)
+            ws.cell(row=days_start_row + day - 1, column=10, value=daily_expenses.get(day, 0))
+            ws.cell(row=days_start_row + day - 1, column=10).number_format = '#,##0.00'
 
         days_end_row = days_start_row + last_day - 1
 
-        # СТОЛБЧАТАЯ ДИАГРАММА ПО ДНЯМ (только если есть данные)
+        # СТОЛБЧАТАЯ ДИАГРАММА
         if daily_expenses:
             bar = BarChart()
             bar.title = "Расходы по дням месяца" if lang == 'ru' else "Daily Expenses"
@@ -532,17 +495,17 @@ class ExportService:
             bar.width = 20
             bar.height = 10
 
-            # Данные для диаграммы
-            days_labels = Reference(ws_summary, min_col=8, min_row=days_start_row, max_row=days_end_row)
-            days_data = Reference(ws_summary, min_col=9, min_row=summary_end_row + 3, max_row=days_end_row)
+            # Данные: колонка I (дни) и J (суммы)
+            days_labels = Reference(ws, min_col=9, min_row=days_start_row, max_row=days_end_row)
+            days_data = Reference(ws, min_col=10, min_row=days_start_row - 1, max_row=days_end_row)
             bar.add_data(days_data, titles_from_data=True)
             bar.set_categories(days_labels)
 
-            # Размещение диаграммы под круговой
-            ws_summary.add_chart(bar, f"G{summary_end_row + 3}")
+            # Размещение под круговой диаграммой
+            ws.add_chart(bar, f"P{days_start_row}")
 
         # Закрепить первую строку
-        ws_summary.freeze_panes = 'A2'
+        ws.freeze_panes = 'A2'
 
         # Сохранить в BytesIO
         output = BytesIO()
