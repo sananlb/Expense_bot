@@ -488,31 +488,24 @@ class ExportService:
                     daily_expenses[day] = 0
                 daily_expenses[day] += amount
 
-        # Данные по дням в СКРЫТЫХ колонках AA-AB (27-28)
-        # Размещаем данные начиная со строки 2 (под заголовками)
+        # Данные по дням размещаем далеко справа (после диаграмм, колонки AA-AB = 27-28)
+        # Видимые для отладки
         days_data_col_day = 27   # Колонка AA
         days_data_col_sum = 28   # Колонка AB
 
+        # Добавляем заголовки в строке 1
         ws.cell(row=1, column=days_data_col_day, value='День' if lang == 'ru' else 'Day')
         ws.cell(row=1, column=days_data_col_sum, value='Сумма' if lang == 'ru' else 'Amount')
-        ws.cell(row=1, column=days_data_col_day).font = header_font
-        ws.cell(row=1, column=days_data_col_day).fill = header_fill
-        ws.cell(row=1, column=days_data_col_sum).font = header_font
-        ws.cell(row=1, column=days_data_col_sum).fill = header_fill
 
-        # Заполняем данные по дням
+        # Заполняем данные по дням (строки 2-32)
         for day in range(1, last_day + 1):
-            row_num = day + 1  # Строка 2, 3, 4...
+            row_num = day + 1
             ws.cell(row=row_num, column=days_data_col_day, value=day)
             ws.cell(row=row_num, column=days_data_col_sum, value=daily_expenses.get(day, 0))
             ws.cell(row=row_num, column=days_data_col_sum).number_format = '#,##0.00'
 
         days_start_row = 2
         days_end_row = last_day + 1
-
-        # СКРЫТЬ колонки с данными для диаграммы (AA-AB)
-        ws.column_dimensions['AA'].hidden = True
-        ws.column_dimensions['AB'].hidden = True
 
         # СТОЛБЧАТАЯ ДИАГРАММА
         if daily_expenses:
