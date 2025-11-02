@@ -56,11 +56,6 @@ app.conf.task_routes = {
         'routing_key': 'report.insights',
         'priority': 6,
     },
-    'expense_bot.celery_tasks.check_budget_limits': {
-        'queue': 'notifications',
-        'routing_key': 'notification.budget',
-        'priority': 8,
-    },
     'expense_bot.celery_tasks.cleanup_old_expenses': {
         'queue': 'maintenance',
         'routing_key': 'maintenance.cleanup',

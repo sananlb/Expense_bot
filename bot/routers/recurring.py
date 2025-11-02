@@ -470,17 +470,17 @@ async def edit_amount_start(callback: types.CallbackQuery, state: FSMContext, la
         await callback.answer(get_text('payment_not_found', lang), show_alert=True)
         return
     
-    await state.update_data(editing_payment_id=payment_id)
-    await state.set_state(RecurringForm.editing_amount)
-    
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=get_text('back', lang), callback_data=f"edit_recurring_{payment_id}")]
     ])
-    
+
     current_amount = format_currency(payment.amount, payment.currency or 'RUB')
     text = f"{get_text('enter_new_amount', lang)}\n\nТекущая сумма: <i>{current_amount}</i>"
-    
+
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    # Сохраняем ID сообщения для последующего удаления
+    await state.update_data(editing_payment_id=payment_id, editing_prompt_message_id=callback.message.message_id)
+    await state.set_state(RecurringForm.editing_amount)
     await callback.answer()
 
 
@@ -494,17 +494,17 @@ async def edit_description_start(callback: types.CallbackQuery, state: FSMContex
     if not payment:
         await callback.answer(get_text('payment_not_found', lang), show_alert=True)
         return
-    
-    await state.update_data(editing_payment_id=payment_id)
-    await state.set_state(RecurringForm.editing_description)
-    
+
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=get_text('back', lang), callback_data=f"edit_recurring_{payment_id}")]
     ])
-    
+
     text = f"{get_text('enter_new_description', lang)}\n\nТекущее название: <i>{payment.description}</i>"
-    
+
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+    # Сохраняем ID сообщения для последующего удаления
+    await state.update_data(editing_payment_id=payment_id, editing_prompt_message_id=callback.message.message_id)
+    await state.set_state(RecurringForm.editing_description)
     await callback.answer()
 
 
@@ -620,11 +620,19 @@ async def process_edit_amount(message: types.Message, state: FSMContext, lang: s
     except ValueError:
         await send_message_with_cleanup(message, state, "❌ Некорректная сумма. Введите положительное число.")
         return
-    
+
+    # Удаляем промежуточное сообщение с запросом ввода
+    prompt_message_id = data.get('editing_prompt_message_id')
+    if prompt_message_id:
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_message_id)
+        except Exception:
+            pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
+
     # Обновляем сумму
     await update_recurring_payment(user_id, payment_id, amount=amount)
     await state.clear()
-    
+
     # Возвращаемся к основному меню
     await show_recurring_menu(message, state, lang)
 
@@ -644,15 +652,23 @@ async def process_edit_description(message: types.Message, state: FSMContext, la
     if len(text) > 200:
         await send_message_with_cleanup(message, state, "❌ Название слишком длинное (максимум 200 символов).")
         return
-    
+
     # Капитализируем первую букву
     if text:
         text = text[0].upper() + text[1:] if len(text) > 1 else text.upper()
-    
+
+    # Удаляем промежуточное сообщение с запросом ввода
+    prompt_message_id = data.get('editing_prompt_message_id')
+    if prompt_message_id:
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_message_id)
+        except Exception:
+            pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
+
     # Обновляем название
     await update_recurring_payment(user_id, payment_id, description=text)
     await state.clear()
-    
+
     # Возвращаемся к основному меню
     await show_recurring_menu(message, state, lang)
 

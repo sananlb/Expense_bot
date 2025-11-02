@@ -1271,58 +1271,6 @@ class ExpenseFunctions:
     
     @staticmethod
     @sync_to_async
-    def check_budget_status(user_id: int, budget_amount: float) -> Dict[str, Any]:
-        """
-        Проверить статус бюджета
-        """
-        try:
-            profile, _ = Profile.objects.get_or_create(
-                telegram_id=user_id,
-                defaults={'language_code': 'ru'}
-            )
-            today = date.today()
-            month_start = today.replace(day=1)
-            
-            # Текущие траты
-            current_total = Expense.objects.filter(
-                profile=profile,
-                expense_date__gte=month_start,
-                expense_date__lte=today
-            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
-            
-            current_total = float(current_total)
-            remaining = budget_amount - current_total
-            percent_used = (current_total / budget_amount * 100) if budget_amount > 0 else 0
-            
-            # Прогноз
-            days_passed = today.day
-            if today.month == 12:
-                next_month = today.replace(year=today.year+1, month=1, day=1)
-            else:
-                next_month = today.replace(month=today.month+1, day=1)
-            days_in_month = (next_month - month_start).days
-            
-            avg_per_day = current_total / days_passed if days_passed > 0 else 0
-            predicted_total = avg_per_day * days_in_month
-            
-            will_exceed = predicted_total > budget_amount
-            
-            return {
-                'success': True,
-                'budget': budget_amount,
-                'spent': current_total,
-                'remaining': remaining,
-                'percent_used': round(percent_used, 1),
-                'predicted_total': round(predicted_total, 2),
-                'will_exceed': will_exceed,
-                'status': 'превышение' if will_exceed else 'в рамках бюджета'
-            }
-        except Exception as e:
-            logger.error(f"Error in check_budget_status: {e}")
-            return {'success': False, 'message': str(e)}
-    
-    @staticmethod
-    @sync_to_async
     def get_recent_expenses(user_id: int, limit: int = 10) -> Dict[str, Any]:
         """
         Получить последние траты
@@ -1987,7 +1935,7 @@ class ExpenseFunctions:
     @sync_to_async
     def check_income_target(user_id: int, target_amount: float = 100000) -> Dict[str, Any]:
         """
-        Проверка достижения целевого дохода (аналог check_budget_status)
+        Проверка достижения целевого дохода
         """
         try:
             profile, _ = Profile.objects.get_or_create(

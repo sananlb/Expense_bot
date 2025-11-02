@@ -101,7 +101,6 @@ async def run_checks():
     await call('get_expense_trend', f.get_expense_trend(TEST_USER, 'month', 6))
     await call('get_weekday_statistics', f.get_weekday_statistics(TEST_USER, 30))
     await call('predict_month_expense', f.predict_month_expense(TEST_USER))
-    await call('check_budget_status', f.check_budget_status(TEST_USER, 5000))
     await call('get_recent_expenses', f.get_recent_expenses(TEST_USER, 5))
 
     # Incomes

@@ -62,24 +62,6 @@ class Command(BaseCommand):
             )
 
             # 3. Проверка бюджетных лимитов каждые 30 минут
-            interval_30min, created = IntervalSchedule.objects.get_or_create(
-                every=30,
-                period=IntervalSchedule.MINUTES
-            )
-
-            task, created = PeriodicTask.objects.update_or_create(
-                task='expense_bot.celery_tasks.check_budget_limits',
-                defaults={
-                    'interval': interval_30min,
-                    'name': 'Check Budget Limits',
-                    'queue': 'notifications',
-                    'enabled': True
-                }
-            )
-            self.stdout.write(
-                self.style.SUCCESS(f"{'✅ Создана' if created else '✔️ Обновлена'} задача: Check Budget Limits")
-            )
-
             # 4. Регулярные платежи в 12:00
             schedule_12pm, created = CrontabSchedule.objects.get_or_create(
                 minute=0,

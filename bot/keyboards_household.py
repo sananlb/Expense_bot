@@ -78,12 +78,3 @@ def get_household_rename_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
-
-
-def get_invite_link_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
-    """Клавиатура для сообщения со ссылкой-приглашением: Назад и Закрыть"""
-    keyboard = [
-        [InlineKeyboardButton(text=get_text('back', lang), callback_data="household_budget")],
-        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
-    ]
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)

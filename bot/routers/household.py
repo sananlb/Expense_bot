@@ -2,7 +2,7 @@
 Роутер для работы с семейным бюджетом
 """
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -16,12 +16,12 @@ from bot.keyboards_household import (
     get_household_settings_keyboard,
     get_confirm_join_keyboard,
     get_household_members_keyboard,
-    get_invite_link_keyboard,
     get_household_rename_keyboard
 )
 from bot.services.expense import get_expenses_summary
 from datetime import datetime, date, timedelta
 import logging
+import html
 
 logger = logging.getLogger(__name__)
 
@@ -139,23 +139,27 @@ async def process_household_name(message: Message, state: FSMContext, lang: str 
 async def generate_invite(callback: CallbackQuery, lang: str = 'ru'):
     """Генерация ссылки-приглашения"""
     await callback.answer()
-    
+
     profile = await get_or_create_profile(callback.from_user.id)
     bot_info = await callback.bot.get_me()
-    
+
     success, result = await sync_to_async(HouseholdService.generate_invite_link)(
         profile=profile,
         bot_username=bot_info.username
     )
-    
+
     if success:
+        # Сразу показываем ссылку для копирования без промежуточного меню
         await callback.message.edit_text(
             f"{get_text('invite_link_title', lang)}\n\n"
+            f"{get_text('invite_link_note', lang)}\n\n"
             f"<code>{result}</code>\n\n"
-            f"{get_text('invite_link_note', lang)}\n"
             f"{get_text('invite_link_valid', lang)}",
             parse_mode="HTML",
-            reply_markup=get_invite_link_keyboard(lang)
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=get_text('back', lang), callback_data="household_budget")],
+                [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
+            ])
         )
     else:
         await callback.message.edit_text(
@@ -329,52 +333,73 @@ async def process_family_invite(message: Message, token: str):
     Вызывается из start.py при обработке deep-link
     """
     profile = await get_or_create_profile(message.from_user.id)
-    
+
+    # Получаем язык пользователя
+    lang = await sync_to_async(lambda: profile.language_code or 'ru')()
+
     # Проверяем приглашение
     from expenses.models import FamilyInvite
     invite = await sync_to_async(lambda: FamilyInvite.objects.filter(token=token).first())()
-    
+
     if not invite or not invite.is_valid():
         await message.answer(
-            "❌ Приглашение недействительно или истекло",
+            get_text('invite_invalid', lang),
             parse_mode="HTML"
         )
         return
-    
+
     # Проверяем, не пытается ли пользователь присоединиться к своему же домохозяйству
-    inviter_id = await sync_to_async(lambda: invite.inviter_id)()
-    if inviter_id == profile.id:
+    inviter_telegram_id = await sync_to_async(lambda: invite.inviter.telegram_id)()
+    if inviter_telegram_id == message.from_user.id:
         await message.answer(
-            "❌ Вы не можете использовать собственное приглашение",
+            get_text('invite_self_error', lang),
             parse_mode="HTML"
         )
         return
-    
+
     has_household = await sync_to_async(lambda: bool(profile.household_id))()
     if has_household:
         await message.answer(
-            "❌ Вы уже состоите в семейном бюджете.\n"
-            "Сначала выйдите из текущего, чтобы присоединиться к новому.",
+            get_text('invite_already_in_household', lang),
             parse_mode="HTML"
         )
         return
-    
+
     # Собираем данные домохозяйства синхронно, чтобы не трогать ORM в async
     household_name, members_count, max_members = await sync_to_async(
         lambda: (
-            (invite.household.name or "семейному бюджету"),
+            (invite.household.name or get_text('household_default_name', lang)),
             invite.household.members_count,
             invite.household.max_members,
         )
     )()
-    
+
+    # Получаем информацию о приглашающем пользователе
+    try:
+        inviter_chat = await message.bot.get_chat(inviter_telegram_id)
+        inviter_name = inviter_chat.first_name or get_text('invite_user_fallback', lang).format(user_id=inviter_telegram_id)
+        # ВАЖНО: Экранируем HTML-символы для безопасного отображения
+        inviter_name_escaped = html.escape(inviter_name)
+        if inviter_chat.username:
+            # Экранируем username на всякий случай (хотя он не должен содержать HTML)
+            username_escaped = html.escape(inviter_chat.username)
+            inviter_display = f"<a href='https://t.me/{username_escaped}'>{inviter_name_escaped}</a>"
+        else:
+            inviter_display = inviter_name_escaped
+    except Exception:
+        inviter_display = html.escape(get_text('invite_user_fallback', lang).format(user_id=inviter_telegram_id))
+
+    # Экранируем название домохозяйства
+    household_name_escaped = html.escape(household_name)
+
     await message.answer(
-        f"🏠 <b>Приглашение в </b>\n\n"
-        f"Участников: {members_count}/{max_members}\n\n"
-        "После присоединения вы будете вести общий учет финансов "
-        "с другими участниками.\n\n"
-        "Присоединиться?",
-        reply_markup=get_confirm_join_keyboard(action="join", token=token, lang='ru'),
+        f"{get_text('invite_title', lang)}\n\n"
+        f"{get_text('invite_message', lang).format(inviter=inviter_display)}\n\n"
+        f"<b>{household_name_escaped}</b>\n"
+        f"{get_text('invite_members_count', lang).format(count=members_count, max=max_members)}\n\n"
+        f"{get_text('invite_description', lang)}\n\n"
+        f"{get_text('invite_question', lang)}",
+        reply_markup=get_confirm_join_keyboard(action="join", token=token, lang=lang),
         parse_mode="HTML"
     )
 

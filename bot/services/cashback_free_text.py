@@ -164,6 +164,22 @@ def _extract_percent(text: str) -> Optional[float]:
 
 
 def _extract_category_and_bank(text: str) -> Tuple[Optional[str], Optional[str]]:
+    # Проверяем специальный случай "все категории" / "всем категориям" и т.д.
+    # Паттерн ищет: (все|всем|всех|всю) + (категори*)
+    all_categories_pattern = r"\b(все|всем|всех|всю)\s+категор\w*"
+    if re.search(all_categories_pattern, text, flags=re.IGNORECASE):
+        # Это запрос на добавление кешбека ко ВСЕМ категориям
+        # Извлекаем только банк (все что после "категори*")
+        m = re.search(r"категор\w*\s+(.+)$", text, flags=re.IGNORECASE)
+        if m:
+            remainder = m.group(1).strip()
+            remainder = re.sub(r"[\.,!]+$", "", remainder)
+            # remainder может содержать только банк или банк с дополнительными словами
+            # Возвращаем специальное значение "все" для категории
+            return "все", remainder
+        # Если не нашли что после категории, возвращаем ошибку
+        return None, None
+
     m = re.search(r"категор\w*\s+(.+)$", text, flags=re.IGNORECASE)
     if not m:
         return None, None
@@ -311,6 +327,71 @@ async def process_cashback_free_text(user_id: int, text: str):
         profile = await sync_to_async(Profile.objects.get)(telegram_id=user_id)
     except Profile.DoesNotExist:
         return False, "❌ Профиль не найден. Отправьте /start."
+
+    # Проверяем специальный случай "все категории"
+    if cat_name.lower() == "все":
+        # Извлекаем банк из bank_name (который содержит полный остаток текста)
+        if not bank_name:
+            return False, (
+                "❌ Не удалось определить банк.\n"
+                "Добавьте название банка, например: 'кешбек 5% на все категории Тинькофф'."
+            )
+
+        # Нормализуем название банка
+        bank_name = _normalize_bank_name(bank_name)
+
+        # Получаем все категории пользователя
+        @sync_to_async
+        def get_all_categories():
+            return list(profile.categories.all())
+
+        categories = await get_all_categories()
+        if not categories:
+            return False, (
+                "❌ У вас пока нет категорий трат.\n"
+                "Сначала создайте категории в разделе 'Категории'."
+            )
+
+        # Добавляем кешбек ко всем категориям
+        now = datetime.now()
+        month = now.month
+        last_day = calendar.monthrange(now.year, now.month)[1]
+        extended_next_month = (last_day - now.day) <= 1
+
+        added_count = 0
+        for category in categories:
+            await add_cashback(
+                user_id=user_id,
+                category_id=category.id,
+                bank_name=bank_name,
+                cashback_percent=percent,
+                month=month,
+            )
+            # Если создаем в последние 2 дня месяца — продлеваем на следующий
+            if extended_next_month:
+                next_month = 1 if month == 12 else month + 1
+                await add_cashback(
+                    user_id=user_id,
+                    category_id=category.id,
+                    bank_name=bank_name,
+                    cashback_percent=percent,
+                    month=next_month,
+                )
+            added_count += 1
+
+        percent_str = ("{:.1f}".format(percent)).rstrip('0').rstrip('.')
+        msg = (
+            "✅ Кешбэк добавлен для всех категорий\n\n"
+            f"Банк: {bank_name}\n"
+            f"Категорий: {added_count}\n"
+            f"Процент: {percent_str}%\n"
+            f"Месяц: {month}"
+        )
+        if extended_next_month:
+            msg += "\nТакже продлён на следующий месяц"
+        return True, msg
+
+    # Обычный случай - одна категория
     category = await _resolve_category(profile, cat_name)
     if not category:
         return False, (
@@ -355,7 +436,7 @@ async def process_cashback_free_text(user_id: int, text: str):
     from bot.utils.language import get_user_language
     user_lang = await get_user_language(user_id)
     category_display_name = category.get_display_name(user_lang)
-    
+
     msg = (
         "✅ Кешбэк добавлен\n\n"
         f"Банк: {bank_name}\n"

@@ -443,19 +443,6 @@ def format_function_result(func_name: str, result: Dict) -> str:
             f"средний дневной доход {daily:,.0f} ₽, прогноз {predicted:,.0f} ₽."
         )
 
-    if func_name == 'check_budget_status':
-        budget = result.get('budget', 0)
-        spent = result.get('spent', 0)
-        remaining = result.get('remaining', 0)
-        percent = result.get('percent_used', 0)
-        status = result.get('status', '')
-        return (
-            f"Бюджет: {budget:,.0f} ₽\n"
-            f"Потрачено: {spent:,.0f} ₽ ({percent:.1f}%)\n"
-            f"Осталось: {remaining:,.0f} ₽\n"
-            f"Статус: {status}"
-        )
-
     if func_name == 'check_income_target':
         target = result.get('target', 0)
         current = result.get('current', 0)

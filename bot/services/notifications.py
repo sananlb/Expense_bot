@@ -8,7 +8,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 
-from expenses.models import Profile, Expense, Budget
+from expenses.models import Profile, Expense
 from ..services.expense import get_expenses_summary
 from ..utils import format_amount, get_month_name
 
@@ -145,52 +145,3 @@ class NotificationService:
                 text += '\n'.join(key_points) + "\n"
 
         return text
-    
-    async def send_budget_warning(self, user_id: int, budget: Budget, spent: Decimal, percent: float):
-        """Send budget warning notification"""
-        try:
-            period_text = {
-                'daily': 'день',
-                'weekly': 'неделю', 
-                'monthly': 'месяц'
-            }.get(budget.period, budget.period)
-            
-            # Получаем язык пользователя для правильного отображения
-            from bot.utils.language import get_user_language
-            user_lang = await get_user_language(user_id)
-            
-            if budget.category:
-                category_display = budget.category.get_display_name(user_lang)
-                cat_text = f" в категории {category_display}"
-            else:
-                cat_text = ""
-            
-            text = f"""⚠️ <b>Предупреждение о бюджете</b>
-            
-Вы потратили {percent:.0f}% от бюджета на {period_text}{cat_text}.
-
-💰 Потрачено: {format_amount(spent, 'RUB', 'ru')}
-📊 Лимит: {format_amount(budget.amount, 'RUB', 'ru')}
-💵 Осталось: {format_amount(budget.amount - spent, 'RUB', 'ru')}"""
-            
-            if percent >= 100:
-                text += "\n\n❗ <b>Бюджет превышен!</b>"
-            elif percent >= 90:
-                text += "\n\n⚠️ <b>Осталось менее 10% бюджета</b>"
-            
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="📊 Мои расходы", callback_data="expenses_today")],
-                [InlineKeyboardButton(text="❌ Закрыть", callback_data="close")]
-            ])
-            
-            await self.bot.send_message(
-                chat_id=user_id,
-                text=text,
-                reply_markup=keyboard,
-                parse_mode='HTML'
-            )
-            
-            logger.info(f"Budget warning sent to user {user_id} ({percent:.0f}%)")
-            
-        except Exception as e:
-            logger.error(f"Error sending budget warning to user {user_id}: {e}")

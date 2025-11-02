@@ -662,6 +662,15 @@ async def process_edit_amount(message: types.Message, state: FSMContext, lang: s
         success = await update_expense(message.from_user.id, item_id, **update_kwargs)
 
     if success:
+        # Удаляем промежуточное сообщение с запросом ввода
+        data = await state.get_data()
+        prompt_message_id = data.get('editing_prompt_message_id')
+        if prompt_message_id:
+            try:
+                await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_message_id)
+            except Exception:
+                pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
+
         # Показываем обновленную операцию
         await show_updated_expense(message, state, item_id, lang)
     else:
@@ -694,6 +703,15 @@ async def process_edit_description(message: types.Message, state: FSMContext, la
         success = await update_expense(message.from_user.id, item_id, description=description)
     
     if success:
+        # Удаляем промежуточное сообщение с запросом ввода
+        data = await state.get_data()
+        prompt_message_id = data.get('editing_prompt_message_id')
+        if prompt_message_id:
+            try:
+                await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_message_id)
+            except Exception:
+                pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
+
         # Показываем обновленную операцию
         await show_updated_expense(message, state, item_id, lang)
     else:
@@ -1900,7 +1918,7 @@ async def edit_field_amount(callback: types.CallbackQuery, state: FSMContext, la
     """Редактирование суммы"""
     data = await state.get_data()
     expense_id = data.get('editing_expense_id')
-    
+
     await callback.message.edit_text(
         f"💰 <b>{get_text('editing_amount', lang)}</b>\n\n"
         f"{get_text('enter_new_amount', lang)}",
@@ -1909,6 +1927,8 @@ async def edit_field_amount(callback: types.CallbackQuery, state: FSMContext, la
             [InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_back_{expense_id}")]
         ])
     )
+    # Сохраняем ID сообщения для последующего удаления
+    await state.update_data(editing_prompt_message_id=callback.message.message_id)
     await state.set_state(EditExpenseForm.editing_amount)
     await callback.answer()
 
@@ -1918,7 +1938,7 @@ async def edit_field_description(callback: types.CallbackQuery, state: FSMContex
     """Редактирование описания"""
     data = await state.get_data()
     expense_id = data.get('editing_expense_id')
-    
+
     await callback.message.edit_text(
         f"📝 <b>{get_text('editing_description', lang)}</b>\n\n"
         f"{get_text('enter_new_description', lang)}",
@@ -1927,6 +1947,8 @@ async def edit_field_description(callback: types.CallbackQuery, state: FSMContex
             [InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_back_{expense_id}")]
         ])
     )
+    # Сохраняем ID сообщения для последующего удаления
+    await state.update_data(editing_prompt_message_id=callback.message.message_id)
     await state.set_state(EditExpenseForm.editing_description)
     await callback.answer()
 
