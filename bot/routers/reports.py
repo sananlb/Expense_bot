@@ -24,13 +24,13 @@ router = Router(name="reports")
 
 
 @router.message(Command("summary"))
-async def cmd_summary(message: Message, lang: str = 'ru'):
+async def cmd_summary(message: Message, state: FSMContext, lang: str = 'ru'):
     """Команда /summary - показать сводку за месяц"""
     today = date.today()
     start_date = today.replace(day=1)
     end_date = today
-    
-    await show_expenses_summary(message, start_date, end_date, lang)
+
+    await show_expenses_summary(message, start_date, end_date, lang, state=state)
 
 
 @router.callback_query(F.data == "expenses_today")
@@ -451,17 +451,35 @@ async def cmd_report(message: Message, lang: str = 'ru'):
     )
 
 
-@router.callback_query(F.data == "show_diary")
+@router.callback_query(F.data.in_(["show_diary", "toggle_view_scope_diary"]))
 async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать дневник трат (последние 3 дня, максимум 30 записей)"""
     try:
         from datetime import datetime, timedelta
-        from expenses.models import Expense, Profile
+        from expenses.models import Expense, Profile, UserSettings
         from asgiref.sync import sync_to_async
         import pytz
-        
+
         user_id = callback.from_user.id
-        
+
+        # Если это переключение режима, сначала переключаем
+        if callback.data == "toggle_view_scope_diary":
+            @sync_to_async
+            def toggle_scope():
+                profile = Profile.objects.get(telegram_id=user_id)
+                if not profile.household_id:
+                    return False
+                settings = profile.settings if hasattr(profile, 'settings') else UserSettings.objects.create(profile=profile)
+                current = getattr(settings, 'view_scope', 'personal')
+                settings.view_scope = 'household' if current == 'personal' else 'personal'
+                settings.save()
+                return True
+
+            ok = await toggle_scope()
+            if not ok:
+                await callback.answer('Нет семейного бюджета' if lang == 'ru' else 'No household', show_alert=True)
+                return
+
         # Получаем профиль пользователя с часовым поясом
         @sync_to_async
         def get_user_profile():
@@ -469,7 +487,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                 return Profile.objects.get(telegram_id=user_id)
             except Profile.DoesNotExist:
                 return None
-        
+
         profile = await get_user_profile()
         user_tz = pytz.timezone(profile.timezone if profile else 'UTC')
         
@@ -545,11 +563,28 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
             return operations[:30]
         
         operations = await get_recent_operations()
-        
-        if not operations:
-            text = f"📋 <b>{get_text('diary', lang)}</b>\n\n<i>{get_text('no_operations', lang)}</i>"
+
+        # Получаем текущий режим для заголовка
+        @sync_to_async
+        def get_scope_for_title():
+            from bot.services.profile import get_user_settings as gus
+            settings = gus.__wrapped__(user_id)
+            return getattr(settings, 'view_scope', 'personal')
+
+        current_scope = await get_scope_for_title()
+        household_mode = bool(profile and profile.household) and current_scope == 'household'
+
+        # Формируем заголовок с указанием режима
+        diary_title = get_text('diary', lang)
+        if household_mode:
+            title_suffix = " (семейный)" if lang == 'ru' else " (household)"
         else:
-            text = f"📋 <b>{get_text('diary', lang)}</b>\n\n"
+            title_suffix = ""
+
+        if not operations:
+            text = f"📋 <b>{diary_title}{title_suffix}</b>\n\n<i>{get_text('no_operations', lang)}</i>"
+        else:
+            text = f"📋 <b>{diary_title}{title_suffix}</b>\n\n"
             
             # Сортируем операции по дате (от старых к новым) для группировки по дням
             operations = sorted(operations, key=lambda x: (x['date'], x['time']))
@@ -625,14 +660,30 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                     @sync_to_async
                     def check_first_day_completeness():
                         from expenses.models import Income
-                        expense_count = Expense.objects.filter(
-                            profile__telegram_id=user_id,
-                            expense_date=first_day_date
-                        ).count()
-                        income_count = Income.objects.filter(
-                            profile__telegram_id=user_id,
-                            income_date=first_day_date
-                        ).count()
+                        from bot.services.profile import get_user_settings as gus
+                        # Определяем режим просмотра (так же как в get_recent_operations)
+                        settings = gus.__wrapped__(user_id)
+                        household_mode = bool(profile and profile.household) and getattr(settings, 'view_scope', 'personal') == 'household'
+
+                        # Используем соответствующий фильтр в зависимости от режима
+                        if household_mode:
+                            expense_count = Expense.objects.filter(
+                                profile__household=profile.household,
+                                expense_date=first_day_date
+                            ).count()
+                            income_count = Income.objects.filter(
+                                profile__household=profile.household,
+                                income_date=first_day_date
+                            ).count()
+                        else:
+                            expense_count = Expense.objects.filter(
+                                profile__telegram_id=user_id,
+                                expense_date=first_day_date
+                            ).count()
+                            income_count = Income.objects.filter(
+                                profile__telegram_id=user_id,
+                                income_date=first_day_date
+                            ).count()
                         return expense_count + income_count
                     
                     first_day_total = await check_first_day_completeness()
@@ -712,12 +763,35 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
         
         # Добавляем вопрос в конце
         text += f"\n<i>💡 {get_text('show_other_days', lang)}</i>"
-        
-        # Добавляем кнопку "Назад"
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=get_text('back_button', lang), callback_data="expenses_today")],
-            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
-        ])
+
+        # Получаем текущий режим просмотра
+        @sync_to_async
+        def get_current_scope():
+            from bot.services.profile import get_user_settings as gus
+            settings = gus.__wrapped__(user_id)
+            has_household = bool(profile and profile.household)
+            current_scope = getattr(settings, 'view_scope', 'personal')
+            return has_household, current_scope
+
+        has_household, current_scope = await get_current_scope()
+
+        # Формируем клавиатуру
+        keyboard_buttons = []
+
+        # Кнопка переключения режима - только если есть семья
+        if has_household:
+            scope_btn_text = (
+                get_text('household_budget_button', lang)
+                if current_scope == 'household'
+                else get_text('my_budget_button', lang)
+            )
+            keyboard_buttons.append([InlineKeyboardButton(text=scope_btn_text, callback_data="toggle_view_scope_diary")])
+
+        # Кнопки Назад и Закрыть
+        keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_button', lang), callback_data="expenses_today")])
+        keyboard_buttons.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
         
         await callback.message.edit_text(
             text,
@@ -730,6 +804,265 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
         logger.error(f"Error showing expense diary: {e}")
         await callback.answer("Произошла ошибка при загрузке дневника", show_alert=True)
 
+
+@router.callback_query(F.data == "export_month_csv")
+async def callback_export_month_csv(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Экспорт операций за месяц в CSV (Premium функция)"""
+    try:
+        from expenses.models import Expense, Income, Profile
+        from bot.services.export_service import ExportService
+        from bot.services.profile import get_user_settings
+        from asgiref.sync import sync_to_async
+
+        user_id = callback.from_user.id
+
+        # Проверка Premium подписки
+        if not await check_subscription(user_id):
+            await callback.answer()
+            await callback.message.answer(
+                get_text('export_premium_required', lang),
+                reply_markup=get_subscription_button(),
+                parse_mode="HTML"
+            )
+            return
+
+        # Показываем уведомление о генерации
+        await callback.answer(get_text('export_generating', lang), show_alert=False)
+
+        # Получаем месяц и год из state (из отчета)
+        data = await state.get_data()
+        start_date_str = data.get('report_start_date')
+        end_date_str = data.get('report_end_date')
+
+        if not start_date_str or not end_date_str:
+            await callback.message.answer(
+                get_text('export_error', lang),
+                parse_mode="HTML"
+            )
+            return
+
+        # Конвертируем строки в date
+        from datetime import date as date_type
+        start_date = date_type.fromisoformat(start_date_str)
+        end_date = date_type.fromisoformat(end_date_str)
+
+        # Используем year и month из start_date
+        year = start_date.year
+        month = start_date.month
+
+        # Получаем данные пользователя и операции
+        @sync_to_async
+        def get_user_data():
+            profile = Profile.objects.get(telegram_id=user_id)
+
+            # Определяем режим просмотра (личный или семейный)
+            settings = get_user_settings.__wrapped__(user_id)
+            household_mode = bool(profile.household) and getattr(settings, 'view_scope', 'personal') == 'household'
+
+            # Формируем фильтр для операций
+            if household_mode:
+                expenses = list(
+                    Expense.objects.filter(
+                        profile__household=profile.household,
+                        expense_date__year=year,
+                        expense_date__month=month
+                    ).select_related('category').order_by('-expense_date', '-expense_time')
+                )
+                incomes = list(
+                    Income.objects.filter(
+                        profile__household=profile.household,
+                        income_date__year=year,
+                        income_date__month=month
+                    ).select_related('category').order_by('-income_date', '-income_time')
+                )
+            else:
+                expenses = list(
+                    Expense.objects.filter(
+                        profile__telegram_id=user_id,
+                        expense_date__year=year,
+                        expense_date__month=month
+                    ).select_related('category').order_by('-expense_date', '-expense_time')
+                )
+                incomes = list(
+                    Income.objects.filter(
+                        profile__telegram_id=user_id,
+                        income_date__year=year,
+                        income_date__month=month
+                    ).select_related('category').order_by('-income_date', '-income_time')
+                )
+
+            return expenses, incomes
+
+        expenses, incomes = await get_user_data()
+
+        # Проверка на пустоту
+        if not expenses and not incomes:
+            await callback.message.answer(
+                get_text('export_empty', lang),
+                parse_mode="HTML"
+            )
+            return
+
+        # Генерация CSV
+        @sync_to_async
+        def generate_csv_file():
+            return ExportService.generate_csv(expenses, incomes, year, month, lang)
+
+        csv_bytes = await generate_csv_file()
+
+        # Формируем имя файла с названием месяца
+        month_names_ru = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+                         'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+        month_names_en = ['January', 'February', 'March', 'April', 'May', 'June',
+                         'July', 'August', 'September', 'October', 'November', 'December']
+        month_name = month_names_ru[month - 1] if lang == 'ru' else month_names_en[month - 1]
+
+        filename = f"expenses_{month_name}_{year}.csv"
+        document = BufferedInputFile(csv_bytes, filename=filename)
+
+        # Отправляем файл
+        await callback.message.answer_document(
+            document,
+            caption=get_text('export_success', lang).format(month=f"{month_name} {year}"),
+            parse_mode="HTML"
+        )
+
+    except Exception as e:
+        logger.error(f"Error exporting CSV: {e}", exc_info=True)
+        await callback.message.answer(
+            get_text('export_error', lang),
+            parse_mode="HTML"
+        )
+
+
+@router.callback_query(F.data == "export_month_excel")
+async def callback_export_month_excel(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Экспорт операций за месяц в XLSX с графиками (Premium функция)"""
+    try:
+        from expenses.models import Expense, Income, Profile
+        from bot.services.export_service import ExportService
+        from bot.services.profile import get_user_settings
+        from asgiref.sync import sync_to_async
+
+        user_id = callback.from_user.id
+
+        # Проверка Premium подписки
+        if not await check_subscription(user_id):
+            await callback.answer()
+            await callback.message.answer(
+                get_text('export_premium_required', lang),
+                reply_markup=get_subscription_button(),
+                parse_mode="HTML"
+            )
+            return
+
+        # Показываем уведомление о генерации
+        await callback.answer(get_text('export_generating', lang), show_alert=False)
+
+        # Получаем месяц и год из state (из отчета)
+        data = await state.get_data()
+        start_date_str = data.get('report_start_date')
+        end_date_str = data.get('report_end_date')
+
+        if not start_date_str or not end_date_str:
+            await callback.message.answer(
+                get_text('export_error', lang),
+                parse_mode="HTML"
+            )
+            return
+
+        # Конвертируем строки в date
+        from datetime import date as date_type
+        start_date = date_type.fromisoformat(start_date_str)
+        end_date = date_type.fromisoformat(end_date_str)
+
+        # Используем year и month из start_date
+        year = start_date.year
+        month = start_date.month
+
+        # Получаем данные пользователя и операции
+        @sync_to_async
+        def get_user_data():
+            profile = Profile.objects.get(telegram_id=user_id)
+
+            # Определяем режим просмотра (личный или семейный)
+            settings = get_user_settings.__wrapped__(user_id)
+            household_mode = bool(profile.household) and getattr(settings, 'view_scope', 'personal') == 'household'
+
+            # Формируем фильтр для операций
+            if household_mode:
+                expenses = list(
+                    Expense.objects.filter(
+                        profile__household=profile.household,
+                        expense_date__year=year,
+                        expense_date__month=month
+                    ).select_related('category').order_by('-expense_date', '-expense_time')
+                )
+                incomes = list(
+                    Income.objects.filter(
+                        profile__household=profile.household,
+                        income_date__year=year,
+                        income_date__month=month
+                    ).select_related('category').order_by('-income_date', '-income_time')
+                )
+            else:
+                expenses = list(
+                    Expense.objects.filter(
+                        profile__telegram_id=user_id,
+                        expense_date__year=year,
+                        expense_date__month=month
+                    ).select_related('category').order_by('-expense_date', '-expense_time')
+                )
+                incomes = list(
+                    Income.objects.filter(
+                        profile__telegram_id=user_id,
+                        income_date__year=year,
+                        income_date__month=month
+                    ).select_related('category').order_by('-income_date', '-income_time')
+                )
+
+            return expenses, incomes, household_mode
+
+        expenses, incomes, household_mode = await get_user_data()
+
+        # Проверка на пустоту
+        if not expenses and not incomes:
+            await callback.message.answer(
+                get_text('export_empty', lang),
+                parse_mode="HTML"
+            )
+            return
+
+        # Генерация XLSX
+        @sync_to_async
+        def generate_xlsx_file():
+            return ExportService.generate_xlsx_with_charts(expenses, incomes, year, month, user_id, lang, household_mode)
+
+        xlsx_buffer = await generate_xlsx_file()
+
+        # Формируем имя файла с названием месяца
+        month_names_ru = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+                         'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+        month_names_en = ['January', 'February', 'March', 'April', 'May', 'June',
+                         'July', 'August', 'September', 'October', 'November', 'December']
+        month_name = month_names_ru[month - 1] if lang == 'ru' else month_names_en[month - 1]
+
+        filename = f"expenses_{month_name}_{year}.xlsx"
+        document = BufferedInputFile(xlsx_buffer.read(), filename=filename)
+
+        # Отправляем файл
+        await callback.message.answer_document(
+            document,
+            caption=get_text('export_success', lang).format(month=f"{month_name} {year}"),
+            parse_mode="HTML"
+        )
+
+    except Exception as e:
+        logger.error(f"Error exporting XLSX: {e}", exc_info=True)
+        await callback.message.answer(
+            get_text('export_error', lang),
+            parse_mode="HTML"
+        )
 
 
 @router.callback_query(F.data == "back_to_summary")

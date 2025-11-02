@@ -180,9 +180,11 @@ def expenses_summary_keyboard(
         # Кнопка Топ-5
         keyboard.button(text=get_text('top5_button', lang), callback_data="top5_menu")
     elif period == 'month' and show_pdf:
-        # Для месячных отчетов показываем кнопку PDF (отдельной строкой)
+        # Для месячных отчетов показываем кнопки экспорта (CSV, Excel, PDF) в один ряд
+        keyboard.button(text=get_text('export_csv_button', lang), callback_data="export_month_csv")
+        keyboard.button(text=get_text('export_excel_button', lang), callback_data="export_month_excel")
         keyboard.button(text=get_text('generate_pdf', lang), callback_data="pdf_generate_current")
-        
+
         # Кнопки навигации по месяцам
         if current_month and current_year:
             # Определяем предыдущий месяц
@@ -249,7 +251,7 @@ def expenses_summary_keyboard(
             rows = []
             if show_scope_toggle:
                 rows.append(1)  # Переключатель режимов
-            rows.append(1)      # PDF отдельной строкой
+            rows.append(3)      # CSV, XLS, PDF в один ряд
             if nav_buttons == 1:
                 rows.append(1)
             elif nav_buttons == 2:
@@ -262,7 +264,7 @@ def expenses_summary_keyboard(
             rows = []
             if show_scope_toggle:
                 rows.append(1)
-            rows.extend([1, 1, 1])  # PDF, предыдущий месяц, закрыть
+            rows.extend([3, 1, 1])  # CSV, XLS, PDF в один ряд; предыдущий месяц; закрыть
             keyboard.adjust(*rows)
     elif period == 'month':  # Месячный отчет без PDF
         if current_month and current_year:

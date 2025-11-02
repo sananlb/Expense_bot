@@ -22,7 +22,7 @@ TEXTS = {
         'household_subscription_required': '💎 Семейный бюджет доступен только с активной подпиской.',
         'household_full': '❌ В семейном бюджете достигнут максимум участников',
         'create_household_button': '➕ Создать семейный бюджет',
-        'invite_member_button': '🔗 Пригласить участника',
+        'invite_member_button': '📤 Отправить приглашение',
         'members_list_button': '👥 Список участников',
         'rename_household_button': '✏️ Переименовать',
         'leave_household_button': '🚪 Выйти из семейного бюджета',
@@ -34,10 +34,20 @@ TEXTS = {
         'not_in_household': 'Вы не состоите в семейном бюджете',
         'only_creator_can_rename': 'Только создатель может переименовать семейный бюджет',
         'household_leave_confirm': '⚠️ <b>Вы уверены, что хотите выйти из семейного бюджета?</b>\n\nПосле выхода вы будете вести личный учет финансов.',
-        'invite_link_title': '🔗 <b>Ссылка-приглашение в семейный бюджет:</b>',
-        'invite_link_note': 'Отправьте эту ссылку тому, кого хотите пригласить.',
+        'invite_link_title': '🔗 <b>Приглашение в семейный бюджет</b>',
+        'invite_link_note': 'Для приглашения участников в семью скопируйте ссылку ниже и отправьте её тому, кого хотите пригласить.',
         'invite_link_valid': 'Ссылка действительна 48 часов.',
-        'yes_join': '✅ Да, присоединиться',
+        'invite_title': '🏠 <b>Приглашение в семью</b>',
+        'invite_message': '{inviter} приглашает вас в семью для ведения совместного бюджета в Coins',
+        'invite_members_count': 'Участников: {count}/{max}',
+        'invite_description': 'После присоединения вы будете вести общий учет финансов с другими участниками.',
+        'invite_question': 'Присоединиться?',
+        'invite_user_fallback': 'Пользователь {user_id}',
+        'invite_invalid': '❌ Приглашение недействительно или истекло',
+        'invite_self_error': '❌ Вы не можете использовать собственное приглашение',
+        'invite_already_in_household': '❌ Вы уже состоите в семейном бюджете.\nСначала выйдите из текущего, чтобы присоединиться к новому.',
+        'household_default_name': 'семейный бюджет',
+        'yes_join': '✅ Да',
         'yes_leave': '✅ Да, выйти',
         'action_cancelled': 'Действие отменено',
         'member_left_notification': '👤 Пользователь {user_id} вышел из семейного бюджета',
@@ -122,7 +132,7 @@ TEXTS = {
         'total_spent': 'Всего потрачено',
         'by_categories': 'По категориям',
         'potential_cashback': 'Кешбэк',
-        'generate_pdf': '📄 Сформировать PDF отчет',
+        'generate_pdf': '📄 PDF',
         'show_month_start': '📅 Показать с начала месяца',
         'pdf_report_generated': '📄 PDF отчет сформирован',
         'report_generation_error': '❌ Ошибка генерации отчета',
@@ -778,6 +788,22 @@ TEXTS = {
 • "На что я трачу больше всего денег?"
 
 Бот понимает разговорный язык и поможет с анализом ваших финансов.''',
+
+        # Экспорт отчетов (Premium функция)
+        'export_csv_button': '📊 CSV',
+        'export_excel_button': '📈 XLS',
+        'export_premium_required': (
+            '⭐ <b>Экспорт отчетов</b> доступен только в Premium подписке\n\n'
+            'С Premium вы получаете:\n'
+            '• 📊 Экспорт в Excel с графиками\n'
+            '• 📄 Экспорт в CSV для импорта\n'
+            '• 📑 PDF отчеты без ограничений\n'
+            '• 🎯 Приоритетная поддержка'
+        ),
+        'export_success': '✅ Отчет за <b>{month}</b> успешно сгенерирован!',
+        'export_error': '❌ Произошла ошибка при генерации отчета. Попробуйте позже.',
+        'export_empty': '📭 Нет данных за текущий месяц для экспорта',
+        'export_generating': '⏳ Генерируем отчет, пожалуйста подождите...',
     },
     'en': {
         # Policies and offer
@@ -798,7 +824,7 @@ TEXTS = {
         'household_subscription_required': '💎 Household budgeting is available only with an active subscription.',
         'household_full': '❌ The household is full',
         'create_household_button': '➕ Create household',
-        'invite_member_button': '🔗 Invite member',
+        'invite_member_button': '📤 Send invitation',
         'members_list_button': '👥 Members',
         'rename_household_button': '✏️ Rename',
         'leave_household_button': '🚪 Leave household',
@@ -810,10 +836,20 @@ TEXTS = {
         'not_in_household': 'You are not in a household',
         'only_creator_can_rename': 'Only the household creator can rename it',
         'household_leave_confirm': '⚠️ <b>Are you sure you want to leave the household?</b>\n\nAfter leaving you will track finances personally.',
-        'invite_link_title': '🔗 <b>Household invite link:</b>',
-        'invite_link_note': 'Send this link to the person you want to invite.',
+        'invite_link_title': '🔗 <b>Household invitation</b>',
+        'invite_link_note': 'To invite members to your household, copy the link below and send it to the person you want to invite.',
         'invite_link_valid': 'The link is valid for 48 hours.',
-        'yes_join': '✅ Yes, join',
+        'invite_title': '🏠 <b>Household invitation</b>',
+        'invite_message': '{inviter} invites you to join a household for managing shared budget in Coins',
+        'invite_members_count': 'Members: {count}/{max}',
+        'invite_description': 'After joining, you will track finances together with other members.',
+        'invite_question': 'Join?',
+        'invite_user_fallback': 'User {user_id}',
+        'invite_invalid': '❌ Invitation is invalid or expired',
+        'invite_self_error': '❌ You cannot use your own invitation',
+        'invite_already_in_household': '❌ You are already in a household.\nPlease leave your current household first to join a new one.',
+        'household_default_name': 'household',
+        'yes_join': '✅ Yes',
         'yes_leave': '✅ Yes, leave',
         'action_cancelled': 'Action cancelled',
         'member_left_notification': '👤 User {user_id} left the household',
@@ -898,7 +934,7 @@ TEXTS = {
         'total_spent': 'Total spent',
         'by_categories': 'By categories',
         'potential_cashback': 'Cashback',
-        'generate_pdf': '📄 Generate PDF report',
+        'generate_pdf': '📄 PDF',
         'show_month_start': '📅 Show from month start',
         'pdf_report_generated': '📄 PDF report generated',
         'report_generation_error': '❌ Report generation error',
@@ -1580,7 +1616,23 @@ The bot understands natural language and will help analyze your finances.''',
         'add_cashback': '➕ Add',
         'remove_cashback': '➖ Remove',
         'remove_all_cashback': '🗑 Remove All',
-        
+
+        # Export translations (Premium feature)
+        'export_csv_button': '📊 CSV',
+        'export_excel_button': '📈 XLS',
+        'export_premium_required': (
+            '⭐ <b>Report export</b> is only available with Premium subscription\n\n'
+            'With Premium you get:\n'
+            '• 📊 Excel export with charts\n'
+            '• 📄 CSV export for import\n'
+            '• 📑 Unlimited PDF reports\n'
+            '• 🎯 Priority support'
+        ),
+        'export_success': '✅ Report for <b>{month}</b> generated successfully!',
+        'export_error': '❌ An error occurred while generating the report. Please try again later.',
+        'export_empty': '📭 No data for current month to export',
+        'export_generating': '⏳ Generating report, please wait...',
+
         # Categories translations
         'manage_categories': '<b>Category Management</b>',
         'no_categories_yet': 'You have no categories yet',
