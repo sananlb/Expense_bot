@@ -455,10 +455,16 @@ class ExportService:
 
         # КРУГОВАЯ ДИАГРАММА ПО КАТЕГОРИЯМ (колонка P)
         if summary_end_row > 1:
+            from openpyxl.chart.legend import Legend
+
             pie = PieChart()
             pie.title = "Расходы по категориям" if lang == 'ru' else "Expenses by Category"
             pie.width = 15
             pie.height = 12
+
+            # Легенда справа от диаграммы
+            pie.legend = Legend()
+            pie.legend.position = 'r'  # Справа
 
             # Данные: колонка I (категории) и K (всего)
             labels = Reference(ws, min_col=9, min_row=2, max_row=summary_end_row)
@@ -498,6 +504,10 @@ class ExportService:
 
         days_end_row = days_start_row + last_day - 1
 
+        # СКРЫТЬ строки с данными для диаграммы (от заголовка до конца данных)
+        for row_num in range(days_start_row - 1, days_end_row + 1):
+            ws.row_dimensions[row_num].hidden = True
+
         # СТОЛБЧАТАЯ ДИАГРАММА
         if daily_expenses:
             bar = BarChart()
@@ -513,8 +523,10 @@ class ExportService:
             bar.add_data(days_data, titles_from_data=True)
             bar.set_categories(days_labels)
 
-            # Размещение под круговой диаграммой
-            ws.add_chart(bar, f"P{days_start_row}")
+            # Размещение под круговой диаграммой (с отступом, чтобы не наезжали)
+            # Круговая диаграмма: height=12 (~12 строк), начало P2, конец ~P14
+            # Размещаем столбчатую с строки 20
+            ws.add_chart(bar, "P20")
 
         # Закрепить первую строку
         ws.freeze_panes = 'A2'
