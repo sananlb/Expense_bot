@@ -11,13 +11,6 @@ from .category import (
     create_default_categories,
     get_icon_for_category
 )
-from .budget import (
-    create_budget,
-    get_user_budgets,
-    check_budget_status,
-    delete_budget,
-    check_all_budgets
-)
 from .expense import (
     create_expense,
     get_user_expenses,
@@ -42,12 +35,6 @@ __all__ = [
     'delete_category',
     'create_default_categories',
     'get_icon_for_category',
-    # Budget services
-    'create_budget',
-    'get_user_budgets',
-    'check_budget_status',
-    'delete_budget',
-    'check_all_budgets',
     # Expense services
     'create_expense',
     'get_user_expenses',
