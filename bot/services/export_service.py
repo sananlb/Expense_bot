@@ -329,31 +329,41 @@ class ExportService:
             income_total = incomes_by_currency.get(currency, 0)
             balance = income_total - expense_total
 
-            # Расходы
-            if expense_total > 0:
-                label = 'Расходы:' if lang == 'ru' else 'Expenses:'
-                ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
-                ws.cell(row=current_row, column=3, value=-expense_total)
-                ws.cell(row=current_row, column=4, value=currency)
-                ws.cell(row=current_row, column=3).font = Font(bold=True, color="FF0000")
-                ws.cell(row=current_row, column=3).number_format = '#,##0.00'
-                current_row += 1
+            # Расходы (ВСЕГДА показываем, даже если 0)
+            label = 'Расходы:' if lang == 'ru' else 'Expenses:'
+            ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=None)
+            ws.cell(row=current_row, column=3, value=-expense_total)
+            ws.cell(row=current_row, column=4, value=currency)
+            ws.cell(row=current_row, column=5, value=None)
+            ws.cell(row=current_row, column=6, value=None)
+            ws.cell(row=current_row, column=7, value=None)
+            ws.cell(row=current_row, column=3).font = Font(bold=True, color="FF0000")
+            ws.cell(row=current_row, column=3).number_format = '#,##0.00'
+            current_row += 1
 
-            # Доходы
-            if income_total > 0:
-                label = 'Доходы:' if lang == 'ru' else 'Income:'
-                ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
-                ws.cell(row=current_row, column=3, value=income_total)
-                ws.cell(row=current_row, column=4, value=currency)
-                ws.cell(row=current_row, column=3).font = Font(bold=True, color="008000")
-                ws.cell(row=current_row, column=3).number_format = '#,##0.00'
-                current_row += 1
+            # Доходы (ВСЕГДА показываем, даже если 0)
+            label = 'Доходы:' if lang == 'ru' else 'Income:'
+            ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=None)
+            ws.cell(row=current_row, column=3, value=income_total)
+            ws.cell(row=current_row, column=4, value=currency)
+            ws.cell(row=current_row, column=5, value=None)
+            ws.cell(row=current_row, column=6, value=None)
+            ws.cell(row=current_row, column=7, value=None)
+            ws.cell(row=current_row, column=3).font = Font(bold=True, color="008000")
+            ws.cell(row=current_row, column=3).number_format = '#,##0.00'
+            current_row += 1
 
-            # Баланс
+            # Баланс (ВСЕГДА показываем)
             label = 'Баланс:' if lang == 'ru' else 'Balance:'
             ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+            ws.cell(row=current_row, column=2, value=None)
             ws.cell(row=current_row, column=3, value=balance)
             ws.cell(row=current_row, column=4, value=currency)
+            ws.cell(row=current_row, column=5, value=None)
+            ws.cell(row=current_row, column=6, value=None)
+            ws.cell(row=current_row, column=7, value=None)
             ws.cell(row=current_row, column=3).font = Font(bold=True, color="0000FF")
             ws.cell(row=current_row, column=3).number_format = '#,##0.00'
             current_row += 2
