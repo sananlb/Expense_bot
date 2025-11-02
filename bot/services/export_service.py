@@ -391,23 +391,25 @@ class ExportService:
 
                 key = (category_name, currency)
                 if key not in category_stats:
-                    category_stats[key] = {'total': 0, 'count': 0, 'category_id': None}
+                    category_stats[key] = {'total': 0, 'count': 0, 'category_ids': set()}
 
                 category_stats[key]['total'] += amount
                 category_stats[key]['count'] += 1
 
-                # Сохраняем category_id
+                # Сохраняем ВСЕ category_id (в household mode может быть несколько для одного названия)
                 if 'object' in op and hasattr(op['object'], 'category_id'):
-                    category_stats[key]['category_id'] = op['object'].category_id
+                    category_stats[key]['category_ids'].add(op['object'].category_id)
 
         # Заполнение Summary
         summary_row = 2
         for (category, currency), stats in sorted(category_stats.items(), key=lambda x: x[1]['total'], reverse=True):
             average = stats['total'] / stats['count'] if stats['count'] > 0 else 0
 
-            # Кешбэк
-            category_id = stats.get('category_id')
-            cashback = category_cashbacks.get(category_id, 0) if category_id else 0
+            # Кешбэк - СУММА по ВСЕМ category_id для этой категории (важно для household mode!)
+            total_cashback = 0
+            for category_id in stats.get('category_ids', set()):
+                total_cashback += category_cashbacks.get(category_id, 0)
+            cashback = total_cashback
 
             # Заполняем колонки I-N
             ws.cell(row=summary_row, column=9, value=category)
