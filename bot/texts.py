@@ -132,7 +132,7 @@ TEXTS = {
         'total_spent': 'Всего потрачено',
         'by_categories': 'По категориям',
         'potential_cashback': 'Кешбэк',
-        'generate_pdf': '📄 PDF',
+        'generate_pdf': '📊 PDF',
         'show_month_start': '📅 Показать с начала месяца',
         'pdf_report_generated': '📄 PDF отчет сформирован',
         'report_generation_error': '❌ Ошибка генерации отчета',
@@ -790,7 +790,7 @@ TEXTS = {
 Бот понимает разговорный язык и поможет с анализом ваших финансов.''',
 
         # Экспорт отчетов (Premium функция)
-        'export_csv_button': '📊 CSV',
+        'export_csv_button': '📄 CSV',
         'export_excel_button': '📈 XLS',
         'export_premium_required': (
             '⭐ <b>Экспорт отчетов</b> доступен только в Premium подписке\n\n'
@@ -934,7 +934,7 @@ TEXTS = {
         'total_spent': 'Total spent',
         'by_categories': 'By categories',
         'potential_cashback': 'Cashback',
-        'generate_pdf': '📄 PDF',
+        'generate_pdf': '📊 PDF',
         'show_month_start': '📅 Show from month start',
         'pdf_report_generated': '📄 PDF report generated',
         'report_generation_error': '❌ Report generation error',
@@ -1618,7 +1618,7 @@ The bot understands natural language and will help analyze your finances.''',
         'remove_all_cashback': '🗑 Remove All',
 
         # Export translations (Premium feature)
-        'export_csv_button': '📊 CSV',
+        'export_csv_button': '📄 CSV',
         'export_excel_button': '📈 XLS',
         'export_premium_required': (
             '⭐ <b>Report export</b> is only available with Premium subscription\n\n'
