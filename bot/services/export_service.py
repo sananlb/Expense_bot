@@ -802,6 +802,8 @@ class ExportService:
             line.y_axis.axId = 200  # Вторая ось Y
             line.y_axis.delete = False
             line.y_axis.crosses = "max"  # Вторая ось справа
+            # Убираем линии сетки со второй оси (черные линии)
+            line.y_axis.majorGridlines = None
 
             # Данные для линии кешбека
             cashback_data = Reference(ws,
