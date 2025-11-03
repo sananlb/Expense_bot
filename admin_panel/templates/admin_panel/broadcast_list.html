@@ -39,6 +39,7 @@
                         <th>Название</th>
                         <th>Статус</th>
                         <th>Получатели</th>
+                        <th>Язык</th>
                         <th>Отправлено</th>
                         <th>Создана</th>
                         <th>Действия</th>
@@ -65,6 +66,7 @@
                             {% endif %}
                         </td>
                         <td>{{ broadcast.total_recipients }}</td>
+                        <td>{{ broadcast.get_language_filter_display }}</td>
                         <td>
                             {{ broadcast.sent_count }}/{{ broadcast.total_recipients }}
                         </td>
@@ -77,7 +79,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="7" class="text-center">Нет рассылок</td>
+                        <td colspan="8" class="text-center">Нет рассылок</td>
                     </tr>
                     {% endfor %}
                 </tbody>

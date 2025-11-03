@@ -40,6 +40,7 @@ class BroadcastMessageForm(forms.ModelForm):
             'title',
             'message_text',
             'recipient_type',
+            'language_filter',
             'include_inactive_days',
             'custom_recipients',
         ]
@@ -56,6 +57,9 @@ class BroadcastMessageForm(forms.ModelForm):
             'recipient_type': forms.Select(attrs={
                 'class': 'form-select',
                 'id': 'recipient-type-select'
+            }),
+            'language_filter': forms.Select(attrs={
+                'class': 'form-select',
             }),
             'include_inactive_days': forms.NumberInput(attrs={
                 'class': 'form-control',
@@ -74,7 +78,7 @@ class BroadcastMessageForm(forms.ModelForm):
         # Настройка поля custom_recipients
         self.fields['custom_recipients'].queryset = Profile.objects.filter(
             is_active=True
-        ).order_by('-last_activity')
+        ).order_by('language_code', '-last_activity')
         
         # Форматирование отображения пользователей
         self.fields['custom_recipients'].label_from_instance = self.label_from_instance
@@ -88,7 +92,7 @@ class BroadcastMessageForm(forms.ModelForm):
     
     def label_from_instance(self, obj):
         """Форматирование отображения пользователя в списке"""
-        name = str(obj.telegram_id)
+        name = f"{obj.telegram_id} [{obj.language_code.upper()}]"
         # Проверяем наличие подписки
         if obj.subscriptions.filter(
             is_active=True,

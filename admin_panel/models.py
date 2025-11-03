@@ -26,6 +26,12 @@ class BroadcastMessage(models.Model):
         ('custom', 'Выборочно'),
     ]
     
+    LANGUAGE_FILTER_CHOICES = [
+        ('all', 'Все языки'),
+        ('ru', 'Русский'),
+        ('en', 'English'),
+    ]
+    
     # Основные поля
     title = models.CharField(
         max_length=200,
@@ -44,6 +50,14 @@ class BroadcastMessage(models.Model):
         choices=RECIPIENT_TYPE_CHOICES,
         default='all',
         verbose_name='Тип получателей'
+    )
+    
+    language_filter = models.CharField(
+        max_length=5,
+        choices=LANGUAGE_FILTER_CHOICES,
+        default='all',
+        verbose_name='Язык получателей',
+        help_text='Ограничить рассылку пользователями конкретного языка'
     )
     
     custom_recipients = models.ManyToManyField(
@@ -139,51 +153,57 @@ class BroadcastMessage(models.Model):
         """Подсчет количества получателей"""
         from datetime import timedelta
         
+        def apply_language(qs):
+            if self.language_filter == 'all':
+                return qs
+            return qs.filter(language_code=self.language_filter)
+        
         if self.recipient_type == 'all':
-            return Profile.objects.filter(is_active=True).count()
+            return apply_language(Profile.objects.filter(is_active=True)).count()
         
         elif self.recipient_type == 'active':
             # Активные за последние 7 дней
             week_ago = timezone.now() - timedelta(days=7)
-            return Profile.objects.filter(
+            return apply_language(Profile.objects.filter(
                 is_active=True,
                 last_activity__gte=week_ago
-            ).count()
+            )).count()
         
         elif self.recipient_type == 'subscribed':
             # Пользователи с активной подпиской
-            return Profile.objects.filter(
+            return apply_language(Profile.objects.filter(
                 is_active=True,
                 subscriptions__is_active=True,
                 subscriptions__end_date__gt=timezone.now()
-            ).distinct().count()
+            )).distinct().count()
         
         elif self.recipient_type == 'trial':
             # На пробном периоде
-            return Profile.objects.filter(
+            return apply_language(Profile.objects.filter(
                 is_active=True,
                 subscriptions__type='trial',
                 subscriptions__is_active=True,
                 subscriptions__end_date__gt=timezone.now()
-            ).distinct().count()
+            )).distinct().count()
         
         elif self.recipient_type == 'inactive':
             days = self.include_inactive_days or 30
             inactive_date = timezone.now() - timedelta(days=days)
-            return Profile.objects.filter(
+            return apply_language(Profile.objects.filter(
                 is_active=True,
                 last_activity__lt=inactive_date
-            ).count()
+            )).count()
         
         elif self.recipient_type == 'beta':
             # Бета-тестеры
-            return Profile.objects.filter(
+            return apply_language(Profile.objects.filter(
                 is_active=True,
                 is_beta_tester=True
-            ).count()
+            )).count()
         
         elif self.recipient_type == 'custom':
-            return self.custom_recipients.count()
+            qs = self.custom_recipients.filter(is_active=True)
+            return apply_language(qs).count()
         
         return 0
     
@@ -191,47 +211,52 @@ class BroadcastMessage(models.Model):
         """Получить QuerySet получателей"""
         from datetime import timedelta
         
+        def apply_language(qs):
+            if self.language_filter == 'all':
+                return qs
+            return qs.filter(language_code=self.language_filter)
+        
         if self.recipient_type == 'all':
-            return Profile.objects.filter(is_active=True)
+            return apply_language(Profile.objects.filter(is_active=True))
         
         elif self.recipient_type == 'active':
             week_ago = timezone.now() - timedelta(days=7)
-            return Profile.objects.filter(
+            return apply_language(Profile.objects.filter(
                 is_active=True,
                 last_activity__gte=week_ago
-            )
+            ))
         
         elif self.recipient_type == 'subscribed':
-            return Profile.objects.filter(
+            return apply_language(Profile.objects.filter(
                 is_active=True,
                 subscriptions__is_active=True,
                 subscriptions__end_date__gt=timezone.now()
-            ).distinct()
+            )).distinct()
         
         elif self.recipient_type == 'trial':
-            return Profile.objects.filter(
+            return apply_language(Profile.objects.filter(
                 is_active=True,
                 subscriptions__type='trial',
                 subscriptions__is_active=True,
                 subscriptions__end_date__gt=timezone.now()
-            ).distinct()
+            )).distinct()
         
         elif self.recipient_type == 'inactive':
             days = self.include_inactive_days or 30
             inactive_date = timezone.now() - timedelta(days=days)
-            return Profile.objects.filter(
+            return apply_language(Profile.objects.filter(
                 is_active=True,
                 last_activity__lt=inactive_date
-            )
+            ))
         
         elif self.recipient_type == 'beta':
-            return Profile.objects.filter(
+            return apply_language(Profile.objects.filter(
                 is_active=True,
                 is_beta_tester=True
-            )
+            ))
         
         elif self.recipient_type == 'custom':
-            return self.custom_recipients.filter(is_active=True)
+            return apply_language(self.custom_recipients.filter(is_active=True))
         
         return Profile.objects.none()
 

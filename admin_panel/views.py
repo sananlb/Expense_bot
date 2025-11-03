@@ -425,6 +425,8 @@ def broadcast_create(request):
     # Статистика для подсказок
     stats = {
         'total_users': Profile.objects.filter(is_active=True).count(),
+        'ru_users': Profile.objects.filter(is_active=True, language_code='ru').count(),
+        'en_users': Profile.objects.filter(is_active=True, language_code='en').count(),
         'active_users': Profile.objects.filter(
             is_active=True,
             last_activity__gte=timezone.now() - timedelta(days=7)

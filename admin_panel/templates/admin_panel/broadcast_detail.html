@@ -77,6 +77,7 @@
             </div>
             <div class="card-body">
                 <p><strong>Тип получателей:</strong> {{ broadcast.get_recipient_type_display }}</p>
+                <p><strong>Язык получателей:</strong> {{ broadcast.get_language_filter_display }}</p>
                 <p><strong>Создана:</strong> {{ broadcast.created_at|date:"d.m.Y H:i" }}</p>
                 {% if broadcast.scheduled_at %}
                     <p><strong>Запланирована:</strong> {{ broadcast.scheduled_at|date:"d.m.Y H:i" }}</p>
