@@ -910,9 +910,20 @@ class ExportService:
                 )
             )
 
-            # Легенда внутри области диаграммы справа
+            # Легенда внутри области диаграммы справа, сдвинутая влево
             income_pie.legend = Legend()
             income_pie.legend.position = 'r'
+            # Настройка позиции легенды - сдвигаем влево внутри правой области
+            income_pie.legend.layout = Layout(
+                manualLayout=ManualLayout(
+                    xMode="edge",
+                    yMode="edge",
+                    x=0.55,  # Начало легенды на 55% ширины диаграммы (левее)
+                    y=0.1,   # Отступ сверху
+                    w=0.4,   # Ширина легенды
+                    h=0.8    # Высота легенды
+                )
+            )
 
             # Данные для круговой диаграммы доходов
             income_labels = Reference(ws, min_col=income_summary_start_col, min_row=3, max_row=income_summary_end_row)
