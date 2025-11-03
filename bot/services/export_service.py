@@ -289,20 +289,28 @@ class ExportService:
         gray_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
 
         # ==================== ЛЕВАЯ ЧАСТЬ: ТРАТЫ (Колонки A-G) ====================
+        # Заголовок секции
+        operations_section_title = 'ДНЕВНИК ОПЕРАЦИЙ' if lang == 'ru' else 'OPERATIONS LOG'
+        ops_title_cell = ws.cell(row=1, column=1, value=operations_section_title)
+        ops_title_cell.font = Font(bold=True, color="FFFFFF", size=12)
+        ops_title_cell.fill = PatternFill(start_color="2E5090", end_color="2E5090", fill_type="solid")
+        ops_title_cell.alignment = header_alignment
+        ops_title_cell.border = thin_border
+
         if lang == 'en':
             headers_left = ['Date', 'Time', 'Amount', 'Currency', 'Category', 'Description', 'Type']
         else:
             headers_left = ['Дата', 'Время', 'Сумма', 'Валюта', 'Категория', 'Описание', 'Тип']
 
         for idx, header in enumerate(headers_left, start=1):
-            cell = ws.cell(row=1, column=idx, value=header)
+            cell = ws.cell(row=2, column=idx, value=header)
             cell.font = header_font
             cell.fill = header_fill
             cell.alignment = header_alignment
             cell.border = thin_border
 
         # Заполнение данных трат
-        current_row = 2
+        current_row = 3  # Начинаем с 3-й строки (1 - заголовок секции, 2 - заголовки колонок)
         expenses_by_currency = {}
         incomes_by_currency = {}
 
@@ -422,15 +430,24 @@ class ExportService:
             ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 50)
 
         # ==================== ПРАВАЯ ЧАСТЬ: SUMMARY (Колонки I-N) ====================
+        summary_start_col = 9  # Колонка I
+
+        # Заголовок секции расходов
+        expenses_section_title = 'РАСХОДЫ' if lang == 'ru' else 'EXPENSES'
+        exp_title_cell = ws.cell(row=1, column=summary_start_col, value=expenses_section_title)
+        exp_title_cell.font = Font(bold=True, color="FFFFFF", size=12)
+        exp_title_cell.fill = PatternFill(start_color="E53935", end_color="E53935", fill_type="solid")
+        exp_title_cell.alignment = header_alignment
+        exp_title_cell.border = thin_border
+
         # Заголовки Summary
         if lang == 'en':
             headers_right = ['Category', 'Currency', 'Total', 'Count', 'Average', 'Cashback']
         else:
             headers_right = ['Категория', 'Валюта', 'Всего', 'Количество', 'Средний чек', 'Кешбэк']
 
-        summary_start_col = 9  # Колонка I
         for idx, header in enumerate(headers_right):
-            cell = ws.cell(row=1, column=summary_start_col + idx, value=header)
+            cell = ws.cell(row=2, column=summary_start_col + idx, value=header)
             cell.font = header_font
             cell.fill = header_fill
             cell.alignment = header_alignment
@@ -462,7 +479,7 @@ class ExportService:
         pie_segment_ratios: List[float] = []
 
         # Заполнение Summary
-        summary_row = 2
+        summary_row = 3  # Начинаем с 3-й строки (1 - заголовок секции, 2 - заголовки колонок)
         for (category, currency), stats in sorted_categories:
             average = stats['total'] / stats['count'] if stats['count'] > 0 else 0
 
@@ -563,8 +580,8 @@ class ExportService:
             )
 
             # Данные: колонка I (категории) и K (всего)
-            labels = Reference(ws, min_col=9, min_row=2, max_row=summary_end_row)
-            data = Reference(ws, min_col=11, min_row=1, max_row=summary_end_row)
+            labels = Reference(ws, min_col=9, min_row=3, max_row=summary_end_row)
+            data = Reference(ws, min_col=11, min_row=2, max_row=summary_end_row)
             pie.add_data(data, titles_from_data=True)
             pie.set_categories(labels)
 
@@ -683,12 +700,12 @@ class ExportService:
         # СТОЛБЧАТАЯ ДИАГРАММА размещается СПРАВА от круговой
         bar_chart_row = charts_start_row  # Используем тот же ряд что и круговая диаграмма
 
-        # Таблица данных для stacked bar chart размещается ПОД столбчатой диаграммой
+        # Таблица данных для stacked bar chart размещается СПРАВА (скрыта от основного просмотра)
         if sorted_categories and sorted_days:
             # Таблицу опускаем ниже диаграмм для наглядности
             table_start_row = bar_chart_row + int(pie_block_height + 12)
-            # Размещаем в тех же колонках что и диаграммы (начиная с I = 9)
-            chart_data_start_col = 9
+            # Размещаем справа, в колонке AX (50) - данные для диаграммы, скрыты от основного просмотра
+            chart_data_start_col = 50
 
             day_header = 'День' if lang == 'ru' else 'Day'
             day_cell = ws.cell(row=table_start_row, column=chart_data_start_col, value=day_header)
@@ -1032,7 +1049,7 @@ class ExportService:
             if sorted_income_categories_list and sorted_days:
                 # Таблица данных для столбчатой диаграммы доходов
                 income_table_start_row = table_start_row  # Используем тот же ряд что и для расходов
-                income_chart_data_start_col = income_summary_start_col  # Колонка AA
+                income_chart_data_start_col = 70  # Колонка BR - данные для диаграммы, скрыты справа
 
                 day_header = 'День' if lang == 'ru' else 'Day'
                 day_cell = ws.cell(row=income_table_start_row, column=income_chart_data_start_col, value=day_header)
@@ -1113,11 +1130,11 @@ class ExportService:
                     series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dLbls = None
 
-                # Размещение столбчатой диаграммы доходов (справа от круговой, немного правее)
-                ws.add_chart(income_bar, f"AL{charts_start_row}")
+                # Размещение столбчатой диаграммы доходов (справа от круговой, немного левее)
+                ws.add_chart(income_bar, f"AJ{charts_start_row}")
 
-        # Закрепить первую строку
-        ws.freeze_panes = 'A2'
+        # Закрепить заголовки (строки 1-2: заголовок секции + заголовки колонок)
+        ws.freeze_panes = 'A3'
 
         # Сохранить в BytesIO
         output = BytesIO()
