@@ -800,7 +800,7 @@ class ExportService:
             line = LineChart()
             line.title = None
             line.y_axis.axId = 200  # Вторая ось Y
-            line.y_axis.delete = False
+            line.y_axis.delete = True  # Скрываем правую ось Y полностью
             line.y_axis.crosses = "max"  # Вторая ось справа
             # Убираем линии сетки со второй оси (черные линии)
             line.y_axis.majorGridlines = None
