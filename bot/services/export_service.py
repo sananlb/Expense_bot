@@ -903,7 +903,7 @@ class ExportService:
                     yMode="factor",
                     wMode="factor",
                     hMode="factor",
-                    x=0.15,  # Сдвинули диаграмму правее (было 0.065)
+                    x=0.065,
                     y=0.05,
                     w=0.42,
                     h=0.8
@@ -913,17 +913,6 @@ class ExportService:
             # Легенда внутри области диаграммы справа
             income_pie.legend = Legend()
             income_pie.legend.position = 'r'
-            # Настройка позиции легенды - узкая колонка справа, компактная
-            income_pie.legend.layout = Layout(
-                manualLayout=ManualLayout(
-                    xMode="edge",
-                    yMode="edge",
-                    x=0.70,  # Начало легенды на 70% ширины диаграммы
-                    y=0.10,  # Отступ сверху 10%
-                    w=0.25,  # Узкая ширина для одного столбца
-                    h=0.5    # Компактная высота - категории плотно сверху (было 0.9)
-                )
-            )
 
             # Данные для круговой диаграммы доходов
             income_labels = Reference(ws, min_col=income_summary_start_col, min_row=3, max_row=income_summary_end_row)
@@ -1089,8 +1078,8 @@ class ExportService:
                     series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dLbls = None
 
-                # Размещение столбчатой диаграммы доходов (справа от круговой, сдвинуто правее)
-                ws.add_chart(income_bar, f"AS{charts_start_row}")
+                # Размещение столбчатой диаграммы доходов (справа от круговой)
+                ws.add_chart(income_bar, f"AJ{charts_start_row}")
 
         # Закрепить первую строку
         ws.freeze_panes = 'A2'
