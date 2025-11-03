@@ -547,17 +547,6 @@ class ExportService:
 
             pie = PieChart()
             pie.title = "Расходы по категориям" if lang == 'ru' else "Expenses by Category"
-            # Увеличиваем шрифт заголовка
-            if RichText and ParagraphProperties and CharacterProperties:
-                from openpyxl.chart.text import RichText as ChartRichText
-                pie.title.tx = ChartRichText(p=[
-                    Paragraph(
-                        pPr=ParagraphProperties(
-                            defRPr=CharacterProperties(sz=1400, b=True)  # Размер 14pt, жирный
-                        )
-                    )
-                ])
-                pie.title.tx.p[0].text = "Расходы по категориям" if lang == 'ru' else "Expenses by Category"
             pie.varyColors = True
             pie.width = 19.76  # Блок еще шире - диаграмма слева, легенда справа
             pie.height = 11.5488  # Блок выше для размещения заголовка
@@ -780,17 +769,6 @@ class ExportService:
 
             # Настраиваем заголовок и убираем подписи осей
             bar.title = "Расходы по дням" if lang == 'ru' else "Expenses by Day"
-            # Увеличиваем шрифт заголовка
-            if RichText and ParagraphProperties and CharacterProperties:
-                from openpyxl.chart.text import RichText as ChartRichText
-                bar.title.tx = ChartRichText(p=[
-                    Paragraph(
-                        pPr=ParagraphProperties(
-                            defRPr=CharacterProperties(sz=1400, b=True)  # Размер 14pt, жирный
-                        )
-                    )
-                ])
-                bar.title.tx.p[0].text = "Расходы по дням" if lang == 'ru' else "Expenses by Day"
             bar.x_axis.title = None  # Убираем подпись оси X
             bar.y_axis.title = None  # Убираем подпись оси Y
             bar.legend = None  # Убираем легенду
@@ -956,17 +934,6 @@ class ExportService:
             # КРУГОВАЯ ДИАГРАММА ДОХОДОВ (справа от столбчатой расходов)
             income_pie = PieChart()
             income_pie.title = "Доходы по категориям" if lang == 'ru' else "Income by Category"
-            # Увеличиваем шрифт заголовка
-            if RichText and ParagraphProperties and CharacterProperties:
-                from openpyxl.chart.text import RichText as ChartRichText
-                income_pie.title.tx = ChartRichText(p=[
-                    Paragraph(
-                        pPr=ParagraphProperties(
-                            defRPr=CharacterProperties(sz=1400, b=True)  # Размер 14pt, жирный
-                        )
-                    )
-                ])
-                income_pie.title.tx.p[0].text = "Доходы по категориям" if lang == 'ru' else "Income by Category"
             income_pie.varyColors = True
             income_pie.width = 19.76
             income_pie.height = 11.5488
@@ -1129,18 +1096,8 @@ class ExportService:
                 income_bar.grouping = "stacked"
                 income_bar.overlap = 100
 
-                # Добавляем заголовок с большим шрифтом
+                # Добавляем заголовок
                 income_bar.title = "Доходы по дням" if lang == 'ru' else "Income by Day"
-                if RichText and ParagraphProperties and CharacterProperties:
-                    from openpyxl.chart.text import RichText as ChartRichText
-                    income_bar.title.tx = ChartRichText(p=[
-                        Paragraph(
-                            pPr=ParagraphProperties(
-                                defRPr=CharacterProperties(sz=1400, b=True)  # Размер 14pt, жирный
-                            )
-                        )
-                    ])
-                    income_bar.title.tx.p[0].text = "Доходы по дням" if lang == 'ru' else "Income by Day"
                 income_bar.x_axis.title = None
                 income_bar.y_axis.title = None
                 income_bar.legend = None
