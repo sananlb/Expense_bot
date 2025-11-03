@@ -547,6 +547,17 @@ class ExportService:
 
             pie = PieChart()
             pie.title = "Расходы по категориям" if lang == 'ru' else "Expenses by Category"
+            # Увеличиваем шрифт заголовка
+            if RichText and ParagraphProperties and CharacterProperties:
+                from openpyxl.chart.text import RichText as ChartRichText
+                pie.title.tx = ChartRichText(p=[
+                    Paragraph(
+                        pPr=ParagraphProperties(
+                            defRPr=CharacterProperties(sz=1400, b=True)  # Размер 14pt, жирный
+                        )
+                    )
+                ])
+                pie.title.tx.p[0].text = "Расходы по категориям" if lang == 'ru' else "Expenses by Category"
             pie.varyColors = True
             pie.width = 19.76  # Блок еще шире - диаграмма слева, легенда справа
             pie.height = 11.5488  # Блок выше для размещения заголовка
@@ -700,12 +711,12 @@ class ExportService:
         # СТОЛБЧАТАЯ ДИАГРАММА размещается СПРАВА от круговой
         bar_chart_row = charts_start_row  # Используем тот же ряд что и круговая диаграмма
 
-        # Таблица данных для stacked bar chart размещается СПРАВА (скрыта от основного просмотра)
+        # Таблица данных для stacked bar chart размещается ПОД диаграммами
         if sorted_categories and sorted_days:
             # Таблицу опускаем ниже диаграмм для наглядности
             table_start_row = bar_chart_row + int(pie_block_height + 12)
-            # Размещаем справа, в колонке AX (50) - данные для диаграммы, скрыты от основного просмотра
-            chart_data_start_col = 50
+            # Размещаем в тех же колонках что и диаграммы (начиная с I = 9)
+            chart_data_start_col = 9
 
             day_header = 'День' if lang == 'ru' else 'Day'
             day_cell = ws.cell(row=table_start_row, column=chart_data_start_col, value=day_header)
@@ -767,8 +778,19 @@ class ExportService:
             bar.grouping = "stacked"  # Наложение категорий друг на друга
             bar.overlap = 100  # Полное наложение для stacked chart
 
-            # Убираем весь текст - заголовок, подписи осей
-            bar.title = None  # Убираем заголовок
+            # Настраиваем заголовок и убираем подписи осей
+            bar.title = "Расходы по дням" if lang == 'ru' else "Expenses by Day"
+            # Увеличиваем шрифт заголовка
+            if RichText and ParagraphProperties and CharacterProperties:
+                from openpyxl.chart.text import RichText as ChartRichText
+                bar.title.tx = ChartRichText(p=[
+                    Paragraph(
+                        pPr=ParagraphProperties(
+                            defRPr=CharacterProperties(sz=1400, b=True)  # Размер 14pt, жирный
+                        )
+                    )
+                ])
+                bar.title.tx.p[0].text = "Расходы по дням" if lang == 'ru' else "Expenses by Day"
             bar.x_axis.title = None  # Убираем подпись оси X
             bar.y_axis.title = None  # Убираем подпись оси Y
             bar.legend = None  # Убираем легенду
@@ -842,8 +864,8 @@ class ExportService:
             bar.y_axis.crosses = "autoZero"
             bar += line  # Добавляем линию к столбчатой диаграмме
 
-            # Размещение СПРАВА от круговой диаграммы (чуть правее для зазора)
-            ws.add_chart(bar, f"Q{bar_chart_row}")
+            # Размещение СПРАВА от круговой диаграммы (немного левее)
+            ws.add_chart(bar, f"P{bar_chart_row}")
 
         # ==================== ДИАГРАММЫ ДОХОДОВ ====================
         # Подсчет статистики по категориям доходов
@@ -934,6 +956,17 @@ class ExportService:
             # КРУГОВАЯ ДИАГРАММА ДОХОДОВ (справа от столбчатой расходов)
             income_pie = PieChart()
             income_pie.title = "Доходы по категориям" if lang == 'ru' else "Income by Category"
+            # Увеличиваем шрифт заголовка
+            if RichText and ParagraphProperties and CharacterProperties:
+                from openpyxl.chart.text import RichText as ChartRichText
+                income_pie.title.tx = ChartRichText(p=[
+                    Paragraph(
+                        pPr=ParagraphProperties(
+                            defRPr=CharacterProperties(sz=1400, b=True)  # Размер 14pt, жирный
+                        )
+                    )
+                ])
+                income_pie.title.tx.p[0].text = "Доходы по категориям" if lang == 'ru' else "Income by Category"
             income_pie.varyColors = True
             income_pie.width = 19.76
             income_pie.height = 11.5488
@@ -1049,7 +1082,7 @@ class ExportService:
             if sorted_income_categories_list and sorted_days:
                 # Таблица данных для столбчатой диаграммы доходов
                 income_table_start_row = table_start_row  # Используем тот же ряд что и для расходов
-                income_chart_data_start_col = 70  # Колонка BR - данные для диаграммы, скрыты справа
+                income_chart_data_start_col = income_summary_start_col  # Колонка AA
 
                 day_header = 'День' if lang == 'ru' else 'Day'
                 day_cell = ws.cell(row=income_table_start_row, column=income_chart_data_start_col, value=day_header)
@@ -1096,7 +1129,18 @@ class ExportService:
                 income_bar.grouping = "stacked"
                 income_bar.overlap = 100
 
-                income_bar.title = None
+                # Добавляем заголовок с большим шрифтом
+                income_bar.title = "Доходы по дням" if lang == 'ru' else "Income by Day"
+                if RichText and ParagraphProperties and CharacterProperties:
+                    from openpyxl.chart.text import RichText as ChartRichText
+                    income_bar.title.tx = ChartRichText(p=[
+                        Paragraph(
+                            pPr=ParagraphProperties(
+                                defRPr=CharacterProperties(sz=1400, b=True)  # Размер 14pt, жирный
+                            )
+                        )
+                    ])
+                    income_bar.title.tx.p[0].text = "Доходы по дням" if lang == 'ru' else "Income by Day"
                 income_bar.x_axis.title = None
                 income_bar.y_axis.title = None
                 income_bar.legend = None
@@ -1130,8 +1174,8 @@ class ExportService:
                     series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dLbls = None
 
-                # Размещение столбчатой диаграммы доходов (справа от круговой, немного левее)
-                ws.add_chart(income_bar, f"AJ{charts_start_row}")
+                # Размещение столбчатой диаграммы доходов (справа от круговой, немного правее)
+                ws.add_chart(income_bar, f"AL{charts_start_row}")
 
         # Закрепить заголовки (строки 1-2: заголовок секции + заголовки колонок)
         ws.freeze_panes = 'A3'
