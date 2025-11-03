@@ -705,8 +705,8 @@ class ExportService:
 
         # Сортируем категории для стабильности отображения
         sorted_categories = sorted(all_categories)
-        # ВАЖНО: sorted_days теперь включает ВСЕ дни месяца от 1 до last_day (как в PDF)
-        sorted_days = list(range(1, last_day + 1))
+        # ВАЖНО: sorted_days включает ВСЕ дни месяца от 0 до last_day для меток 0,5,10,15,20,25,30
+        sorted_days = list(range(0, last_day + 1))
 
         # СТОЛБЧАТАЯ ДИАГРАММА размещается СПРАВА от круговой
         bar_chart_row = charts_start_row  # Используем тот же ряд что и круговая диаграмма
