@@ -549,12 +549,12 @@ class ExportService:
             # Легенда внутри области диаграммы справа
             pie.legend = Legend()
             pie.legend.position = 'r'
-            # Настройка позиции легенды - начало с 70%
+            # Настройка позиции легенды - начало с 65%
             pie.legend.layout = Layout(
                 manualLayout=ManualLayout(
                     xMode="edge",
                     yMode="edge",
-                    x=0.70,  # Начало легенды на 70% ширины
+                    x=0.65,  # Начало легенды на 65% ширины
                     y=0.05,
                     w=0.25,
                     h=0.9
@@ -933,12 +933,12 @@ class ExportService:
             # Легенда внутри области диаграммы справа
             income_pie.legend = Legend()
             income_pie.legend.position = 'r'
-            # Настройка позиции легенды - начало с 70%
+            # Настройка позиции легенды - начало с 65%
             income_pie.legend.layout = Layout(
                 manualLayout=ManualLayout(
                     xMode="edge",
                     yMode="edge",
-                    x=0.70,  # Начало легенды на 70% ширины
+                    x=0.65,  # Начало легенды на 65% ширины
                     y=0.05,
                     w=0.25,
                     h=0.9
