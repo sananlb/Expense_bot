@@ -504,9 +504,16 @@ class ExportService:
                     max_length = max(max_length, len(str(cell.value)))
             ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 40)
 
+        total_expenses = sum(stats['total'] for _, stats in sorted_categories)
+        pie_segment_ratios = []
+        for (_, _), stats in sorted_categories:
+            amount = stats['total']
+            ratio = (amount / total_expenses) if total_expenses else 0
+            pie_segment_ratios.append(ratio)
         # ==================== ГРАФИКИ ====================
         # Диаграммы размещаются ПОД таблицей Summary (вертикально)
         charts_start_row = summary_end_row + 2  # Начало диаграмм под таблицей
+        pie_block_height = 11.5
 
         # КРУГОВАЯ ДИАГРАММА ПО КАТЕГОРИЯМ (под таблицей Summary)
         if summary_end_row > 1:
@@ -515,15 +522,15 @@ class ExportService:
             pie = PieChart()
             pie.title = "Расходы по категориям" if lang == 'ru' else "Expenses by Category"
             pie.varyColors = True
-            pie.width = 20.8  # Совпадает по ширине с блоком столбчатой диаграммы
-            pie.height = 11.5488  # На 20% ниже для более компактного блока
+            pie.width = 19.76  # Блок еще шире - диаграмма слева, легенда справа
+            pie.height = 11.5488  # Блок выше для размещения заголовка
             pie.layout = Layout(
                 manualLayout=ManualLayout(
                     xMode="edge",
                     yMode="factor",
                     wMode="factor",
                     hMode="factor",
-                    x=0.06,   # Сдвигаем диаграмму ближе к левому краю блока
+                    x=0.065,
                     y=0.05,
                     w=0.42,
                     h=0.8
@@ -540,6 +547,8 @@ class ExportService:
             pie.add_data(data, titles_from_data=True)
             pie.set_categories(labels)
 
+            pie_block_height = pie.height
+
             # Применяем цвета из палитры к каждому сегменту круговой диаграммы
             from openpyxl.chart.series import DataPoint
             if pie.series:
@@ -554,7 +563,7 @@ class ExportService:
                 data_labels.showLegendKey = False
                 data_labels.showSerName = False
                 data_labels.showBubbleSize = False
-                data_labels.dLblPos = "ctr"
+                data_labels.dLblPos = "outEnd"
                 data_labels.numFmt = "0%"
                 point_labels: List[DataLabel] = []
                 if RichText and ParagraphProperties and CharacterProperties:
@@ -650,13 +659,13 @@ class ExportService:
         # ВАЖНО: sorted_days теперь включает ВСЕ дни месяца от 1 до last_day (как в PDF)
         sorted_days = list(range(1, last_day + 1))
 
-        # СТОЛБЧАТАЯ ДИАГРАММА размещается ПОД круговой (круговая height=18, +большой отступ)
-        bar_chart_row = charts_start_row + 28  # Еще ниже круговой диаграммы, чтобы точно не наезжала (18+10)
+        # СТОЛБЧАТАЯ ДИАГРАММА размещается СПРАВА от круговой
+        bar_chart_row = charts_start_row  # Используем тот же ряд что и круговая диаграмма
 
         # Таблица данных для stacked bar chart размещается ПОД столбчатой диаграммой
         if sorted_categories and sorted_days:
-            # Размещаем таблицу НАМНОГО ниже столбчатой диаграммы (bar height=12, +очень большой отступ)
-            table_start_row = bar_chart_row + 25  # Еще ниже, чтобы точно не залазила под диаграмму
+            # Таблицу опускаем ниже диаграмм для наглядности
+            table_start_row = bar_chart_row + int(pie_block_height + 12)
             # Размещаем в тех же колонках что и диаграммы (начиная с I = 9)
             chart_data_start_col = 9
 
@@ -726,8 +735,8 @@ class ExportService:
             bar.y_axis.title = None  # Убираем подпись оси Y
             bar.legend = None  # Убираем легенду
 
-            bar.width = 20.8  # Блок на 20% уже как и у круговой диаграммы
-            bar.height = 10.8  # Высота на 10% ниже для компактности
+            bar.width = 16  # Чуть уже, сдвигаем ближе вправо
+            bar.height = 11.6  # Делаем немного выше для лучшего баланса
 
             # Настраиваем ось X (дни) - показываем метки 5, 10, 15, 20, 25, 30
             # tickLblSkip определяет как часто показывать метки
@@ -793,8 +802,284 @@ class ExportService:
             bar.y_axis.crosses = "autoZero"
             bar += line  # Добавляем линию к столбчатой диаграмме
 
-            # Размещение ПОД круговой диаграммой (используем bar_chart_row определенный выше)
-            ws.add_chart(bar, f"I{bar_chart_row}")
+            # Размещение СПРАВА от круговой диаграммы (чуть правее для зазора)
+            ws.add_chart(bar, f"Q{bar_chart_row}")
+
+        # ==================== ДИАГРАММЫ ДОХОДОВ ====================
+        # Подсчет статистики по категориям доходов
+        income_category_stats = {}
+        for op in operations:
+            if op['type'] == 'income':
+                category_name = op['category'] or ('Без категории' if lang == 'ru' else 'No category')
+                currency = op['currency']
+                amount = abs(op['amount'])
+
+                key = (category_name, currency)
+                if key not in income_category_stats:
+                    income_category_stats[key] = {'total': 0, 'count': 0}
+
+                income_category_stats[key]['total'] += amount
+                income_category_stats[key]['count'] += 1
+
+        # Если есть доходы, создаем диаграммы
+        if income_category_stats:
+            sorted_income_categories = sorted(
+                income_category_stats.items(), key=lambda x: x[1]['total'], reverse=True
+            )
+            total_incomes = sum(stats['total'] for _, stats in sorted_income_categories)
+            income_pie_segment_ratios: List[float] = []
+
+            # ТАБЛИЦА SUMMARY ДЛЯ ДОХОДОВ (справа от диаграмм расходов)
+            income_summary_start_col = 27  # Колонка AA (27)
+            if lang == 'en':
+                income_headers = ['Category', 'Currency', 'Total', 'Count', 'Average']
+            else:
+                income_headers = ['Категория', 'Валюта', 'Всего', 'Количество', 'Средний']
+
+            # Заголовок секции доходов
+            income_section_title = 'ДОХОДЫ' if lang == 'ru' else 'INCOME'
+            title_cell = ws.cell(row=1, column=income_summary_start_col, value=income_section_title)
+            title_cell.font = Font(bold=True, color="FFFFFF", size=12)
+            title_cell.fill = PatternFill(start_color="4CAF50", end_color="4CAF50", fill_type="solid")
+            title_cell.alignment = header_alignment
+            title_cell.border = thin_border
+
+            # Заголовки колонок для Summary доходов
+            for idx, header in enumerate(income_headers):
+                cell = ws.cell(row=2, column=income_summary_start_col + idx, value=header)
+                cell.font = header_font
+                cell.fill = PatternFill(start_color="66BB6A", end_color="66BB6A", fill_type="solid")
+                cell.alignment = header_alignment
+                cell.border = thin_border
+
+            # Заполнение данных Summary для доходов
+            income_summary_row = 3
+            for (category, currency), stats in sorted_income_categories:
+                average = stats['total'] / stats['count'] if stats['count'] > 0 else 0
+
+                ws.cell(row=income_summary_row, column=income_summary_start_col, value=category)
+                ws.cell(row=income_summary_row, column=income_summary_start_col + 1, value=currency)
+                ws.cell(row=income_summary_row, column=income_summary_start_col + 2, value=stats['total'])
+                ws.cell(row=income_summary_row, column=income_summary_start_col + 3, value=stats['count'])
+                ws.cell(row=income_summary_row, column=income_summary_start_col + 4, value=average)
+
+                # Применяем границы и чередующуюся заливку
+                is_even_row = (income_summary_row % 2 == 0)
+                for col in range(income_summary_start_col, income_summary_start_col + 5):
+                    cell = ws.cell(row=income_summary_row, column=col)
+                    cell.border = thin_border
+                    if is_even_row:
+                        cell.fill = gray_fill
+
+                # Форматирование чисел
+                ws.cell(row=income_summary_row, column=income_summary_start_col + 2).number_format = '#,##0.00'
+                ws.cell(row=income_summary_row, column=income_summary_start_col + 4).number_format = '#,##0.00'
+
+                ratio = (stats['total'] / total_incomes) if total_incomes else 0
+                income_pie_segment_ratios.append(ratio)
+
+                income_summary_row += 1
+
+            income_summary_end_row = income_summary_row - 1
+
+            # Автоширина для колонок доходов
+            for col in range(income_summary_start_col, income_summary_start_col + 5):
+                max_length = 0
+                for row in range(1, income_summary_row):
+                    cell = ws.cell(row=row, column=col)
+                    if cell.value:
+                        max_length = max(max_length, len(str(cell.value)))
+                ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 40)
+
+            # КРУГОВАЯ ДИАГРАММА ДОХОДОВ (справа от столбчатой расходов)
+            income_pie = PieChart()
+            income_pie.title = "Доходы по категориям" if lang == 'ru' else "Income by Category"
+            income_pie.varyColors = True
+            income_pie.width = 19.76
+            income_pie.height = 11.5488
+            income_pie.layout = Layout(
+                manualLayout=ManualLayout(
+                    xMode="edge",
+                    yMode="factor",
+                    wMode="factor",
+                    hMode="factor",
+                    x=0.065,
+                    y=0.05,
+                    w=0.42,
+                    h=0.8
+                )
+            )
+
+            # Легенда внутри области диаграммы справа
+            income_pie.legend = Legend()
+            income_pie.legend.position = 'r'
+
+            # Данные для круговой диаграммы доходов
+            income_labels = Reference(ws, min_col=income_summary_start_col, min_row=3, max_row=income_summary_end_row)
+            income_data = Reference(ws, min_col=income_summary_start_col + 2, min_row=2, max_row=income_summary_end_row)
+            income_pie.add_data(income_data, titles_from_data=True)
+            income_pie.set_categories(income_labels)
+
+            # Применяем цвета к сегментам круговой диаграммы доходов
+            if income_pie.series:
+                series = income_pie.series[0]
+                series.tx = None
+
+                data_labels = DataLabelList()
+                data_labels.showPercent = False
+                data_labels.showLeaderLines = False
+                data_labels.showValue = False
+                data_labels.showCatName = False
+                data_labels.showLegendKey = False
+                data_labels.showSerName = False
+                data_labels.showBubbleSize = False
+                data_labels.dLblPos = "outEnd"
+                data_labels.numFmt = "0%"
+                point_labels: List[DataLabel] = []
+                if RichText and ParagraphProperties and CharacterProperties:
+                    data_labels.txPr = RichText(p=[
+                        Paragraph(
+                            pPr=ParagraphProperties(
+                                defRPr=CharacterProperties(sz=900, b=True, solidFill="FFFFFF")
+                            )
+                        )
+                    ])
+                series.dLbls = data_labels
+
+                # Показываем подписи только для сегментов >= 4%
+                for idx, ratio in enumerate(income_pie_segment_ratios):
+                    if ratio >= 0.04:
+                        point_labels.append(
+                            DataLabel(
+                                idx=idx,
+                                showPercent=True,
+                                showVal=False,
+                                showCatName=False,
+                                showSerName=False,
+                                showLegendKey=False,
+                                showLeaderLines=False
+                            )
+                        )
+                if point_labels:
+                    data_labels.dLbl = point_labels
+
+                for idx in range(income_summary_end_row - 2):
+                    color_idx = idx % len(ExportService.CATEGORY_COLORS)
+                    color_hex = ExportService.CATEGORY_COLORS[color_idx].lstrip('#').upper()
+                    pt = DataPoint(idx=idx)
+                    pt.graphicalProperties = GraphicalProperties(solidFill=color_hex)
+                    series.dPt.append(pt)
+
+            # Размещение круговой диаграммы доходов (колонка AA)
+            ws.add_chart(income_pie, f"AA{charts_start_row}")
+
+            # СТОЛБЧАТАЯ ДИАГРАММА ДОХОДОВ ПО ДНЯМ
+            # Подсчет доходов по дням и категориям
+            daily_incomes_by_category = {}  # {category: {day: amount}}
+            income_categories = set()
+
+            for op in operations:
+                if op['type'] == 'income':
+                    category = op['category'] or ('Без категории' if lang == 'ru' else 'No category')
+                    income_categories.add(category)
+
+                    day = op['date'].day
+                    amount = abs(op['amount'])
+
+                    if category not in daily_incomes_by_category:
+                        daily_incomes_by_category[category] = {}
+                    if day not in daily_incomes_by_category[category]:
+                        daily_incomes_by_category[category][day] = 0
+                    daily_incomes_by_category[category][day] += amount
+
+            sorted_income_categories_list = sorted(income_categories)
+
+            if sorted_income_categories_list and sorted_days:
+                # Таблица данных для столбчатой диаграммы доходов
+                income_table_start_row = table_start_row  # Используем тот же ряд что и для расходов
+                income_chart_data_start_col = income_summary_start_col  # Колонка AA
+
+                day_header = 'День' if lang == 'ru' else 'Day'
+                day_cell = ws.cell(row=income_table_start_row, column=income_chart_data_start_col, value=day_header)
+                day_cell.font = header_font
+                day_cell.fill = PatternFill(start_color="66BB6A", end_color="66BB6A", fill_type="solid")
+                day_cell.alignment = header_alignment
+                day_cell.border = thin_border
+
+                for idx, category in enumerate(sorted_income_categories_list):
+                    col = income_chart_data_start_col + 1 + idx
+                    cell = ws.cell(row=income_table_start_row, column=col, value=category)
+                    cell.font = header_font
+                    cell.fill = PatternFill(start_color="66BB6A", end_color="66BB6A", fill_type="solid")
+                    cell.alignment = header_alignment
+                    cell.border = thin_border
+
+                # Заполнение данных по дням
+                for offset, day in enumerate(sorted_days, start=1):
+                    row_num = income_table_start_row + offset
+                    ws.cell(row=row_num, column=income_chart_data_start_col, value=day)
+                    ws.cell(row=row_num, column=income_chart_data_start_col).border = thin_border
+
+                    is_even_row = (row_num % 2 == 0)
+                    for idx, category in enumerate(sorted_income_categories_list):
+                        col = income_chart_data_start_col + 1 + idx
+                        amount = daily_incomes_by_category.get(category, {}).get(day, 0)
+                        cell = ws.cell(row=row_num, column=col, value=amount if amount else None)
+                        cell.number_format = '#,##0.00'
+                        cell.border = thin_border
+                        if is_even_row:
+                            cell.fill = gray_fill
+
+                    if is_even_row:
+                        ws.cell(row=row_num, column=income_chart_data_start_col).fill = gray_fill
+
+                income_days_start_row = income_table_start_row + 1
+                income_days_end_row = income_table_start_row + len(sorted_days)
+                income_categories_start_col = income_chart_data_start_col + 1
+                income_categories_end_col = income_chart_data_start_col + len(sorted_income_categories_list)
+
+                # СТОЛБЧАТАЯ ДИАГРАММА ДОХОДОВ (STACKED)
+                income_bar = BarChart()
+                income_bar.type = "col"
+                income_bar.grouping = "stacked"
+                income_bar.overlap = 100
+
+                income_bar.title = None
+                income_bar.x_axis.title = None
+                income_bar.y_axis.title = None
+                income_bar.legend = None
+
+                income_bar.width = 16
+                income_bar.height = 11.6
+
+                # Настройки оси
+                income_bar.x_axis.tickLblSkip = 4
+                income_bar.x_axis.tickMarkSkip = 4
+                income_bar.x_axis.delete = False
+                income_bar.y_axis.delete = False
+
+                # Серые линии сетки
+                income_bar.y_axis.majorGridlines = ChartLines()
+                income_bar.y_axis.majorGridlines.spPr = GraphicalProperties(ln=LineProperties(solidFill="D0D0D0"))
+
+                # Данные для столбцов
+                income_days_labels = Reference(ws, min_col=income_chart_data_start_col, min_row=income_days_start_row, max_row=income_days_end_row)
+                income_bar_data = Reference(ws,
+                                          min_col=income_categories_start_col,
+                                          max_col=income_categories_end_col,
+                                          min_row=income_table_start_row,
+                                          max_row=income_days_end_row)
+                income_bar.add_data(income_bar_data, titles_from_data=True)
+                income_bar.set_categories(income_days_labels)
+
+                # Применяем цвета
+                for idx, series in enumerate(income_bar.series):
+                    color_hex = ExportService.CATEGORY_COLORS[idx % len(ExportService.CATEGORY_COLORS)].lstrip('#').upper()
+                    series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
+                    series.dLbls = None
+
+                # Размещение столбчатой диаграммы доходов (справа от круговой)
+                ws.add_chart(income_bar, f"AJ{charts_start_row}")
 
         # Закрепить первую строку
         ws.freeze_panes = 'A2'
