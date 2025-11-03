@@ -541,7 +541,7 @@ class ExportService:
         cashbacks = Cashback.objects.filter(profile__telegram_id=user_id)
         for cb in cashbacks:
             if cb.category_id:
-                category_cashbacks[cb.category_id] = cb.cashback_percent / 100.0
+                category_cashbacks[cb.category_id] = float(cb.cashback_percent) / 100.0
 
         # Собираем все уникальные категории
         all_categories = set()
