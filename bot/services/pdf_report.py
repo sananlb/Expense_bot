@@ -74,7 +74,7 @@ class PDFReportService:
         """Подготовить данные для отчета из БД"""
         try:
             # Получаем профиль пользователя
-            profile = await Profile.objects.aget(telegram_id=user_id)
+            profile = await Profile.objects.select_related('household').aget(telegram_id=user_id)
 
             # Определяем период
             start_date = date(year, month, 1)
@@ -101,12 +101,39 @@ class PDFReportService:
                 '#E91E63'   # ярко-розовый (темнее)
             ]
 
+            # Определяем режим отображения (личный/семейный) и имя семьи
+            try:
+                settings_obj = await UserSettings.objects.aget(profile=profile)
+            except UserSettings.DoesNotExist:
+                settings_obj = None
+
+            household_mode = bool(getattr(profile, 'household_id', None)) and settings_obj and getattr(settings_obj, 'view_scope', 'personal') == 'household'
+            household_name = None
+            if household_mode and getattr(profile, 'household', None) and getattr(profile.household, 'name', None):
+                household_name = profile.household.name
+
+            def build_filters(prefix: str, start: date, end: date) -> Dict[str, object]:
+                """Сформировать фильтр для расходов/доходов с учетом режима просмотра."""
+                filters: Dict[str, object] = {
+                    f"{prefix}_date__gte": start,
+                    f"{prefix}_date__lte": end,
+                }
+                if household_mode and getattr(profile, 'household', None):
+                    filters['profile__household'] = profile.household
+                else:
+                    filters['profile'] = profile
+                return filters
+
+            def build_cashback_filters() -> Dict[str, object]:
+                filters: Dict[str, object] = {'month': month}
+                if household_mode and getattr(profile, 'household', None):
+                    filters['profile__household'] = profile.household
+                else:
+                    filters['profile'] = profile
+                return filters
+
             # Получаем расходы за период
-            expenses = Expense.objects.filter(
-                profile=profile,
-                expense_date__gte=start_date,
-                expense_date__lte=end_date
-            )
+            expenses = Expense.objects.filter(**build_filters('expense', start_date, end_date))
 
             # Общая статистика
             total_stats = await expenses.aaggregate(
@@ -128,31 +155,12 @@ class PDFReportService:
             income_categories = []
             daily_incomes = {}
 
-            # Определяем режим отображения (личный/семейный) для пометки в отчете
-            household_mode = False
-            household_name = None
-            try:
-                settings_obj = await UserSettings.objects.aget(profile=profile)
-            except UserSettings.DoesNotExist:
-                settings_obj = None
-            if getattr(profile, 'household_id', None) and settings_obj and getattr(settings_obj, 'view_scope', 'personal') == 'household':
-                household_mode = True
-                try:
-                    # Берем имя семьи, если есть
-                    if profile.household_id:
-                        hh = await Profile.objects.select_related('household').aget(id=profile.id)
-                        if hh.household and hh.household.name:
-                            household_name = hh.household.name
-                except Exception:
-                    household_name = None
-
             # Обрабатываем расходы только если они есть
             if total_count > 0:
                 # Получаем все кешбеки пользователя для этого месяца
                 user_cashbacks = []
                 async for cb in Cashback.objects.filter(
-                    profile=profile,
-                    month=month
+                    **build_cashback_filters()
                 ).select_related('category'):
                     user_cashbacks.append(cb)
 
@@ -283,9 +291,7 @@ class PDFReportService:
                 prev_end = date(prev_year, prev_month, prev_last_day)
             
                 prev_total = await Expense.objects.filter(
-                    profile=profile,
-                    expense_date__gte=prev_start,
-                    expense_date__lte=prev_end
+                    **build_filters('expense', prev_start, prev_end)
                 ).aaggregate(total=Sum('amount'))
             
                 prev_amount = float(prev_total['total'] or 0)
@@ -308,9 +314,7 @@ class PDFReportService:
                 # Получаем все расходы за 6 месяцев одним запросом
                 all_expenses_6m = []
                 async for item in Expense.objects.filter(
-                    profile=profile,
-                    expense_date__gte=six_months_start,
-                    expense_date__lte=end_date
+                    **build_filters('expense', six_months_start, end_date)
                 ).values('expense_date__year', 'expense_date__month', 'currency').annotate(
                     total=Sum('amount'),
                     count=Count('id')
@@ -320,9 +324,7 @@ class PDFReportService:
                 # Получаем все доходы за 6 месяцев одним запросом
                 all_incomes_6m = []
                 async for item in Income.objects.filter(
-                    profile=profile,
-                    income_date__gte=six_months_start,
-                    income_date__lte=end_date
+                    **build_filters('income', six_months_start, end_date)
                 ).values('income_date__year', 'income_date__month', 'currency').annotate(
                     total=Sum('amount'),
                     count=Count('id')
@@ -449,9 +451,7 @@ class PDFReportService:
             
             # Получаем доходы за период
             incomes = Income.objects.filter(
-                profile=profile,
-                income_date__gte=start_date,
-                income_date__lte=end_date
+                **build_filters('income', start_date, end_date)
             ).select_related('category')
             
             # Статистика по доходам

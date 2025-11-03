@@ -14,6 +14,13 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.chart import PieChart, BarChart, Reference
 from openpyxl.chart.shapes import GraphicalProperties
+from openpyxl.chart.layout import Layout, ManualLayout
+from openpyxl.chart.label import DataLabel, DataLabelList
+try:
+    from openpyxl.chart.text import RichText, Paragraph
+    from openpyxl.drawing.text import ParagraphProperties, CharacterProperties
+except ImportError:
+    RichText = Paragraph = ParagraphProperties = CharacterProperties = None
 
 from expenses.models import Expense, Income, Cashback, Profile
 
@@ -439,9 +446,15 @@ class ExportService:
                 if 'object' in op and hasattr(op['object'], 'category_id'):
                     category_stats[key]['category_ids'].add(op['object'].category_id)
 
+        sorted_categories = sorted(
+            category_stats.items(), key=lambda x: x[1]['total'], reverse=True
+        )
+        total_expenses = sum(stats['total'] for _, stats in sorted_categories)
+        pie_segment_ratios: List[float] = []
+
         # Заполнение Summary
         summary_row = 2
-        for (category, currency), stats in sorted(category_stats.items(), key=lambda x: x[1]['total'], reverse=True):
+        for (category, currency), stats in sorted_categories:
             average = stats['total'] / stats['count'] if stats['count'] > 0 else 0
 
             # Кешбэк - СУММА по ВСЕМ category_id для этой категории (важно для household mode!)
@@ -475,6 +488,9 @@ class ExportService:
             if cashback > 0:
                 ws.cell(row=summary_row, column=14).font = Font(color="008000", bold=True)
 
+            ratio = (stats['total'] / total_expenses) if total_expenses else 0
+            pie_segment_ratios.append(ratio)
+
             summary_row += 1
 
         summary_end_row = summary_row - 1
@@ -498,13 +514,25 @@ class ExportService:
 
             pie = PieChart()
             pie.title = "Расходы по категориям" if lang == 'ru' else "Expenses by Category"
-            pie.width = 26  # Блок еще шире - диаграмма слева, легенда справа
-            pie.height = 18  # Блок выше для размещения заголовка
+            pie.varyColors = True
+            pie.width = 20.8  # Совпадает по ширине с блоком столбчатой диаграммы
+            pie.height = 11.5488  # На 20% ниже для более компактного блока
+            pie.layout = Layout(
+                manualLayout=ManualLayout(
+                    xMode="edge",
+                    yMode="factor",
+                    wMode="factor",
+                    hMode="factor",
+                    x=0.06,   # Сдвигаем диаграмму ближе к левому краю блока
+                    y=0.05,
+                    w=0.42,
+                    h=0.8
+                )
+            )
 
-            # Легенда ВНУТРИ области диаграммы справа
+            # Легенда внутри области диаграммы справа
             pie.legend = Legend()
             pie.legend.position = 'r'  # Справа внутри
-            pie.legend.graphicalProperties = GraphicalProperties(solidFill="FFFFFF")
 
             # Данные: колонка I (категории) и K (всего)
             labels = Reference(ws, min_col=9, min_row=2, max_row=summary_end_row)
@@ -516,9 +544,49 @@ class ExportService:
             from openpyxl.chart.series import DataPoint
             if pie.series:
                 series = pie.series[0]
+                series.tx = None  # убираем ссылку на заголовок серии, чтобы не выводился Total/Ряд
+
+                data_labels = DataLabelList()
+                data_labels.showPercent = False
+                data_labels.showLeaderLines = False
+                data_labels.showValue = False
+                data_labels.showCatName = False
+                data_labels.showLegendKey = False
+                data_labels.showSerName = False
+                data_labels.showBubbleSize = False
+                data_labels.dLblPos = "ctr"
+                data_labels.numFmt = "0%"
+                point_labels: List[DataLabel] = []
+                if RichText and ParagraphProperties and CharacterProperties:
+                    data_labels.txPr = RichText(p=[
+                        Paragraph(
+                            pPr=ParagraphProperties(
+                                defRPr=CharacterProperties(sz=900, b=True, solidFill="FFFFFF")
+                            )
+                        )
+                    ])
+                series.dLbls = data_labels
+
+                # Показываем подписи только для сегментов >= 3%
+                for idx, ratio in enumerate(pie_segment_ratios):
+                    if ratio >= 0.04:
+                        point_labels.append(
+                            DataLabel(
+                                idx=idx,
+                                showPercent=True,
+                                showVal=False,
+                                showCatName=False,
+                                showSerName=False,
+                                showLegendKey=False,
+                                showLeaderLines=False
+                            )
+                        )
+                if point_labels:
+                    data_labels.dLbl = point_labels
+
                 for idx in range(summary_end_row - 1):  # Количество категорий
                     color_idx = idx % len(ExportService.CATEGORY_COLORS)
-                    color_hex = ExportService.CATEGORY_COLORS[color_idx].lstrip('#')
+                    color_hex = ExportService.CATEGORY_COLORS[color_idx].lstrip('#').upper()
 
                     # Создаем точку данных с цветом
                     pt = DataPoint(idx=idx)
@@ -658,8 +726,8 @@ class ExportService:
             bar.y_axis.title = None  # Убираем подпись оси Y
             bar.legend = None  # Убираем легенду
 
-            bar.width = 26  # Такая же ширина как у круговой диаграммы
-            bar.height = 12
+            bar.width = 20.8  # Блок на 20% уже как и у круговой диаграммы
+            bar.height = 10.8  # Высота на 10% ниже для компактности
 
             # Настраиваем ось X (дни) - показываем метки 5, 10, 15, 20, 25, 30
             # tickLblSkip определяет как часто показывать метки

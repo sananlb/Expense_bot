@@ -95,7 +95,7 @@ async def parse_utm_source(start_args: str) -> Optional[Dict[str, Any]]:
             page = parts[1] if len(parts) > 1 else 'unknown'
 
             return {
-                'source': 'landing',
+                'source': 'organic',
                 'campaign': f"{domain}_{page}",
                 'details': {
                     'domain': domain,
