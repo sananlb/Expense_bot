@@ -703,7 +703,7 @@ class ExportService:
         # Таблица данных для stacked bar chart размещается ПОД диаграммами
         if sorted_categories and sorted_days:
             # Таблицу опускаем ниже диаграмм для наглядности
-            table_start_row = bar_chart_row + int(pie_block_height + 12)
+            table_start_row = bar_chart_row + int(pie_block_height + 15)
             # Размещаем в тех же колонках что и диаграммы (начиная с I = 9)
             chart_data_start_col = 9
 
@@ -842,8 +842,8 @@ class ExportService:
             bar.y_axis.crosses = "autoZero"
             bar += line  # Добавляем линию к столбчатой диаграмме
 
-            # Размещение СПРАВА от круговой диаграммы (немного левее)
-            ws.add_chart(bar, f"P{bar_chart_row}")
+            # Размещение СПРАВА от круговой диаграммы
+            ws.add_chart(bar, f"Q{bar_chart_row}")
 
         # ==================== ДИАГРАММЫ ДОХОДОВ ====================
         # Подсчет статистики по категориям доходов
@@ -1131,8 +1131,8 @@ class ExportService:
                     series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dLbls = None
 
-                # Размещение столбчатой диаграммы доходов (справа от круговой, немного правее)
-                ws.add_chart(income_bar, f"AL{charts_start_row}")
+                # Размещение столбчатой диаграммы доходов (справа от круговой)
+                ws.add_chart(income_bar, f"AK{charts_start_row}")
 
         # Закрепить заголовки (строки 1-2: заголовок секции + заголовки колонок)
         ws.freeze_panes = 'A3'
