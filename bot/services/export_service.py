@@ -465,6 +465,10 @@ class ExportService:
 
         expenses_data_end_row = current_row - 1
 
+        # Добавляем автофильтр для таблицы операций (интерактивная сортировка и фильтрация)
+        if expenses_data_end_row > 2:  # Если есть хотя бы одна операция
+            ws.auto_filter.ref = f"A2:{get_column_letter(ops_end_col)}{expenses_data_end_row}"
+
         # Итоги (Расходы, Доходы, Кешбэк, Баланс)
         current_row += 1
         all_currencies = set(list(expenses_by_currency.keys()) + list(incomes_by_currency.keys()))
