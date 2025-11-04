@@ -1095,18 +1095,18 @@ class ExportService:
                     if cell.value:
                         max_length = max(max_length, len(str(cell.value)))
 
-                # Увеличенная ширина для столбцов Total и Count
+                # Ограниченная ширина для стабильного размещения диаграмм (макс 20 вместо 40)
                 col_offset = col - income_summary_start_col
                 if col_offset == 2 or col_offset == 3:  # Total (2) и Count (3)
-                    ws.column_dimensions[get_column_letter(col)].width = min(max_length + 5, 40)
+                    ws.column_dimensions[get_column_letter(col)].width = min(max_length + 5, 20)
                 else:
-                    ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 40)
+                    ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 20)
 
             # КРУГОВАЯ ДИАГРАММА ДОХОДОВ (справа от столбчатой расходов)
             income_pie = PieChart()
             income_pie.title = "Доходы по категориям" if lang == 'ru' else "Income by Category"
             income_pie.varyColors = True
-            income_pie.width = 14  # Уменьшенная ширина (~5-6 колонок) для стабильного размещения со смещением +7
+            income_pie.width = 19.3  # Та же ширина что и расходы (реальная круговая часть ~12.5см из-за легенды)
             income_pie.height = 11.5488
             income_pie.layout = Layout(
                 manualLayout=ManualLayout(
@@ -1305,9 +1305,10 @@ class ExportService:
                     series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dLbls = None
 
-                # Размещение столбчатой диаграммы доходов (справа от круговой, смещение +9 колонок)
-                # Круговая width=14см (~5.5 колонок) + зазор 3.5 колонки = стабильное размещение
-                income_bar_col = get_column_letter(income_summary_start_col + 9)
+                # Размещение столбчатой диаграммы доходов (справа от круговой, смещение +7 колонок)
+                # Та же логика что в расходах: круговая width=19.3см (реальная часть ~12.5см) + смещение +7
+                # Ширина колонок ограничена (макс 20) для предсказуемого размещения
+                income_bar_col = get_column_letter(income_summary_start_col + 7)
                 ws.add_chart(income_bar, f"{income_bar_col}{charts_start_row}")
 
         # Закрепить заголовки (строки 1-2: заголовок секции + заголовки колонок)
