@@ -666,7 +666,13 @@ class ExportService:
                 cell = ws.cell(row=row, column=col)
                 if cell.value:
                     max_length = max(max_length, len(str(cell.value)))
-            ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 40)
+
+            # Увеличенная ширина для столбцов Total и Count
+            col_offset = col - summary_start_col
+            if col_offset == 2 or col_offset == 3:  # Total (2) и Count (3)
+                ws.column_dimensions[get_column_letter(col)].width = min(max_length + 5, 40)
+            else:
+                ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 40)
 
         total_expenses = sum(stats['total'] for _, stats in sorted_categories)
         pie_segment_ratios = []
@@ -1057,7 +1063,13 @@ class ExportService:
                     cell = ws.cell(row=row, column=col)
                     if cell.value:
                         max_length = max(max_length, len(str(cell.value)))
-                ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 40)
+
+                # Увеличенная ширина для столбцов Total и Count
+                col_offset = col - income_summary_start_col
+                if col_offset == 2 or col_offset == 3:  # Total (2) и Count (3)
+                    ws.column_dimensions[get_column_letter(col)].width = min(max_length + 5, 40)
+                else:
+                    ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 40)
 
             # КРУГОВАЯ ДИАГРАММА ДОХОДОВ (справа от столбчатой расходов)
             income_pie = PieChart()
