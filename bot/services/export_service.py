@@ -567,7 +567,12 @@ class ExportService:
                 cell = ws.cell(row=row, column=col)
                 if cell.value:
                     max_length = max(max_length, len(str(cell.value)))
-            ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 50)
+
+            # Столбец Cashback (4) делаем в 2 раза уже
+            if col == 4 and has_any_cashback:
+                ws.column_dimensions[get_column_letter(col)].width = min(max_length + 1, 50)
+            else:
+                ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 50)
 
         # ==================== ПРАВАЯ ЧАСТЬ: SUMMARY (Колонки K-P) ====================
         summary_start_col = 11  # Колонка K (отступ 2 столбца от дневника)
@@ -669,10 +674,12 @@ class ExportService:
                 if cell.value:
                     max_length = max(max_length, len(str(cell.value)))
 
-            # Увеличенная ширина для столбцов Total, Count и Cashback
+            # Увеличенная ширина для столбцов Total и Count, Cashback уже
             col_offset = col - summary_start_col
-            if col_offset in [2, 3, 5]:  # Total (2), Count (3) и Cashback (5)
+            if col_offset in [2, 3]:  # Total (2) и Count (3)
                 ws.column_dimensions[get_column_letter(col)].width = min(max_length + 5, 40)
+            elif col_offset == 5:  # Cashback (5) - в 2 раза уже
+                ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 40)
             else:
                 ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 40)
 
