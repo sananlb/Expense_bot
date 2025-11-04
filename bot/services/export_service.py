@@ -705,7 +705,7 @@ class ExportService:
             pie = PieChart()
             pie.title = "Расходы по категориям" if lang == 'ru' else "Expenses by Category"
             pie.varyColors = True
-            pie.width = 19.76  # Блок еще шире - диаграмма слева, легенда справа
+            pie.width = 19.3  # Немного уже для создания зазора со столбчатой диаграммой
             pie.height = 11.5488  # Блок выше для размещения заголовка
             pie.layout = Layout(
                 manualLayout=ManualLayout(
