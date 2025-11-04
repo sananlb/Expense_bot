@@ -856,6 +856,13 @@ class ExportService:
         # ВАЖНО: sorted_days включает ВСЕ дни месяца от 0 до last_day для меток 0,5,10,15,20,25,30
         sorted_days = list(range(0, last_day + 1))
 
+        # Вычисляем динамическую колонку для секции доходов
+        # Таблица расходов: колонка 11 (День) + категории + кешбэк
+        # Максимальная колонка расходов = 12 + len(sorted_categories)
+        expense_table_last_col = 12 + len(sorted_categories)
+        # Добавляем зазор минимум 5 колонок, но не меньше чем колонка 30 (AD)
+        dynamic_income_start_col = max(30, expense_table_last_col + 5)
+
         # СТОЛБЧАТАЯ ДИАГРАММА размещается СПРАВА от круговой
         bar_chart_row = charts_start_row  # Используем тот же ряд что и круговая диаграмма
 
@@ -1017,7 +1024,8 @@ class ExportService:
             income_pie_segment_ratios: List[float] = []
 
             # ТАБЛИЦА SUMMARY ДЛЯ ДОХОДОВ (справа от диаграмм расходов)
-            income_summary_start_col = 30  # Колонка AD (30) - увеличен отступ от секции расходов
+            # Используем динамически рассчитанную колонку для предотвращения наложения с таблицей расходов
+            income_summary_start_col = dynamic_income_start_col
             if lang == 'en':
                 income_headers = ['Category', 'Currency', 'Total', 'Count', 'Average']
             else:
@@ -1176,8 +1184,9 @@ class ExportService:
                     pt.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dPt.append(pt)
 
-            # Размещение круговой диаграммы доходов (колонка AD)
-            ws.add_chart(income_pie, f"AD{charts_start_row}")
+            # Размещение круговой диаграммы доходов (динамическая колонка)
+            income_pie_col = get_column_letter(income_summary_start_col)
+            ws.add_chart(income_pie, f"{income_pie_col}{charts_start_row}")
 
             # СТОЛБЧАТАЯ ДИАГРАММА ДОХОДОВ ПО ДНЯМ
             # Подсчет доходов по дням и категориям
@@ -1203,7 +1212,7 @@ class ExportService:
             if sorted_income_categories_list and sorted_days:
                 # Таблица данных для столбчатой диаграммы доходов
                 income_table_start_row = table_start_row  # Используем тот же ряд что и для расходов
-                income_chart_data_start_col = income_summary_start_col  # Колонка AA
+                income_chart_data_start_col = income_summary_start_col  # Динамическая колонка (зависит от количества категорий расходов)
 
                 day_header = 'День' if lang == 'ru' else 'Day'
                 day_cell = ws.cell(row=income_table_start_row, column=income_chart_data_start_col, value=day_header)
@@ -1286,8 +1295,9 @@ class ExportService:
                     series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dLbls = None
 
-                # Размещение столбчатой диаграммы доходов (справа от круговой, колонка AN)
-                ws.add_chart(income_bar, f"AM{charts_start_row}")
+                # Размещение столбчатой диаграммы доходов (справа от круговой, смещение +9 колонок)
+                income_bar_col = get_column_letter(income_summary_start_col + 9)
+                ws.add_chart(income_bar, f"{income_bar_col}{charts_start_row}")
 
         # Закрепить заголовки (строки 1-2: заголовок секции + заголовки колонок)
         ws.freeze_panes = 'A3'
