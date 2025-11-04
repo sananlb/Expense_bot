@@ -601,7 +601,7 @@ class ExportService:
                 data_labels.showLegendKey = False
                 data_labels.showSerName = False
                 data_labels.showBubbleSize = False
-                data_labels.dLblPos = "outEnd"
+                data_labels.dLblPos = "inEnd"  # Позиция внутри у края (ближе к центру)
                 data_labels.numFmt = "0%"
                 point_labels: List[DataLabel] = []
                 if RichText and ParagraphProperties and CharacterProperties:
@@ -870,7 +870,7 @@ class ExportService:
             income_pie_segment_ratios: List[float] = []
 
             # ТАБЛИЦА SUMMARY ДЛЯ ДОХОДОВ (справа от диаграмм расходов)
-            income_summary_start_col = 27  # Колонка AA (27)
+            income_summary_start_col = 29  # Колонка AC (29) - увеличен отступ от секции расходов
             if lang == 'en':
                 income_headers = ['Category', 'Currency', 'Total', 'Count', 'Average']
             else:
@@ -985,7 +985,7 @@ class ExportService:
                 data_labels.showLegendKey = False
                 data_labels.showSerName = False
                 data_labels.showBubbleSize = False
-                data_labels.dLblPos = "outEnd"
+                data_labels.dLblPos = "inEnd"  # Позиция внутри у края (ближе к центру)
                 data_labels.numFmt = "0%"
                 point_labels: List[DataLabel] = []
                 if RichText and ParagraphProperties and CharacterProperties:
@@ -1022,8 +1022,8 @@ class ExportService:
                     pt.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dPt.append(pt)
 
-            # Размещение круговой диаграммы доходов (колонка AA)
-            ws.add_chart(income_pie, f"AA{charts_start_row}")
+            # Размещение круговой диаграммы доходов (колонка AC)
+            ws.add_chart(income_pie, f"AC{charts_start_row}")
 
             # СТОЛБЧАТАЯ ДИАГРАММА ДОХОДОВ ПО ДНЯМ
             # Подсчет доходов по дням и категориям
@@ -1132,7 +1132,7 @@ class ExportService:
                     series.dLbls = None
 
                 # Размещение столбчатой диаграммы доходов (справа от круговой)
-                ws.add_chart(income_bar, f"AK{charts_start_row}")
+                ws.add_chart(income_bar, f"AM{charts_start_row}")
 
         # Закрепить заголовки (строки 1-2: заголовок секции + заголовки колонок)
         ws.freeze_panes = 'A3'
