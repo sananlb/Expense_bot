@@ -123,9 +123,13 @@ loop.run_until_complete(
 
 Добавить три новых обработчика после существующих `callback_export_month_csv`, `callback_export_month_excel`.
 
-**Важно**: Код практически идентичен существующим обработчикам, но:
-1. Callback data: `monthly_report_*` вместо `export_month_*`
-2. В caption добавляем рекламный текст
+**⚠️ ВАЖНО**: Код НЕ идентичен существующим обработчикам!
+
+**Ключевое отличие**: Существующие обработчики (`callback_export_month_csv`, `callback_export_month_excel`) берут период из **FSM state** (`report_start_date`/`report_end_date`), который заполняется при навигации по меню.
+
+Новые обработчики вызываются из push-уведомления 1 числа, где state НЕ заполнен. Поэтому нужно:
+1. **Парсить год и месяц из `callback_data`** (формат: `monthly_report_csv_YEAR_MONTH`)
+2. **Запрашивать операции напрямую** по году/месяцу (не из state)
 
 #### Пример для CSV:
 
@@ -134,10 +138,100 @@ loop.run_until_complete(
 async def callback_monthly_report_csv(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Генерация CSV отчета из ежемесячного уведомления"""
     try:
-        # ... (код идентичен callback_export_month_csv) ...
+        from expenses.models import Expense, Income, Profile
+        from bot.services.export_service import ExportService
+        from bot.services.profile import get_user_settings
+        from asgiref.sync import sync_to_async
+        from aiogram.types import BufferedInputFile
 
-        # ========== ЕДИНСТВЕННОЕ ОТЛИЧИЕ ==========
-        # Формируем caption с рекламным текстом
+        user_id = callback.from_user.id
+
+        # ========== ОТЛИЧИЕ 1: Парсим callback_data ==========
+        # Формат: monthly_report_csv_2025_10
+        parts = callback.data.split('_')
+        year = int(parts[3])
+        month = int(parts[4])
+
+        # Проверка Premium подписки
+        if not await check_subscription(user_id):
+            await callback.answer()
+            await callback.message.answer(
+                get_text('export_premium_required', lang),
+                reply_markup=get_subscription_button(),
+                parse_mode="HTML"
+            )
+            return
+
+        await callback.answer(get_text('export_generating', lang), show_alert=False)
+
+        # ========== ОТЛИЧИЕ 2: Запрашиваем данные по year/month ==========
+        @sync_to_async
+        def get_user_data():
+            profile = Profile.objects.get(telegram_id=user_id)
+            settings = get_user_settings.__wrapped__(user_id)
+            household_mode = bool(profile.household) and getattr(settings, 'view_scope', 'personal') == 'household'
+
+            if household_mode:
+                expenses = list(
+                    Expense.objects.filter(
+                        profile__household=profile.household,
+                        expense_date__year=year,
+                        expense_date__month=month
+                    ).select_related('category').order_by('-expense_date', '-expense_time')
+                )
+                incomes = list(
+                    Income.objects.filter(
+                        profile__household=profile.household,
+                        income_date__year=year,
+                        income_date__month=month
+                    ).select_related('category').order_by('-income_date', '-income_time')
+                )
+            else:
+                expenses = list(
+                    Expense.objects.filter(
+                        profile__telegram_id=user_id,
+                        expense_date__year=year,
+                        expense_date__month=month
+                    ).select_related('category').order_by('-expense_date', '-expense_time')
+                )
+                incomes = list(
+                    Income.objects.filter(
+                        profile__telegram_id=user_id,
+                        income_date__year=year,
+                        income_date__month=month
+                    ).select_related('category').order_by('-income_date', '-income_time')
+                )
+
+            return expenses, incomes, household_mode
+
+        expenses, incomes, household_mode = await get_user_data()
+
+        # Проверка на пустоту
+        if not expenses and not incomes:
+            await callback.message.answer(
+                get_text('export_empty', lang),
+                parse_mode="HTML"
+            )
+            return
+
+        # Генерация CSV
+        @sync_to_async
+        def generate_csv_file():
+            return ExportService.generate_csv(expenses, incomes, year, month, lang, user_id, household_mode)
+
+        csv_bytes = await generate_csv_file()
+
+        # Формируем имя файла
+        month_names_ru = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+                         'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+        month_names_en = ['January', 'February', 'March', 'April', 'May', 'June',
+                         'July', 'August', 'September', 'October', 'November', 'December']
+        month_name = month_names_ru[month - 1] if lang == 'ru' else month_names_en[month - 1]
+
+        filename = f"expenses_{month_name}_{year}.csv"
+        document = BufferedInputFile(csv_bytes, filename=filename)
+
+        # ========== ОТЛИЧИЕ 3: Добавляем рекламный текст ==========
         caption = (
             f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
             f"🤖 Сгенерировано в Coins @showmecoinbot"
@@ -152,9 +246,16 @@ async def callback_monthly_report_csv(callback: CallbackQuery, state: FSMContext
 
     except Exception as e:
         logger.error(f"Error generating monthly CSV report: {e}", exc_info=True)
+        await callback.message.answer(
+            get_text('export_error', lang),
+            parse_mode="HTML"
+        )
 ```
 
-Аналогично для **XLSX** и **PDF** - просто копируем логику из `callback_export_month_excel` и `pdf_generate_current`, добавляя рекламный текст в caption.
+Аналогично для **XLSX** и **PDF** - копируем эту же логику:
+1. Парсим `callback_data` для получения year/month
+2. Запрашиваем данные по этим параметрам (не из state)
+3. Добавляем рекламный текст в caption
 
 ---
 
@@ -162,12 +263,14 @@ async def callback_monthly_report_csv(callback: CallbackQuery, state: FSMContext
 
 Опционально можно добавить рекламный текст и в существующие обработчики экспорта (когда пользователь сам выбирает экспорт из меню):
 
-### Файл: `bot/routers/reports.py`
+### Файлы для изменения:
 
-В функциях:
+**1. `bot/routers/reports.py`:**
 - `callback_export_month_csv` (строка ~920)
 - `callback_export_month_excel` (строка ~1050)
-- `callback_pdf_generate_current` (в `bot/routers/pdf_report.py`)
+
+**2. `bot/routers/expense.py`:**
+- `callback_pdf_generate_current` (строка 442)
 
 Добавить рекламный текст в caption:
 
@@ -194,22 +297,39 @@ caption = (
 
 ## ✅ Чек-лист реализации
 
+### Этап 1: Изменение уведомления
 - [ ] Переименовать `send_monthly_report` → `send_monthly_report_notification` в `bot/services/notifications.py`
 - [ ] Изменить тело функции: убрать генерацию PDF, добавить кнопки выбора формата
 - [ ] Обновить вызов в `expense_bot/celery_tasks.py` (строка 73)
-- [ ] Создать 3 callback обработчика в `bot/routers/reports.py`:
-  - [ ] `callback_monthly_report_csv_*`
-  - [ ] `callback_monthly_report_xlsx_*`
-  - [ ] `callback_monthly_report_pdf_*`
-- [ ] Добавить рекламный текст в caption всех трех обработчиков
-- [ ] (Опционально) Добавить рекламный текст в существующие обработчики экспорта
-- [ ] Протестировать весь флоу:
-  - [ ] Автоматическая отправка уведомления 1 числа
-  - [ ] Генерация PDF по кнопке
-  - [ ] Генерация XLSX по кнопке
-  - [ ] Генерация CSV по кнопке
-  - [ ] Проверить caption с рекламным текстом
-  - [ ] Проверить пересылку сообщения (Forward)
+
+### Этап 2: Создание обработчиков (в `bot/routers/reports.py`)
+- [ ] `callback_monthly_report_csv_*`:
+  - [ ] Парсить year/month из callback_data (формат: `monthly_report_csv_YEAR_MONTH`)
+  - [ ] Запросить expenses/incomes по year/month (НЕ из state!)
+  - [ ] Генерировать CSV
+  - [ ] Добавить рекламный текст в caption
+- [ ] `callback_monthly_report_xlsx_*`:
+  - [ ] Парсить year/month из callback_data
+  - [ ] Запросить expenses/incomes по year/month
+  - [ ] Генерировать XLSX
+  - [ ] Добавить рекламный текст в caption
+- [ ] `callback_monthly_report_pdf_*`:
+  - [ ] Парсить year/month из callback_data
+  - [ ] Вызвать PDFReportService с year/month
+  - [ ] Добавить рекламный текст в caption
+
+### Этап 3 (опционально): Обновление существующих обработчиков
+- [ ] `callback_export_month_csv` в `bot/routers/reports.py:920`
+- [ ] `callback_export_month_excel` в `bot/routers/reports.py:1050`
+- [ ] `callback_pdf_generate_current` в `bot/routers/expense.py:442`
+
+### Этап 4: Тестирование
+- [ ] Автоматическая отправка уведомления 1 числа (можно эмулировать)
+- [ ] Генерация PDF по кнопке из уведомления
+- [ ] Генерация XLSX по кнопке из уведомления
+- [ ] Генерация CSV по кнопке из уведомления
+- [ ] Проверить caption с рекламным текстом на всех форматах
+- [ ] Проверить пересылку сообщения (Forward) - рекламный текст должен сохраняться
 
 ---
 
@@ -253,6 +373,10 @@ caption = (
 2. **Реклама**: При пересылке получатель видит "🤖 Сгенерировано в Coins @showmecoinbot"
 3. **Гибкость**: Пользователь сам выбирает формат (PDF/XLSX/CSV)
 4. **UX**: Используется встроенный механизм пересылки Telegram
+5. **⚠️ Важно**: Новые обработчики НЕ используют FSM state - парсят данные из callback_data
+6. **Расположение файлов**:
+   - CSV/XLSX обработчики → `bot/routers/reports.py`
+   - PDF обработчик существует в → `bot/routers/expense.py:442` (не pdf_report.py!)
 
 ---
 
