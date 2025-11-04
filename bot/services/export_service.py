@@ -567,8 +567,8 @@ class ExportService:
                     max_length = max(max_length, len(str(cell.value)))
             ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 50)
 
-        # ==================== ПРАВАЯ ЧАСТЬ: SUMMARY (Колонки J-O) ====================
-        summary_start_col = 10  # Колонка J (отступ 1 столбец от дневника)
+        # ==================== ПРАВАЯ ЧАСТЬ: SUMMARY (Колонки K-P) ====================
+        summary_start_col = 11  # Колонка K (отступ 2 столбца от дневника)
 
         # Заголовок секции расходов
         expenses_section_title = 'РАСХОДЫ' if lang == 'ru' else 'EXPENSES'
@@ -780,8 +780,8 @@ class ExportService:
                     pt.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dPt.append(pt)
 
-            # Размещение ПОД таблицей Summary, начиная с колонки J
-            ws.add_chart(pie, f"J{charts_start_row}")
+            # Размещение ПОД таблицей Summary, начиная с колонки K
+            ws.add_chart(pie, f"K{charts_start_row}")
 
         # СТОЛБЧАТАЯ ДИАГРАММА ПО ДНЯМ И КАТЕГОРИЯМ
         # Подсчет расходов по дням и категориям для stacked bar chart
@@ -844,8 +844,8 @@ class ExportService:
         if sorted_categories and sorted_days:
             # Таблицу опускаем ниже диаграмм для наглядности
             table_start_row = bar_chart_row + int(pie_block_height + 15)
-            # Размещаем в тех же колонках что и диаграммы (начиная с J = 10)
-            chart_data_start_col = 10
+            # Размещаем в тех же колонках что и диаграммы (начиная с K = 11)
+            chart_data_start_col = 11
 
             day_header = 'День' if lang == 'ru' else 'Day'
             day_cell = ws.cell(row=table_start_row, column=chart_data_start_col, value=day_header)
@@ -970,8 +970,8 @@ class ExportService:
             bar.y_axis.axId = 100
             bar.y_axis.crosses = "autoZero"
 
-            # Размещение СПРАВА от круговой диаграммы (X - с учетом ширины круговой)
-            ws.add_chart(bar, f"X{bar_chart_row}")
+            # Размещение СПРАВА от круговой диаграммы (S - ближе к круговой)
+            ws.add_chart(bar, f"S{bar_chart_row}")
 
         # ==================== ДИАГРАММЫ ДОХОДОВ ====================
         # Подсчет статистики по категориям доходов
