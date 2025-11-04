@@ -906,7 +906,7 @@ async def callback_export_month_csv(callback: CallbackQuery, state: FSMContext, 
         # Генерация CSV
         @sync_to_async
         def generate_csv_file():
-            return ExportService.generate_csv(expenses, incomes, year, month, lang)
+            return ExportService.generate_csv(expenses, incomes, year, month, lang, user_id, household_mode)
 
         csv_bytes = await generate_csv_file()
 

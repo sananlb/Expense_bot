@@ -168,7 +168,9 @@ class ExportService:
         incomes: List[Income],
         year: int,
         month: int,
-        lang: str = 'ru'
+        lang: str = 'ru',
+        user_id: int = None,
+        household_mode: bool = False
     ) -> bytes:
         """
         Генерация CSV файла с операциями за месяц.
@@ -179,20 +181,45 @@ class ExportService:
             year: Год
             month: Месяц
             lang: Язык (ru/en)
+            user_id: ID пользователя для расчета кешбэка
+            household_mode: Режим семейного бюджета
 
         Returns:
             Байты CSV файла (UTF-8 с BOM для корректного открытия в Excel)
         """
         operations = ExportService.prepare_operations_data(expenses, incomes)
 
+        # Рассчитываем кешбэк для каждой траты
+        expense_cashbacks = {}  # {expense_id: cashback_amount}
+        has_any_cashback = False
+
+        if user_id and expenses:
+            category_cashbacks = ExportService.calculate_category_cashbacks(expenses, user_id, month, household_mode)
+
+            # Рассчитываем кешбэк для каждой траты
+            for expense in expenses:
+                if expense.category_id and expense.category_id in category_cashbacks:
+                    cashback_amount = float(expense.amount) * (category_cashbacks[expense.category_id] / sum(
+                        float(e.amount) for e in expenses if e.category_id == expense.category_id
+                    ))
+                    expense_cashbacks[expense.id] = cashback_amount
+                    if cashback_amount > 0:
+                        has_any_cashback = True
+
         output = StringIO()
 
         # Заголовки в зависимости от языка
-        # ВАЖНО: Порядок колонок - Дата, Время, Сумма, Валюта, Категория, Описание, Тип
-        if lang == 'en':
-            headers = ['Date', 'Time', 'Amount', 'Currency', 'Category', 'Description', 'Type']
+        # Порядок: Дата, Время, Сумма, Кешбэк (если есть), Валюта, Категория, Описание, Тип
+        if has_any_cashback:
+            if lang == 'en':
+                headers = ['Date', 'Time', 'Amount', 'Cashback', 'Currency', 'Category', 'Description', 'Type']
+            else:
+                headers = ['Дата', 'Время', 'Сумма', 'Кешбэк', 'Валюта', 'Категория', 'Описание', 'Тип']
         else:
-            headers = ['Дата', 'Время', 'Сумма', 'Валюта', 'Категория', 'Описание', 'Тип']
+            if lang == 'en':
+                headers = ['Date', 'Time', 'Amount', 'Currency', 'Category', 'Description', 'Type']
+            else:
+                headers = ['Дата', 'Время', 'Сумма', 'Валюта', 'Категория', 'Описание', 'Тип']
 
         writer = csv.writer(output, delimiter=',', quotechar='"', quoting=csv.QUOTE_ALL)
         writer.writerow(headers)
@@ -210,15 +237,33 @@ class ExportService:
             category = str(op['category'] or '')
             category = category.replace('\n', ' ').replace('\r', ' ').strip()
 
-            writer.writerow([
-                op['date'].strftime('%d.%m.%Y'),
-                op['time'].strftime('%H:%M'),
-                f"{op['amount']:.2f}",
-                op['currency'],
-                category,
-                description,
-                type_text
-            ])
+            # Получаем кешбэк для траты
+            cashback = 0
+            if op['type'] == 'expense' and 'object' in op and hasattr(op['object'], 'id'):
+                cashback = expense_cashbacks.get(op['object'].id, 0)
+
+            # Формируем строку в зависимости от наличия колонки кешбэка
+            if has_any_cashback:
+                writer.writerow([
+                    op['date'].strftime('%d.%m.%Y'),
+                    op['time'].strftime('%H:%M'),
+                    f"{op['amount']:.2f}",
+                    f"{cashback:.2f}" if op['type'] == 'expense' else '',
+                    op['currency'],
+                    category,
+                    description,
+                    type_text
+                ])
+            else:
+                writer.writerow([
+                    op['date'].strftime('%d.%m.%Y'),
+                    op['time'].strftime('%H:%M'),
+                    f"{op['amount']:.2f}",
+                    op['currency'],
+                    category,
+                    description,
+                    type_text
+                ])
 
         # Вернуть байты с BOM (Byte Order Mark) для корректного открытия в Excel
         return '\ufeff'.encode('utf-8') + output.getvalue().encode('utf-8')
@@ -251,6 +296,22 @@ class ExportService:
         """
         operations = ExportService.prepare_operations_data(expenses, incomes)
         category_cashbacks = ExportService.calculate_category_cashbacks(expenses, user_id, month, household_mode)
+
+        # Рассчитываем кешбэк для каждой траты
+        expense_cashbacks = {}  # {expense_id: cashback_amount}
+        has_any_cashback = False
+
+        if expenses:
+            # Рассчитываем кешбэк для каждой траты
+            for expense in expenses:
+                if expense.category_id and expense.category_id in category_cashbacks:
+                    category_total = sum(float(e.amount) for e in expenses if e.category_id == expense.category_id)
+                    if category_total > 0:
+                        cashback_amount = float(expense.amount) * (category_cashbacks[expense.category_id] / category_total)
+                        expense_cashbacks[expense.id] = cashback_amount
+                        if cashback_amount > 0:
+                            has_any_cashback = True
+
         wb = Workbook()
         ws = wb.active
 
@@ -288,7 +349,7 @@ class ExportService:
         )
         gray_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
 
-        # ==================== ЛЕВАЯ ЧАСТЬ: ТРАТЫ (Колонки A-G) ====================
+        # ==================== ЛЕВАЯ ЧАСТЬ: ТРАТЫ (Колонки A-G или A-H если есть кешбэк) ====================
         # Заголовок секции
         operations_section_title = 'ДНЕВНИК ОПЕРАЦИЙ' if lang == 'ru' else 'OPERATIONS LOG'
         ops_title_cell = ws.cell(row=1, column=1, value=operations_section_title)
@@ -297,10 +358,19 @@ class ExportService:
         ops_title_cell.alignment = header_alignment
         ops_title_cell.border = thin_border
 
-        if lang == 'en':
-            headers_left = ['Date', 'Time', 'Amount', 'Currency', 'Category', 'Description', 'Type']
+        # Порядок: Дата, Время, Сумма, Кешбэк (если есть), Валюта, Категория, Описание, Тип
+        if has_any_cashback:
+            if lang == 'en':
+                headers_left = ['Date', 'Time', 'Amount', 'Cashback', 'Currency', 'Category', 'Description', 'Type']
+            else:
+                headers_left = ['Дата', 'Время', 'Сумма', 'Кешбэк', 'Валюта', 'Категория', 'Описание', 'Тип']
         else:
-            headers_left = ['Дата', 'Время', 'Сумма', 'Валюта', 'Категория', 'Описание', 'Тип']
+            if lang == 'en':
+                headers_left = ['Date', 'Time', 'Amount', 'Currency', 'Category', 'Description', 'Type']
+            else:
+                headers_left = ['Дата', 'Время', 'Сумма', 'Валюта', 'Категория', 'Описание', 'Тип']
+
+        ops_end_col = len(headers_left)  # 8 если есть кешбэк, 7 если нет
 
         for idx, header in enumerate(headers_left, start=1):
             cell = ws.cell(row=2, column=idx, value=header)
@@ -313,6 +383,7 @@ class ExportService:
         current_row = 3  # Начинаем с 3-й строки (1 - заголовок секции, 2 - заголовки колонок)
         expenses_by_currency = {}
         incomes_by_currency = {}
+        total_cashback_by_currency = {}  # Для подсчета общего кешбэка по валютам
 
         for op in operations:
             type_text = 'Доход' if op['type'] == 'income' else 'Трата'
@@ -323,18 +394,33 @@ class ExportService:
             description = str(op['description'] or '').replace('\n', ' ').replace('\r', ' ').strip()
             category = str(op['category'] or '').replace('\n', ' ').replace('\r', ' ').strip()
 
-            # Заполняем колонки A-G
+            # Получаем кешбэк для траты
+            cashback = 0
+            if op['type'] == 'expense' and 'object' in op and hasattr(op['object'], 'id'):
+                cashback = expense_cashbacks.get(op['object'].id, 0)
+
+            # Заполняем колонки A-G или A-H (в зависимости от has_any_cashback)
             ws.cell(row=current_row, column=1, value=op['date'].strftime('%d.%m.%Y'))
             ws.cell(row=current_row, column=2, value=op['time'].strftime('%H:%M'))
             ws.cell(row=current_row, column=3, value=op['amount'])
-            ws.cell(row=current_row, column=4, value=op['currency'])
-            ws.cell(row=current_row, column=5, value=category)
-            ws.cell(row=current_row, column=6, value=description)
-            ws.cell(row=current_row, column=7, value=type_text)
+
+            if has_any_cashback:
+                # С колонкой кешбэка: Дата, Время, Сумма, Кешбэк, Валюта, Категория, Описание, Тип
+                ws.cell(row=current_row, column=4, value=cashback if op['type'] == 'expense' else None)
+                ws.cell(row=current_row, column=5, value=op['currency'])
+                ws.cell(row=current_row, column=6, value=category)
+                ws.cell(row=current_row, column=7, value=description)
+                ws.cell(row=current_row, column=8, value=type_text)
+            else:
+                # Без колонки кешбэка: Дата, Время, Сумма, Валюта, Категория, Описание, Тип
+                ws.cell(row=current_row, column=4, value=op['currency'])
+                ws.cell(row=current_row, column=5, value=category)
+                ws.cell(row=current_row, column=6, value=description)
+                ws.cell(row=current_row, column=7, value=type_text)
 
             # Применяем границы и чередующуюся заливку к строке
             is_even_row = (current_row % 2 == 0)
-            for col in range(1, 8):  # Колонки A-G
+            for col in range(1, ops_end_col + 1):  # Колонки A-G или A-H
                 cell = ws.cell(row=current_row, column=col)
                 cell.border = thin_border
                 if is_even_row:
@@ -348,12 +434,24 @@ class ExportService:
                 amount_cell.font = Font(color="000000")  # Черный цвет для трат
             amount_cell.number_format = '#,##0.00'
 
+            # Форматирование кешбэка (зеленым цветом)
+            if has_any_cashback and cashback > 0:
+                cashback_cell = ws.cell(row=current_row, column=4)
+                cashback_cell.font = Font(color="008000", bold=True)
+                cashback_cell.number_format = '#,##0.00'
+
             # Подсчет по валютам
             currency = op['currency']
             if op['type'] == 'expense':
                 if currency not in expenses_by_currency:
                     expenses_by_currency[currency] = 0
                 expenses_by_currency[currency] += abs(op['amount'])
+
+                # Подсчет кешбэка по валютам
+                if cashback > 0:
+                    if currency not in total_cashback_by_currency:
+                        total_cashback_by_currency[currency] = 0
+                    total_cashback_by_currency[currency] += cashback
             else:
                 if currency not in incomes_by_currency:
                     incomes_by_currency[currency] = 0
@@ -363,13 +461,14 @@ class ExportService:
 
         expenses_data_end_row = current_row - 1
 
-        # Итоги (Расходы, Доходы, Баланс)
+        # Итоги (Расходы, Доходы, Кешбэк, Баланс)
         current_row += 1
         all_currencies = set(list(expenses_by_currency.keys()) + list(incomes_by_currency.keys()))
 
         for currency in sorted(all_currencies):
             expense_total = expenses_by_currency.get(currency, 0)
             income_total = incomes_by_currency.get(currency, 0)
+            cashback_total = total_cashback_by_currency.get(currency, 0)
             balance = income_total - expense_total
 
             # Расходы (ВСЕГДА показываем, даже если 0)
@@ -377,12 +476,17 @@ class ExportService:
             ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
             ws.cell(row=current_row, column=2, value=None)
             ws.cell(row=current_row, column=3, value=-expense_total)
-            ws.cell(row=current_row, column=4, value=currency)
-            ws.cell(row=current_row, column=5, value=None)
-            ws.cell(row=current_row, column=6, value=None)
-            ws.cell(row=current_row, column=7, value=None)
+            if has_any_cashback:
+                ws.cell(row=current_row, column=4, value=None)
+                ws.cell(row=current_row, column=5, value=currency)
+                for col in range(6, ops_end_col + 1):
+                    ws.cell(row=current_row, column=col, value=None)
+            else:
+                ws.cell(row=current_row, column=4, value=currency)
+                for col in range(5, ops_end_col + 1):
+                    ws.cell(row=current_row, column=col, value=None)
             # Применяем границы к строке итогов
-            for col in range(1, 8):
+            for col in range(1, ops_end_col + 1):
                 ws.cell(row=current_row, column=col).border = thin_border
             ws.cell(row=current_row, column=3).font = Font(bold=True, color="000000")  # Черный цвет
             ws.cell(row=current_row, column=3).number_format = '#,##0.00'
@@ -393,35 +497,67 @@ class ExportService:
             ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
             ws.cell(row=current_row, column=2, value=None)
             ws.cell(row=current_row, column=3, value=income_total)
-            ws.cell(row=current_row, column=4, value=currency)
-            ws.cell(row=current_row, column=5, value=None)
-            ws.cell(row=current_row, column=6, value=None)
-            ws.cell(row=current_row, column=7, value=None)
+            if has_any_cashback:
+                ws.cell(row=current_row, column=4, value=None)
+                ws.cell(row=current_row, column=5, value=currency)
+                for col in range(6, ops_end_col + 1):
+                    ws.cell(row=current_row, column=col, value=None)
+            else:
+                ws.cell(row=current_row, column=4, value=currency)
+                for col in range(5, ops_end_col + 1):
+                    ws.cell(row=current_row, column=col, value=None)
             # Применяем границы к строке итогов
-            for col in range(1, 8):
+            for col in range(1, ops_end_col + 1):
                 ws.cell(row=current_row, column=col).border = thin_border
             ws.cell(row=current_row, column=3).font = Font(bold=True, color="008000")
             ws.cell(row=current_row, column=3).number_format = '#,##0.00'
             current_row += 1
+
+            # Кешбэк (показываем только если есть)
+            if cashback_total > 0:
+                label = 'Кешбэк:' if lang == 'ru' else 'Cashback:'
+                ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
+                ws.cell(row=current_row, column=2, value=None)
+                ws.cell(row=current_row, column=3, value=cashback_total)
+                if has_any_cashback:
+                    ws.cell(row=current_row, column=4, value=None)
+                    ws.cell(row=current_row, column=5, value=currency)
+                    for col in range(6, ops_end_col + 1):
+                        ws.cell(row=current_row, column=col, value=None)
+                else:
+                    ws.cell(row=current_row, column=4, value=currency)
+                    for col in range(5, ops_end_col + 1):
+                        ws.cell(row=current_row, column=col, value=None)
+                # Применяем границы к строке итогов
+                for col in range(1, ops_end_col + 1):
+                    ws.cell(row=current_row, column=col).border = thin_border
+                ws.cell(row=current_row, column=3).font = Font(bold=True, color="008000")
+                ws.cell(row=current_row, column=3).number_format = '#,##0.00'
+                current_row += 1
 
             # Баланс (ВСЕГДА показываем)
             label = 'Баланс:' if lang == 'ru' else 'Balance:'
             ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
             ws.cell(row=current_row, column=2, value=None)
             ws.cell(row=current_row, column=3, value=balance)
-            ws.cell(row=current_row, column=4, value=currency)
-            ws.cell(row=current_row, column=5, value=None)
-            ws.cell(row=current_row, column=6, value=None)
-            ws.cell(row=current_row, column=7, value=None)
+            if has_any_cashback:
+                ws.cell(row=current_row, column=4, value=None)
+                ws.cell(row=current_row, column=5, value=currency)
+                for col in range(6, ops_end_col + 1):
+                    ws.cell(row=current_row, column=col, value=None)
+            else:
+                ws.cell(row=current_row, column=4, value=currency)
+                for col in range(5, ops_end_col + 1):
+                    ws.cell(row=current_row, column=col, value=None)
             # Применяем границы к строке итогов
-            for col in range(1, 8):
+            for col in range(1, ops_end_col + 1):
                 ws.cell(row=current_row, column=col).border = thin_border
             ws.cell(row=current_row, column=3).font = Font(bold=True, color="0000FF")
             ws.cell(row=current_row, column=3).number_format = '#,##0.00'
             current_row += 2
 
-        # Автоширина для колонок A-G
-        for col in range(1, 8):
+        # Автоширина для колонок A-G или A-H
+        for col in range(1, ops_end_col + 1):
             max_length = 0
             for row in range(1, current_row):
                 cell = ws.cell(row=row, column=col)
@@ -745,9 +881,9 @@ class ExportService:
                     if is_even_row:
                         cell.fill = gray_fill
 
-                # Данные кешбека
+                # Данные кешбека (отрицательные для отображения столбиков вниз)
                 cashback_amount = daily_cashback.get(day, 0)
-                cashback_cell = ws.cell(row=row_num, column=cashback_col, value=cashback_amount if cashback_amount else None)
+                cashback_cell = ws.cell(row=row_num, column=cashback_col, value=-cashback_amount if cashback_amount else None)
                 cashback_cell.number_format = '#,##0.00'
                 cashback_cell.border = thin_border
                 if is_even_row:
@@ -811,36 +947,23 @@ class ExportService:
                 series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                 series.dLbls = None
 
-            # Добавляем линию кешбека на вторую ось Y
-            from openpyxl.chart import LineChart
-
-            line = LineChart()
-            line.title = None
-            line.y_axis.axId = 200  # Вторая ось Y
-            line.y_axis.delete = True  # Скрываем правую ось Y полностью
-            line.y_axis.crosses = "max"  # Вторая ось справа
-            # Убираем линии сетки со второй оси (черные линии)
-            line.y_axis.majorGridlines = None
-
-            # Данные для линии кешбека
+            # Добавляем столбики кешбека (зеленые столбики вниз) на ту же ось Y
+            # Данные для кешбека (отрицательные значения)
             cashback_data = Reference(ws,
                                      min_col=cashback_col,
                                      min_row=table_start_row,
                                      max_row=days_end_row)
-            line.add_data(cashback_data, titles_from_data=True)
-            line.set_categories(days_labels)
+            bar.add_data(cashback_data, titles_from_data=True)
 
-            # Стиль линии кешбека (зеленая линия)
-            if line.series:
-                line.series[0].graphicalProperties = GraphicalProperties(
-                    ln=LineProperties(solidFill="00AA00", w=25000)  # Зеленая линия, толщина 2.5pt
-                )
-                line.series[0].smooth = True  # Сглаженная линия
+            # Применяем зеленый цвет к серии кешбека (последняя добавленная серия)
+            if bar.series:
+                cashback_series = bar.series[-1]  # Последняя серия - это кешбэк
+                cashback_series.graphicalProperties = GraphicalProperties(solidFill="00AA00")  # Зеленый цвет
+                cashback_series.dLbls = None
 
-            # Объединяем столбчатую диаграмму и линию
+            # Настраиваем ось Y
             bar.y_axis.axId = 100
             bar.y_axis.crosses = "autoZero"
-            bar += line  # Добавляем линию к столбчатой диаграмме
 
             # Размещение СПРАВА от круговой диаграммы
             ws.add_chart(bar, f"Q{bar_chart_row}")
