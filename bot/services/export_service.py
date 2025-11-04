@@ -1106,7 +1106,7 @@ class ExportService:
             income_pie = PieChart()
             income_pie.title = "Доходы по категориям" if lang == 'ru' else "Income by Category"
             income_pie.varyColors = True
-            income_pie.width = 19.3  # Та же ширина что и у расходов для консистентности
+            income_pie.width = 14  # Уменьшенная ширина (~5-6 колонок) для стабильного размещения со смещением +7
             income_pie.height = 11.5488
             income_pie.layout = Layout(
                 manualLayout=ManualLayout(
@@ -1305,9 +1305,9 @@ class ExportService:
                     series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dLbls = None
 
-                # Размещение столбчатой диаграммы доходов (справа от круговой, смещение +7 колонок)
-                # Используем то же смещение что и в расходах (+7), т.к. ширина теперь одинаковая (19.3)
-                income_bar_col = get_column_letter(income_summary_start_col + 7)
+                # Размещение столбчатой диаграммы доходов (справа от круговой, смещение +9 колонок)
+                # Круговая width=14см (~5.5 колонок) + зазор 3.5 колонки = стабильное размещение
+                income_bar_col = get_column_letter(income_summary_start_col + 9)
                 ws.add_chart(income_bar, f"{income_bar_col}{charts_start_row}")
 
         # Закрепить заголовки (строки 1-2: заголовок секции + заголовки колонок)
