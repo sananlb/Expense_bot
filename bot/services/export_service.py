@@ -1102,14 +1102,23 @@ class ExportService:
                 else:
                     ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 20)
 
-            # Создаем буферную зону для диаграмм доходов (пустые колонки фиксированной ширины)
-            # Таблица Summary доходов занимает 5 колонок (Категория, Валюта, Всего, Количество, Средний)
-            # Диаграммы размещаем в отдельных пустых колонках после таблицы (как у расходов)
-            income_charts_buffer_start = income_summary_start_col + 5  # Первая пустая колонка после таблицы
+            # Вычисляем фактическую ширину таблицы Summary доходов (5 колонок)
+            # и переводим её в эквивалент "стандартных" колонок для правильного размещения столбчатой диаграммы
+            import math
+            standard_col_width = 8.43  # Стандартная ширина колонки Excel
 
-            # Устанавливаем фиксированную ширину буферным колонкам (стандартная Excel = 8.43)
-            for buffer_col_idx in range(income_charts_buffer_start, income_charts_buffer_start + 15):
-                ws.column_dimensions[get_column_letter(buffer_col_idx)].width = 8.43
+            # Суммируем фактическую ширину всех 5 колонок таблицы Summary
+            table_total_width = 0
+            for col_idx in range(income_summary_start_col, income_summary_start_col + 5):
+                col_letter = get_column_letter(col_idx)
+                table_total_width += ws.column_dimensions[col_letter].width
+
+            # Переводим в количество "стандартных" колонок (округляем вверх)
+            table_in_standard_cols = math.ceil(table_total_width / standard_col_width)
+
+            # Желаемый зазор между круговой и столбчатой диаграммами (в стандартных колонках)
+            # У расходов между K и R = 7 колонок, используем такой же зазор
+            desired_gap_cols = 7
 
             # КРУГОВАЯ ДИАГРАММА ДОХОДОВ (в буферной зоне, не в таблице!)
             income_pie = PieChart()
@@ -1315,10 +1324,11 @@ class ExportService:
                     series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dLbls = None
 
-                # Размещение столбчатой диаграммы доходов (в буферной зоне, +7 от круговой)
-                # Та же логика что в расходах: диаграммы в пустых колонках фиксированной ширины (8.43)
-                # Смещение +7 колонок × 8.43 см = одинаковое физическое расстояние всегда
-                income_bar_col = get_column_letter(income_charts_buffer_start + 7)
+                # Размещение столбчатой диаграммы доходов с компенсацией ширины таблицы
+                # Якорь = начало таблицы + ширина таблицы (в стандартных колонках) + зазор
+                # Это обеспечивает одинаковое физическое расстояние независимо от ширины колонок таблицы
+                income_bar_anchor_col = income_summary_start_col + table_in_standard_cols + desired_gap_cols
+                income_bar_col = get_column_letter(income_bar_anchor_col)
                 ws.add_chart(income_bar, f"{income_bar_col}{charts_start_row}")
 
         # Закрепить заголовки (строки 1-2: заголовок секции + заголовки колонок)
