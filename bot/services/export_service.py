@@ -209,6 +209,8 @@ class ExportService:
                         has_any_cashback = True
 
         output = StringIO()
+        # Добавляем BOM в начало для корректного открытия в Excel
+        output.write('\ufeff')
 
         # Заголовки в зависимости от языка
         # Порядок: Дата, Время, Сумма, Кешбэк (если есть), Валюта, Категория, Описание, Тип
@@ -267,8 +269,8 @@ class ExportService:
                     type_text
                 ])
 
-        # Вернуть байты с BOM (Byte Order Mark) для корректного открытия в Excel
-        return '\ufeff'.encode('utf-8') + output.getvalue().encode('utf-8')
+        # Вернуть байты (BOM уже добавлен в начало StringIO)
+        return output.getvalue().encode('utf-8')
 
     @staticmethod
     def generate_xlsx_with_charts(
