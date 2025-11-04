@@ -524,7 +524,8 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
                 "• Distribution by categories\n"
                 "• Daily spending dynamics\n"
                 "• Cashback information\n\n"
-                "💡 <i>Tip: Save the report to track expense dynamics</i>"
+                "💡 <i>Tip: Save the report to track expense dynamics</i>\n\n"
+                "🤖 Generated with Coins @showmecoinbot"
             )
         else:
             mode = " – 🏠 Семейный бюджет" if household_mode else ""
@@ -535,7 +536,8 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
                 "• Распределение по категориям\n"
                 "• Динамика трат по дням\n"
                 "• Информация о кешбеке\n\n"
-                "💡 <i>Совет: сохраните отчет для отслеживания динамики расходов</i>"
+                "💡 <i>Совет: сохраните отчет для отслеживания динамики расходов</i>\n\n"
+                "🤖 Сгенерировано в Coins @showmecoinbot"
             )
         await callback.message.answer_document(
             document=pdf_file,

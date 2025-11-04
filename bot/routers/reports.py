@@ -920,10 +920,16 @@ async def callback_export_month_csv(callback: CallbackQuery, state: FSMContext, 
         filename = f"expenses_{month_name}_{year}.csv"
         document = BufferedInputFile(csv_bytes, filename=filename)
 
+        # Формируем caption с рекламным текстом
+        caption = (
+            f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
+            f"🤖 Сгенерировано в Coins @showmecoinbot"
+        )
+
         # Отправляем файл
         await callback.message.answer_document(
             document,
-            caption=get_text('export_success', lang).format(month=f"{month_name} {year}"),
+            caption=caption,
             parse_mode="HTML"
         )
 
@@ -1050,10 +1056,16 @@ async def callback_export_month_excel(callback: CallbackQuery, state: FSMContext
         filename = f"expenses_{month_name}_{year}.xlsx"
         document = BufferedInputFile(xlsx_buffer.read(), filename=filename)
 
+        # Формируем caption с рекламным текстом
+        caption = (
+            f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
+            f"🤖 Сгенерировано в Coins @showmecoinbot"
+        )
+
         # Отправляем файл
         await callback.message.answer_document(
             document,
-            caption=get_text('export_success', lang).format(month=f"{month_name} {year}"),
+            caption=caption,
             parse_mode="HTML"
         )
 
