@@ -110,25 +110,34 @@ class NotificationService:
         text = ""
 
         # Финансовая сводка (каждый показатель с новой строки)
-        text += f"💰 Расходы: {float(insight.total_expenses):,.0f} ₽\n".replace(',', ' ')
+        text += f"💸 Расходы: {float(insight.total_expenses):,.0f} ₽\n".replace(',', ' ')
         text += f"💵 Доходы: {float(insight.total_incomes):,.0f} ₽\n".replace(',', ' ')
 
         # Баланс показываем всегда
         balance = insight.balance
         balance_emoji = "📈" if balance >= 0 else "📉"
         balance_sign = "+" if balance >= 0 else ""
-        text += f"📊 Баланс: {balance_emoji} {balance_sign}{float(balance):,.0f} ₽\n".replace(',', ' ')
+        text += f"⚖️ Баланс: {balance_emoji} {balance_sign}{float(balance):,.0f} ₽\n".replace(',', ' ')
 
-        text += f"📊 Количество трат: {insight.expenses_count}\n\n"
+        text += f"🧮 Количество трат: {insight.expenses_count}\n\n"
 
-        # Топ 5 категорий
+        # Топ 5 категорий (только с ненулевыми расходами)
         if insight.top_categories:
             text += f"🏆 <b>Топ категорий:</b>\n"
-            for i, cat in enumerate(insight.top_categories[:5], 1):
+            displayed_count = 0
+            for cat in insight.top_categories:
                 percentage = cat.get('percentage', 0)
                 amount = cat.get('amount', 0)
                 category_name = cat.get('category', 'Без категории')
-                text += f"{i}. {category_name}: {amount:,.0f}₽ ({percentage:.0f}%)\n".replace(',', ' ')
+
+                # Показываем только категории с ненулевыми расходами
+                if amount > 0:
+                    displayed_count += 1
+                    text += f"{displayed_count}. {category_name}: {amount:,.0f}₽ ({percentage:.0f}%)\n".replace(',', ' ')
+
+                    # Ограничиваем вывод 5 категориями
+                    if displayed_count >= 5:
+                        break
             text += "\n"
 
         # AI резюме
