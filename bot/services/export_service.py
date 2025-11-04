@@ -739,7 +739,7 @@ class ExportService:
                 data_labels.showLegendKey = False
                 data_labels.showSerName = False
                 data_labels.showBubbleSize = False
-                data_labels.dLblPos = "inEnd"  # Позиция внутри у края (ближе к центру)
+                data_labels.dLblPos = "bestFit"  # Автоматическое позиционирование для избежания перекрытий
                 data_labels.numFmt = "0%"
                 point_labels: List[DataLabel] = []
                 if RichText and ParagraphProperties and CharacterProperties:
@@ -753,19 +753,21 @@ class ExportService:
                 series.dLbls = data_labels
 
                 # Показываем подписи только для сегментов >= 3%
+                from openpyxl.chart.label import DataLabelList as DLL
                 for idx, ratio in enumerate(pie_segment_ratios):
                     if ratio >= 0.04:
-                        point_labels.append(
-                            DataLabel(
-                                idx=idx,
-                                showPercent=True,
-                                showVal=False,
-                                showCatName=False,
-                                showSerName=False,
-                                showLegendKey=False,
-                                showLeaderLines=False
-                            )
+                        point_label = DataLabel(
+                            idx=idx,
+                            showPercent=True,
+                            showVal=False,
+                            showCatName=False,
+                            showSerName=False,
+                            showLegendKey=False,
+                            showLeaderLines=False
                         )
+                        # Устанавливаем позицию для каждой метки
+                        point_label.dLblPos = "bestFit"
+                        point_labels.append(point_label)
                 if point_labels:
                     data_labels.dLbl = point_labels
 
@@ -904,6 +906,7 @@ class ExportService:
             bar.type = "col"  # Вертикальные столбики
             bar.grouping = "stacked"  # Наложение категорий друг на друга
             bar.overlap = 100  # Полное наложение для stacked chart
+            bar.gapWidth = 300  # Увеличиваем расстояние между столбцами (делает столбики уже)
 
             # Настраиваем заголовок и убираем подписи осей
             bar.title = "Расходы по дням" if lang == 'ru' else "Expenses by Day"
@@ -1110,7 +1113,7 @@ class ExportService:
                 data_labels.showLegendKey = False
                 data_labels.showSerName = False
                 data_labels.showBubbleSize = False
-                data_labels.dLblPos = "inEnd"  # Позиция внутри у края (ближе к центру)
+                data_labels.dLblPos = "bestFit"  # Автоматическое позиционирование для избежания перекрытий
                 data_labels.numFmt = "0%"
                 point_labels: List[DataLabel] = []
                 if RichText and ParagraphProperties and CharacterProperties:
@@ -1126,17 +1129,18 @@ class ExportService:
                 # Показываем подписи только для сегментов >= 4%
                 for idx, ratio in enumerate(income_pie_segment_ratios):
                     if ratio >= 0.04:
-                        point_labels.append(
-                            DataLabel(
-                                idx=idx,
-                                showPercent=True,
-                                showVal=False,
-                                showCatName=False,
-                                showSerName=False,
-                                showLegendKey=False,
-                                showLeaderLines=False
-                            )
+                        point_label = DataLabel(
+                            idx=idx,
+                            showPercent=True,
+                            showVal=False,
+                            showCatName=False,
+                            showSerName=False,
+                            showLegendKey=False,
+                            showLeaderLines=False
                         )
+                        # Устанавливаем позицию для каждой метки
+                        point_label.dLblPos = "bestFit"
+                        point_labels.append(point_label)
                 if point_labels:
                     data_labels.dLbl = point_labels
 
@@ -1220,6 +1224,7 @@ class ExportService:
                 income_bar.type = "col"
                 income_bar.grouping = "stacked"
                 income_bar.overlap = 100
+                income_bar.gapWidth = 300  # Увеличиваем расстояние между столбцами (делает столбики уже)
 
                 # Добавляем заголовок
                 income_bar.title = "Доходы по дням" if lang == 'ru' else "Income by Day"
