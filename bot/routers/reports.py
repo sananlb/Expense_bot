@@ -923,7 +923,7 @@ async def callback_export_month_csv(callback: CallbackQuery, state: FSMContext, 
         # Формируем caption с рекламным текстом
         caption = (
             f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
-            f"🤖 Сгенерировано в Coins @showmecoinbot"
+            f"✨ Сгенерировано в Coins @showmecoinbot"
         )
 
         # Отправляем файл
@@ -1059,7 +1059,7 @@ async def callback_export_month_excel(callback: CallbackQuery, state: FSMContext
         # Формируем caption с рекламным текстом
         caption = (
             f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
-            f"🤖 Сгенерировано в Coins @showmecoinbot"
+            f"✨ Сгенерировано в Coins @showmecoinbot"
         )
 
         # Отправляем файл
@@ -1175,7 +1175,7 @@ async def callback_monthly_report_csv(callback: CallbackQuery, state: FSMContext
         # Добавляем рекламный текст в caption
         caption = (
             f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
-            f"🤖 Сгенерировано в Coins @showmecoinbot"
+            f"✨ Сгенерировано в Coins @showmecoinbot"
         )
 
         # Отправляем файл
@@ -1291,7 +1291,7 @@ async def callback_monthly_report_xlsx(callback: CallbackQuery, state: FSMContex
         # Добавляем рекламный текст в caption
         caption = (
             f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
-            f"🤖 Сгенерировано в Coins @showmecoinbot"
+            f"✨ Сгенерировано в Coins @showmecoinbot"
         )
 
         # Отправляем файл
@@ -1363,7 +1363,7 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
         # Добавляем рекламный текст в caption
         caption = (
             f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
-            f"🤖 Сгенерировано в Coins @showmecoinbot"
+            f"✨ Сгенерировано в Coins @showmecoinbot"
         )
 
         # Отправляем PDF
