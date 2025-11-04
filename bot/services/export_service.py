@@ -140,8 +140,9 @@ class ExportService:
                 'amount': -float(expense.amount),  # Отрицательное для трат
                 'currency': expense.currency,
                 'category': expense.category.name if expense.category else '',
+                'category_id': expense.category_id,  # ID категории для расчета кешбэка
                 'description': expense.description or '',
-                'object': expense  # Сохраняем объект для доступа к category_id
+                'object': expense  # Сохраняем объект для доступа к дополнительным полям
             })
 
         # Добавить доходы
@@ -153,8 +154,9 @@ class ExportService:
                 'amount': float(income.amount),  # Положительное для доходов
                 'currency': income.currency,
                 'category': income.category.name if income.category else '',
+                'category_id': income.category_id,  # ID категории
                 'description': income.description or '',
-                'object': income  # Сохраняем объект для доступа к category_id
+                'object': income  # Сохраняем объект для доступа к дополнительным полям
             })
 
         # Сортировать от новых к старым
@@ -858,9 +860,9 @@ class ExportService:
                 cell.alignment = header_alignment
                 cell.border = thin_border
 
-            # Заголовок для кешбека
+            # Заголовок для кешбэка
             cashback_col = chart_data_start_col + 1 + len(sorted_categories)
-            cashback_cell = ws.cell(row=table_start_row, column=cashback_col, value='Кешбек' if lang == 'ru' else 'Cashback')
+            cashback_cell = ws.cell(row=table_start_row, column=cashback_col, value='Кешбэк' if lang == 'ru' else 'Cashback')
             cashback_cell.font = header_font
             cashback_cell.fill = header_fill
             cashback_cell.alignment = header_alignment
