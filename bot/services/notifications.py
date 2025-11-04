@@ -60,7 +60,7 @@ class NotificationService:
                 if insight:
                     # Формируем текст инсайта и добавляем к caption
                     insight_text = self._format_insight_text(insight, report_month, report_year)
-                    full_caption = f"{caption}\n\n{insight_text}\n\n💡 Выберите формат для скачивания:"
+                    full_caption = f"{caption}\n\n{insight_text}\n\n💡 <i>Выберите формат отчета для скачивания:</i>"
 
                     # Telegram ограничивает текстовые сообщения до 4096 символов
                     if len(full_caption) <= 4000:
@@ -70,18 +70,18 @@ class NotificationService:
                         max_insight_length = 4000 - len(caption) - 50
                         if max_insight_length > 100:
                             truncated_insight = insight_text[:max_insight_length] + "..."
-                            caption = f"{caption}\n\n{truncated_insight}\n\n💡 Выберите формат для скачивания:"
+                            caption = f"{caption}\n\n{truncated_insight}\n\n💡 <i>Выберите формат отчета для скачивания:</i>"
                         else:
-                            caption += "\n\n💡 Выберите формат для скачивания:"
+                            caption += "\n\n💡 <i>Выберите формат отчета для скачивания:</i>"
 
                     logger.info(f"Monthly insights generated for user {user_id} for {report_year}-{report_month:02d}")
                 else:
-                    caption += "\n\n💡 Выберите формат для скачивания:"
+                    caption += "\n\n💡 <i>Выберите формат отчета для скачивания:</i>"
                     logger.info(f"No insights generated for user {user_id} for {report_year}-{report_month:02d} (not enough data)")
 
             except Exception as e:
                 logger.error(f"Error generating insights for user {user_id}: {e}")
-                caption += "\n\n💡 Выберите формат для скачивания:"
+                caption += "\n\n💡 <i>Выберите формат отчета для скачивания:</i>"
 
             # Создаем клавиатуру с кнопками форматов (в один ряд)
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -109,14 +109,17 @@ class NotificationService:
         """Format insight for display in message"""
         text = ""
 
-        # Финансовая сводка (компактный формат)
+        # Финансовая сводка (компактный формат с доходами)
         text += f"💰 Расходы: {float(insight.total_expenses):,.0f} ₽".replace(',', ' ')
 
-        if insight.total_incomes > 0:
-            balance = insight.balance
-            balance_emoji = "📈" if balance >= 0 else "📉"
-            balance_sign = "+" if balance >= 0 else ""
-            text += f" | Баланс: {balance_emoji} {balance_sign}{float(balance):,.0f} ₽".replace(',', ' ')
+        # Всегда показываем доходы
+        text += f" | 💵 Доходы: {float(insight.total_incomes):,.0f} ₽".replace(',', ' ')
+
+        # Баланс показываем всегда
+        balance = insight.balance
+        balance_emoji = "📈" if balance >= 0 else "📉"
+        balance_sign = "+" if balance >= 0 else ""
+        text += f" | Баланс: {balance_emoji} {balance_sign}{float(balance):,.0f} ₽".replace(',', ' ')
 
         text += f"\n📊 Количество трат: {insight.expenses_count}\n\n"
 
@@ -134,11 +137,13 @@ class NotificationService:
         if insight.ai_summary:
             text += f"📝 {insight.ai_summary}\n\n"
 
-        # AI анализ (только первые 3 пункта)
+        # AI анализ (исключаем первый пункт о топ категории, берем 2-4 пункты)
         if insight.ai_analysis:
             analysis_lines = insight.ai_analysis.split('\n')
-            # Берем только первые 3 пункта
-            key_points = [line for line in analysis_lines if line.strip().startswith('•')][:3]
+            # Берем только пункты со значком •
+            all_points = [line for line in analysis_lines if line.strip().startswith('•')]
+            # Пропускаем первый пункт (обычно дублирует топ категорию), берем следующие 3
+            key_points = all_points[1:4] if len(all_points) > 1 else []
             if key_points:
                 text += f"📊 <b>Ключевые моменты:</b>\n"
                 text += '\n'.join(key_points) + "\n"
