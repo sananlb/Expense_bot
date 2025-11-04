@@ -603,6 +603,10 @@ class ExportService:
         # Инициализация переменных с дефолтными значениями (используются секцией доходов)
         charts_start_row = 3  # Если нет расходов, диаграммы доходов начинаются с 3-й строки
         dynamic_income_start_col = 30  # Колонка AD (минимальное значение по умолчанию)
+        last_day = calendar.monthrange(year, month)[1]  # Количество дней в месяце
+        sorted_days = list(range(0, last_day + 1))  # Список всех дней месяца (0-31)
+        pie_block_height = 11.5  # Высота блока диаграммы (для расчета позиции таблицы)
+        table_start_row = charts_start_row + int(pie_block_height + 15)  # Таблица под диаграммами
 
         # ЕСЛИ ЕСТЬ РАСХОДЫ - создаем секцию расходов (заголовки, summary, диаграммы)
         if category_stats:
@@ -701,8 +705,9 @@ class ExportService:
                 pie_segment_ratios.append(ratio)
             # ==================== ГРАФИКИ ====================
             # Диаграммы размещаются ПОД таблицей Summary (вертикально)
+            # Пересчитываем charts_start_row на основе фактического количества категорий расходов
             charts_start_row = summary_end_row + 2  # Начало диаграмм под таблицей
-            pie_block_height = 11.5
+            # pie_block_height уже инициализирован выше
 
             # КРУГОВАЯ ДИАГРАММА ПО КАТЕГОРИЯМ (под таблицей Summary)
             if summary_end_row > 1:
@@ -810,7 +815,7 @@ class ExportService:
 
             # СТОЛБЧАТАЯ ДИАГРАММА ПО ДНЯМ И КАТЕГОРИЯМ
             # Подсчет расходов по дням и категориям для stacked bar chart
-            last_day = calendar.monthrange(year, month)[1]
+            # last_day уже инициализирован выше
 
             daily_expenses = {}  # Общие расходы по дням (для обратной совместимости)
             daily_expenses_by_category = {}  # {category: {day: amount}}
@@ -859,10 +864,9 @@ class ExportService:
 
             # Сортируем категории для стабильности отображения
             sorted_categories = sorted(all_categories)
-            # ВАЖНО: sorted_days включает ВСЕ дни месяца от 0 до last_day для меток 0,5,10,15,20,25,30
-            sorted_days = list(range(0, last_day + 1))
+            # sorted_days уже инициализирован выше
 
-            # Вычисляем динамическую колонку для секции доходов
+            # Пересчитываем динамическую колонку для секции доходов с учетом количества категорий расходов
             # Таблица расходов: колонка 11 (День) + категории + кешбэк
             # Максимальная колонка расходов = 12 + len(sorted_categories)
             expense_table_last_col = 12 + len(sorted_categories)
@@ -874,7 +878,7 @@ class ExportService:
 
             # Таблица данных для stacked bar chart размещается ПОД диаграммами
             if sorted_categories and sorted_days:
-                # Таблицу опускаем ниже диаграмм для наглядности
+                # Пересчитываем table_start_row для размещения под диаграммами расходов
                 table_start_row = bar_chart_row + int(pie_block_height + 15)
                 # Размещаем в тех же колонках что и диаграммы (начиная с K = 11)
                 chart_data_start_col = 11
