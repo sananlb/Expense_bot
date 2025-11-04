@@ -1305,8 +1305,9 @@ class ExportService:
                     series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dLbls = None
 
-                # Размещение столбчатой диаграммы доходов (справа от круговой, смещение +9 колонок)
-                income_bar_col = get_column_letter(income_summary_start_col + 9)
+                # Размещение столбчатой диаграммы доходов (справа от круговой, смещение +11 колонок)
+                # Увеличено с +9 до +11 чтобы избежать наложения на круговую диаграмму (width=19.76)
+                income_bar_col = get_column_letter(income_summary_start_col + 11)
                 ws.add_chart(income_bar, f"{income_bar_col}{charts_start_row}")
 
         # Закрепить заголовки (строки 1-2: заголовок секции + заголовки колонок)
