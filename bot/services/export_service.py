@@ -977,7 +977,7 @@ class ExportService:
             bar.y_axis.crosses = "autoZero"
 
             # Размещение СПРАВА от круговой диаграммы (S - ближе к круговой)
-            ws.add_chart(bar, f"S{bar_chart_row}")
+            ws.add_chart(bar, f"R{bar_chart_row}")
 
         # ==================== ДИАГРАММЫ ДОХОДОВ ====================
         # Подсчет статистики по категориям доходов
@@ -1274,7 +1274,7 @@ class ExportService:
                     series.dLbls = None
 
                 # Размещение столбчатой диаграммы доходов (справа от круговой, колонка AN)
-                ws.add_chart(income_bar, f"AN{charts_start_row}")
+                ws.add_chart(income_bar, f"AM{charts_start_row}")
 
         # Закрепить заголовки (строки 1-2: заголовок секции + заголовки колонок)
         ws.freeze_panes = 'A3'
