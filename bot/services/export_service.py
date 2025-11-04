@@ -8,6 +8,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from typing import List, Dict, Any
 import logging
+import math
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -16,6 +17,8 @@ from openpyxl.chart import PieChart, BarChart, Reference
 from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.chart.layout import Layout, ManualLayout
 from openpyxl.chart.label import DataLabel, DataLabelList
+from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
+from openpyxl.drawing.xdr import XDRPositiveSize2D
 try:
     from openpyxl.chart.text import RichText, Paragraph
     from openpyxl.drawing.text import ParagraphProperties, CharacterProperties
@@ -1102,29 +1105,15 @@ class ExportService:
                 else:
                     ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 20)
 
-            # Вычисляем фактическую ширину таблицы Summary доходов (5 колонок)
-            # и переводим её в эквивалент "стандартных" колонок для правильного размещения столбчатой диаграммы
-            import math
-            standard_col_width = 8.43  # Стандартная ширина колонки Excel
-
-            # Суммируем фактическую ширину всех 5 колонок таблицы Summary
-            table_total_width = 0
-            for col_idx in range(income_summary_start_col, income_summary_start_col + 5):
-                col_letter = get_column_letter(col_idx)
-                table_total_width += ws.column_dimensions[col_letter].width
-
-            # Переводим в количество "стандартных" колонок (округляем вверх)
-            table_in_standard_cols = math.ceil(table_total_width / standard_col_width)
-
-            # Желаемый зазор между круговой и столбчатой диаграммами (в стандартных колонках)
-            # У расходов между K и R = 7 колонок, используем такой же зазор
-            desired_gap_cols = 7
+            # Фиксированная ширина круговой диаграммы и желаемый зазор ~4 см
+            income_pie_width_cm = 19.3
+            desired_horizontal_offset_cm = income_pie_width_cm + 4
 
             # КРУГОВАЯ ДИАГРАММА ДОХОДОВ (в буферной зоне, не в таблице!)
             income_pie = PieChart()
             income_pie.title = "Доходы по категориям" if lang == 'ru' else "Income by Category"
             income_pie.varyColors = True
-            income_pie.width = 19.3  # Та же ширина что и расходы (реальная круговая часть ~12.5см из-за легенды)
+            income_pie.width = income_pie_width_cm  # Та же ширина что и расходы (реальная круговая часть ~12.5см из-за легенды)
             income_pie.height = 11.5488
             income_pie.layout = Layout(
                 manualLayout=ManualLayout(
@@ -1324,12 +1313,86 @@ class ExportService:
                     series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dLbls = None
 
-                # Размещение столбчатой диаграммы доходов с компенсацией ширины таблицы
-                # Якорь = начало таблицы + ширина таблицы (в стандартных колонках) + зазор
-                # Это обеспечивает одинаковое физическое расстояние независимо от ширины колонок таблицы
-                income_bar_anchor_col = income_summary_start_col + table_in_standard_cols + desired_gap_cols
-                income_bar_col = get_column_letter(income_bar_anchor_col)
-                ws.add_chart(income_bar, f"{income_bar_col}{charts_start_row}")
+                # Подбираем позицию с точностью до см (чтобы избегать накопленных погрешностей ширины столбцов)
+                def width_units_to_cm(width_units: float) -> float:
+                    if width_units is None:
+                        width_units = 8.43  # стандартная ширина Excel
+                    if width_units <= 0:
+                        return 0.0
+                    if width_units <= 1:
+                        pixels = width_units * 12  # Excel spec для узких столбцов
+                    else:
+                        pixels = math.floor(width_units * 7 + 5)  # эмпирическая формула Excel
+                    return pixels * 0.026458333  # 1 px ~= 0.026458333 см
+
+                def get_column_width_cm(col_idx: int) -> float:
+                    letter = get_column_letter(col_idx)
+                    dimension = ws.column_dimensions.get(letter)
+                    width_units = dimension.width if dimension and dimension.width else 8.43
+                    return width_units_to_cm(width_units)
+
+                cm_to_emu = 360000  # 1 см в EMU (Excel internal units)
+
+                accumulated_offset_cm = 0.0
+                previous_offset_cm = 0.0
+                current_col_index = income_summary_start_col
+                previous_col_index = income_summary_start_col
+                safety_counter = 0
+
+                while accumulated_offset_cm < desired_horizontal_offset_cm and safety_counter < 500:
+                    safety_counter += 1
+                    previous_col_index = current_col_index
+                    previous_offset_cm = accumulated_offset_cm
+
+                    col_letter = get_column_letter(current_col_index)
+                    column_dimension = ws.column_dimensions.get(col_letter)
+                    col_width_units = column_dimension.width if column_dimension and column_dimension.width else 8.43
+                    accumulated_offset_cm += width_units_to_cm(col_width_units)
+                    current_col_index += 1
+
+                if safety_counter >= 500:
+                    anchor_col_index = income_summary_start_col + 9  # запасной вариант (примерно ширина + зазор)
+                    col_offset_cm = 0.0
+                else:
+                    anchor_col_index = previous_col_index
+                    col_offset_cm = max(desired_horizontal_offset_cm - previous_offset_cm, 0.0)
+
+                anchor_column_width_cm = get_column_width_cm(anchor_col_index)
+
+                adjustment_guard = 0
+                while col_offset_cm >= anchor_column_width_cm and adjustment_guard < 100:
+                    col_offset_cm -= anchor_column_width_cm
+                    anchor_col_index += 1
+                    anchor_column_width_cm = get_column_width_cm(anchor_col_index)
+                    adjustment_guard += 1
+
+                if adjustment_guard >= 100:
+                    col_offset_cm = 0.0
+
+                # Дополнительно сдвигаем диаграмму левее на фиксированное число колонок
+                shift_columns_left = 2
+                shift_count = 0
+                while shift_count < shift_columns_left and anchor_col_index - 1 >= income_summary_start_col:
+                    anchor_col_index -= 1
+                    shift_count += 1
+
+                # После сдвига убеждаемся что смещение не выходит за рамки новой колонки
+                anchor_column_width_cm = get_column_width_cm(anchor_col_index)
+                if col_offset_cm > anchor_column_width_cm:
+                    col_offset_cm = anchor_column_width_cm
+
+                anchor_marker = AnchorMarker(
+                    col=max(anchor_col_index - 1, 0),
+                    colOff=int(round(col_offset_cm * cm_to_emu)),
+                    row=max(charts_start_row - 1, 0),
+                    rowOff=0
+                )
+                anchor_extent = XDRPositiveSize2D(
+                    cx=int(round(income_bar.width * cm_to_emu)),
+                    cy=int(round(income_bar.height * cm_to_emu))
+                )
+                income_bar.anchor = OneCellAnchor(_from=anchor_marker, ext=anchor_extent)
+                ws.add_chart(income_bar)
 
         # Закрепить заголовки (строки 1-2: заголовок секции + заголовки колонок)
         ws.freeze_panes = 'A3'
