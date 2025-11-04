@@ -667,9 +667,9 @@ class ExportService:
                 if cell.value:
                     max_length = max(max_length, len(str(cell.value)))
 
-            # Увеличенная ширина для столбцов Total и Count
+            # Увеличенная ширина для столбцов Total, Count и Cashback
             col_offset = col - summary_start_col
-            if col_offset == 2 or col_offset == 3:  # Total (2) и Count (3)
+            if col_offset in [2, 3, 5]:  # Total (2), Count (3) и Cashback (5)
                 ws.column_dimensions[get_column_letter(col)].width = min(max_length + 5, 40)
             else:
                 ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 40)
