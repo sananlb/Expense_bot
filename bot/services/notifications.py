@@ -109,24 +109,22 @@ class NotificationService:
         """Format insight for display in message"""
         text = ""
 
-        # Финансовая сводка (компактный формат с доходами)
-        text += f"💰 Расходы: {float(insight.total_expenses):,.0f} ₽".replace(',', ' ')
-
-        # Всегда показываем доходы
-        text += f" | 💵 Доходы: {float(insight.total_incomes):,.0f} ₽".replace(',', ' ')
+        # Финансовая сводка (каждый показатель с новой строки)
+        text += f"💰 Расходы: {float(insight.total_expenses):,.0f} ₽\n".replace(',', ' ')
+        text += f"💵 Доходы: {float(insight.total_incomes):,.0f} ₽\n".replace(',', ' ')
 
         # Баланс показываем всегда
         balance = insight.balance
         balance_emoji = "📈" if balance >= 0 else "📉"
         balance_sign = "+" if balance >= 0 else ""
-        text += f" | Баланс: {balance_emoji} {balance_sign}{float(balance):,.0f} ₽".replace(',', ' ')
+        text += f"📊 Баланс: {balance_emoji} {balance_sign}{float(balance):,.0f} ₽\n".replace(',', ' ')
 
-        text += f"\n📊 Количество трат: {insight.expenses_count}\n\n"
+        text += f"📊 Количество трат: {insight.expenses_count}\n\n"
 
-        # Топ 3 категории (сокращено с 5)
+        # Топ 5 категорий
         if insight.top_categories:
             text += f"🏆 <b>Топ категорий:</b>\n"
-            for i, cat in enumerate(insight.top_categories[:3], 1):
+            for i, cat in enumerate(insight.top_categories[:5], 1):
                 percentage = cat.get('percentage', 0)
                 amount = cat.get('amount', 0)
                 category_name = cat.get('category', 'Без категории')
