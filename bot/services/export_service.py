@@ -567,8 +567,8 @@ class ExportService:
                     max_length = max(max_length, len(str(cell.value)))
             ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 50)
 
-        # ==================== ПРАВАЯ ЧАСТЬ: SUMMARY (Колонки I-N) ====================
-        summary_start_col = 9  # Колонка I
+        # ==================== ПРАВАЯ ЧАСТЬ: SUMMARY (Колонки J-O) ====================
+        summary_start_col = 10  # Колонка J (отступ 1 столбец от дневника)
 
         # Заголовок секции расходов
         expenses_section_title = 'РАСХОДЫ' if lang == 'ru' else 'EXPENSES'
@@ -627,30 +627,30 @@ class ExportService:
                 total_cashback += category_cashbacks.get(category_id, 0)
             cashback = total_cashback
 
-            # Заполняем колонки I-N
-            ws.cell(row=summary_row, column=9, value=truncate_text(category))
-            ws.cell(row=summary_row, column=10, value=currency)
-            ws.cell(row=summary_row, column=11, value=stats['total'])
-            ws.cell(row=summary_row, column=12, value=stats['count'])
-            ws.cell(row=summary_row, column=13, value=average)
-            ws.cell(row=summary_row, column=14, value=cashback)
+            # Заполняем колонки Summary
+            ws.cell(row=summary_row, column=summary_start_col, value=truncate_text(category))
+            ws.cell(row=summary_row, column=summary_start_col + 1, value=currency)
+            ws.cell(row=summary_row, column=summary_start_col + 2, value=stats['total'])
+            ws.cell(row=summary_row, column=summary_start_col + 3, value=stats['count'])
+            ws.cell(row=summary_row, column=summary_start_col + 4, value=average)
+            ws.cell(row=summary_row, column=summary_start_col + 5, value=cashback)
 
             # Применяем границы и чередующуюся заливку к строке Summary
             is_even_row = (summary_row % 2 == 0)
-            for col in range(9, 15):  # Колонки I-N
+            for col in range(summary_start_col, summary_start_col + 6):
                 cell = ws.cell(row=summary_row, column=col)
                 cell.border = thin_border
                 if is_even_row:
                     cell.fill = gray_fill
 
             # Форматирование
-            ws.cell(row=summary_row, column=11).number_format = '#,##0.00'
-            ws.cell(row=summary_row, column=13).number_format = '#,##0.00'
-            ws.cell(row=summary_row, column=14).number_format = '#,##0.00'
+            ws.cell(row=summary_row, column=summary_start_col + 2).number_format = '#,##0.00'
+            ws.cell(row=summary_row, column=summary_start_col + 4).number_format = '#,##0.00'
+            ws.cell(row=summary_row, column=summary_start_col + 5).number_format = '#,##0.00'
 
             # Кешбэк зеленым если > 0
             if cashback > 0:
-                ws.cell(row=summary_row, column=14).font = Font(color="008000", bold=True)
+                ws.cell(row=summary_row, column=summary_start_col + 5).font = Font(color="008000", bold=True)
 
             ratio = (stats['total'] / total_expenses) if total_expenses else 0
             pie_segment_ratios.append(ratio)
@@ -659,8 +659,8 @@ class ExportService:
 
         summary_end_row = summary_row - 1
 
-        # Автоширина для колонок I-N
-        for col in range(9, 15):
+        # Автоширина для колонок Summary
+        for col in range(summary_start_col, summary_start_col + 6):
             max_length = 0
             for row in range(1, summary_row):
                 cell = ws.cell(row=row, column=col)
@@ -717,9 +717,9 @@ class ExportService:
                 )
             )
 
-            # Данные: колонка I (категории) и K (всего)
-            labels = Reference(ws, min_col=9, min_row=3, max_row=summary_end_row)
-            data = Reference(ws, min_col=11, min_row=2, max_row=summary_end_row)
+            # Данные: колонка категорий и колонка всего
+            labels = Reference(ws, min_col=summary_start_col, min_row=3, max_row=summary_end_row)
+            data = Reference(ws, min_col=summary_start_col + 2, min_row=2, max_row=summary_end_row)
             pie.add_data(data, titles_from_data=True)
             pie.set_categories(labels)
 
@@ -780,8 +780,8 @@ class ExportService:
                     pt.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dPt.append(pt)
 
-            # Размещение ПОД таблицей Summary, начиная с колонки I
-            ws.add_chart(pie, f"I{charts_start_row}")
+            # Размещение ПОД таблицей Summary, начиная с колонки J
+            ws.add_chart(pie, f"J{charts_start_row}")
 
         # СТОЛБЧАТАЯ ДИАГРАММА ПО ДНЯМ И КАТЕГОРИЯМ
         # Подсчет расходов по дням и категориям для stacked bar chart
@@ -844,8 +844,8 @@ class ExportService:
         if sorted_categories and sorted_days:
             # Таблицу опускаем ниже диаграмм для наглядности
             table_start_row = bar_chart_row + int(pie_block_height + 15)
-            # Размещаем в тех же колонках что и диаграммы (начиная с I = 9)
-            chart_data_start_col = 9
+            # Размещаем в тех же колонках что и диаграммы (начиная с J = 10)
+            chart_data_start_col = 10
 
             day_header = 'День' if lang == 'ru' else 'Day'
             day_cell = ws.cell(row=table_start_row, column=chart_data_start_col, value=day_header)
@@ -917,11 +917,11 @@ class ExportService:
             bar.width = 16  # Чуть уже, сдвигаем ближе вправо
             bar.height = 11.6  # Делаем немного выше для лучшего баланса
 
-            # Настраиваем ось X (дни) - показываем метки 5, 10, 15, 20, 25, 30
+            # Настраиваем ось X (дни) - показываем метки 0, 6, 12, 18, 24, 30
             # tickLblSkip определяет как часто показывать метки
-            # Для показа 5, 10, 15, 20, 25, 30 нужно пропускать каждые 4 метки (показывать каждую 5-ю)
-            bar.x_axis.tickLblSkip = 4  # Показываем каждую 5-ю метку
-            bar.x_axis.tickMarkSkip = 4  # Также пропускаем метки делений
+            # Для показа через каждые 6 дней нужно пропускать каждые 5 меток (показывать каждую 6-ю)
+            bar.x_axis.tickLblSkip = 5  # Показываем каждую 6-ю метку
+            bar.x_axis.tickMarkSkip = 5  # Также пропускаем метки делений
             bar.x_axis.delete = False  # Показываем ось X
 
             # Настраиваем ось Y (суммы)
@@ -970,8 +970,8 @@ class ExportService:
             bar.y_axis.axId = 100
             bar.y_axis.crosses = "autoZero"
 
-            # Размещение СПРАВА от круговой диаграммы
-            ws.add_chart(bar, f"Q{bar_chart_row}")
+            # Размещение СПРАВА от круговой диаграммы (AE - с учетом ширины круговой ~20 колонок)
+            ws.add_chart(bar, f"AE{bar_chart_row}")
 
         # ==================== ДИАГРАММЫ ДОХОДОВ ====================
         # Подсчет статистики по категориям доходов
@@ -998,7 +998,7 @@ class ExportService:
             income_pie_segment_ratios: List[float] = []
 
             # ТАБЛИЦА SUMMARY ДЛЯ ДОХОДОВ (справа от диаграмм расходов)
-            income_summary_start_col = 29  # Колонка AC (29) - увеличен отступ от секции расходов
+            income_summary_start_col = 30  # Колонка AD (30) - увеличен отступ от секции расходов
             if lang == 'en':
                 income_headers = ['Category', 'Currency', 'Total', 'Count', 'Average']
             else:
@@ -1151,8 +1151,8 @@ class ExportService:
                     pt.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dPt.append(pt)
 
-            # Размещение круговой диаграммы доходов (колонка AC)
-            ws.add_chart(income_pie, f"AC{charts_start_row}")
+            # Размещение круговой диаграммы доходов (колонка AD)
+            ws.add_chart(income_pie, f"AD{charts_start_row}")
 
             # СТОЛБЧАТАЯ ДИАГРАММА ДОХОДОВ ПО ДНЯМ
             # Подсчет доходов по дням и категориям
@@ -1235,9 +1235,9 @@ class ExportService:
                 income_bar.width = 16
                 income_bar.height = 11.6
 
-                # Настройки оси
-                income_bar.x_axis.tickLblSkip = 4
-                income_bar.x_axis.tickMarkSkip = 4
+                # Настройки оси - показываем метки через каждые 6 дней (0, 6, 12, 18, 24, 30)
+                income_bar.x_axis.tickLblSkip = 5
+                income_bar.x_axis.tickMarkSkip = 5
                 income_bar.x_axis.delete = False
                 income_bar.y_axis.delete = False
 
@@ -1261,8 +1261,8 @@ class ExportService:
                     series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dLbls = None
 
-                # Размещение столбчатой диаграммы доходов (справа от круговой)
-                ws.add_chart(income_bar, f"AM{charts_start_row}")
+                # Размещение столбчатой диаграммы доходов (справа от круговой, колонка AN)
+                ws.add_chart(income_bar, f"AN{charts_start_row}")
 
         # Закрепить заголовки (строки 1-2: заголовок секции + заголовки колонок)
         ws.freeze_panes = 'A3'
