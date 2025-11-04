@@ -1203,8 +1203,9 @@ class ExportService:
                     pt.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dPt.append(pt)
 
-            # Размещение круговой диаграммы доходов (в буферной зоне после таблицы)
-            income_pie_col = get_column_letter(income_charts_buffer_start)
+            # Размещение круговой диаграммы доходов (под заголовком секции ДОХОДЫ)
+            # Круговая остается на исходном месте (первая колонка таблицы Summary)
+            income_pie_col = get_column_letter(income_summary_start_col)
             ws.add_chart(income_pie, f"{income_pie_col}{charts_start_row}")
 
             # СТОЛБЧАТАЯ ДИАГРАММА ДОХОДОВ ПО ДНЯМ
