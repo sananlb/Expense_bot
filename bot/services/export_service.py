@@ -600,6 +600,10 @@ class ExportService:
                 if 'object' in op and hasattr(op['object'], 'category_id'):
                     category_stats[key]['category_ids'].add(op['object'].category_id)
 
+        # Инициализация переменных с дефолтными значениями (используются секцией доходов)
+        charts_start_row = 3  # Если нет расходов, диаграммы доходов начинаются с 3-й строки
+        dynamic_income_start_col = 30  # Колонка AD (минимальное значение по умолчанию)
+
         # ЕСЛИ ЕСТЬ РАСХОДЫ - создаем секцию расходов (заголовки, summary, диаграммы)
         if category_stats:
             sorted_categories = sorted(
