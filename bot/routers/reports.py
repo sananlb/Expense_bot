@@ -891,9 +891,9 @@ async def callback_export_month_csv(callback: CallbackQuery, state: FSMContext, 
                     ).select_related('category').order_by('-income_date', '-income_time')
                 )
 
-            return expenses, incomes
+            return expenses, incomes, household_mode
 
-        expenses, incomes = await get_user_data()
+        expenses, incomes, household_mode = await get_user_data()
 
         # Проверка на пустоту
         if not expenses and not incomes:
