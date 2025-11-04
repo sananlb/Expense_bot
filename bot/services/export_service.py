@@ -30,23 +30,23 @@ logger = logging.getLogger(__name__)
 class ExportService:
     """Сервис для экспорта данных о тратах и доходах"""
 
-    # Цветовая палитра для категорий (как в PDF отчете)
+    # Цветовая палитра для категорий (приглушенные серые тона)
     CATEGORY_COLORS = [
-        '#4A90E2',  # мягкий синий
-        '#FF6B35',  # кораллово-оранжевый
-        '#7ED321',  # светло-зеленый
-        '#8B5CF6',  # средний фиолетовый
-        '#F5A623',  # золотой
-        '#50C8E8',  # небесно-голубой
-        '#BD5EFF',  # сливовый
-        '#86D36B',  # бледно-зеленый
-        '#E94B9A',  # светло-орхидный
-        '#FF8C00',  # оранжевый
-        '#5DADE2',  # светло-синий
-        '#D4AC0D',  # пшеничный
-        '#C39BD3',  # светло-фиолетовый
-        '#17A2B8',  # светлый морской зеленый
-        '#E91E63'   # ярко-розовый
+        '#7A8B99',  # серо-синий
+        '#8C9BA8',  # светло-серый
+        '#6B7E8F',  # серо-голубой
+        '#8E8B9E',  # серо-фиолетовый
+        '#9B9383',  # серо-бежевый
+        '#7E9BA8',  # серо-голубой светлый
+        '#9A8B99',  # серо-сиреневый
+        '#7F9688',  # серо-зеленый
+        '#9B8394',  # серо-розовый
+        '#9B8874',  # серо-коричневый
+        '#7994A8',  # серо-синий светлый
+        '#9B9173',  # серо-оливковый
+        '#9E95AB',  # серо-лавандовый
+        '#6E9199',  # серо-бирюзовый
+        '#9B7580'   # серо-малиновый
     ]
 
     @staticmethod
@@ -339,7 +339,7 @@ class ExportService:
 
         # Стили
         header_font = Font(bold=True, color="FFFFFF", size=11)
-        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_fill = PatternFill(start_color="6C7A89", end_color="6C7A89", fill_type="solid")  # Серо-синий приглушенный
         header_alignment = Alignment(horizontal="center", vertical="center")
 
         # Стили для зебра-полосок и границ
@@ -356,7 +356,7 @@ class ExportService:
         operations_section_title = 'ДНЕВНИК ОПЕРАЦИЙ' if lang == 'ru' else 'OPERATIONS LOG'
         ops_title_cell = ws.cell(row=1, column=1, value=operations_section_title)
         ops_title_cell.font = Font(bold=True, color="FFFFFF", size=12)
-        ops_title_cell.fill = PatternFill(start_color="2E5090", end_color="2E5090", fill_type="solid")
+        ops_title_cell.fill = PatternFill(start_color="5C6B7A", end_color="5C6B7A", fill_type="solid")  # Серый приглушенный
         ops_title_cell.alignment = header_alignment
         ops_title_cell.border = thin_border
 
@@ -574,7 +574,7 @@ class ExportService:
         expenses_section_title = 'РАСХОДЫ' if lang == 'ru' else 'EXPENSES'
         exp_title_cell = ws.cell(row=1, column=summary_start_col, value=expenses_section_title)
         exp_title_cell.font = Font(bold=True, color="FFFFFF", size=12)
-        exp_title_cell.fill = PatternFill(start_color="E53935", end_color="E53935", fill_type="solid")
+        exp_title_cell.fill = PatternFill(start_color="7A8B99", end_color="7A8B99", fill_type="solid")  # Серо-синий приглушенный
         exp_title_cell.alignment = header_alignment
         exp_title_cell.border = thin_border
 
@@ -1014,7 +1014,7 @@ class ExportService:
             income_section_title = 'ДОХОДЫ' if lang == 'ru' else 'INCOME'
             title_cell = ws.cell(row=1, column=income_summary_start_col, value=income_section_title)
             title_cell.font = Font(bold=True, color="FFFFFF", size=12)
-            title_cell.fill = PatternFill(start_color="4CAF50", end_color="4CAF50", fill_type="solid")
+            title_cell.fill = PatternFill(start_color="7F9688", end_color="7F9688", fill_type="solid")  # Серо-зеленый приглушенный
             title_cell.alignment = header_alignment
             title_cell.border = thin_border
 
@@ -1022,7 +1022,7 @@ class ExportService:
             for idx, header in enumerate(income_headers):
                 cell = ws.cell(row=2, column=income_summary_start_col + idx, value=header)
                 cell.font = header_font
-                cell.fill = PatternFill(start_color="66BB6A", end_color="66BB6A", fill_type="solid")
+                cell.fill = PatternFill(start_color="8C9BA8", end_color="8C9BA8", fill_type="solid")  # Светло-серый
                 cell.alignment = header_alignment
                 cell.border = thin_border
 
@@ -1195,7 +1195,7 @@ class ExportService:
                 day_header = 'День' if lang == 'ru' else 'Day'
                 day_cell = ws.cell(row=income_table_start_row, column=income_chart_data_start_col, value=day_header)
                 day_cell.font = header_font
-                day_cell.fill = PatternFill(start_color="66BB6A", end_color="66BB6A", fill_type="solid")
+                day_cell.fill = PatternFill(start_color="8C9BA8", end_color="8C9BA8", fill_type="solid")  # Светло-серый
                 day_cell.alignment = header_alignment
                 day_cell.border = thin_border
 
@@ -1203,7 +1203,7 @@ class ExportService:
                     col = income_chart_data_start_col + 1 + idx
                     cell = ws.cell(row=income_table_start_row, column=col, value=category)
                     cell.font = header_font
-                    cell.fill = PatternFill(start_color="66BB6A", end_color="66BB6A", fill_type="solid")
+                    cell.fill = PatternFill(start_color="8C9BA8", end_color="8C9BA8", fill_type="solid")  # Светло-серый
                     cell.alignment = header_alignment
                     cell.border = thin_border
 
