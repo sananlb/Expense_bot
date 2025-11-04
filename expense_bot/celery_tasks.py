@@ -70,11 +70,11 @@ def send_monthly_reports():
         for profile in profiles:
             try:
                 loop.run_until_complete(
-                    service.send_monthly_report(profile.telegram_id, profile)
+                    service.send_monthly_report_notification(profile.telegram_id, profile)
                 )
-                logger.info(f"Monthly report sent to user {profile.telegram_id}")
+                logger.info(f"Monthly report notification sent to user {profile.telegram_id}")
             except Exception as e:
-                logger.error(f"Error sending monthly report to user {profile.telegram_id}: {e}")
+                logger.error(f"Error sending monthly report notification to user {profile.telegram_id}: {e}")
 
         loop.close()
 

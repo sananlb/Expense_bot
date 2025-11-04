@@ -1065,6 +1065,310 @@ async def callback_export_month_excel(callback: CallbackQuery, state: FSMContext
         )
 
 
+@router.callback_query(F.data.startswith("monthly_report_csv_"))
+async def callback_monthly_report_csv(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Генерация CSV отчета из ежемесячного уведомления"""
+    try:
+        from expenses.models import Expense, Income, Profile
+        from bot.services.export_service import ExportService
+        from bot.services.profile import get_user_settings
+        from asgiref.sync import sync_to_async
+
+        user_id = callback.from_user.id
+
+        # Парсим callback_data (формат: monthly_report_csv_2025_10)
+        parts = callback.data.split('_')
+        year = int(parts[3])
+        month = int(parts[4])
+
+        # Проверка Premium подписки
+        if not await check_subscription(user_id):
+            await callback.answer()
+            await callback.message.answer(
+                get_text('export_premium_required', lang),
+                reply_markup=get_subscription_button(),
+                parse_mode="HTML"
+            )
+            return
+
+        await callback.answer(get_text('export_generating', lang), show_alert=False)
+
+        # Запрашиваем данные по year/month
+        @sync_to_async
+        def get_user_data():
+            profile = Profile.objects.get(telegram_id=user_id)
+            settings = get_user_settings.__wrapped__(user_id)
+            household_mode = bool(profile.household) and getattr(settings, 'view_scope', 'personal') == 'household'
+
+            if household_mode:
+                expenses = list(
+                    Expense.objects.filter(
+                        profile__household=profile.household,
+                        expense_date__year=year,
+                        expense_date__month=month
+                    ).select_related('category').order_by('-expense_date', '-expense_time')
+                )
+                incomes = list(
+                    Income.objects.filter(
+                        profile__household=profile.household,
+                        income_date__year=year,
+                        income_date__month=month
+                    ).select_related('category').order_by('-income_date', '-income_time')
+                )
+            else:
+                expenses = list(
+                    Expense.objects.filter(
+                        profile__telegram_id=user_id,
+                        expense_date__year=year,
+                        expense_date__month=month
+                    ).select_related('category').order_by('-expense_date', '-expense_time')
+                )
+                incomes = list(
+                    Income.objects.filter(
+                        profile__telegram_id=user_id,
+                        income_date__year=year,
+                        income_date__month=month
+                    ).select_related('category').order_by('-income_date', '-income_time')
+                )
+
+            return expenses, incomes, household_mode
+
+        expenses, incomes, household_mode = await get_user_data()
+
+        # Проверка на пустоту
+        if not expenses and not incomes:
+            await callback.message.answer(
+                get_text('export_empty', lang),
+                parse_mode="HTML"
+            )
+            return
+
+        # Генерация CSV
+        @sync_to_async
+        def generate_csv_file():
+            return ExportService.generate_csv(expenses, incomes, year, month, lang, user_id, household_mode)
+
+        csv_bytes = await generate_csv_file()
+
+        # Формируем имя файла
+        month_names_ru = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+                         'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+        month_names_en = ['January', 'February', 'March', 'April', 'May', 'June',
+                         'July', 'August', 'September', 'October', 'November', 'December']
+        month_name = month_names_ru[month - 1] if lang == 'ru' else month_names_en[month - 1]
+
+        filename = f"expenses_{month_name}_{year}.csv"
+        document = BufferedInputFile(csv_bytes, filename=filename)
+
+        # Добавляем рекламный текст в caption
+        caption = (
+            f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
+            f"🤖 Сгенерировано в Coins @showmecoinbot"
+        )
+
+        # Отправляем файл
+        await callback.message.answer_document(
+            document,
+            caption=caption,
+            parse_mode="HTML"
+        )
+
+    except Exception as e:
+        logger.error(f"Error generating monthly CSV report: {e}", exc_info=True)
+        await callback.message.answer(
+            get_text('export_error', lang),
+            parse_mode="HTML"
+        )
+
+
+@router.callback_query(F.data.startswith("monthly_report_xlsx_"))
+async def callback_monthly_report_xlsx(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Генерация XLSX отчета из ежемесячного уведомления"""
+    try:
+        from expenses.models import Expense, Income, Profile
+        from bot.services.export_service import ExportService
+        from bot.services.profile import get_user_settings
+        from asgiref.sync import sync_to_async
+
+        user_id = callback.from_user.id
+
+        # Парсим callback_data (формат: monthly_report_xlsx_2025_10)
+        parts = callback.data.split('_')
+        year = int(parts[3])
+        month = int(parts[4])
+
+        # Проверка Premium подписки
+        if not await check_subscription(user_id):
+            await callback.answer()
+            await callback.message.answer(
+                get_text('export_premium_required', lang),
+                reply_markup=get_subscription_button(),
+                parse_mode="HTML"
+            )
+            return
+
+        await callback.answer(get_text('export_generating', lang), show_alert=False)
+
+        # Запрашиваем данные по year/month
+        @sync_to_async
+        def get_user_data():
+            profile = Profile.objects.get(telegram_id=user_id)
+            settings = get_user_settings.__wrapped__(user_id)
+            household_mode = bool(profile.household) and getattr(settings, 'view_scope', 'personal') == 'household'
+
+            if household_mode:
+                expenses = list(
+                    Expense.objects.filter(
+                        profile__household=profile.household,
+                        expense_date__year=year,
+                        expense_date__month=month
+                    ).select_related('category').order_by('-expense_date', '-expense_time')
+                )
+                incomes = list(
+                    Income.objects.filter(
+                        profile__household=profile.household,
+                        income_date__year=year,
+                        income_date__month=month
+                    ).select_related('category').order_by('-income_date', '-income_time')
+                )
+            else:
+                expenses = list(
+                    Expense.objects.filter(
+                        profile__telegram_id=user_id,
+                        expense_date__year=year,
+                        expense_date__month=month
+                    ).select_related('category').order_by('-expense_date', '-expense_time')
+                )
+                incomes = list(
+                    Income.objects.filter(
+                        profile__telegram_id=user_id,
+                        income_date__year=year,
+                        income_date__month=month
+                    ).select_related('category').order_by('-income_date', '-income_time')
+                )
+
+            return expenses, incomes, household_mode
+
+        expenses, incomes, household_mode = await get_user_data()
+
+        # Проверка на пустоту
+        if not expenses and not incomes:
+            await callback.message.answer(
+                get_text('export_empty', lang),
+                parse_mode="HTML"
+            )
+            return
+
+        # Генерация XLSX
+        @sync_to_async
+        def generate_xlsx_file():
+            return ExportService.generate_xlsx_with_charts(expenses, incomes, year, month, user_id, lang, household_mode)
+
+        xlsx_buffer = await generate_xlsx_file()
+
+        # Формируем имя файла
+        month_names_ru = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+                         'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+        month_names_en = ['January', 'February', 'March', 'April', 'May', 'June',
+                         'July', 'August', 'September', 'October', 'November', 'December']
+        month_name = month_names_ru[month - 1] if lang == 'ru' else month_names_en[month - 1]
+
+        filename = f"expenses_{month_name}_{year}.xlsx"
+        document = BufferedInputFile(xlsx_buffer.read(), filename=filename)
+
+        # Добавляем рекламный текст в caption
+        caption = (
+            f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
+            f"🤖 Сгенерировано в Coins @showmecoinbot"
+        )
+
+        # Отправляем файл
+        await callback.message.answer_document(
+            document,
+            caption=caption,
+            parse_mode="HTML"
+        )
+
+    except Exception as e:
+        logger.error(f"Error generating monthly XLSX report: {e}", exc_info=True)
+        await callback.message.answer(
+            get_text('export_error', lang),
+            parse_mode="HTML"
+        )
+
+
+@router.callback_query(F.data.startswith("monthly_report_pdf_"))
+async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Генерация PDF отчета из ежемесячного уведомления"""
+    try:
+        from bot.services.pdf_report import PDFReportService
+
+        user_id = callback.from_user.id
+
+        # Парсим callback_data (формат: monthly_report_pdf_2025_10)
+        parts = callback.data.split('_')
+        year = int(parts[3])
+        month = int(parts[4])
+
+        # Проверка Premium подписки
+        if not await check_subscription(user_id):
+            await callback.answer()
+            await callback.message.answer(
+                get_text('export_premium_required', lang),
+                reply_markup=get_subscription_button(),
+                parse_mode="HTML"
+            )
+            return
+
+        await callback.answer(get_text('generating_report', lang), show_alert=False)
+
+        # Генерируем PDF
+        pdf_service = PDFReportService()
+        pdf_bytes = await pdf_service.generate_monthly_report(
+            user_id=user_id,
+            year=year,
+            month=month,
+            lang=lang
+        )
+
+        if not pdf_bytes:
+            await callback.message.answer(
+                get_text('no_data_for_report', lang),
+                parse_mode="HTML"
+            )
+            return
+
+        # Формируем имя файла
+        month_names_ru = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+                         'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+        month_names_en = ['January', 'February', 'March', 'April', 'May', 'June',
+                         'July', 'August', 'September', 'October', 'November', 'December']
+        month_name = month_names_ru[month - 1] if lang == 'ru' else month_names_en[month - 1]
+
+        filename = f"Report_Coins_{month_name}_{year}.pdf"
+        pdf_file = BufferedInputFile(pdf_bytes, filename=filename)
+
+        # Добавляем рекламный текст в caption
+        caption = (
+            f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
+            f"🤖 Сгенерировано в Coins @showmecoinbot"
+        )
+
+        # Отправляем PDF
+        await callback.message.answer_document(
+            document=pdf_file,
+            caption=caption,
+            parse_mode="HTML"
+        )
+
+    except Exception as e:
+        logger.error(f"Error generating monthly PDF report: {e}", exc_info=True)
+        await callback.message.answer(
+            get_text('export_error', lang),
+            parse_mode="HTML"
+        )
+
+
 @router.callback_query(F.data == "back_to_summary")
 async def callback_back_to_summary(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Вернуться к последнему отчету"""
