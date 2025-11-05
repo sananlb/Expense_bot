@@ -30,6 +30,28 @@ from expenses.models import Expense, Income, Cashback, Profile
 logger = logging.getLogger(__name__)
 
 
+CM_TO_EMU = 360000  # 1 сантиметр в единицах EMU (Excel)
+
+
+def _width_units_to_cm(width_units: float) -> float:
+    """Преобразовать ширину столбца Excel (в условных единицах) в сантиметры."""
+    if width_units <= 0:
+        return 0.0
+    if width_units <= 1:
+        pixels = width_units * 12  # Excel использует 12 px для очень узких столбцов
+    else:
+        pixels = math.floor(width_units * 7 + 5)  # эмпирическая формула Excel
+    return pixels * 0.026458333  # 1 px ~= 0.026458333 см
+
+
+def _get_column_width_cm(ws, col_idx: int) -> float:
+    """Получить фактическую ширину столбца по индексу (1-based) в сантиметрах."""
+    letter = get_column_letter(col_idx)
+    dimension = ws.column_dimensions.get(letter)
+    width_units = dimension.width if dimension and dimension.width else 8.43
+    return _width_units_to_cm(width_units)
+
+
 class ExportService:
     """Сервис для экспорта данных о тратах и доходах"""
 
@@ -728,9 +750,18 @@ class ExportService:
                         wMode="factor",
                         hMode="factor",
                         x=0.115,  # Сдвинули на 5% правее (было 0.065)
-                        y=0.05,
+                        y=0.05,   # Стандартное положение по вертикали
                         w=0.42,
                         h=0.8
+                    )
+                )
+                # Смещаем заголовок ближе к левому верхнему краю
+                pie.title.layout = Layout(
+                    manualLayout=ManualLayout(
+                        xMode="edge",
+                        yMode="edge",
+                        x=0.02,
+                        y=0.01
                     )
                 )
 
@@ -813,8 +844,20 @@ class ExportService:
                         pt.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                         series.dPt.append(pt)
 
-                # Размещение ПОД таблицей Summary, начиная с колонки K
-                ws.add_chart(pie, f"K{charts_start_row}")
+                # Размещение ПОД таблицей Summary с гибким позиционированием
+                pie_anchor_column = 11  # Колонка K
+                pie_anchor = AnchorMarker(
+                    col=pie_anchor_column - 1,
+                    colOff=0,
+                    row=max(charts_start_row - 1, 0),
+                    rowOff=0
+                )
+                pie_extent = XDRPositiveSize2D(
+                    cx=int(round(pie.width * CM_TO_EMU)),
+                    cy=int(round(pie.height * CM_TO_EMU))
+                )
+                pie.anchor = OneCellAnchor(_from=pie_anchor, ext=pie_extent)
+                ws.add_chart(pie)
 
             # СТОЛБЧАТАЯ ДИАГРАММА ПО ДНЯМ И КАТЕГОРИЯМ
             # Подсчет расходов по дням и категориям для stacked bar chart
@@ -1009,8 +1052,21 @@ class ExportService:
                 bar.y_axis.axId = 100
                 bar.y_axis.crosses = "autoZero"
 
-                # Размещение СПРАВА от круговой диаграммы (S - ближе к круговой)
-                ws.add_chart(bar, f"R{bar_chart_row}")
+                # Размещение СПРАВА от круговой диаграммы - чуть ближе (≈ половина столбца)
+                bar_anchor_column = 17  # Колонка Q
+                half_column_cm = _get_column_width_cm(ws, bar_anchor_column) / 2
+                bar_anchor = AnchorMarker(
+                    col=bar_anchor_column - 1,
+                    colOff=int(round(half_column_cm * CM_TO_EMU)),
+                    row=max(bar_chart_row - 1, 0),
+                    rowOff=0
+                )
+                bar_extent = XDRPositiveSize2D(
+                    cx=int(round(bar.width * CM_TO_EMU)),
+                    cy=int(round(bar.height * CM_TO_EMU))
+                )
+                bar.anchor = OneCellAnchor(_from=bar_anchor, ext=bar_extent)
+                ws.add_chart(bar)
 
         # ==================== ДИАГРАММЫ ДОХОДОВ ====================
         # Подсчет статистики по категориям доходов
@@ -1105,9 +1161,10 @@ class ExportService:
                 else:
                     ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 20)
 
-            # Фиксированная ширина круговой диаграммы и желаемый зазор ~4 см
+            # Фиксированная ширина круговой диаграммы и желаемый зазор: увеличиваем на ~0.5 столбца
             income_pie_width_cm = 19.3
-            desired_horizontal_offset_cm = income_pie_width_cm + 4
+            half_income_column_cm = _get_column_width_cm(ws, income_summary_start_col) / 2
+            desired_horizontal_offset_cm = income_pie_width_cm + 4 + half_income_column_cm
 
             # КРУГОВАЯ ДИАГРАММА ДОХОДОВ (в буферной зоне, не в таблице!)
             income_pie = PieChart()
@@ -1122,9 +1179,17 @@ class ExportService:
                     wMode="factor",
                     hMode="factor",
                     x=0.115,  # Сдвинули на 5% правее (было 0.065)
-                    y=0.05,
+                    y=0.05,   # Стандартное положение по вертикали
                     w=0.42,
                     h=0.8
+                )
+            )
+            income_pie.title.layout = Layout(
+                manualLayout=ManualLayout(
+                    xMode="edge",
+                    yMode="edge",
+                    x=0.02,
+                    y=0.01
                 )
             )
 
@@ -1313,26 +1378,7 @@ class ExportService:
                     series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dLbls = None
 
-                # Подбираем позицию с точностью до см (чтобы избегать накопленных погрешностей ширины столбцов)
-                def width_units_to_cm(width_units: float) -> float:
-                    if width_units is None:
-                        width_units = 8.43  # стандартная ширина Excel
-                    if width_units <= 0:
-                        return 0.0
-                    if width_units <= 1:
-                        pixels = width_units * 12  # Excel spec для узких столбцов
-                    else:
-                        pixels = math.floor(width_units * 7 + 5)  # эмпирическая формула Excel
-                    return pixels * 0.026458333  # 1 px ~= 0.026458333 см
-
-                def get_column_width_cm(col_idx: int) -> float:
-                    letter = get_column_letter(col_idx)
-                    dimension = ws.column_dimensions.get(letter)
-                    width_units = dimension.width if dimension and dimension.width else 8.43
-                    return width_units_to_cm(width_units)
-
-                cm_to_emu = 360000  # 1 см в EMU (Excel internal units)
-
+                # Подбираем позицию с точностью до сантиметров (избегаем погрешностей ширины столбцов)
                 accumulated_offset_cm = 0.0
                 previous_offset_cm = 0.0
                 current_col_index = income_summary_start_col
@@ -1344,10 +1390,7 @@ class ExportService:
                     previous_col_index = current_col_index
                     previous_offset_cm = accumulated_offset_cm
 
-                    col_letter = get_column_letter(current_col_index)
-                    column_dimension = ws.column_dimensions.get(col_letter)
-                    col_width_units = column_dimension.width if column_dimension and column_dimension.width else 8.43
-                    accumulated_offset_cm += width_units_to_cm(col_width_units)
+                    accumulated_offset_cm += _get_column_width_cm(ws, current_col_index)
                     current_col_index += 1
 
                 if safety_counter >= 500:
@@ -1357,13 +1400,13 @@ class ExportService:
                     anchor_col_index = previous_col_index
                     col_offset_cm = max(desired_horizontal_offset_cm - previous_offset_cm, 0.0)
 
-                anchor_column_width_cm = get_column_width_cm(anchor_col_index)
+                anchor_column_width_cm = _get_column_width_cm(ws, anchor_col_index)
 
                 adjustment_guard = 0
                 while col_offset_cm >= anchor_column_width_cm and adjustment_guard < 100:
                     col_offset_cm -= anchor_column_width_cm
                     anchor_col_index += 1
-                    anchor_column_width_cm = get_column_width_cm(anchor_col_index)
+                    anchor_column_width_cm = _get_column_width_cm(ws, anchor_col_index)
                     adjustment_guard += 1
 
                 if adjustment_guard >= 100:
@@ -1377,19 +1420,19 @@ class ExportService:
                     shift_count += 1
 
                 # После сдвига убеждаемся что смещение не выходит за рамки новой колонки
-                anchor_column_width_cm = get_column_width_cm(anchor_col_index)
+                anchor_column_width_cm = _get_column_width_cm(ws, anchor_col_index)
                 if col_offset_cm > anchor_column_width_cm:
                     col_offset_cm = anchor_column_width_cm
 
                 anchor_marker = AnchorMarker(
                     col=max(anchor_col_index - 1, 0),
-                    colOff=int(round(col_offset_cm * cm_to_emu)),
+                    colOff=int(round(col_offset_cm * CM_TO_EMU)),
                     row=max(charts_start_row - 1, 0),
                     rowOff=0
                 )
                 anchor_extent = XDRPositiveSize2D(
-                    cx=int(round(income_bar.width * cm_to_emu)),
-                    cy=int(round(income_bar.height * cm_to_emu))
+                    cx=int(round(income_bar.width * CM_TO_EMU)),
+                    cy=int(round(income_bar.height * CM_TO_EMU))
                 )
                 income_bar.anchor = OneCellAnchor(_from=anchor_marker, ext=anchor_extent)
                 ws.add_chart(income_bar)

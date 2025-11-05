@@ -19,29 +19,26 @@ def back_close_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
 def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True, has_subscription: bool = False, view_scope: str = 'personal') -> InlineKeyboardMarkup:
     """Меню настроек"""
     keyboard = InlineKeyboardBuilder()
-    
+
     keyboard.button(text=get_text('change_language', lang), callback_data="change_language")
     keyboard.button(text=get_text('change_timezone', lang), callback_data="change_timezone")
     keyboard.button(text=get_text('change_currency', lang), callback_data="change_currency")
-    
+
     # Кнопка семейного бюджета
     keyboard.button(text=get_text('household_button', lang), callback_data="household_budget")
-    
-    # Кнопка переключения кешбэка - только для пользователей с подпиской
-    if has_subscription:
-        status = get_text('disable_cashback' if cashback_enabled else 'enable_cashback', lang)
-        cashback_text = get_text('toggle_cashback', lang).format(status=status)
-        keyboard.button(text=cashback_text, callback_data="toggle_cashback")
-    
+
+    # Кнопка переключения кешбэка - показываем всем пользователям
+    # При попытке включить без подписки будет показано предложение оформить подписку
+    status = get_text('disable_cashback' if cashback_enabled else 'enable_cashback', lang)
+    cashback_text = get_text('toggle_cashback', lang).format(status=status)
+    keyboard.button(text=cashback_text, callback_data="toggle_cashback")
+
     # Кнопка навигации
     keyboard.button(text=get_text('close', lang), callback_data="close")
-    
-    # Правильная настройка кнопок - по одной в ряд
-    if has_subscription:
-        keyboard.adjust(1, 1, 1, 1, 1, 1)
-    else:
-        keyboard.adjust(1, 1, 1, 1, 1)
-    
+
+    # Правильная настройка кнопок - по одной в ряд (всегда 6 кнопок)
+    keyboard.adjust(1, 1, 1, 1, 1, 1)
+
     return keyboard.as_markup()
 
 

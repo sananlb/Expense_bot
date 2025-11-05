@@ -67,7 +67,7 @@ Add information about cashbacks on your bank cards. Pin the cashback message in 
 View the history of all transactions for any period in a convenient format.
 
 <b>📊 Reports:</b>
-Get beautiful PDF reports with charts
+Get beautiful PDF reports with charts and export data as CSV or XLS
 
 <b>🏠 Household:</b>
 Track finances together with your family. Switch between personal and family views.
@@ -94,7 +94,7 @@ Track finances together with your family. Switch between personal and family vie
 Просматривайте историю всех операций за любой период в удобном формате.
 
 <b>📊 Отчеты:</b>
-Получайте красивые PDF отчеты с графиками
+Получайте красивые PDF-отчеты с графиками и экспортируйте данные в CSV и XLS
 
 <b>🏠 Семейный бюджет:</b>
 Ведите общий учет с семьёй. Переключайтесь между личным и семейным режимом просмотра.

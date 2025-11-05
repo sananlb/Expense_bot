@@ -2,7 +2,7 @@
 Сервис для работы с подписками
 """
 from django.utils import timezone
-from expenses.models import Profile, Subscription
+from expenses.models import Profile, Subscription, UserSettings
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -82,8 +82,6 @@ async def deactivate_expired_subscriptions():
     - Кешбек трекинг (cashback_enabled → False)
     - Обновляет команды бота для скрытия /cashback
     """
-    from expenses.models import Profile, UserSettings
-
     now = timezone.now()
 
     # Получаем истекшие подписки (без await - queryset не awaitable!)
@@ -93,7 +91,7 @@ async def deactivate_expired_subscriptions():
     ).select_related('profile')
 
     expired_count = 0
-    user_ids_to_update = []
+    user_ids_to_update: set[int] = set()
 
     async for subscription in expired_subscriptions:
         # Деактивируем подписку
@@ -112,28 +110,27 @@ async def deactivate_expired_subscriptions():
         # Если нет других активных подписок, отключаем премиум функции
         if not has_other_active:
             # Получаем или создаем настройки пользователя
-            settings, created = await UserSettings.objects.aget_or_create(profile=profile)
-
-            settings_updated = False
+            settings, _ = await UserSettings.objects.aget_or_create(profile=profile)
+            changed_fields = []
 
             # Отключаем семейный режим (переводим в личный)
             if settings.view_scope == 'household':
                 settings.view_scope = 'personal'
-                settings_updated = True
+                changed_fields.append('view_scope')
 
             # Отключаем кешбек
             if settings.cashback_enabled:
                 settings.cashback_enabled = False
-                settings_updated = True
+                changed_fields.append('cashback_enabled')
 
             # Сохраняем изменения в настройках
-            if settings_updated:
-                await settings.asave()
-                user_ids_to_update.append(profile.telegram_id)
+            if changed_fields:
+                await settings.asave(update_fields=changed_fields)
+                user_ids_to_update.add(profile.telegram_id)
 
     # Обновляем команды бота для пользователей (скрываем /cashback)
     if user_ids_to_update:
-        await _update_commands_for_users(user_ids_to_update)
+        await _update_commands_for_users(list(user_ids_to_update))
 
     return expired_count
 

@@ -205,20 +205,55 @@ async def show_subscription_menu(callback: CallbackQuery, state: FSMContext, lan
 async def send_stars_invoice(callback: CallbackQuery, state: FSMContext, sub_type: str):
     """Создать и отправить инвойс в Telegram Stars для указанного типа подписки"""
     sub_info = SUBSCRIPTION_PRICES[sub_type]
+
+    # Определяем язык пользователя
+    try:
+        profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
+        lang = profile.language_code or 'ru'
+    except Exception:
+        lang = 'ru'
+
     # Удаляем старое сообщение
     try:
         await callback.message.delete()
     except (TelegramBadRequest, TelegramNotFound):
         pass
 
-    # Отправляем инвойс с полным описанием
+    # Отправляем инвойс с оригинальным описанием
+    if lang.startswith('en'):
+        title = '💎 Premium for 1 month' if sub_type == 'month' else '💎 Premium for 6 months'
+        description = (
+            "🎯 Natural questions to statistics\n"
+            "🎤 Voice expense input\n"
+            "💵 Income tracking\n"
+            "📊 PDF reports and analytics\n"
+            "🏷️ Category customization\n"
+            "💳 Cashback tracking\n"
+            "🏠 Family access"
+            if sub_type == 'month' else
+            "✨ All Premium features + Save 300 stars!\n"
+            "🎯 AI analytics\n"
+            "🎤 Voice input\n"
+            "💵 Income tracking\n"
+            "📊 PDF reports\n"
+            "🏷️ Category customization\n"
+            "💳 Cashback tracking\n"
+            "🏠 Family access\n"
+            "🚀 Priority support"
+        )
+        price_label = "Pay"
+    else:
+        title = sub_info['title']
+        description = sub_info['description']
+        price_label = "Оплата"
+
     invoice_msg = await callback.bot.send_invoice(
         chat_id=callback.from_user.id,
-        title=sub_info['title'],
-        description=sub_info['description'],  # Используем полное описание с функциями
+        title=title,
+        description=description,
         payload=f"subscription_{sub_type}_{callback.from_user.id}",
         currency="XTR",
-        prices=[LabeledPrice(label="Оплата", amount=sub_info['stars'])],
+        prices=[LabeledPrice(label=price_label, amount=sub_info['stars'])],
         start_parameter=f"sub_{sub_type}",
         need_name=False,
         need_phone_number=False,
@@ -474,7 +509,7 @@ async def process_promocode(message: Message, state: FSMContext):
                 f"• 🎯 Естественные вопросы к статистике\n"
                 f"• 🎤 Голосовой ввод трат\n"
                 f"• 🏠 Семейный бюджет\n"
-                f"• 📄 PDF-отчёты с графиками\n"
+                f"• 📊 PDF, Excel и CSV отчёты с графиками\n"
                 f"• 📂 Свои категории расходов\n"
                 f"• 💳 Кешбэк-трекер\n"
                 f"• ⚡ Приоритетная поддержка\n\n"
@@ -578,7 +613,7 @@ async def process_promocode(message: Message, state: FSMContext):
                     f"• 🎯 Естественные вопросы к статистике\n"
                     f"• 🎤 Голосовой ввод трат\n"
                     f"• 🏠 Семейный бюджет\n"
-                    f"• 📄 PDF-отчёты с графиками\n"
+                    f"• 📊 PDF, Excel и CSV отчёты с графиками\n"
                     f"• 📂 Свои категории расходов\n"
                     f"• 💳 Кешбэк-трекер\n"
                     f"• ⚡ Приоритетная поддержка\n\n"
@@ -753,7 +788,7 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
                 f"• 🎯 Естественные вопросы к статистике\n"
                 f"• 🎤 Голосовой ввод трат\n"
                 f"• 🏠 Семейный бюджет\n"
-                f"• 📄 PDF-отчёты с графиками\n"
+                f"• 📊 PDF, Excel и CSV отчёты с графиками\n"
                 f"• 📂 Свои категории расходов\n"
                 f"• 💳 Кешбэк-трекер\n"
                 f"• ⚡ Приоритетная поддержка\n\n"
