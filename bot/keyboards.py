@@ -219,11 +219,17 @@ def expenses_summary_keyboard(
             if not is_future:
                 next_month_name = get_month_name(next_month, lang).capitalize()
                 keyboard.button(text=f"{next_month_name} →", callback_data="expenses_next_month")
+
+            # Кнопка закрытия
+            keyboard.button(text=get_text('close', lang), callback_data="close")
         else:
             keyboard.button(text=get_text('prev_month_arrow', lang), callback_data="expenses_prev_month")
-    
-    # Кнопка закрытия
-    keyboard.button(text=get_text('close', lang), callback_data="close")
+            # Кнопка закрытия
+            keyboard.button(text=get_text('close', lang), callback_data="close")
+
+    # Кнопка закрытия (добавляем только для period != 'month', для month добавим позже)
+    if period != 'month':
+        keyboard.button(text=get_text('close', lang), callback_data="close")
     
     if period == 'today':
         if show_scope_toggle:
@@ -302,6 +308,9 @@ def expenses_summary_keyboard(
                 next_month_name = get_month_name(next_month, lang).capitalize()
                 keyboard.button(text=f"{next_month_name} →", callback_data="expenses_next_month")
 
+            # Кнопка закрытия
+            keyboard.button(text=get_text('close', lang), callback_data="close")
+
             # Подсчитываем количество кнопок навигации для adjust
             nav_buttons = 1  # Всегда есть кнопка предыдущего месяца
             if is_current_month:
@@ -322,6 +331,8 @@ def expenses_summary_keyboard(
         else:
             # Fallback - просто кнопка предыдущего месяца
             keyboard.button(text=get_text('prev_month_arrow', lang), callback_data="expenses_prev_month")
+            # Кнопка закрытия
+            keyboard.button(text=get_text('close', lang), callback_data="close")
             rows = [1, 1]  # Предыдущий месяц, закрыть
             if show_scope_toggle:
                 rows.insert(0, 1)
