@@ -78,21 +78,22 @@ async def deactivate_expired_subscriptions():
     Деактивация истекших подписок (для периодического запуска)
 
     При окончании подписки автоматически отключает:
-    - Семейный режим (household_mode)
-    - Кешбек трекинг (cashback_tracking_enabled)
+    - Семейный режим (view_scope → 'personal')
+    - Кешбек трекинг (cashback_enabled → False)
+    - Обновляет команды бота для скрытия /cashback
     """
-    from expenses.models import Profile
+    from expenses.models import Profile, UserSettings
 
     now = timezone.now()
 
-    # Получаем истекшие подписки
-    expired_subscriptions = await Subscription.objects.filter(
+    # Получаем истекшие подписки (без await - queryset не awaitable!)
+    expired_subscriptions = Subscription.objects.filter(
         is_active=True,
         end_date__lte=now
-    ).select_related('profile').all()
+    ).select_related('profile')
 
     expired_count = 0
-    profiles_to_update = []
+    user_ids_to_update = []
 
     async for subscription in expired_subscriptions:
         # Деактивируем подписку
@@ -110,22 +111,66 @@ async def deactivate_expired_subscriptions():
 
         # Если нет других активных подписок, отключаем премиум функции
         if not has_other_active:
-            # Отключаем семейный режим
-            if profile.household_mode:
-                profile.household_mode = False
-                profiles_to_update.append(profile)
+            # Получаем или создаем настройки пользователя
+            settings, created = await UserSettings.objects.aget_or_create(profile=profile)
 
-            # Отключаем кешбек трекинг
-            if profile.cashback_tracking_enabled:
-                profile.cashback_tracking_enabled = False
-                if profile not in profiles_to_update:
-                    profiles_to_update.append(profile)
+            settings_updated = False
 
-    # Сохраняем изменения в профилях
-    for profile in profiles_to_update:
-        await profile.asave()
+            # Отключаем семейный режим (переводим в личный)
+            if settings.view_scope == 'household':
+                settings.view_scope = 'personal'
+                settings_updated = True
+
+            # Отключаем кешбек
+            if settings.cashback_enabled:
+                settings.cashback_enabled = False
+                settings_updated = True
+
+            # Сохраняем изменения в настройках
+            if settings_updated:
+                await settings.asave()
+                user_ids_to_update.append(profile.telegram_id)
+
+    # Обновляем команды бота для пользователей (скрываем /cashback)
+    if user_ids_to_update:
+        await _update_commands_for_users(user_ids_to_update)
 
     return expired_count
+
+
+async def _update_commands_for_users(user_ids: list):
+    """
+    Обновить команды бота для списка пользователей
+
+    Args:
+        user_ids: Список telegram_id пользователей
+    """
+    from bot.utils.commands import update_user_commands
+    from aiogram import Bot
+    import os
+
+    try:
+        # Получаем инстанс бота
+        bot_token = os.getenv('BOT_TOKEN')
+        if not bot_token:
+            return
+
+        bot = Bot(token=bot_token)
+
+        # Обновляем команды для каждого пользователя
+        for user_id in user_ids:
+            try:
+                await update_user_commands(bot, user_id)
+            except Exception as e:
+                # Логируем ошибку, но продолжаем обновлять других пользователей
+                pass
+
+        # Закрываем сессию бота
+        await bot.session.close()
+
+    except Exception as e:
+        # Если не удалось обновить команды, не критично - обновятся при следующем взаимодействии
+        pass
 
 
 def subscription_required_message() -> str:
