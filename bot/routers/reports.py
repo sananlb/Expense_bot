@@ -1444,7 +1444,9 @@ async def callback_select_month(callback: CallbackQuery, state: FSMContext, lang
         start_date,
         end_date,
         lang,
+        state=state,
         edit=True,
-        original_message=callback.message
+        original_message=callback.message,
+        callback=callback
     )
     await callback.answer()
