@@ -928,7 +928,7 @@ async def callback_export_month_csv(callback: CallbackQuery, state: FSMContext, 
         caption = (
             f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
             f"✨ Сгенерировано в Coins ✨\n"
-            f"@showmecoinbot"
+            f"✨ @showmecoinbot ✨"
         )
 
         # Отправляем файл
@@ -1065,7 +1065,7 @@ async def callback_export_month_excel(callback: CallbackQuery, state: FSMContext
         caption = (
             f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
             f"✨ Сгенерировано в Coins ✨\n"
-            f"@showmecoinbot"
+            f"✨ @showmecoinbot ✨"
         )
 
         # Отправляем файл
@@ -1182,7 +1182,7 @@ async def callback_monthly_report_csv(callback: CallbackQuery, state: FSMContext
         caption = (
             f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
             f"✨ Сгенерировано в Coins ✨\n"
-            f"@showmecoinbot"
+            f"✨ @showmecoinbot ✨"
         )
 
         # Отправляем файл
@@ -1299,7 +1299,7 @@ async def callback_monthly_report_xlsx(callback: CallbackQuery, state: FSMContex
         caption = (
             f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
             f"✨ Сгенерировано в Coins ✨\n"
-            f"@showmecoinbot"
+            f"✨ @showmecoinbot ✨"
         )
 
         # Отправляем файл
@@ -1372,7 +1372,7 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
         caption = (
             f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
             f"✨ Сгенерировано в Coins ✨\n"
-            f"@showmecoinbot"
+            f"✨ @showmecoinbot ✨"
         )
 
         # Отправляем PDF

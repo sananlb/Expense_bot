@@ -538,7 +538,7 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
                 "• Информация о кешбеке\n\n"
                 "💡 <i>Совет: сохраните отчет для отслеживания динамики расходов</i>\n\n"
                 "✨ Сгенерировано в Coins ✨\n"
-                "@showmecoinbot"
+                "✨ @showmecoinbot ✨"
             )
         await callback.message.answer_document(
             document=pdf_file,
