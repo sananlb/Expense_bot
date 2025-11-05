@@ -396,8 +396,8 @@ TEXTS = {
 🔹 Категории:
 Создавайте свои категории или используйте готовые
 
-🔹 PDF отчеты:
-Получайте красивые отчеты с графиками
+🔹 Отчеты (PDF, Excel, CSV):
+Получайте красивые отчеты с графиками в разных форматах
 
 📝 Обратная связь:
 Если у вас есть вопросы или предложения, пишите @SMF_support
@@ -580,7 +580,7 @@ TEXTS = {
         'subscription': 'Подписка',
         'subscription_menu': '⭐ Подписка',
         'no_active_subscription': '❌ У вас нет активной подписки',
-        'subscription_benefits': 'С подпиской вы получаете:\n🎯 AI-аналитика расходов\n🎤 Голосовой ввод трат\n💵 Учёт доходов\n📊 PDF отчёты и графики\n🏷️ Редактирование категорий\n💳 Отслеживание кэшбэка\n🏠 Семейный доступ',
+        'subscription_benefits': 'С подпиской вы получаете:\n🎯 AI-аналитика расходов\n🎤 Голосовой ввод трат\n💵 Учёт доходов\n📊 PDF, Excel и CSV отчёты с графиками\n🏷️ Редактирование категорий\n💳 Отслеживание кэшбэка\n🏠 Семейный доступ',
         'active_subscription': '✅ У вас есть активная подписка',
         'subscription_type': 'Тип',
         'trial_period': 'Пробный период',
@@ -590,7 +590,7 @@ TEXTS = {
         'referral_program': '🎁 Реферальная программа',
         'back_to_subscription': 'Назад в меню подписки',
         'invalid_subscription_type': 'Неверный тип подписки',
-        'subscription_advantages': '💎 Преимущества вашей подписки:\n• Безлимитные траты\n• PDF отчёты\n• Голосовой ввод\n• Ежемесячные операции\n• Отслеживание кешбэков',
+        'subscription_advantages': '💎 Преимущества вашей подписки:\n• Безлимитные траты\n• PDF, Excel и CSV отчёты\n• Голосовой ввод\n• Ежемесячные операции\n• Отслеживание кешбэков',
         'you_received_days': 'Вы получили {days} дней подписки',
         'subscription_valid_until': 'Подписка действует до: {date}',
         'promocode_activated': '✅ Промокод активирован!',
@@ -619,7 +619,7 @@ TEXTS = {
         'payment_successful': '✨ <b>Оплата прошла успешно!</b>',
         'subscription_benefits_title': '💎 <b>Преимущества вашей подписки:</b>',
         'unlimited_expenses': '• Безлимитные траты',
-        'pdf_reports': '• PDF отчёты',
+        'pdf_reports': '• PDF, Excel и CSV отчёты',
         'priority_support': '• Приоритетная поддержка',
         'thanks_support': 'Спасибо за поддержку проекта! 💙',
         'subscription_required': '❌ <b>Требуется подписка</b>',
@@ -1186,8 +1186,8 @@ Track bank card cashbacks
 🔹 Categories:
 Create your own categories or use default ones
 
-🔹 PDF reports:
-Get beautiful reports with charts
+🔹 Reports (PDF, Excel, CSV):
+Get beautiful reports with charts in different formats
 
 📝 Feedback:
 If you have questions or suggestions, write @SMF_support
@@ -1362,7 +1362,7 @@ Thank you for participating in testing! Your feedback helps improve the bot.''',
         'subscription': 'Subscription',
         'subscription_menu': '⭐ Subscription',
         'no_active_subscription': '❌ You have no active subscription',
-        'subscription_benefits': 'With subscription you get:\n🎯 AI expense analytics\n🎤 Voice expense input\n💵 Income tracking\n📊 PDF reports and charts\n🏷️ Category customization\n💳 Cashback tracking\n🏠 Family access',
+        'subscription_benefits': 'With subscription you get:\n🎯 AI expense analytics\n🎤 Voice expense input\n💵 Income tracking\n📊 PDF, Excel and CSV reports with charts\n🏷️ Category customization\n💳 Cashback tracking\n🏠 Family access',
         'active_subscription': '✅ You have an active subscription',
         'subscription_type': 'Type',
         'trial_period': 'Trial period',
@@ -1372,7 +1372,7 @@ Thank you for participating in testing! Your feedback helps improve the bot.''',
         'referral_program': '🎁 Referral program',
         'back_to_subscription': 'Back to subscription menu',
         'invalid_subscription_type': 'Invalid subscription type',
-        'subscription_advantages': '💎 Your subscription advantages:\n• Unlimited expenses\n• PDF reports\n• Voice input\n• Recurring payments\n• Cashback tracking',
+        'subscription_advantages': '💎 Your subscription advantages:\n• Unlimited expenses\n• PDF, Excel and CSV reports\n• Voice input\n• Recurring payments\n• Cashback tracking',
         'you_received_days': 'You received {days} days of subscription',
         'subscription_valid_until': 'Subscription valid until: {date}',
         'promocode_activated': '✅ Promo code activated!',
@@ -1401,7 +1401,7 @@ Thank you for participating in testing! Your feedback helps improve the bot.''',
         'payment_successful': '✨ <b>Payment successful!</b>',
         'subscription_benefits_title': '💎 <b>Your subscription benefits:</b>',
         'unlimited_expenses': '• Unlimited expenses',
-        'pdf_reports': '• PDF reports',
+        'pdf_reports': '• PDF, Excel and CSV reports',
         'priority_support': '• Priority support',
         'thanks_support': 'Thank you for supporting the project! 💙',
         'subscription_required': '❌ <b>Subscription required</b>',
