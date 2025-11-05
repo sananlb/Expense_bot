@@ -267,21 +267,48 @@ def expenses_summary_keyboard(
             rows.extend([3, 1, 1])  # CSV, XLS, PDF в один ряд; предыдущий месяц; закрыть
             keyboard.adjust(*rows)
     elif period == 'month':  # Месячный отчет без PDF
+        # Добавляем кнопки навигации по месяцам (даже без подписки)
         if current_month and current_year:
-            # Проверяем количество кнопок навигации
-            is_future = (current_year > today.year) or (current_year == today.year and current_month >= today.month)
-            
-            # Подсчитываем количество кнопок навигации
-            nav_buttons = 1  # Всегда есть кнопка предыдущего месяца
-            
-            # Добавляем кнопку "Сегодня" только для текущего месяца
-            is_current_month_check = (current_month == today.month and current_year == today.year)
-            if is_current_month_check:
-                nav_buttons += 1
-                
+            # Определяем предыдущий месяц
+            if current_month == 1:
+                prev_month = 12
+                prev_year = current_year - 1
+            else:
+                prev_month = current_month - 1
+                prev_year = current_year
+
+            # Определяем следующий месяц
+            if current_month == 12:
+                next_month = 1
+                next_year = current_year + 1
+            else:
+                next_month = current_month + 1
+                next_year = current_year
+
+            # Проверяем, не является ли следующий месяц будущим
+            is_future = (next_year > today.year) or (next_year == today.year and next_month > today.month)
+
+            # Кнопка предыдущего месяца
+            prev_month_name = get_month_name(prev_month, lang).capitalize()
+            keyboard.button(text=f"← {prev_month_name}", callback_data="expenses_prev_month")
+
+            # Кнопка "Сегодня" - показываем только для текущего месяца
+            is_current_month = (current_month == today.month and current_year == today.year)
+            if is_current_month:
+                keyboard.button(text=get_text('today_arrow', lang), callback_data="expenses_today_view")
+
+            # Кнопка следующего месяца (если не будущий)
             if not is_future:
-                nav_buttons += 1  # Добавляем кнопку следующего месяца
-            
+                next_month_name = get_month_name(next_month, lang).capitalize()
+                keyboard.button(text=f"{next_month_name} →", callback_data="expenses_next_month")
+
+            # Подсчитываем количество кнопок навигации для adjust
+            nav_buttons = 1  # Всегда есть кнопка предыдущего месяца
+            if is_current_month:
+                nav_buttons += 1
+            if not is_future:
+                nav_buttons += 1
+
             rows = []
             if show_scope_toggle:
                 rows.append(1)
@@ -293,10 +320,12 @@ def expenses_summary_keyboard(
                 rows.extend([3, 1])
             keyboard.adjust(*rows)
         else:
-            rows = [1]
+            # Fallback - просто кнопка предыдущего месяца
+            keyboard.button(text=get_text('prev_month_arrow', lang), callback_data="expenses_prev_month")
+            rows = [1, 1]  # Предыдущий месяц, закрыть
             if show_scope_toggle:
                 rows.insert(0, 1)
-            keyboard.adjust(*rows)  # Предыдущий месяц, закрыть (+переключатель при наличии)
+            keyboard.adjust(*rows)
     else:
         keyboard.adjust(1)  # Только закрытие
     
