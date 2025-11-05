@@ -39,7 +39,7 @@ async def update_user_commands(bot: Bot, user_id: int):
 
     # Получаем настройки пользователя (включен ли кешбек)
     user_settings = await get_user_settings(user_id)
-    cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
+    cashback_enabled = user_settings.cashback_enabled
 
     # Формируем базовые команды
     commands = [
