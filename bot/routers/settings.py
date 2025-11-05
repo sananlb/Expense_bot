@@ -230,12 +230,32 @@ async def process_language_change(callback: CallbackQuery, state: FSMContext, la
 async def handle_toggle_cashback(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Переключить кешбэк"""
     try:
-        # Проверяем подписку
-        from bot.services.subscription import check_subscription
-        if not await check_subscription(callback.from_user.id):
-            await callback.answer(get_text('subscription_required', lang), show_alert=True)
-            return
-        
+        # Получаем настройки пользователя
+        user_settings = await get_user_settings(callback.from_user.id)
+
+        # Если кешбек выключен и пользователь хочет его включить - проверяем подписку
+        if not user_settings.cashback_enabled:
+            from bot.services.subscription import check_subscription
+            has_subscription = await check_subscription(callback.from_user.id)
+
+            if not has_subscription:
+                # Показываем сообщение с кнопкой "Оформить подписку"
+                from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text=get_text('get_subscription', lang), callback_data="menu_subscription")],
+                    [InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")],
+                    [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
+                ])
+
+                await callback.message.edit_text(
+                    get_text('cashback_subscription_required', lang),
+                    reply_markup=keyboard,
+                    parse_mode="HTML"
+                )
+                await callback.answer()
+                return
+
         # Переключаем состояние кешбэка
         new_state = await toggle_cashback(callback.from_user.id)
 
@@ -250,7 +270,7 @@ async def handle_toggle_cashback(callback: CallbackQuery, state: FSMContext, lan
 
         # Обновляем меню настроек с новым состоянием кнопки кешбека
         await callback_settings(callback, state, lang)
-        
+
     except Exception as e:
         logger.error(f"Error toggling cashback: {e}")
         await callback.answer(get_text('error_occurred', lang))
