@@ -775,11 +775,15 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
 
         has_household, current_scope = await get_current_scope()
 
+        # Проверяем подписку для семейного бюджета
+        from bot.services.subscription import check_subscription
+        has_subscription = await check_subscription(user_id)
+
         # Формируем клавиатуру
         keyboard_buttons = []
 
-        # Кнопка переключения режима - только если есть семья
-        if has_household:
+        # Кнопка переключения режима - только если есть семья И активная подписка
+        if has_household and has_subscription:
             scope_btn_text = (
                 get_text('household_budget_button', lang)
                 if current_scope == 'household'

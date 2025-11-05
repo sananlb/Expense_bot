@@ -74,12 +74,57 @@ async def get_active_subscription(telegram_id: int) -> Optional[Subscription]:
 
 
 async def deactivate_expired_subscriptions():
-    """Деактивация истекших подписок (для периодического запуска)"""
-    expired_count = await Subscription.objects.filter(
+    """
+    Деактивация истекших подписок (для периодического запуска)
+
+    При окончании подписки автоматически отключает:
+    - Семейный режим (household_mode)
+    - Кешбек трекинг (cashback_tracking_enabled)
+    """
+    from expenses.models import Profile
+
+    now = timezone.now()
+
+    # Получаем истекшие подписки
+    expired_subscriptions = await Subscription.objects.filter(
         is_active=True,
-        end_date__lte=timezone.now()
-    ).aupdate(is_active=False)
-    
+        end_date__lte=now
+    ).select_related('profile').all()
+
+    expired_count = 0
+    profiles_to_update = []
+
+    async for subscription in expired_subscriptions:
+        # Деактивируем подписку
+        subscription.is_active = False
+        await subscription.asave()
+        expired_count += 1
+
+        # Проверяем есть ли у пользователя другие активные подписки
+        profile = subscription.profile
+        has_other_active = await Subscription.objects.filter(
+            profile=profile,
+            is_active=True,
+            end_date__gt=now
+        ).aexists()
+
+        # Если нет других активных подписок, отключаем премиум функции
+        if not has_other_active:
+            # Отключаем семейный режим
+            if profile.household_mode:
+                profile.household_mode = False
+                profiles_to_update.append(profile)
+
+            # Отключаем кешбек трекинг
+            if profile.cashback_tracking_enabled:
+                profile.cashback_tracking_enabled = False
+                if profile not in profiles_to_update:
+                    profiles_to_update.append(profile)
+
+    # Сохраняем изменения в профилях
+    for profile in profiles_to_update:
+        await profile.asave()
+
     return expired_count
 
 
