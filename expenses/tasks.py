@@ -32,16 +32,29 @@ def send_broadcast_message(broadcast_id):
     broadcast.started_at = timezone.now()
     broadcast.save()
     
-    # Получаем получателей
-    recipients = broadcast.get_recipients_queryset()
+    # Получаем ID получателей и синхронизируем записи
+    recipient_ids = set(
+        broadcast.get_recipients_queryset().values_list('id', flat=True)
+    )
+    if recipient_ids:
+        BroadcastRecipient.objects.filter(broadcast=broadcast).exclude(
+            profile_id__in=recipient_ids
+        ).delete()
+    else:
+        BroadcastRecipient.objects.filter(broadcast=broadcast).delete()
     
-    # Создаем записи получателей
-    for profile in recipients:
-        BroadcastRecipient.objects.get_or_create(
+    existing_recipient_ids = set(
+        BroadcastRecipient.objects.filter(broadcast=broadcast).values_list('profile_id', flat=True)
+    )
+    new_recipient_ids = recipient_ids - existing_recipient_ids
+    BroadcastRecipient.objects.bulk_create([
+        BroadcastRecipient(
             broadcast=broadcast,
-            profile=profile,
-            defaults={'status': 'pending'}
+            profile_id=profile_id,
+            status='pending'
         )
+        for profile_id in new_recipient_ids
+    ])
     
     # Отправляем сообщения
     sent_count = 0
