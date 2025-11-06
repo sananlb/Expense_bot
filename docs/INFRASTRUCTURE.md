@@ -2,7 +2,9 @@
 
 ## Production Server
 - **IP:** 80.66.87.178
-- **Domain:** expensebot.duckdns.org
+- **Domains:**
+  - `expensebot.duckdns.org` — бот и Django админка
+  - `www.coins-bot.ru` — лендинг
 - **OS:** Ubuntu 22.04.5 LTS
 - **Path:** /home/batman/expense_bot
 - **Hostname:** vm977127
@@ -21,10 +23,27 @@
 - `bot/` (код бота)
 - `expenses/` (Django приложение)
 - `expense_bot/` (Django проект)
+- `landing/` (файлы лендинга для www.coins-bot.ru)
+- `scripts/` (служебные скрипты, включая `update_landing.sh`)
 - `venv/` (виртуальное окружение)
 - `logs/` (логи)
 - `database/` (данные БД)
 - `requirements.txt`
+
+### Лендинг (www.coins-bot.ru)
+**Путь на сервере:** `/var/www/coins-bot/`
+- Файлы копируются из `/home/batman/expense_bot/landing/` через `scripts/update_landing.sh`
+- Резервные копии: `/var/www/backups/coins-bot/`
+- Обслуживается nginx (конфигурация в `/etc/nginx/sites-available/expensebot`)
+- Владелец файлов: `www-data:www-data`
+- SSL сертификат: Let's Encrypt (до 2025-11-07)
+
+**Процесс обновления лендинга:**
+```bash
+cd /home/batman/expense_bot
+git pull origin master
+bash scripts/update_landing.sh
+```
 
 ## Infrastructure
 
@@ -187,3 +206,24 @@ REDIS_PASSWORD=RedisExpense2024
 - Режим: polling
 
 Сохранена эта конфигурация как эталонная.
+
+## Последние обновления (ноябрь 2024)
+
+### Локализация и улучшения UI
+1. **Локализация подписок Telegram Stars:**
+   - Добавлена полная локализация invoice на английский язык
+   - Локализованы: title, description, кнопка оплаты ("Оплата"/"Payment")
+   - Файл: `bot/routers/subscription.py`
+
+2. **Обновление форматов отчётов:**
+   - Везде изменено с "PDF отчёты" на "CSV, XLS, PDF отчёты"
+   - Обновлены файлы: `landing/index.html`, `landing/index_en.html`, `landing/offer.html`, `landing/offer_en.html`
+   - Обновлены meta descriptions, Open Graph и Twitter теги
+
+3. **Улучшения доступности:**
+   - Кнопка отслеживания кешбэка теперь доступна всем пользователям (ранее только Premium)
+   - Файл: `bot/keyboards.py`
+
+### Коммиты:
+- `0d4e649` - Обновлены все упоминания форматов отчетов в лендинге на CSV, XLS, PDF
+- `085c832` - Добавлена полная локализация подписок и улучшения интерфейса
