@@ -1099,16 +1099,6 @@ async def callback_monthly_report_csv(callback: CallbackQuery, state: FSMContext
         year = int(parts[3])
         month = int(parts[4])
 
-        # Проверка Premium подписки
-        if not await check_subscription(user_id):
-            await callback.answer()
-            await callback.message.answer(
-                get_text('export_premium_required', lang),
-                reply_markup=get_subscription_button(),
-                parse_mode="HTML"
-            )
-            return
-
         await callback.answer(get_text('export_generating', lang), show_alert=False)
 
         # Запрашиваем данные по year/month
@@ -1216,16 +1206,6 @@ async def callback_monthly_report_xlsx(callback: CallbackQuery, state: FSMContex
         year = int(parts[3])
         month = int(parts[4])
 
-        # Проверка Premium подписки
-        if not await check_subscription(user_id):
-            await callback.answer()
-            await callback.message.answer(
-                get_text('export_premium_required', lang),
-                reply_markup=get_subscription_button(),
-                parse_mode="HTML"
-            )
-            return
-
         await callback.answer(get_text('export_generating', lang), show_alert=False)
 
         # Запрашиваем данные по year/month
@@ -1329,16 +1309,6 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
         parts = callback.data.split('_')
         year = int(parts[3])
         month = int(parts[4])
-
-        # Проверка Premium подписки
-        if not await check_subscription(user_id):
-            await callback.answer()
-            await callback.message.answer(
-                get_text('export_premium_required', lang),
-                reply_markup=get_subscription_button(),
-                parse_mode="HTML"
-            )
-            return
 
         await callback.answer(get_text('generating_report', lang), show_alert=False)
 
