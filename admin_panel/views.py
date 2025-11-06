@@ -27,19 +27,20 @@ def dashboard(request):
     now = timezone.now()
     today = now.date()
     yesterday = today - timedelta(days=1)
-    week_ago = today - timedelta(days=7)
-    month_ago = today - timedelta(days=30)
+    week_ago_datetime = now - timedelta(days=7)
+    week_ago_date = today - timedelta(days=7)
+    month_ago_date = today - timedelta(days=30)
     
     # Основные метрики
     total_users = Profile.objects.count()
     active_today = Profile.objects.filter(last_activity__date=today).count()
     active_yesterday = Profile.objects.filter(last_activity__date=yesterday).count()
-    active_week = Profile.objects.filter(last_activity__gte=week_ago).count()
+    active_week = Profile.objects.filter(last_activity__gte=week_ago_datetime).count()
     
     # Метрики по тратам
     expenses_today = Expense.objects.filter(expense_date=today).count()
     expenses_yesterday = Expense.objects.filter(expense_date=yesterday).count()
-    expenses_week = Expense.objects.filter(expense_date__gte=week_ago).count()
+    expenses_week = Expense.objects.filter(expense_date__gte=week_ago_date).count()
     
     # Финансовые метрики
     total_expenses_today = Expense.objects.filter(
@@ -47,31 +48,26 @@ def dashboard(request):
     ).aggregate(total=Sum('amount'))['total'] or 0
     
     total_expenses_month = Expense.objects.filter(
-        expense_date__gte=month_ago
+        expense_date__gte=month_ago_date
     ).aggregate(total=Sum('amount'))['total'] or 0
     
     # Метрики доходов
     total_income_month = Income.objects.filter(
-        income_date__gte=month_ago
+        income_date__gte=month_ago_date
     ).aggregate(total=Sum('amount'))['total'] or 0
     
     # Метрики подписок
-    active_subscriptions = Subscription.objects.filter(
+    active_subscriptions_qs = Subscription.objects.filter(
         is_active=True,
         end_date__gt=now
-    ).count()
-    
-    trial_subscriptions = Subscription.objects.filter(
-        type='trial',
-        is_active=True,
-        end_date__gt=now
-    ).count()
-    
-    paid_subscriptions = active_subscriptions - trial_subscriptions
+    )
+    active_subscriptions = active_subscriptions_qs.values('profile').distinct().count()
+    trial_subscriptions = active_subscriptions_qs.filter(type='trial').values('profile').distinct().count()
+    paid_subscriptions = active_subscriptions_qs.filter(payment_method='stars').values('profile').distinct().count()
     
     # Новые регистрации
     new_users_today = Profile.objects.filter(created_at__date=today).count()
-    new_users_week = Profile.objects.filter(created_at__gte=week_ago).count()
+    new_users_week = Profile.objects.filter(created_at__gte=week_ago_datetime).count()
     
     # Последние регистрации
     recent_registrations = Profile.objects.order_by('-created_at')[:10]
@@ -81,7 +77,7 @@ def dashboard(request):
     
     # Топ активных пользователей за неделю
     top_active_users = Profile.objects.filter(
-        expenses__expense_date__gte=week_ago
+        expenses__expense_date__gte=week_ago_date
     ).annotate(
         expense_count=Count('expenses'),
         total_expenses=Sum('expenses__amount')
@@ -89,7 +85,7 @@ def dashboard(request):
     
     # Топ категорий трат за месяц
     top_categories = ExpenseCategory.objects.filter(
-        expenses__expense_date__gte=month_ago
+        expenses__expense_date__gte=month_ago_date
     ).annotate(
         expense_count=Count('expenses'),
         total_amount=Sum('expenses__amount')
@@ -99,7 +95,7 @@ def dashboard(request):
     beta_testers = Profile.objects.filter(is_beta_tester=True).count()
     active_beta_testers = Profile.objects.filter(
         is_beta_tester=True,
-        last_activity__gte=week_ago
+        last_activity__gte=week_ago_datetime
     ).count()
     
     # Статистика регулярных платежей
