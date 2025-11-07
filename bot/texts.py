@@ -811,6 +811,11 @@ TEXTS = {
 
 Закрепите заметку с кешбэками в чате с ботом, чтобы иметь быстрый доступ.
 
+<b>📊 Отчеты:</b>
+PDF отчеты с графиками, экспорт в CSV и Excel доступны в Premium подписке.
+
+Бот автоматически присылает месячные отчеты 1-го числа каждого месяца за предыдущий месяц.
+
 <b>💬 Вопросы боту естественным языком:</b>
 Спрашивайте бота о ваших финансах простыми словами:
 • "Сколько я потратил на продукты в этом месяце?"
@@ -1620,6 +1625,11 @@ Cashback can be entered through the menu, or by message to the bot in the format
 "cashback X% category XXXX bank"
 
 Pin the note with cashbacks in the chat with the bot for quick access.
+
+<b>📊 Reports:</b>
+PDF reports with charts, CSV and Excel export are available in Premium subscription.
+
+The bot automatically sends monthly reports on the 1st day of each month for the previous month.
 
 <b>💬 Natural language questions to the bot:</b>
 Ask the bot about your finances in simple words:
