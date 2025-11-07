@@ -436,7 +436,7 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
 
             if not has_active_subscription and not existing_trial:
                 try:
-                    trial_end = timezone.now() + timedelta(days=7)
+                    trial_end = timezone.now() + timedelta(days=30)
                     await Subscription.objects.acreate(
                         profile=profile,
                         type='trial',
