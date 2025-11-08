@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+
+  <!-- Russian Main Page -->
+  <url>
+    <loc>https://www.coins-bot.ru/</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.coins-bot.ru/index_en.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://www.coins-bot.ru/"/>
+    <lastmod>2025-11-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- English Main Page -->
+  <url>
+    <loc>https://www.coins-bot.ru/index_en.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.coins-bot.ru/index_en.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://www.coins-bot.ru/"/>
+    <lastmod>2025-11-08</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <!-- Russian Privacy Policy -->
+  <url>
+    <loc>https://www.coins-bot.ru/privacy.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.coins-bot.ru/privacy_en.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://www.coins-bot.ru/privacy.html"/>
+    <lastmod>2025-11-08</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <!-- English Privacy Policy -->
+  <url>
+    <loc>https://www.coins-bot.ru/privacy_en.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.coins-bot.ru/privacy_en.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://www.coins-bot.ru/privacy.html"/>
+    <lastmod>2025-11-08</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <!-- Russian Terms of Service (Offer) -->
+  <url>
+    <loc>https://www.coins-bot.ru/offer.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.coins-bot.ru/offer_en.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://www.coins-bot.ru/offer.html"/>
+    <lastmod>2025-11-08</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <!-- English Terms of Service (Offer) -->
+  <url>
+    <loc>https://www.coins-bot.ru/offer_en.html</loc>
+    <xhtml:link rel="alternate" hreflang="en" href="https://www.coins-bot.ru/offer_en.html"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://www.coins-bot.ru/offer.html"/>
+    <lastmod>2025-11-08</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+</urlset>

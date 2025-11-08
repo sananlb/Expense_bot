@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://www.coins-bot.ru/sitemap.xml
+
+# Disallow demo files if needed
+Disallow: /demos/
