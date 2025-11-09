@@ -540,12 +540,55 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         
         # Если не нашли похожую трату, возвращаем None
         return None
-    
-    # Определяем категорию
+
+    # ВАЖНО: Сначала проверяем историю пользователя (ВЫСШИЙ ПРИОРИТЕТ)
+    # Если уже вводил трату с таким описанием - используем ту же категорию
+    category_from_history = None
+    if user_id and profile and text_without_amount:
+        from bot.services.expense import get_last_expense_by_description
+        # Используем text_without_amount для поиска (это описание без суммы)
+        search_desc = text_without_amount.strip()
+        if search_desc:
+            last_expense = await get_last_expense_by_description(user_id, search_desc)
+            if last_expense and last_expense.category_id:
+                # Нашли трату с таким же описанием - используем её категорию
+                try:
+                    if last_expense.category:
+                        lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
+                        category_from_history = get_category_display_name(last_expense.category, lang_code)
+
+                        # Формируем описание
+                        desc_text = text_without_amount if text_without_amount else text_without_date
+                        desc_text = ' '.join(desc_text.split())
+                        if desc_text:
+                            desc_text = re.sub(r'[.,:;!?]+$', '', desc_text).strip()
+                        # Капитализируем первую букву
+                        if desc_text and len(desc_text) > 0:
+                            desc_text = desc_text[0].upper() + desc_text[1:] if len(desc_text) > 1 else desc_text.upper()
+
+                        # Сразу возвращаем результат из истории
+                        result = {
+                            'amount': float(amount),
+                            'description': desc_text or 'Расход',
+                            'category': category_from_history,
+                            'category_id': last_expense.category_id,
+                            'currency': last_expense.currency or currency,
+                            'confidence': 0.95,  # Очень высокая уверенность
+                            'from_history': True,  # Флаг что взято из истории
+                            'expense_date': expense_date
+                        }
+
+                        logger.info(f"Нашли категорию '{category_from_history}' из истории для '{search_desc}'")
+                        return result
+                except (AttributeError, TypeError) as e:
+                    logger.debug(f"Error getting category from history: {e}")
+                    pass
+
+    # Определяем категорию по ключевым словам (если не нашли в истории)
     category = None
     max_score = 0
     text_lower = text_to_parse.lower()  # Создаем text_lower для поиска категорий
-    
+
     # Сначала проверяем пользовательские категории, если есть профиль
     if profile:
         from expenses.models import ExpenseCategory, CategoryKeyword
