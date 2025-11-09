@@ -540,6 +540,16 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             keywords = await get_keywords()
             for kw in keywords:
                 if kw.keyword.lower() in text_lower:
+                    # Обновляем last_used и usage_count при использовании ключевого слова
+                    @sync_to_async
+                    def update_keyword_usage():
+                        from django.utils import timezone
+                        keyword = CategoryKeyword.objects.get(id=kw.id)
+                        keyword.usage_count += 1
+                        keyword.save(update_fields=['usage_count', 'last_used'])  # last_used обновится auto_now
+
+                    await update_keyword_usage()
+
                     # Используем язык пользователя для отображения категории
                     lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
                     category = get_category_display_name(user_cat, lang_code)

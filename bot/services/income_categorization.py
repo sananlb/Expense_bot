@@ -79,22 +79,30 @@ def find_category_by_keywords(text: str, profile: Profile) -> Optional[IncomeCat
     Поиск категории по ключевым словам
     """
     text_lower = text.lower()
-    
+
     # Получаем все ключевые слова для категорий пользователя
     keywords = IncomeCategoryKeyword.objects.filter(
         category__profile=profile,
         category__is_active=True
     ).select_related('category')
-    
+
     best_match = None
     best_weight = 0
-    
+    best_keyword_id = None
+
     for keyword_obj in keywords:
         if keyword_obj.keyword.lower() in text_lower:
             if keyword_obj.normalized_weight > best_weight:
                 best_match = keyword_obj.category
                 best_weight = keyword_obj.normalized_weight
-    
+                best_keyword_id = keyword_obj.id
+
+    # Обновляем last_used и usage_count для использованного ключевого слова
+    if best_keyword_id:
+        keyword = IncomeCategoryKeyword.objects.get(id=best_keyword_id)
+        keyword.usage_count += 1
+        keyword.save(update_fields=['usage_count', 'last_used'])  # last_used обновится auto_now
+
     return best_match
 
 

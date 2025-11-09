@@ -1180,16 +1180,15 @@ def cleanup_old_keywords(profile_id: int, is_income: bool = False):
         if total >= 1000:
             logger.info(f"User {profile_id} has {total} keywords, cleaning up...")
 
-            # Оставляем только 900 самых свежих (по last_used)
-            # Остальные удаляем
-            keywords_to_keep = KeywordModel.objects.filter(
+            # Удаляем 100 самых давно неиспользуемых слов (по last_used, ascending)
+            keywords_to_delete = KeywordModel.objects.filter(
                 category__profile_id=profile_id
-            ).order_by('-last_used')[:900].values_list('id', flat=True)
+            ).order_by('last_used')[:100].values_list('id', flat=True)
 
-            # Удалить все кроме топ-900 по последнему использованию
+            # Удалить только 100 самых старых по последнему использованию
             deleted = KeywordModel.objects.filter(
-                category__profile_id=profile_id
-            ).exclude(id__in=list(keywords_to_keep)).delete()
+                id__in=list(keywords_to_delete)
+            ).delete()
 
             logger.info(f"Deleted {deleted[0]} old keywords for user {profile_id}")
 
@@ -1224,9 +1223,6 @@ def learn_keywords_on_create(expense_id: int, category_id: int):
         expense = Expense.objects.get(id=expense_id)
         category = ExpenseCategory.objects.get(id=category_id)
 
-        # Очистка старых ключевых слов если их >= 1000 у пользователя
-        cleanup_old_keywords(profile_id=expense.profile.id, is_income=False)
-
         # Извлекаем и очищаем слова из описания
         words = extract_words_from_description(expense.description)
 
@@ -1240,6 +1236,7 @@ def learn_keywords_on_create(expense_id: int, category_id: int):
         words = corrected_words
 
         # Добавляем ключевые слова для категории
+        any_created = False  # Флаг что хотя бы одно новое слово создано
         for word in words:
             keyword, created = CategoryKeyword.objects.get_or_create(
                 category=category,
@@ -1247,13 +1244,19 @@ def learn_keywords_on_create(expense_id: int, category_id: int):
                 defaults={'normalized_weight': 1.0, 'usage_count': 1}
             )
 
-            # Увеличиваем счетчик использований
-            # last_used обновляется автоматически (auto_now=True)
-            if not created:
+            if created:
+                any_created = True
+            else:
+                # Увеличиваем счетчик использований
+                # last_used обновляется автоматически (auto_now=True)
                 keyword.usage_count += 1
                 keyword.save()
 
             logger.info(f"Learned keyword '{word}' for category '{category.name}' from AI (user {expense.profile.telegram_id})")
+
+        # Очистка старых ключевых слов только если добавили новые
+        if any_created:
+            cleanup_old_keywords(profile_id=expense.profile.id, is_income=False)
 
         # Пересчитываем нормализованные веса для конфликтующих слов
         recalculate_normalized_weights(expense.profile.id, words)

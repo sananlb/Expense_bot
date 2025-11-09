@@ -1126,14 +1126,12 @@ async def learn_from_category_change(user_id: int, expense_id: int, new_category
             category = ExpenseCategory.objects.get(id=new_category_id)
             profile = Profile.objects.get(telegram_id=user_id)
 
-            # Очистка старых ключевых слов если их >= 1000 у пользователя
-            cleanup_old_keywords(profile_id=profile.id, is_income=False)
-
             # Извлекаем слова из описания используя общую функцию
             words = extract_words_from_description(description)
 
             # Добавляем/обновляем ключевые слова
             added_keywords = []
+            any_created = False  # Флаг что хотя бы одно новое слово создано
             for word in words:
                 if len(word) >= 3:  # Минимум 3 буквы
                     keyword, created = CategoryKeyword.objects.get_or_create(
@@ -1142,13 +1140,18 @@ async def learn_from_category_change(user_id: int, expense_id: int, new_category
                         defaults={'normalized_weight': 1.0, 'usage_count': 1}
                     )
 
-                    # Увеличиваем счетчик использований
-                    # last_used обновляется автоматически (auto_now=True)
                     if created:
                         added_keywords.append(word)
+                        any_created = True
                     else:
+                        # Увеличиваем счетчик использований
+                        # last_used обновляется автоматически (auto_now=True)
                         keyword.usage_count += 1
                         keyword.save()
+
+            # Очистка старых ключевых слов только если добавили новые
+            if any_created:
+                cleanup_old_keywords(profile_id=profile.id, is_income=False)
 
             # Пересчитываем нормализованные веса
             if words:
