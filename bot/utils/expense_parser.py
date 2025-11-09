@@ -636,7 +636,34 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         'confidence': 0.5 if category else 0.2,
         'expense_date': expense_date  # Добавляем дату, если она была указана
     }
-    
+
+    # ВАЖНО: Сначала проверяем историю пользователя
+    # Если уже вводил трату с таким описанием - используем ту же категорию
+    if user_id and description and not category:
+        from bot.services.expense import get_last_expense_by_description
+        last_expense = await get_last_expense_by_description(user_id, description)
+        if last_expense and last_expense.category_id:
+            # Нашли трату с таким же описанием - используем её категорию
+            category_id = last_expense.category_id
+
+            # Безопасно получаем имя категории
+            try:
+                if last_expense.category:
+                    lang_code = profile.language_code if profile and hasattr(profile, 'language_code') else 'ru'
+                    category = get_category_display_name(last_expense.category, lang_code)
+
+                    # Обновляем результат с категорией из истории
+                    result['category'] = category
+                    result['category_id'] = category_id
+                    result['confidence'] = 0.95  # Очень высокая уверенность
+                    result['from_history'] = True  # Флаг что взято из истории
+
+                    logger.info(f"Нашли категорию '{category}' из истории для описания '{description}'")
+                    return result
+            except (AttributeError, TypeError) as e:
+                logger.debug(f"Error getting category from history: {e}")
+                pass
+
     # Попробуем улучшить с помощью AI, если:
     # 1. Не нашли категорию по ключевым словам
     # 2. Или нашли, но её нет у пользователя
