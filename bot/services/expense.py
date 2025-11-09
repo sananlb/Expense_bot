@@ -107,11 +107,22 @@ def create_expense(
         # Если категория определена AI, обучаем систему (сохраняем слова в БД)
         if ai_categorized and category_id and description:
             from expense_bot.celery_tasks import learn_keywords_on_create
-            learn_keywords_on_create.delay(
-                expense_id=expense.id,
-                category_id=category_id
-            )
-            logger.info(f"Triggered keywords learning for new expense {expense.id}")
+            from django.conf import settings
+
+            # В режиме разработки - синхронно (Celery worker может не работать на Windows)
+            # В продакшене - асинхронно через Celery
+            if settings.DEBUG:
+                logger.info(f"[DEBUG MODE] Running keywords learning synchronously for expense {expense.id}")
+                learn_keywords_on_create(
+                    expense_id=expense.id,
+                    category_id=category_id
+                )
+            else:
+                learn_keywords_on_create.delay(
+                    expense_id=expense.id,
+                    category_id=category_id
+                )
+                logger.info(f"Triggered async keywords learning for new expense {expense.id}")
 
         logger.info(f"Created expense {expense.id} for user {user_id}")
         return expense
@@ -622,39 +633,48 @@ def find_similar_expenses(
 ) -> List[Dict[str, Any]]:
     """
     Найти похожие траты за последний период
-    
+
     Args:
         telegram_id: ID пользователя в Telegram
         description: Описание для поиска
         days_back: Количество дней назад для поиска (по умолчанию год)
-        
+
     Returns:
         Список похожих трат с уникальными суммами
     """
     try:
         profile = Profile.objects.get(telegram_id=telegram_id)
-        
+
         # Определяем период поиска
         end_date = date.today()
         start_date = end_date - timedelta(days=days_back)
-        
-        # Нормализуем описание для поиска
+
+        # Нормализуем описание для поиска - извлекаем только буквы, без пунктуации
         search_desc = description.lower().strip()
-        
+        import re
+        search_words = re.findall(r'[а-яёa-z]+', search_desc)
+
+        # Если нет слов для поиска - возвращаем пустой результат
+        if not search_words:
+            return []
+
         # Ищем траты с похожим описанием
         queryset = Expense.objects.filter(
             profile=profile,
             expense_date__gte=start_date,
             expense_date__lte=end_date
         )
-        
-        # Фильтруем по описанию (точное совпадение или содержит)
+
+        # Фильтруем по описанию - точное совпадение слов (case-insensitive)
         similar_expenses = []
         for expense in queryset.select_related('category'):
             if expense.description:
                 exp_desc = expense.description.lower().strip()
-                # Проверяем точное совпадение или вхождение
-                if exp_desc == search_desc or search_desc in exp_desc or exp_desc in search_desc:
+                # Извлекаем слова без пунктуации
+                exp_words = re.findall(r'[а-яёa-z]+', exp_desc)
+
+                # Все слова из поиска должны присутствовать в описании траты
+                if all(word in exp_words for word in search_words):
                     similar_expenses.append(expense)
         
         # Получаем язык пользователя для правильного отображения

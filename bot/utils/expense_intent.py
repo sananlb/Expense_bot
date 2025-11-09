@@ -70,11 +70,17 @@ SHOW_EXPENSE_PHRASES = [
 def is_show_expenses_request(text: str) -> Tuple[bool, float]:
     """
     Определяет, является ли текст запросом на показ трат
-    
+
     Returns:
         Tuple[bool, float]: (является ли запросом показа, уверенность от 0 до 1)
     """
     text_lower = text.lower().strip()
+
+    # ВАЖНО: Одно слово БЕЗ цифр = всегда трата (описание), а не запрос показа
+    text_words = text_lower.split()
+    has_numbers = any(char.isdigit() for char in text_lower)
+    if len(text_words) == 1 and not has_numbers:
+        return False, 0.0  # Это трата, не запрос показа
     
     # Аналитические вопросы, которые НЕ должны вызывать показ трат
     # Эти вопросы требуют ответа от AI, а не просто показ списка
@@ -108,9 +114,37 @@ def is_show_expenses_request(text: str) -> Tuple[bool, float]:
     
     # 2. Проверка на наличие глаголов показа
     has_show_verb = any(verb in text_lower for verb in SHOW_VERBS)
-    
+
     # 3. Проверка на временные маркеры
-    has_time_marker = any(marker in text_lower for marker in TIME_MARKERS)
+    # Разделяем проверку на несколько типов:
+    # - Многословные фразы ('прошлый месяц') - подстрока в тексте
+    # - Префиксы месяцев ('январ', 'март') - подстрока (из-за склонений)
+    # - Длинные префиксы ('сегодняшн', 'вчерашн') - подстрока в тексте
+    # - Короткие односложные ('год', 'лет', 'все') - только целое слово
+
+    has_time_marker = False
+
+    # Список префиксов месяцев (склоняются: март/марта/марте)
+    month_prefixes = ['январ', 'феврал', 'март', 'апрел', 'май', 'мая', 'июн', 'июл', 'август', 'сентябр', 'октябр', 'ноябр', 'декабр']
+
+    # 1. Многословные фразы
+    multiword_markers = [m for m in TIME_MARKERS if ' ' in m]
+    if any(marker in text_lower for marker in multiword_markers):
+        has_time_marker = True
+
+    # 2. Префиксы месяцев - всегда подстрока
+    if any(month in text_lower for month in month_prefixes):
+        has_time_marker = True
+
+    # 3. Короткие односложные (<=4 символа), НО исключая месяцы - только целое слово
+    short_markers = [m for m in TIME_MARKERS if ' ' not in m and len(m) <= 4 and m not in month_prefixes]
+    if any(marker in text_words for marker in short_markers):
+        has_time_marker = True
+
+    # 4. Длинные односложные (5+ символов) - подстрока (для префиксов типа 'сегодняшн')
+    long_markers = [m for m in TIME_MARKERS if ' ' not in m and len(m) >= 5]
+    if any(marker in text_lower for marker in long_markers):
+        has_time_marker = True
     
     # 4. Проверка на слова о тратах
     has_expense_word = any(word in text_lower for word in EXPENSE_WORDS)
@@ -146,8 +180,8 @@ def is_show_expenses_request(text: str) -> Tuple[bool, float]:
     
     # Слабые индикаторы только для НЕ-вопросов
     # Исключаем фразы с числами - это скорее всего добавление траты с суммой
-    has_numbers = any(char.isdigit() for char in text_lower)
-    if not is_question and has_time_marker and len(text_lower.split()) <= 3 and not has_numbers:
+    # has_numbers уже вычислен в начале функции
+    if not is_question and has_time_marker and len(text_words) <= 3 and not has_numbers:
         # Короткая фраза с временным маркером БЕЗ чисел
         return True, 0.7
     

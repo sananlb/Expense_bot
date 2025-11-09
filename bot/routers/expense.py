@@ -799,7 +799,9 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
             amount=amount,
             description=final_description,
             currency=currency,
-            expense_date=expense_date  # Добавляем дату, если она была указана
+            expense_date=expense_date,  # Добавляем дату, если она была указана
+            ai_categorized=parsed_full.get('ai_enhanced', False) if parsed_full else False,
+            ai_confidence=parsed_full.get('confidence') if parsed_full else None
         )
     except ValueError as e:
         # Обработка ошибок валидации даты
@@ -1092,17 +1094,43 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     
     # (перенесено вверх) Проверка на ввод кешбэка выполняется до проверки состояния
 
-    # НОВОЕ: Проверка на запрос показа трат ДО вызова AI парсера (экономия токенов)
+    # ВАЖНО: Сначала проверяем есть ли ключевые слова в тексте
+    # Если есть - это точно трата, не нужно проверять намерения
+    from expenses.models import CategoryKeyword
+    from django.db.models import Q
     from ..utils.expense_intent import is_show_expenses_request
-    is_show_request, confidence = is_show_expenses_request(text)
-    if is_show_request and confidence >= 0.7:
-        logger.info(f"Detected show expenses request: '{text}' (confidence: {confidence:.2f})")
-        from ..routers.chat import process_chat_message
-        # Сохраняем уже запущенный индикатор до отправки ответа
-        await process_chat_message(message, state, text, skip_typing=True)
-        # После ответа корректно останавливаем индикатор
-        await cancel_typing()
-        return
+    import re
+
+    # Извлекаем слова из текста (убираем числа и короткие слова)
+    text_words = [w.lower() for w in re.findall(r'[а-яёa-z]+', text.lower()) if len(w) >= 3]
+
+    has_keyword = False
+    if text_words:
+        # Проверяем есть ли какое-то из слов в сохраненных ключевых словах пользователя
+        keyword_query = Q()
+        for word in text_words:
+            keyword_query |= Q(keyword__iexact=word)
+
+        has_keyword = await CategoryKeyword.objects.filter(
+            keyword_query,
+            category__profile__telegram_id=user_id
+        ).aexists()
+
+        if has_keyword:
+            logger.info(f"Found keyword in saved keywords for user {user_id}, treating as expense: '{text}'")
+
+    # НОВОЕ: Проверка на запрос показа трат ДО вызова AI парсера (экономия токенов)
+    # НО только если НЕ найдено ключевое слово
+    if not has_keyword:
+        is_show_request, confidence = is_show_expenses_request(text)
+        if is_show_request and confidence >= 0.7:
+            logger.info(f"Detected show expenses request: '{text}' (confidence: {confidence:.2f})")
+            from ..routers.chat import process_chat_message
+            # Сохраняем уже запущенный индикатор до отправки ответа
+            await process_chat_message(message, state, text, skip_typing=True)
+            # После ответа корректно останавливаем индикатор
+            await cancel_typing()
+            return
     
     # НОВОЕ: Проверка на доход перед парсингом как расход
     from ..utils.expense_parser import detect_income_intent, parse_income_message
@@ -1285,7 +1313,13 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     
     if not parsed:
         # Повторная проверка с использованием единого модуля (на случай если AI парсер не сработал)
-        is_show_request, show_confidence = is_show_expenses_request(text)
+        # НО если мы нашли ключевое слово - не проверяем намерение снова
+        if not has_keyword:
+            is_show_request, show_confidence = is_show_expenses_request(text)
+        else:
+            is_show_request, show_confidence = False, 0.0
+            logger.info(f"Skipping intent check because keyword was found for: '{text}'")
+
         if is_show_request and show_confidence >= 0.6:
             logger.info(f"Show expenses request detected after parsing failed: '{text}'")
             from ..routers.chat import process_chat_message
@@ -1315,13 +1349,16 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         
         # Иначе это трата (message_type == 'record')
         might_be_expense = True
-        
+        logger.info(f"Message classified as expense record, searching for similar expenses: '{text}'")
+
         if might_be_expense and len(text) > 2:  # Минимальная длина для осмысленного описания
             # Сначала ищем похожие траты за последний год
             from ..services.expense import find_similar_expenses
             from datetime import datetime
-            
+
+            logger.info(f"Calling find_similar_expenses for: '{text}'")
             similar = await find_similar_expenses(user_id, text)
+            logger.info(f"Found {len(similar) if similar else 0} similar expenses")
             
             # Также проверяем похожие доходы
             from ..services.income import get_last_income_by_description, create_income
@@ -1468,10 +1505,10 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                         amount = last_expense['amount']
                         currency = last_expense['currency']
                         category_name = last_expense['category']
-                        
+
                         # Создаем или получаем категорию
                         category = await get_or_create_category(user_id, category_name)
-                
+
                 # Делаем первую букву заглавной
                 description_capitalized = text[0].upper() + text[1:] if text else text
                 
@@ -1483,7 +1520,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                         amount=amount,
                         description=description_capitalized,
                         currency=currency,
-                        expense_date=parsed.get('expense_date') if parsed else None  # Добавляем дату, если она была указана
+                        expense_date=parsed.get('expense_date') if parsed else None,  # Добавляем дату, если она была указана
+                        ai_categorized=parsed.get('ai_enhanced', False) if parsed else False,
+                        ai_confidence=parsed.get('confidence') if parsed else None
                     )
                 except ValueError as e:
                     # Обработка ошибок валидации даты
@@ -1538,6 +1577,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 )
             else:
                 # Если похожих трат нет, используем обычный двухшаговый ввод
+                logger.info(f"No similar expenses found, asking for amount: '{text}'")
                 await state.update_data(expense_description=text)
                 await state.set_state(ExpenseForm.waiting_for_amount_clarification)
                 
@@ -1590,7 +1630,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             amount=amount,
             description=parsed['description'],
             currency=currency,
-            expense_date=parsed.get('expense_date')  # Добавляем дату, если она была указана
+            expense_date=parsed.get('expense_date'),  # Добавляем дату, если она была указана
+            ai_categorized=parsed.get('ai_enhanced', False),
+            ai_confidence=parsed.get('confidence')
         )
     except ValueError as e:
         # Обработка ошибок валидации даты
