@@ -378,8 +378,8 @@ class CategoryKeyword(models.Model):
         verbose_name='Язык ключевого слова'
     )
     
-    # Счетчик использования (только ручные исправления)
-    usage_count = models.IntegerField(default=0, verbose_name='Количество использований')
+    # Счетчик использования (дробные значения: AI = 0.5, ручное = 1.0)
+    usage_count = models.FloatField(default=0.0, verbose_name='Количество использований')
     
     # Нормализованный вес для конфликтующих слов
     normalized_weight = models.FloatField(default=1.0, verbose_name='Нормализованный вес')
@@ -1047,8 +1047,8 @@ class IncomeCategoryKeyword(models.Model):
     category = models.ForeignKey(IncomeCategory, on_delete=models.CASCADE, related_name='keywords')
     keyword = models.CharField(max_length=100, db_index=True)
     
-    # Счетчик использования (только ручные исправления)
-    usage_count = models.IntegerField(default=0, verbose_name='Количество использований')
+    # Счетчик использования (дробные значения: AI = 0.5, ручное = 1.0)
+    usage_count = models.FloatField(default=0.0, verbose_name='Количество использований')
     
     # Нормализованный вес для конфликтующих слов
     normalized_weight = models.FloatField(default=1.0, verbose_name='Нормализованный вес')

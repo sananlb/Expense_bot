@@ -497,48 +497,10 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             text_to_parse = text_cleaned
             expense_date = None
 
-    # Если не нашли сумму, пытаемся найти последнюю трату с таким же названием
+    # Если не нашли сумму, возвращаем None
+    # Пользователь должен указать сумму явно
     if not amount or amount <= 0:
-        if user_id:
-            from bot.services.expense import get_last_expense_by_description
-            # Пытаемся найти последнюю трату с похожим описанием
-            last_expense = await get_last_expense_by_description(user_id, original_text)
-            if last_expense:
-                # Используем сумму и категорию из найденной траты
-                amount = last_expense.amount
-                category_id = last_expense.category_id
-                category_name = None
-                
-                # Безопасно получаем имя категории (уже должно быть загружено через select_related)
-                try:
-                    if last_expense.category:
-                        # Используем язык пользователя для отображения категории
-                        lang_code = profile.language_code if profile and hasattr(profile, 'language_code') else 'ru'
-                        category_name = get_category_display_name(last_expense.category, lang_code)
-                except (AttributeError, TypeError) as e:
-                    logger.debug(f"Error getting category name: {e}")
-                    pass
-                    
-                # Используем текст без даты для описания
-                desc_text = text_without_date if text_without_date else original_text
-                # Сохраняем описание с капитализацией первой буквы
-                description = desc_text[0].upper() + desc_text[1:] if len(desc_text) > 1 else desc_text.upper() if desc_text else 'Расход'
-                
-                result = {
-                    'amount': float(amount),
-                    'description': description,
-                    'category': category_name,
-                    'category_id': category_id,
-                    'currency': last_expense.currency or 'RUB',
-                    'confidence': 0.8,  # Высокая уверенность, так как нашли похожую трату
-                    'reused_from_last': True,  # Флаг, что данные взяты из предыдущей траты
-                    'expense_date': expense_date  # Добавляем дату, если она была указана
-                }
-                
-                logger.info(f"Нашли похожую трату '{last_expense.description}' с суммой {amount}")
-                return result
-        
-        # Если не нашли похожую трату, возвращаем None
+        logger.debug(f"No amount found in text: {original_text}")
         return None
 
     # Определяем категорию по ключевым словам
@@ -636,33 +598,6 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         'confidence': 0.5 if category else 0.2,
         'expense_date': expense_date  # Добавляем дату, если она была указана
     }
-
-    # ВАЖНО: Сначала проверяем историю пользователя
-    # Если уже вводил трату с таким описанием - используем ту же категорию
-    if user_id and description and not category:
-        from bot.services.expense import get_last_expense_by_description
-        last_expense = await get_last_expense_by_description(user_id, description)
-        if last_expense and last_expense.category_id:
-            # Нашли трату с таким же описанием - используем её категорию
-            category_id = last_expense.category_id
-
-            # Безопасно получаем имя категории
-            try:
-                if last_expense.category:
-                    lang_code = profile.language_code if profile and hasattr(profile, 'language_code') else 'ru'
-                    category = get_category_display_name(last_expense.category, lang_code)
-
-                    # Обновляем результат с категорией из истории
-                    result['category'] = category
-                    result['category_id'] = category_id
-                    result['confidence'] = 0.95  # Очень высокая уверенность
-                    result['from_history'] = True  # Флаг что взято из истории
-
-                    logger.info(f"Нашли категорию '{category}' из истории для описания '{description}'")
-                    return result
-            except (AttributeError, TypeError) as e:
-                logger.debug(f"Error getting category from history: {e}")
-                pass
 
     # Попробуем улучшить с помощью AI, если:
     # 1. Не нашли категорию по ключевым словам
