@@ -378,15 +378,16 @@ class CategoryKeyword(models.Model):
         verbose_name='Язык ключевого слова'
     )
     
-    # Счетчик использования (дробные значения: AI = 0.5, ручное = 1.0)
-    usage_count = models.FloatField(default=0.0, verbose_name='Количество использований')
-    
+    # Счетчик использования (для статистики)
+    usage_count = models.IntegerField(default=0, verbose_name='Количество использований')
+
     # Нормализованный вес для конфликтующих слов
     normalized_weight = models.FloatField(default=1.0, verbose_name='Нормализованный вес')
-    
-    # Временная метка создания
-    created_at = models.DateTimeField(auto_now_add=True)
-    
+
+    # Временные метки
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    last_used = models.DateTimeField(auto_now=True, verbose_name='Последнее использование')
+
     class Meta:
         db_table = 'expenses_category_keyword'
         verbose_name = 'Ключевое слово категории'
@@ -396,6 +397,7 @@ class CategoryKeyword(models.Model):
             models.Index(fields=['category', 'keyword']),
             models.Index(fields=['normalized_weight']),
             models.Index(fields=['language']),
+            models.Index(fields=['last_used']),  # Индекс для быстрой сортировки при очистке
         ]
     
     def __str__(self):
@@ -1047,15 +1049,16 @@ class IncomeCategoryKeyword(models.Model):
     category = models.ForeignKey(IncomeCategory, on_delete=models.CASCADE, related_name='keywords')
     keyword = models.CharField(max_length=100, db_index=True)
     
-    # Счетчик использования (дробные значения: AI = 0.5, ручное = 1.0)
-    usage_count = models.FloatField(default=0.0, verbose_name='Количество использований')
-    
+    # Счетчик использования (для статистики)
+    usage_count = models.IntegerField(default=0, verbose_name='Количество использований')
+
     # Нормализованный вес для конфликтующих слов
     normalized_weight = models.FloatField(default=1.0, verbose_name='Нормализованный вес')
-    
-    # Временная метка создания
-    created_at = models.DateTimeField(auto_now_add=True)
-    
+
+    # Временные метки
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    last_used = models.DateTimeField(auto_now=True, verbose_name='Последнее использование')
+
     class Meta:
         db_table = 'expenses_income_category_keyword'
         verbose_name = 'Ключевое слово категории дохода'
@@ -1064,6 +1067,7 @@ class IncomeCategoryKeyword(models.Model):
         indexes = [
             models.Index(fields=['keyword']),
             models.Index(fields=['category', 'usage_count']),
+            models.Index(fields=['last_used']),  # Индекс для быстрой сортировки при очистке
         ]
     
     def __str__(self):

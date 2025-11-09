@@ -1139,17 +1139,16 @@ async def learn_from_category_change(user_id: int, expense_id: int, new_category
                     keyword, created = CategoryKeyword.objects.get_or_create(
                         category=category,
                         keyword=word.lower(),
-                        defaults={'normalized_weight': 1.0, 'usage_count': 1.0}
+                        defaults={'normalized_weight': 1.0, 'usage_count': 1}
                     )
 
-                    # Ручное изменение имеет высший приоритет - usage_count = 1.0
+                    # Увеличиваем счетчик использований
+                    # last_used обновляется автоматически (auto_now=True)
                     if created:
-                        keyword.usage_count = 1.0
                         added_keywords.append(word)
                     else:
-                        keyword.usage_count += 1.0  # Увеличиваем для существующих
-
-                    keyword.save()
+                        keyword.usage_count += 1
+                        keyword.save()
 
             # Пересчитываем нормализованные веса
             if words:
