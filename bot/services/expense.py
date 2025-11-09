@@ -104,8 +104,8 @@ def create_expense(
         # Обновляем объект с загруженным profile для корректной работы
         expense.profile = profile
 
-        # Если категория определена AI с высокой уверенностью, обучаем систему
-        if ai_categorized and category_id and description and ai_confidence and ai_confidence >= 0.8:
+        # Если категория определена AI, обучаем систему (сохраняем слова в БД)
+        if ai_categorized and category_id and description:
             from expense_bot.celery_tasks import learn_keywords_on_create
             learn_keywords_on_create.delay(
                 expense_id=expense.id,
@@ -925,34 +925,6 @@ async def get_date_summary(user_id: int, target_date: date) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f"Error getting date summary for {target_date}: {e}")
         return {'total': 0, 'count': 0, 'categories': [], 'currency': 'RUB', 'currency_totals': {}, 'single_currency': True}
-
-
-@sync_to_async
-def get_last_expense_by_description(telegram_id: int, description: str) -> Optional[Expense]:
-    """
-    Найти последнюю трату пользователя по описанию
-
-    Args:
-        telegram_id: ID пользователя
-        description: Описание для поиска
-
-    Returns:
-        Последняя трата с похожим описанием или None
-    """
-    try:
-        profile = Profile.objects.get(telegram_id=telegram_id)
-        # Ищем точное совпадение или частичное вхождение
-        # Ограничиваем поиск последними 1000 тратами для производительности
-        expense = Expense.objects.filter(
-            profile=profile,
-            description__icontains=description.strip()
-        ).select_related('category').order_by('-expense_date', '-created_at')[:1000].first()
-        return expense
-    except Profile.DoesNotExist:
-        return None
-    except Exception as e:
-        logger.error(f"Error finding expense by description: {e}")
-        return None
 
 
 @sync_to_async

@@ -1157,11 +1157,80 @@ def update_keywords_weights(expense_id: int, old_category_id: int, new_category_
         logger.error(f"Error in update_keywords_weights task: {e}")
 
 
+def cleanup_old_keywords(profile_id: int, is_income: bool = False):
+    """
+    Очистка старых ключевых слов если их больше 1000 у пользователя.
+
+    Args:
+        profile_id: ID профиля пользователя
+        is_income: True для доходов, False для расходов
+    """
+    try:
+        from expenses.models import CategoryKeyword, IncomeCategoryKeyword
+        from django.utils import timezone
+        from datetime import timedelta
+
+        # Выбираем модель в зависимости от типа
+        KeywordModel = IncomeCategoryKeyword if is_income else CategoryKeyword
+
+        # Подсчитываем общее количество слов пользователя
+        if is_income:
+            total = KeywordModel.objects.filter(
+                category__profile_id=profile_id
+            ).count()
+        else:
+            total = KeywordModel.objects.filter(
+                category__profile_id=profile_id
+            ).count()
+
+        if total >= 1000:
+            logger.info(f"User {profile_id} has {total} keywords, cleaning up...")
+
+            # Шаг 1: Удалить старые редкоиспользуемые (usage_count < 2 и старше 6 месяцев)
+            six_months_ago = timezone.now() - timedelta(days=180)
+            deleted_old = KeywordModel.objects.filter(
+                category__profile_id=profile_id,
+                usage_count__lt=2,
+                created_at__lt=six_months_ago
+            ).delete()
+
+            logger.info(f"Deleted {deleted_old[0]} old keywords for user {profile_id}")
+
+            # Пересчитываем количество после первой очистки
+            total = KeywordModel.objects.filter(
+                category__profile_id=profile_id
+            ).count()
+
+            # Шаг 2: Если все еще >= 1000, удалить самые редкоиспользуемые
+            if total >= 1000:
+                # Получить ID самых редкоиспользуемых слов (оставить только 900 самых популярных)
+                keywords_to_keep = KeywordModel.objects.filter(
+                    category__profile_id=profile_id
+                ).order_by('-usage_count', '-created_at')[:900].values_list('id', flat=True)
+
+                # Удалить все остальные
+                deleted_rare = KeywordModel.objects.filter(
+                    category__profile_id=profile_id
+                ).exclude(id__in=list(keywords_to_keep)).delete()
+
+                logger.info(f"Deleted {deleted_rare[0]} rarely used keywords for user {profile_id}")
+
+            # Финальное количество
+            final_total = KeywordModel.objects.filter(
+                category__profile_id=profile_id
+            ).count()
+
+            logger.info(f"Cleanup complete for user {profile_id}: {total} -> {final_total} keywords")
+
+    except Exception as e:
+        logger.error(f"Error in cleanup_old_keywords for user {profile_id}: {e}")
+
+
 @shared_task
 def learn_keywords_on_create(expense_id: int, category_id: int):
     """
     Обучение системы при создании новой траты с AI-категоризацией.
-    Запускается если AI определил категорию с высокой уверенностью (>= 0.8).
+    Запускается при ЛЮБОЙ AI-категоризации для автоматического сохранения слов.
     """
     try:
         from expenses.models import Expense, ExpenseCategory, CategoryKeyword
@@ -1176,6 +1245,9 @@ def learn_keywords_on_create(expense_id: int, category_id: int):
         # Получаем объекты
         expense = Expense.objects.get(id=expense_id)
         category = ExpenseCategory.objects.get(id=category_id)
+
+        # Очистка старых ключевых слов если их >= 1000 у пользователя
+        cleanup_old_keywords(profile_id=expense.profile.id, is_income=False)
 
         # Извлекаем и очищаем слова из описания
         words = extract_words_from_description(expense.description)

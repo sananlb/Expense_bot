@@ -1113,50 +1113,55 @@ async def optimize_keywords_for_new_category(user_id: int, new_category_id: int)
 
 async def learn_from_category_change(user_id: int, expense_id: int, new_category_id: int, description: str):
     """
-    Обучается на основе изменения категории расхода пользователем
-    Добавляет ключевые слова из описания в новую категорию
+    Обучается на основе изменения категории расхода пользователем.
+    Добавляет ключевые слова из описания в новую категорию с высоким приоритетом (usage_count = 1.0).
     """
     try:
-        from expenses.models import Expense
-        import re
-        
+        from expenses.models import Expense, Profile
+        from expense_bot.celery_tasks import extract_words_from_description, recalculate_normalized_weights, cleanup_old_keywords
+
         @sync_to_async
         def add_keywords_from_description():
-            # Получаем категорию
+            # Получаем категорию и профиль
             category = ExpenseCategory.objects.get(id=new_category_id)
-            
-            # Извлекаем слова из описания
-            words = re.findall(r'\w+', description.lower())
-            
-            # Фильтруем слова
-            meaningful_words = []
-            for word in words:
-                if len(word) > 3 and not word.isdigit():
-                    # Проверяем, не является ли это суммой или числом
-                    try:
-                        float(word)
-                        continue
-                    except:
-                        meaningful_words.append(word)
-            
-            # Добавляем только первые 2-3 значимых слова
+            profile = Profile.objects.get(telegram_id=user_id)
+
+            # Очистка старых ключевых слов если их >= 1000 у пользователя
+            cleanup_old_keywords(profile_id=profile.id, is_income=False)
+
+            # Извлекаем слова из описания используя общую функцию
+            words = extract_words_from_description(description)
+
+            # Добавляем/обновляем ключевые слова
             added_keywords = []
-            for word in meaningful_words[:3]:
-                # Проверяем, нет ли уже такого ключевого слова
-                keyword, created = CategoryKeyword.objects.get_or_create(
-                    category=category,
-                    keyword=word
-                )
-                if created:
-                    added_keywords.append(word)
-            
+            for word in words:
+                if len(word) >= 3:  # Минимум 3 буквы
+                    keyword, created = CategoryKeyword.objects.get_or_create(
+                        category=category,
+                        keyword=word.lower(),
+                        defaults={'normalized_weight': 1.0, 'usage_count': 1.0}
+                    )
+
+                    # Ручное изменение имеет высший приоритет - usage_count = 1.0
+                    if created:
+                        keyword.usage_count = 1.0
+                        added_keywords.append(word)
+                    else:
+                        keyword.usage_count += 1.0  # Увеличиваем для существующих
+
+                    keyword.save()
+
+            # Пересчитываем нормализованные веса
+            if words:
+                recalculate_normalized_weights(profile.id, words)
+
             return added_keywords
-        
+
         added = await add_keywords_from_description()
-        
+
         if added:
-            logger.info(f"Learned keywords {added} for category {new_category_id} from expense {expense_id}")
-        
+            logger.info(f"Learned keywords {added} for category {new_category_id} from manual change (expense {expense_id})")
+
     except Exception as e:
         logger.error(f"Error learning from category change: {e}")
 
