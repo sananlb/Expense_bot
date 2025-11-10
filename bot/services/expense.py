@@ -81,7 +81,36 @@ def create_expense(
         if description and len(description) > 500:
             logger.warning(f"User {user_id} provided too long description: {len(description)} chars")
             raise ValueError("Описание слишком длинное (максимум 500 символов)")
-            
+
+        # Проверка 4: Валидация category_id (защита от использования чужих категорий)
+        if category_id is not None:
+            try:
+                category = ExpenseCategory.objects.select_related('profile').get(id=category_id)
+
+                # Проверяем что категория принадлежит пользователю или члену его семьи
+                is_valid_category = False
+
+                # Случай 1: Категория принадлежит самому пользователю
+                if category.profile_id == profile.id:
+                    is_valid_category = True
+                # Случай 2: Пользователь в семейном бюджете, категория от члена семьи
+                elif profile.household_id is not None:
+                    # Проверяем что категория от члена той же семьи
+                    if category.profile.household_id == profile.household_id:
+                        is_valid_category = True
+                        logger.debug(f"Category {category_id} belongs to household member, allowed")
+
+                if not is_valid_category:
+                    logger.warning(
+                        f"User {user_id} (profile {profile.id}) tried to use category {category_id} "
+                        f"belonging to another user (profile {category.profile_id})"
+                    )
+                    raise ValueError("Нельзя использовать категорию другого пользователя")
+
+            except ExpenseCategory.DoesNotExist:
+                logger.warning(f"User {user_id} tried to use non-existent category {category_id}")
+                raise ValueError(f"Категория с ID {category_id} не существует")
+
         # Если дата указана вручную (не сегодня), устанавливаем время 12:00
         from datetime import time as datetime_time
         if expense_date and expense_date != date.today():
@@ -123,6 +152,10 @@ def create_expense(
                     category_id=category_id
                 )
                 logger.info(f"Triggered async keywords learning for new expense {expense.id}")
+
+        # Сбрасываем флаг напоминания о внесении трат
+        from expenses.tasks import clear_expense_reminder
+        clear_expense_reminder(user_id)
 
         logger.info(f"Created expense {expense.id} for user {user_id}")
         return expense

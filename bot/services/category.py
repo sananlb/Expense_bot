@@ -2,7 +2,7 @@
 Сервис для работы с категориями расходов
 """
 from typing import List, Optional, Set
-from expenses.models import ExpenseCategory, Profile, CategoryKeyword
+from expenses.models import ExpenseCategory, IncomeCategory, Profile, CategoryKeyword
 from asgiref.sync import sync_to_async
 from django.db.models import Sum, Count, Q
 from bot.utils.db_utils import get_or_create_user_profile_sync
@@ -22,6 +22,8 @@ EMOJI_PREFIX_RE = re.compile(
     r"\u2300-\u23FF"
     r"\u2B00-\u2BFF"
     r"\u26A0-\u26FF"
+    r"\uFE00-\uFE0F"
+    r"\U000E0100-\U000E01EF"
     r"]+\s*"
 )
 
@@ -477,120 +479,115 @@ def update_default_categories_language(user_id: int, new_lang: str) -> bool:
         True если обновление прошло успешно
     """
     from bot.utils.language import translate_category_name
-    from expenses.models import DEFAULT_CATEGORIES
+    from expenses.models import DEFAULT_CATEGORIES, DEFAULT_INCOME_CATEGORIES
     import re
     
     try:
         profile = Profile.objects.get(telegram_id=user_id)
         
-        # Получаем все категории пользователя
-        user_categories = ExpenseCategory.objects.filter(profile=profile)
+        expense_categories = ExpenseCategory.objects.filter(profile=profile)
+        income_categories = IncomeCategory.objects.filter(profile=profile)
         
-        # Паттерн для извлечения эмодзи
         emoji_pattern = re.compile(
             r'^['
-            r'\U0001F000-\U0001F9FF'  # Основные эмодзи
-            r'\U00002600-\U000027BF'  # Разные символы
-            r'\U0001F300-\U0001F5FF'  # Символы и пиктограммы
-            r'\U0001F600-\U0001F64F'  # Эмоции
-            r'\U0001F680-\U0001F6FF'  # Транспорт и символы
-            r'\u2600-\u27BF'          # Разные символы (короткий диапазон)
-            r'\u2300-\u23FF'          # Технические символы
-            r'\u2B00-\u2BFF'          # Стрелки и символы
-            r'\u26A0-\u26FF'          # Предупреждающие знаки
+            r'\U0001F000-\U0001F9FF'
+            r'\U00002600-\U000027BF'
+            r'\U0001F300-\U0001F5FF'
+            r'\U0001F600-\U0001F64F'
+            r'\U0001F680-\U0001F6FF'
+            r'\u2600-\u27BF'
+            r'\u2300-\u23FF'
+            r'\u2B00-\u2BFF'
+            r'\u26A0-\u26FF'
+            r'\uFE00-\uFE0F'
+            r'\U000E0100-\U000E01EF'
             r']+'
         )
+        emoji_strip_pattern = re.compile(
+            r'^['
+            r'\U0001F000-\U0001F9FF'
+            r'\U00002600-\U000027BF'
+            r'\U0001F300-\U0001F5FF'
+            r'\U0001F600-\U0001F64F'
+            r'\U0001F680-\U0001F6FF'
+            r'\u2600-\u27BF'
+            r'\u2300-\u23FF'
+            r'\u2B00-\u2BFF'
+            r'\u26A0-\u26FF'
+            r'\uFE00-\uFE0F'
+            r'\U000E0100-\U000E01EF'
+            r']+\s*'
+        )
         
-        # Создаем список стандартных категорий для сравнения
         default_names_ru = {name for name, _ in DEFAULT_CATEGORIES}
         default_names_en = {
             'Groceries', 'Cafes and Restaurants', 'Transport',
             'Car', 'Housing', 'Pharmacies', 'Medicine', 'Beauty',
             'Sports and Fitness', 'Clothes and Shoes', 'Entertainment',
             'Education', 'Gifts', 'Travel',
-            'Utilities and Subscriptions', 'Other Expenses'
+            'Utilities and Subscriptions', 'Savings', 'Other Expenses'
+        }
+        default_income_names_ru = {name for name, _ in DEFAULT_INCOME_CATEGORIES}
+        default_income_names_en = {
+            'Salary', 'Bonuses', 'Freelance', 'Investments',
+            'Bank Interest', 'Rent Income', 'Refunds',
+            'Gifts', 'Other Income'
         }
         
-        updated_count = 0
-        for category in user_categories:
-            # Извлекаем эмодзи и текст
-            match = emoji_pattern.match(category.name)
+        def split_name(raw_name: str) -> tuple[str, str]:
+            raw_name = raw_name or ''
+            match = emoji_pattern.match(raw_name)
             if match:
                 emoji = match.group()
-                text = category.name[len(emoji):].strip()
+                text = raw_name[len(emoji):].strip()
             else:
-                text = category.name.strip()
                 emoji = ''
-            
-            # Проверяем, является ли это стандартной категорией
-            is_default = text in default_names_ru or text in default_names_en
-            
-            if is_default:
-                # Переводим только стандартные категории
+                text = raw_name.strip()
+            return emoji, text
+        
+        def update_queryset(queryset, default_ru, default_en, category_type: str) -> int:
+            updated = 0
+            for category in queryset:
+                emoji, text = split_name(category.name)
+                if text not in default_ru and text not in default_en:
+                    continue
+                
                 if new_lang == 'ru':
-                    # Меняем на русский
                     if category.name_ru:
-                        # У нас уже есть русское название, просто меняем язык по умолчанию
                         category.original_language = 'ru'
                     else:
-                        # Переводим из английского если нужно (text уже без эмодзи)
                         translated_text = translate_category_name(text, 'ru')
-                        # Убираем эмодзи из перевода если он там есть (функция может вернуть с эмодзи)
-                        import re
-                        emoji_strip_pattern = re.compile(
-                            r'^['
-                            r'\U0001F000-\U0001F9FF'
-                            r'\U00002600-\U000027BF'
-                            r'\U0001F300-\U0001F5FF'
-                            r'\U0001F600-\U0001F64F'
-                            r'\U0001F680-\U0001F6FF'
-                            r'\u2600-\u27BF'
-                            r'\u2300-\u23FF'
-                            r'\u2B00-\u2BFF'
-                            r'\u26A0-\u26FF'
-                            r']+\s*'
-                        )
                         translated_text = emoji_strip_pattern.sub('', translated_text).strip()
                         category.name_ru = translated_text
-                        # Сохраняем эмодзи если его нет
                         if not category.icon and emoji:
                             category.icon = emoji
                         category.original_language = 'ru'
                 else:
-                    # Меняем на английский
                     if category.name_en:
-                        # У нас уже есть английское название
                         category.original_language = 'en'
                     else:
-                        # Переводим из русского если нужно (text уже без эмодзи)
                         translated_text = translate_category_name(text, 'en')
-                        # Убираем эмодзи из перевода если он там есть
-                        import re
-                        emoji_strip_pattern = re.compile(
-                            r'^['
-                            r'\U0001F000-\U0001F9FF'
-                            r'\U00002600-\U000027BF'
-                            r'\U0001F300-\U0001F5FF'
-                            r'\U0001F600-\U0001F64F'
-                            r'\U0001F680-\U0001F6FF'
-                            r'\u2600-\u27BF'
-                            r'\u2300-\u23FF'
-                            r'\u2B00-\u2BFF'
-                            r'\u26A0-\u26FF'
-                            r']+\s*'
-                        )
                         translated_text = emoji_strip_pattern.sub('', translated_text).strip()
                         category.name_en = translated_text
-                        # Сохраняем эмодзи если его нет
                         if not category.icon and emoji:
                             category.icon = emoji
                         category.original_language = 'en'
                 
                 category.save()
-                updated_count += 1
-                logger.info(f"Updated category language for '{text}' to '{new_lang}' for user {user_id}")
+                updated += 1
+                logger.info(
+                    f"Updated {category_type} category language for '{text}' to '{new_lang}' for user {user_id}"
+                )
+            return updated
         
-        logger.info(f"Updated {updated_count} default categories for user {user_id} to language '{new_lang}'")
+        expense_updated = update_queryset(expense_categories, default_names_ru, default_names_en, 'expense')
+        income_updated = update_queryset(income_categories, default_income_names_ru, default_income_names_en, 'income')
+        total_updated = expense_updated + income_updated
+        
+        logger.info(
+            f"Updated {total_updated} default categories for user {user_id} to language '{new_lang}' "
+            f"(expenses={expense_updated}, incomes={income_updated})"
+        )
         return True
         
     except Profile.DoesNotExist:
@@ -659,8 +656,12 @@ def create_default_categories_sync(user_id: int) -> bool:
                     categories_to_create.append(
                         ExpenseCategory(
                             profile=profile,
-                            name=full_name,
-                            icon='',
+                            name=full_name,  # Старое поле для обратной совместимости
+                            name_ru=name if lang == 'ru' else None,
+                            name_en=name if lang == 'en' else None,
+                            original_language=lang,
+                            is_translatable=True,  # Дефолтные категории переводятся
+                            icon=icon,
                             is_active=True
                         )
                     )
@@ -672,8 +673,12 @@ def create_default_categories_sync(user_id: int) -> bool:
             categories = [
                 ExpenseCategory(
                     profile=profile,
-                    name=f"{icon} {name}",
-                    icon='',
+                    name=f"{icon} {name}",  # Старое поле для обратной совместимости
+                    name_ru=name if lang == 'ru' else None,
+                    name_en=name if lang == 'en' else None,
+                    original_language=lang,
+                    is_translatable=True,  # Дефолтные категории переводятся
+                    icon=icon,
                     is_active=True
                 )
                 for name, icon in default_categories
