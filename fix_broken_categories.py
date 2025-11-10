@@ -14,6 +14,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'expense_bot.settings')
 django.setup()
 
 from expenses.models import ExpenseCategory, Profile
+from django.db.models import Q
 import re
 
 
@@ -65,13 +66,12 @@ def fix_broken_categories(dry_run: bool = True):
     print("=" * 70)
     print()
 
-    # Находим все категории с пустыми мультиязычными полями
+    # Находим все категории где ОБА мультиязычных поля пустые
+    # Используем & (AND) чтобы найти только полностью битые категории
     broken_categories = ExpenseCategory.objects.filter(
-        name_ru__isnull=True,
-        name_en__isnull=True
-    ) | ExpenseCategory.objects.filter(
-        name_ru='',
-        name_en=''
+        Q(name_ru__isnull=True) | Q(name_ru='')
+    ).filter(
+        Q(name_en__isnull=True) | Q(name_en='')
     )
 
     total_broken = broken_categories.count()
@@ -109,6 +109,15 @@ def fix_broken_categories(dry_run: bool = True):
             skipped_count += 1
             continue
 
+        # Извлекаем эмодзи для icon (первый эмодзи в строке)
+        emoji_match = re.search(
+            r'[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F'
+            r'\U0001F680-\U0001F6FF\u2600-\u27BF\u2300-\u23FF\u2B00-\u2BFF'
+            r'\u26A0-\u26FF\uFE00-\uFE0F\U000E0100-\U000E01EF]',
+            category.name
+        )
+        extracted_icon = emoji_match.group(0) if emoji_match else ''
+
         # Убираем эмодзи из названия
         name_clean = re.sub(
             r'[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F'
@@ -142,6 +151,10 @@ def fix_broken_categories(dry_run: bool = True):
                 category.original_language = 'mixed'
                 category.is_translatable = False
 
+            # Восстанавливаем icon если он был извлечен из названия
+            if extracted_icon and not category.icon:
+                category.icon = extracted_icon
+
             category.save()
 
         fixed_count += 1
@@ -164,11 +177,9 @@ def fix_broken_categories(dry_run: bool = True):
         print()
         print("Проверка после исправления...")
         remaining_broken = ExpenseCategory.objects.filter(
-            name_ru__isnull=True,
-            name_en__isnull=True
-        ) | ExpenseCategory.objects.filter(
-            name_ru='',
-            name_en=''
+            Q(name_ru__isnull=True) | Q(name_ru='')
+        ).filter(
+            Q(name_en__isnull=True) | Q(name_en='')
         )
         remaining_count = remaining_broken.count()
         print(f"Осталось битых категорий: {remaining_count}")

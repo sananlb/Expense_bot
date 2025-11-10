@@ -643,16 +643,27 @@ def create_default_categories_sync(user_id: int) -> bool:
         # все равно создаем все остальные
         if existing_count > 0:
             logger.info(f"User {user_id} has only {existing_count} categories (likely from fallback), creating remaining defaults")
-            # Получаем названия уже существующих категорий
-            existing_names = set(
-                ExpenseCategory.objects.filter(profile=profile)
-                .values_list('name', flat=True)
-            )
+            # Получаем названия уже существующих категорий по мультиязычным полям
+            existing_categories = ExpenseCategory.objects.filter(profile=profile)
+
+            # Формируем сет существующих названий в зависимости от языка
+            existing_names = set()
+            for cat in existing_categories:
+                if lang == 'ru' and cat.name_ru:
+                    existing_names.add(cat.name_ru)
+                elif lang == 'en' and cat.name_en:
+                    existing_names.add(cat.name_en)
+                # Fallback для старых категорий без мультиязычных полей
+                elif cat.name:
+                    # Убираем эмодзи из старого названия для сравнения
+                    name_without_emoji = cat.name.lstrip('🍔🍽️🚗🚕🏠💊💄🏃👕🎭📚🎁✈️💰📝💵💸')
+                    existing_names.add(name_without_emoji.strip())
+
             # Создаем только те категории, которых еще нет
             categories_to_create = []
             for name, icon in default_categories:
-                full_name = f"{icon} {name}"
-                if full_name not in existing_names:
+                if name not in existing_names:
+                    full_name = f"{icon} {name}"
                     categories_to_create.append(
                         ExpenseCategory(
                             profile=profile,

@@ -149,7 +149,8 @@ def fix_expenses_with_foreign_categories(dry_run: bool = True):
                     ''
                 ).lower().strip()
 
-                if cat_name and foreign_cat_name in cat_name or cat_name in foreign_cat_name:
+                # Проверяем похожесть только если оба названия непустые
+                if cat_name and (foreign_cat_name in cat_name or cat_name in foreign_cat_name):
                     user_category = cat
                     break
 
