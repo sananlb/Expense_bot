@@ -67,9 +67,7 @@ TEXTS = {
         'expense_not_found': '❌ Трата не найдена',
 
         # Напоминания
-        'expense_reminder': '''📝 <b>Напоминание о внесении трат</b>
-
-Не забудьте записать расходы за сегодня, чтобы вести точный учёт бюджета 💰''',
+        'expense_reminder': '''💡 <i>Не забудьте записать расходы за сегодня, чтобы вести точный учёт бюджета 💰</i>''',
         
         # Категории
         'category': 'Категория',
@@ -911,9 +909,7 @@ PDF отчеты с графиками, экспорт в CSV и Excel дост�
         'expense_not_found': '❌ Expense not found',
 
         # Reminders
-        'expense_reminder': '''📝 <b>Expense Reminder</b>
-
-Don't forget to record today's expenses to keep accurate track of your budget 💰''',
+        'expense_reminder': '''💡 <i>Don't forget to record today's expenses to keep accurate track of your budget 💰</i>''',
 
         # Categories
         'category': 'Category',
