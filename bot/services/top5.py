@@ -129,6 +129,7 @@ def calculate_top5_sync(profile: Profile, window_start: date, window_end: date) 
         it['needs_category_hint'] = key_counts[kk] > 1
 
     # Подготовка к сериализации для JSONField с предзагрузкой эмодзи категорий
+    user_lang = profile.language_code or 'ru'
     serialized: List[Dict] = []
     for it in final:
         # Получаем эмодзи и название категории для сохранения в снепшот
@@ -143,7 +144,7 @@ def calculate_top5_sync(profile: Profile, window_start: date, window_end: date) 
                 cat = None
             if cat:
                 category_emoji = get_category_emoji(cat)
-                category_name = get_category_display_name(cat)
+                category_name = get_category_display_name(cat, user_lang)
         except Exception:
             pass
 

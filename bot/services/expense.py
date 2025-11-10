@@ -370,21 +370,37 @@ def get_expenses_summary(
         income_count = incomes.count()
         
         # По категориям доходов
+        user_lang = profile.language_code or 'ru'
         by_income_category = incomes.values(
-            'category__id',
-            'category__name'
+            'category__id'
         ).annotate(
             total=Sum('amount'),
             count=Count('id')
         ).order_by('-total')
 
-        # Преобразуем в список словарей
+        # Преобразуем в список словарей с мультиязычными названиями
+        from expenses.models import IncomeCategory
+        from bot.utils.language import get_text
+
         income_categories_list = []
         for cat in by_income_category:
+            category_id = cat['category__id']
+            if category_id:
+                try:
+                    category = IncomeCategory.objects.get(id=category_id)
+                    cat_name = category.get_display_name(user_lang)
+                except IncomeCategory.DoesNotExist:
+                    cat_name = f"💰 {get_text(user_lang, 'other_income')}"
+            else:
+                cat_name = f"💰 {get_text(user_lang, 'other_income')}"
+
+            # Извлекаем иконку из названия
+            icon = cat_name.split()[0] if cat_name else '💰'
+
             income_categories_list.append({
-                'id': cat['category__id'],
-                'name': cat['category__name'] or 'Прочие доходы',
-                'icon': '💰',
+                'id': category_id or 0,
+                'name': cat_name,
+                'icon': icon,
                 'total': cat['total'],
                 'count': cat['count']
             })
