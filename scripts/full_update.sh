@@ -89,8 +89,8 @@ echo ""
 
 # Шаг 8: Ожидание готовности контейнеров
 echo -e "${YELLOW}[8/11] ⏳ Жду готовности контейнеров...${NC}"
-echo -e "${YELLOW}  Даю контейнерам 10 секунд на инициализацию...${NC}"
-sleep 10
+echo -e "${YELLOW}  Даю контейнерам 20 секунд на инициализацию (PostgreSQL, Redis, Bot)...${NC}"
+sleep 20
 echo -e "${GREEN}✓ Контейнеры готовы${NC}"
 echo ""
 
@@ -143,62 +143,70 @@ set -e
 echo -e "${GREEN}✓ Проверка DNS/UFW завершена${NC}"
 echo ""
 
-# Шаг 10: Установка webhook с fallback на IP
-echo -e "${YELLOW}[10/11] 🔗 Установка Telegram webhook (с fallback на IP)...${NC}"
-
-# Получаем IP сервера
-SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s icanhazip.com 2>/dev/null || echo "94.198.220.155")
-
-# Делаем скрипт исполняемым
-chmod +x scripts/set_webhook.sh
-
-# Запускаем установку webhook (не падаем при ошибке)
+# Шаг 10: Проверка готовности и webhook
+echo -e "${YELLOW}[10/11] 🔗 Проверяю установку Telegram webhook...${NC}"
 set +e
 
-# Пытаемся установить webhook на домен
-if [ "$USE_DOMAIN" = true ]; then
-    echo -e "${YELLOW}  Попытка установки webhook на домен...${NC}"
-    if bash scripts/set_webhook.sh; then
-        echo -e "${GREEN}✓ Webhook установлен на домен: https://expensebot.duckdns.org/webhook/${NC}"
-        WEBHOOK_SET=true
-    else
-        echo -e "${YELLOW}⚠️ Не удалось установить webhook на домен${NC}"
-        WEBHOOK_SET=false
-    fi
+# Ждем еще 10 секунд чтобы бот успел установить webhook
+echo -e "${YELLOW}  Даю боту 10 секунд на установку webhook...${NC}"
+sleep 10
+
+# Проверяем что эндпоинт доступен изнутри
+echo -e "${YELLOW}  Проверяю эндпоинт /webhook/ изнутри контейнера...${NC}"
+ENDPOINT_CHECK=$(docker exec expense_bot_app curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/webhook/ 2>/dev/null || echo "000")
+
+if [ "$ENDPOINT_CHECK" = "405" ]; then
+    echo -e "${GREEN}  ✓ Эндпоинт /webhook/ доступен (405 = ожидает POST)${NC}"
 else
-    echo -e "${YELLOW}  Домен не резолвится, пропускаю попытку на домен${NC}"
-    WEBHOOK_SET=false
+    echo -e "${YELLOW}  ⚠️ Эндпоинт /webhook/ вернул код: $ENDPOINT_CHECK${NC}"
 fi
 
-# Если не получилось установить на домен, используем IP
-if [ "$WEBHOOK_SET" = false ]; then
-    echo -e "${YELLOW}  Попытка установки webhook на IP адрес...${NC}"
+# Проверяем статус webhook через Telegram API
+echo -e "${YELLOW}  Проверяю статус webhook в Telegram...${NC}"
+BOT_TOKEN=$(grep "^BOT_TOKEN=" .env | cut -d '=' -f2 | tr -d '\r' | tr -d ' ')
 
-    # Получаем токен из .env
-    BOT_TOKEN=$(grep "^BOT_TOKEN=" .env | cut -d '=' -f2 | tr -d '\r')
+if [ -n "$BOT_TOKEN" ]; then
+    WEBHOOK_INFO=$(docker exec expense_bot_app python -c "
+import os
+import requests
+token = '$BOT_TOKEN'
+try:
+    r = requests.get(f'https://api.telegram.org/bot{token}/getWebhookInfo', timeout=5)
+    result = r.json().get('result', {})
+    url = result.get('url', '')
+    pending = result.get('pending_update_count', 0)
+    error = result.get('last_error_message', '')
+    print(f'URL={url}')
+    print(f'PENDING={pending}')
+    print(f'ERROR={error}')
+except Exception as e:
+    print(f'ERROR=Failed to check: {e}')
+" 2>/dev/null || echo "ERROR=Failed to execute check")
 
-    if [ -n "$BOT_TOKEN" ]; then
-        # Пытаемся установить webhook на IP
-        WEBHOOK_URL="https://${SERVER_IP}/webhook/"
-        RESPONSE=$(curl -s -X POST "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
-            -d "url=${WEBHOOK_URL}" \
-            -d "drop_pending_updates=true" 2>/dev/null || echo '{"ok":false}')
+    WEBHOOK_URL=$(echo "$WEBHOOK_INFO" | grep "^URL=" | cut -d '=' -f2-)
+    PENDING=$(echo "$WEBHOOK_INFO" | grep "^PENDING=" | cut -d '=' -f2-)
+    ERROR=$(echo "$WEBHOOK_INFO" | grep "^ERROR=" | cut -d '=' -f2-)
 
-        if echo "$RESPONSE" | grep -q '"ok":true'; then
-            echo -e "${YELLOW}⚠️ Webhook установлен на IP: ${WEBHOOK_URL}${NC}"
-            echo -e "${YELLOW}⚠️ ВАЖНО: IP адрес вместо домена - это временное решение!${NC}"
-            echo -e "${YELLOW}   Необходимо:${NC}"
-            echo -e "${YELLOW}   1. Проверить правила UFW: sudo ufw status${NC}"
-            echo -e "${YELLOW}   2. Проверить DuckDNS: nslookup expensebot.duckdns.org${NC}"
-            echo -e "${YELLOW}   3. После исправления переустановить webhook на домен${NC}"
-        else
-            echo -e "${RED}❌ Не удалось установить webhook ни на домен, ни на IP${NC}"
-            echo -e "${YELLOW}  Попробуйте вручную: bash ~/fix_webhook_force.sh${NC}"
-        fi
+    if [ -n "$WEBHOOK_URL" ] && [ "$WEBHOOK_URL" != "None" ]; then
+        echo -e "${GREEN}  ✅ Webhook установлен: $WEBHOOK_URL${NC}"
+        [ "$PENDING" != "0" ] && echo -e "${YELLOW}  ⚠️ Pending updates: $PENDING${NC}"
     else
-        echo -e "${RED}❌ Не найден BOT_TOKEN в .env${NC}"
-        echo -e "${YELLOW}  Попробуйте вручную: bash ~/fix_webhook_force.sh${NC}"
+        echo -e "${YELLOW}  ⚠️ Webhook не установлен или не настроен${NC}"
+        [ -n "$ERROR" ] && [ "$ERROR" != "None" ] && echo -e "${YELLOW}  Последняя ошибка: $ERROR${NC}"
+        echo -e "${YELLOW}  💡 Бот может работать, но webhook нужно проверить${NC}"
     fi
+else
+    echo -e "${RED}  ❌ Не найден BOT_TOKEN в .env${NC}"
+fi
+
+# Проверяем логи бота на наличие ошибок webhook
+echo -e "${YELLOW}  Проверяю логи бота на ошибки webhook...${NC}"
+WEBHOOK_ERRORS=$(docker logs expense_bot_app 2>&1 | grep -i "webhook" | grep -i "error\|failed" | tail -3 || true)
+if [ -n "$WEBHOOK_ERRORS" ]; then
+    echo -e "${YELLOW}  ⚠️ Обнаружены ошибки в логах:${NC}"
+    echo "$WEBHOOK_ERRORS" | sed 's/^/     /'
+else
+    echo -e "${GREEN}  ✓ Ошибок webhook в логах не обнаружено${NC}"
 fi
 
 set -e

@@ -229,18 +229,30 @@ async def main_webhook():
     ).register(app, path=webhook_path)
     
     setup_application(app, dp, bot=bot)
-    
+
     # Установка webhook
     webhook_url = os.getenv("WEBHOOK_URL")
     if webhook_url:
-        await bot.set_webhook(f"{webhook_url}{webhook_path}")
-    
+        full_webhook_url = f"{webhook_url}{webhook_path}"
+        try:
+            webhook_info = await bot.set_webhook(
+                url=full_webhook_url,
+                allowed_updates=["message", "callback_query", "pre_checkout_query"],
+                drop_pending_updates=False
+            )
+            logger.info(f"✅ Webhook установлен успешно: {full_webhook_url}")
+        except Exception as e:
+            logger.error(f"❌ Ошибка установки webhook: {e}")
+            logger.warning("⚠️ Бот продолжит работу, но webhook может не работать")
+    else:
+        logger.warning("⚠️ WEBHOOK_URL не задан в .env, webhook не будет установлен")
+
     # Запуск веб-сервера
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, host="0.0.0.0", port=8000)
     await site.start()
-    
+
     logger.info("Webhook сервер запущен на порту 8000")
     
     # Бесконечный цикл
