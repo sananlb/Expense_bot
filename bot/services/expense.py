@@ -285,18 +285,30 @@ def get_expenses_summary(
             expenses_by_currency[currency]['count'] += 1
             total_count += 1
 
-            # Получаем мультиязычное название категории
+            # Получаем мультиязычное название категории с учетом is_translatable
             if expense.category:
                 cat_id = expense.category.id
-                # Используем мультиязычные поля если они есть
-                if user_lang == 'en' and hasattr(expense.category, 'name_en') and expense.category.name_en:
-                    cat_name = expense.category.name_en
-                elif user_lang == 'ru' and hasattr(expense.category, 'name_ru') and expense.category.name_ru:
-                    cat_name = expense.category.name_ru
-                else:
-                    cat_name = expense.category.name
-
                 cat_icon = expense.category.icon or ''
+
+                # Проверяем флаг is_translatable для правильной обработки кастомных категорий
+                if not expense.category.is_translatable:
+                    # Кастомная категория - берем оригинал без перевода
+                    if expense.category.original_language == 'ru':
+                        cat_name = expense.category.name_ru
+                    elif expense.category.original_language == 'en':
+                        cat_name = expense.category.name_en
+                    else:
+                        # Fallback на старое поле
+                        cat_name = expense.category.name.replace(cat_icon, '').strip() if cat_icon else expense.category.name
+                else:
+                    # Системная категория - переводим на язык пользователя
+                    if user_lang == 'en' and expense.category.name_en:
+                        cat_name = expense.category.name_en
+                    elif user_lang == 'ru' and expense.category.name_ru:
+                        cat_name = expense.category.name_ru
+                    else:
+                        # Fallback на старое поле
+                        cat_name = expense.category.name.replace(cat_icon, '').strip() if cat_icon else expense.category.name
             else:
                 cat_id = 0
                 cat_name = get_text('no_category', user_lang)
