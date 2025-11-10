@@ -227,28 +227,31 @@ def get_expenses_summary(
             ).select_related('category')
         logger.info(f"Query: profile={profile.id}, date>={start_date}, date<={end_date}, found={expenses.count()} expenses")
         
-        # Группируем по валютам
-        expenses_by_currency = {}
-        categories_by_currency = {}
-        
+        # Группируем по категориям (все валюты вместе)
+        expenses_by_currency = {}  # Общая статистика по валютам
+        categories = {}  # Категории с суммами по валютам
+
         # Получаем язык пользователя для мультиязычных категорий
         from bot.utils.language import get_user_language
         from asgiref.sync import async_to_sync
         user_lang = async_to_sync(get_user_language)(user_id)
-        
+
+        total_count = 0  # Общее количество трат
+
         for expense in expenses:
             currency = expense.currency or 'RUB'
-            
+
+            # Статистика по валютам
             if currency not in expenses_by_currency:
                 expenses_by_currency[currency] = {
                     'total': Decimal('0'),
                     'count': 0
                 }
-                categories_by_currency[currency] = {}
-            
+
             expenses_by_currency[currency]['total'] += expense.amount
             expenses_by_currency[currency]['count'] += 1
-            
+            total_count += 1
+
             # Получаем мультиязычное название категории
             if expense.category:
                 cat_id = expense.category.id
@@ -259,46 +262,54 @@ def get_expenses_summary(
                     cat_name = expense.category.name_ru
                 else:
                     cat_name = expense.category.name
-                
+
                 cat_icon = expense.category.icon or ''
             else:
                 cat_id = 0
                 cat_name = 'Без категории' if user_lang == 'ru' else 'No category'
                 cat_icon = ''
-            
-            if cat_id not in categories_by_currency[currency]:
-                categories_by_currency[currency][cat_id] = {
+
+            # Группируем по категориям, храним суммы по каждой валюте
+            if cat_id not in categories:
+                categories[cat_id] = {
                     'id': cat_id,
                     'name': cat_name,
                     'icon': cat_icon,
-                    'total': Decimal('0'),
+                    'amounts': {},  # Суммы по валютам
                     'count': 0
                 }
-            
-            categories_by_currency[currency][cat_id]['total'] += expense.amount
-            categories_by_currency[currency][cat_id]['count'] += 1
-        
-        # Определяем основную валюту (с наибольшим количеством операций)
-        if expenses_by_currency:
-            main_currency = max(expenses_by_currency.items(), key=lambda x: x[1]['count'])[0]
-            total = expenses_by_currency[main_currency]['total']
-            count = expenses_by_currency[main_currency]['count']
-            
-            # Преобразуем категории основной валюты в список
+
+            # Добавляем сумму к валюте категории
+            if currency not in categories[cat_id]['amounts']:
+                categories[cat_id]['amounts'][currency] = Decimal('0')
+
+            categories[cat_id]['amounts'][currency] += expense.amount
+            categories[cat_id]['count'] += 1
+
+        # Преобразуем категории в список и сортируем
+        if categories:
+            # Сортируем по общей сумме (берем первую валюту или сумму всех)
             categories_list = sorted(
-                categories_by_currency[main_currency].values(),
-                key=lambda x: x['total'],
+                categories.values(),
+                key=lambda x: sum(x['amounts'].values()),
                 reverse=True
             )
 
             # Логируем список категорий для отладки
-            logger.info(f"Categories for main currency {main_currency}: {[(c['name'], c['total']) for c in categories_list]}")
+            logger.info(f"Categories with all currencies: {[(c['name'], c['amounts']) for c in categories_list]}")
+        else:
+            categories_list = []
+
+        # Определяем основную валюту и общие суммы (для обратной совместимости)
+        if expenses_by_currency:
+            main_currency = max(expenses_by_currency.items(), key=lambda x: x[1]['count'])[0]
+            total = expenses_by_currency[main_currency]['total']
+            count = total_count
         else:
             main_currency = 'RUB'
             total = Decimal('0')
             count = 0
-            categories_list = []
-            
+
         # НОВОЕ: Получаем данные о доходах (учитываем семейный режим)
         from expenses.models import Income
         if household_mode and profile.household:
@@ -400,14 +411,16 @@ def get_expenses_summary(
             
             for cat in categories_list:
                 if cat['id'] in cashback_map:
+                    # Берем сумму в основной валюте для расчета кешбэка
+                    cat_total = cat['amounts'].get(main_currency, Decimal('0'))
                     max_cashback = max(cashback_map[cat['id']], key=lambda x: x.cashback_percent)
                     if max_cashback.limit_amount:
                         cashback_amount = min(
-                            cat['total'] * max_cashback.cashback_percent / 100,
+                            cat_total * max_cashback.cashback_percent / 100,
                             max_cashback.limit_amount
                         )
                     else:
-                        cashback_amount = cat['total'] * max_cashback.cashback_percent / 100
+                        cashback_amount = cat_total * max_cashback.cashback_percent / 100
                     potential_cashback += cashback_amount
                 
         return {

@@ -325,7 +325,11 @@ async def show_expenses_summary(
                         icon = cat.get('icon', '')
                         name = cat.get('name', get_text('no_category', lang))
                         category_display = f"{icon} {name}" if icon else name
-                        text += f"  {category_display}: {format_amount(cat['total'], summary['currency'], lang)}\n"
+
+                        # Формируем строку с суммами по валютам
+                        amounts = cat.get('amounts', {})
+                        amounts_str = " / ".join([format_amount(amt, cur, lang) for cur, amt in amounts.items()])
+                        text += f"  {category_display}: {amounts_str}\n"
                 else:
                     # Показываем первые 20 категорий
                     for cat in summary['by_category'][:20]:
@@ -333,15 +337,27 @@ async def show_expenses_summary(
                         icon = cat.get('icon', '')
                         name = cat.get('name', get_text('no_category', lang))
                         category_display = f"{icon} {name}" if icon else name
-                        text += f"  {category_display}: {format_amount(cat['total'], summary['currency'], lang)}\n"
-                    
-                    # Добавляем "остальные траты"
+
+                        # Формируем строку с суммами по валютам
+                        amounts = cat.get('amounts', {})
+                        amounts_str = " / ".join([format_amount(amt, cur, lang) for cur, amt in amounts.items()])
+                        text += f"  {category_display}: {amounts_str}\n"
+
+                    # Добавляем "остальные траты" - собираем суммы по валютам
                     remaining_count = total_categories - 20
-                    remaining_sum = sum(cat['total'] for cat in summary['by_category'][20:])
+                    from decimal import Decimal
+                    remaining_by_currency = {}
+                    for cat in summary['by_category'][20:]:
+                        for cur, amt in cat.get('amounts', {}).items():
+                            if cur not in remaining_by_currency:
+                                remaining_by_currency[cur] = Decimal('0')
+                            remaining_by_currency[cur] += amt
+
+                    remaining_str = " / ".join([format_amount(amt, cur, lang) for cur, amt in remaining_by_currency.items()])
                     if lang == 'ru':
-                        text += f"  📦 <i>Остальные траты ({remaining_count} {'категория' if remaining_count == 1 else 'категории' if remaining_count < 5 else 'категорий'}): {format_amount(remaining_sum, summary['currency'], lang)}</i>\n"
+                        text += f"  📦 <i>Остальные траты ({remaining_count} {'категория' if remaining_count == 1 else 'категории' if remaining_count < 5 else 'категорий'}): {remaining_str}</i>\n"
                     else:
-                        text += f"  📦 <i>Other expenses ({remaining_count} {'category' if remaining_count == 1 else 'categories'}): {format_amount(remaining_sum, summary['currency'], lang)}</i>\n"
+                        text += f"  📦 <i>Other expenses ({remaining_count} {'category' if remaining_count == 1 else 'categories'}): {remaining_str}</i>\n"
                 
                 text += "\n"
             
