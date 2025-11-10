@@ -826,38 +826,35 @@ async def get_today_summary(user_id: int) -> Dict[str, Any]:
             # For multiple currencies, show main currency total
             total = float(currency_totals.get(user_currency, 0))
         
-        # Group by category and currency
+        # Group by category with amounts per currency (consistent with get_expenses_summary)
         # Получаем язык пользователя для правильного отображения
         from bot.utils.language import get_user_language
         user_lang = await get_user_language(user_id)
-        
-        categories_by_currency = {}
+
+        categories = {}
         for expense in expenses:
             if expense.category:
                 currency = expense.currency or 'RUB'
-                if currency not in categories_by_currency:
-                    categories_by_currency[currency] = {}
-                
                 cat_key = expense.category.id
-                if cat_key not in categories_by_currency[currency]:
-                    categories_by_currency[currency][cat_key] = {
+
+                # Create category entry if doesn't exist
+                if cat_key not in categories:
+                    categories[cat_key] = {
+                        'id': cat_key,
                         'name': expense.category.get_display_name(user_lang),
                         'icon': expense.category.icon,
-                        'amount': Decimal('0'),
-                        'currency': currency
+                        'amounts': {}  # Amounts per currency
                     }
-                categories_by_currency[currency][cat_key]['amount'] += expense.amount
-        
-        # Combine categories from all currencies
-        all_categories = []
-        for currency, cats in categories_by_currency.items():
-            for cat in cats.values():
-                all_categories.append(cat)
-        
-        # Sort by amount (note: mixed currencies, but at least shows all)
+
+                # Add amount to currency
+                if currency not in categories[cat_key]['amounts']:
+                    categories[cat_key]['amounts'][currency] = Decimal('0')
+                categories[cat_key]['amounts'][currency] += expense.amount
+
+        # Convert to list and sort by total amount across all currencies
         sorted_categories = sorted(
-            all_categories,
-            key=lambda x: x['amount'],
+            categories.values(),
+            key=lambda x: sum(x['amounts'].values()),
             reverse=True
         )
         
@@ -915,37 +912,36 @@ async def get_date_summary(user_id: int, target_date: date) -> Dict[str, Any]:
             # For multiple currencies, show main currency total
             total = float(currency_totals.get(user_currency, 0))
         
-        # Group by category and currency
+        # Group by category with amounts per currency (consistent with get_expenses_summary)
         from bot.utils.language import get_user_language
         user_lang = await get_user_language(user_id)
-        
-        categories_by_currency = {}
+
+        categories = {}
         for expense in expenses:
             if expense.category:
                 currency = expense.currency or 'RUB'
-                if currency not in categories_by_currency:
-                    categories_by_currency[currency] = {}
-                
-                # Get localized category name
-                cat_name = get_category_display_name(expense.category, user_lang)
-                
-                if cat_name not in categories_by_currency[currency]:
-                    categories_by_currency[currency][cat_name] = Decimal('0')
-                categories_by_currency[currency][cat_name] += expense.amount
-        
-        # Format categories for each currency
-        sorted_categories = []
-        for currency in sorted(categories_by_currency.keys()):
-            for cat_name, amount in sorted(
-                categories_by_currency[currency].items(), 
-                key=lambda x: x[1], 
-                reverse=True
-            ):
-                sorted_categories.append({
-                    'name': cat_name,
-                    'amount': float(amount),
-                    'currency': currency
-                })
+                cat_key = expense.category.id
+
+                # Create category entry if doesn't exist
+                if cat_key not in categories:
+                    categories[cat_key] = {
+                        'id': cat_key,
+                        'name': expense.category.get_display_name(user_lang),
+                        'icon': expense.category.icon,
+                        'amounts': {}  # Amounts per currency
+                    }
+
+                # Add amount to currency
+                if currency not in categories[cat_key]['amounts']:
+                    categories[cat_key]['amounts'][currency] = Decimal('0')
+                categories[cat_key]['amounts'][currency] += expense.amount
+
+        # Convert to list and sort by total amount across all currencies
+        sorted_categories = sorted(
+            categories.values(),
+            key=lambda x: sum(x['amounts'].values()),
+            reverse=True
+        )
         
         return {
             'total': total,

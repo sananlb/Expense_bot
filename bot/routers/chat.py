@@ -299,26 +299,44 @@ async def get_simple_response(text: str, user_id: int) -> str:
             # Показать траты за месяц
             from datetime import date
             from ..services.expense import get_expenses_summary
+            from ..utils.language import format_amount, get_user_language
             today = date.today()
             start_date = today.replace(day=1)
-            
+
             summary = await get_expenses_summary(
                 user_id=user_id,
                 start_date=start_date,
                 end_date=today
             )
-            
+
             if not summary or summary.get('total', 0) == 0:
                 return "В этом месяце трат пока нет."
             else:
-                response = f"Траты за текущий месяц: {summary['total']:,.0f} ₽\n\n"
+                # Get user language
+                lang = await get_user_language(user_id)
+
+                # Show total per currency
+                response = "Траты за текущий месяц:\n"
+                currency_totals = summary.get('currency_totals', {})
+                for currency, amount in currency_totals.items():
+                    response += f"  {format_amount(amount, currency, lang)}\n"
+
+                response += "\n"
+
+                # Show top 5 categories with all currencies
                 for cat in summary.get('by_category', [])[:5]:
-                    response += f"{cat.get('icon', '')} {cat['name']}: {cat['total']:,.0f} ₽\n"
-                
+                    icon = cat.get('icon', '')
+                    name = cat.get('name', '')
+                    # Format amounts for all currencies
+                    amounts = cat.get('amounts', {})
+                    amounts_str = " / ".join([format_amount(amt, cur, lang) for cur, amt in amounts.items()])
+                    response += f"{icon} {name}: {amounts_str}\n"
+
                 # Добавим информацию о доходах если есть
                 if summary.get('income_total', 0) > 0:
-                    response += f"\nДоходы: {summary['income_total']:,.0f} ₽"
-                    
+                    income_currency = summary.get('currency', 'RUB')
+                    response += f"\nДоходы: {format_amount(summary['income_total'], income_currency, lang)}"
+
                 return response
         else:
             return "Я могу показать траты за сегодня или за текущий месяц. Просто спросите!"
