@@ -272,6 +272,7 @@ def translate_category_name(category_name: str, to_lang: str = 'en') -> str:
         'Образование': 'Education',
         'Подарки': 'Gifts',
         'Путешествия': 'Travel',
+        'Коммуналка и подписки': 'Utilities and Subscriptions',
         'Коммунальные услуги и подписки': 'Utilities and Subscriptions',
         'Прочие расходы': 'Other Expenses',
         # Дополнительные категории
@@ -312,7 +313,7 @@ def translate_category_name(category_name: str, to_lang: str = 'en') -> str:
         'Education': 'Образование',
         'Gifts': 'Подарки',
         'Travel': 'Путешествия',
-        'Utilities and Subscriptions': 'Коммунальные услуги и подписки',
+        'Utilities and Subscriptions': 'Коммуналка и подписки',
         'Other Expenses': 'Прочие расходы',
         # Дополнительные обратные переводы
         'Food': 'Еда',

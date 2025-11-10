@@ -133,7 +133,7 @@ UNIFIED_CATEGORIES = [
     {
         'id': 'subscriptions',
         'icon': '📱',
-        'name_ru': 'Коммунальные услуги и подписки',
+        'name_ru': 'Коммуналка и подписки',
         'name_en': 'Utilities and Subscriptions',
         'keywords_ru': ['подписка', 'интернет', 'телефон', 'связь', 'коммуналка', 'жкх', 'электричество', 'вода', 'газ', 'netflix', 'spotify', 'яндекс', 'облако', 'хостинг'],
         'keywords_en': ['subscription', 'internet', 'phone', 'mobile', 'utilities', 'electricity', 'water', 'gas', 'netflix', 'spotify', 'cloud', 'hosting']
