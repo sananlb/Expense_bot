@@ -167,6 +167,15 @@ CATEGORY_KEYWORDS_EXACT = {
         'subscriptions': ['подписка', 'netflix', 'spotify', 'youtube', 'сервис', 'абонемент'],
         'brands': ['мтс', 'билайн', 'мегафон', 'теле2', 'yota', 'ростелеком'],
         'keywords': ['коммуналка', 'связь', 'подписка', 'услуги']
+    },
+    'накопления': {
+        'savings': ['накопления', 'сбережения', 'копилка', 'откладываю', 'отложил', 'копить',
+                   'сберегательный', 'накопительный', 'кубышка', 'на пенсию', 'пенсионный'],
+        'investments': ['инвестиции', 'инвестировал', 'инвестирую', 'вложил', 'вкладываю',
+                       'портфель', 'брокер', 'акции', 'облигации', 'фонд', 'етф', 'etf', 'пиф'],
+        'deposits': ['вклад', 'депозит', 'банк', 'сбербанк', 'втб', 'тинькофф', 'альфа'],
+        'accounts': ['иис', 'брокерский счет', 'накопительный счет', 'пенсионный фонд'],
+        'keywords': ['накопления', 'инвестиции', 'вклад', 'сбережения', 'копить']
     }
 }
 
@@ -262,6 +271,14 @@ CATEGORY_KEYWORDS_EN = {
         'communication': ['internet', 'phone', 'mobile', 'plan', 'topup'],
         'subscriptions': ['subscription', 'netflix', 'spotify', 'youtube', 'service'],
         'keywords': ['utilities', 'bills', 'subscription', 'services']
+    },
+    'savings': {
+        'savings': ['savings', 'save', 'saving', 'nest egg', 'rainy day fund', 'emergency fund'],
+        'investments': ['investment', 'invested', 'investing', 'invest', 'portfolio', 'broker',
+                       'stocks', 'bonds', 'fund', 'mutual fund', 'etf', 'index fund'],
+        'deposits': ['deposit', 'bank deposit', 'term deposit', 'cd', 'certificate of deposit'],
+        'accounts': ['ira', '401k', 'retirement', 'pension', 'brokerage account', 'saving account'],
+        'keywords': ['savings', 'investment', 'deposit', 'retirement', 'pension']
     },
     'other expenses': {
         'keywords': ['other', 'misc', 'miscellaneous', 'various']

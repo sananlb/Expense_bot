@@ -602,10 +602,10 @@ def create_default_categories_sync(user_id: int) -> bool:
     if created:
         logger.info(f"Created new profile for user {user_id}")
 
-    # Проверяем количество категорий - должно быть минимум 16 для считать инициализированным
+    # Проверяем количество категорий - должно быть минимум 17 для считать инициализированным
     # Это защищает от race condition когда создалась только "Прочие расходы"
     existing_count = ExpenseCategory.objects.filter(profile=profile).count()
-    if existing_count >= 16:
+    if existing_count >= 17:
         logger.debug(f"User {user_id} already has {existing_count} categories, skipping default creation")
         return False
 
@@ -629,6 +629,7 @@ def create_default_categories_sync(user_id: int) -> bool:
                 ('Gifts', '🎁'),
                 ('Travel', '✈️'),
                 ('Utilities and Subscriptions', '📱'),
+                ('Savings', '💎'),
                 ('Other Expenses', '💰')
             ]
         else:
