@@ -6,7 +6,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta, date
 from decimal import Decimal
 from asgiref.sync import sync_to_async
-from expenses.models import Expense, Profile, Income, IncomeCategory
+from expenses.models import Expense, Profile, Income, IncomeCategory, ExpenseCategory
 from django.db.models import Sum, Avg, Max, Min, Count, Q
 from collections import defaultdict
 from bot.utils.category_helpers import get_category_display_name
@@ -789,9 +789,6 @@ class ExpenseFunctions:
                 # Если период не распознан, используем последние 30 дней
                 end_date = date.today()
                 start_date = end_date - timedelta(days=30)
-
-            from expenses.models import ExpenseCategory
-            from django.db.models import Q
 
             logger.info(f"get_category_total: searching for category='{category}', user={user_id}, period={period}")
             logger.info(f"get_category_total: date range {start_date} to {end_date}")
