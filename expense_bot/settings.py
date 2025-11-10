@@ -375,6 +375,11 @@ try:
         'task': 'expense_bot.celery_tasks.collect_daily_analytics',
         'schedule': crontab(hour=2, minute=0),  # 2 AM daily
         'options': {'queue': 'analytics'}
+    },
+    'send-expense-reminders': {
+        'task': 'expenses.tasks.send_expense_reminders',
+        'schedule': crontab(hour=20, minute=0),  # 8 PM daily
+        'options': {'queue': 'notifications'}
     }
 }
 except ImportError:

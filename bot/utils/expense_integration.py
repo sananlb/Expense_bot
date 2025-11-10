@@ -142,7 +142,11 @@ class ExpenseParserService:
                 ai_processed=parsed.ai_processed,
                 ai_confidence=parsed.confidence
             )
-            
+
+            # Сбрасываем флаг напоминания о внесении трат
+            from expenses.tasks import clear_expense_reminder
+            clear_expense_reminder(user_id)
+
             return expense
         
         except (Profile.DoesNotExist, Exception) as e:

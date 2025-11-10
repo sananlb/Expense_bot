@@ -274,7 +274,16 @@ def translate_category_name(category_name: str, to_lang: str = 'en') -> str:
         'Путешествия': 'Travel',
         'Коммуналка и подписки': 'Utilities and Subscriptions',
         'Коммунальные услуги и подписки': 'Utilities and Subscriptions',
+        'Накопления': 'Savings',
         'Прочие расходы': 'Other Expenses',
+        'Зарплата': 'Salary',
+        'Премии и бонусы': 'Bonuses',
+        'Фриланс': 'Freelance',
+        'Инвестиции': 'Investments',
+        'Проценты по вкладам': 'Bank Interest',
+        'Аренда недвижимости': 'Rent Income',
+        'Возвраты и компенсации': 'Refunds',
+        'Прочие доходы': 'Other Income',
         # Дополнительные категории
         'Еда': 'Food',
         'Дом': 'Home',
@@ -314,7 +323,16 @@ def translate_category_name(category_name: str, to_lang: str = 'en') -> str:
         'Gifts': 'Подарки',
         'Travel': 'Путешествия',
         'Utilities and Subscriptions': 'Коммуналка и подписки',
+        'Savings': 'Накопления',
         'Other Expenses': 'Прочие расходы',
+        'Salary': 'Зарплата',
+        'Bonuses': 'Премии и бонусы',
+        'Freelance': 'Фриланс',
+        'Investments': 'Инвестиции',
+        'Bank Interest': 'Проценты по вкладам',
+        'Rent Income': 'Аренда недвижимости',
+        'Refunds': 'Возвраты и компенсации',
+        'Other Income': 'Прочие доходы',
         # Дополнительные обратные переводы
         'Food': 'Еда',
         'Home': 'Дом',
@@ -337,8 +355,7 @@ def translate_category_name(category_name: str, to_lang: str = 'en') -> str:
         'Utilities': 'Коммуналка',
         'Tech': 'Техника',
         'Documents': 'Документы',
-        'Other': 'Прочее',
-        'Groceries': 'Продукты'
+        'Other': 'Прочее'
     }
     
     # Извлекаем эмодзи и текст из названия
@@ -359,6 +376,8 @@ def translate_category_name(category_name: str, to_lang: str = 'en') -> str:
         r'\u2300-\u23FF'          # Технические символы
         r'\u2B00-\u2BFF'          # Стрелки и символы
         r'\u26A0-\u26FF'          # Предупреждающие знаки
+        r'\uFE00-\uFE0F'          # Вариационные селекторы
+        r'\U000E0100-\U000E01EF'  # Доп. вариационные селекторы
         r']+'
     )
     match = emoji_pattern.match(category_name)

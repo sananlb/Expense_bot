@@ -341,3 +341,166 @@ def check_subscription_refunds():
         logger.info(f"[COMMISSION] Refunded {refunded_count} commissions due to subscription cancellations")
 
     return {'refunded': refunded_count, 'timestamp': now.isoformat()}
+
+
+@shared_task
+def send_expense_reminders():
+    """
+    Отправка напоминаний о внесении финансовых операций пользователям.
+
+    Логика работы:
+    1. Новый пользователь зарегистрировался и не внес ни одной операции
+       → На следующий день в 20:00 отправляется напоминание
+       → Флаг "напоминание отправлено" ставится БЕЗ срока действия
+
+    2. Пользователь не вносил операции (траты или доходы) больше 24 часов
+       → В 20:00 отправляется напоминание
+       → Флаг "напоминание отправлено" ставится БЕЗ срока действия
+
+    3. После отправки напоминания:
+       → Если пользователь НЕ внес операцию - больше НЕ напоминаем (флаг остается навсегда)
+       → Если пользователь ВНЕС операцию - флаг сбрасывается, логика повторяется с шага 2
+
+    Ключевые моменты:
+    - Напоминание отправляется ОДИН РАЗ до внесения операции
+    - Флаг в Redis хранится бессрочно (timeout=None)
+    - Единственный способ сбросить флаг - внести любую операцию (трату или доход)
+    - После внесения операции через 24ч бездействия придет новое напоминание
+    """
+    from django.core.cache import cache
+    from expenses.models import Profile, Expense, Income
+
+    now = timezone.now()
+    yesterday = now - timedelta(hours=24)
+
+    sent_count = 0
+    skipped_count = 0
+
+    # Получаем всех активных пользователей
+    active_profiles = Profile.objects.filter(is_active=True)
+
+    for profile in active_profiles:
+        try:
+            # Ключ в Redis для отслеживания отправленного напоминания
+            reminder_key = f"expense_reminder_sent:{profile.telegram_id}"
+
+            # Проверяем, было ли уже отправлено напоминание
+            if cache.get(reminder_key):
+                skipped_count += 1
+                continue
+
+            # Получаем последнюю трату пользователя
+            last_expense = Expense.objects.filter(
+                profile=profile
+            ).order_by('-created_at').first()
+
+            # Получаем последний доход пользователя
+            last_income = Income.objects.filter(
+                profile=profile
+            ).order_by('-created_at').first()
+
+            # Определяем последнюю финансовую операцию (трата или доход)
+            last_operation = None
+            last_operation_type = None
+
+            if last_expense and last_income:
+                # Есть и траты, и доходы - берем самое свежее
+                if last_expense.created_at > last_income.created_at:
+                    last_operation = last_expense
+                    last_operation_type = 'expense'
+                else:
+                    last_operation = last_income
+                    last_operation_type = 'income'
+            elif last_expense:
+                last_operation = last_expense
+                last_operation_type = 'expense'
+            elif last_income:
+                last_operation = last_income
+                last_operation_type = 'income'
+
+            # Условие для отправки напоминания
+            should_remind = False
+
+            if not last_operation:
+                # Новый пользователь без операций
+                # Проверяем, прошел ли хотя бы день с регистрации
+                if profile.created_at and profile.created_at < yesterday:
+                    should_remind = True
+                    logger.info(f"[REMINDER] New user {profile.telegram_id} needs reminder (no operations)")
+            else:
+                # Пользователь с операциями - проверяем давность последней операции
+                if last_operation.created_at < yesterday:
+                    should_remind = True
+                    logger.info(
+                        f"[REMINDER] User {profile.telegram_id} needs reminder "
+                        f"(last {last_operation_type}: {last_operation.created_at})"
+                    )
+
+            if should_remind:
+                # Получаем язык пользователя
+                lang = profile.language_code or 'ru'
+
+                # Отправляем напоминание
+                from bot.telegram_utils import send_telegram_message
+                from bot.texts import get_text
+
+                message = get_text('expense_reminder', lang)
+
+                try:
+                    send_telegram_message(
+                        chat_id=profile.telegram_id,
+                        text=message,
+                        parse_mode='HTML'
+                    )
+
+                    # Устанавливаем флаг в Redis БЕЗ ограничения по времени
+                    # Флаг будет сброшен только при создании новой операции
+                    cache.set(reminder_key, True, timeout=None)  # Бессрочно
+
+                    sent_count += 1
+                    logger.info(f"[REMINDER] Sent reminder to user {profile.telegram_id}")
+
+                    # Небольшая задержка между отправками
+                    time.sleep(0.05)
+
+                except Exception as e:
+                    logger.error(f"[REMINDER] Failed to send reminder to {profile.telegram_id}: {e}")
+            else:
+                skipped_count += 1
+
+        except Exception as e:
+            logger.error(f"[REMINDER] Error processing user {profile.telegram_id}: {e}")
+            continue
+
+    logger.info(
+        f"[REMINDER] Completed: {sent_count} reminders sent, {skipped_count} users skipped"
+    )
+
+    return {
+        'sent': sent_count,
+        'skipped': skipped_count,
+        'timestamp': now.isoformat()
+    }
+
+
+def clear_expense_reminder(telegram_id: int):
+    """
+    Сброс флага напоминания при создании новой финансовой операции (траты или дохода).
+
+    После сброса флага пользователь снова может получить напоминание через 24 часа
+    бездействия. Это единственный способ сбросить флаг - внести операцию.
+
+    Вызывается из:
+    - create_expense() - при создании траты
+    - create_income() - при создании дохода
+    - recurring payments processor - при автоматических операциях
+
+    Args:
+        telegram_id: ID пользователя в Telegram
+    """
+    from django.core.cache import cache
+
+    reminder_key = f"expense_reminder_sent:{telegram_id}"
+    cache.delete(reminder_key)
+
+    logger.debug(f"[REMINDER] Cleared reminder flag for user {telegram_id}")

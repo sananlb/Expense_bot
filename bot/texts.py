@@ -65,6 +65,16 @@ TEXTS = {
         'expense_deleted': '❌ Трата удалена',
         'expense_updated': '✏️ Трата обновлена',
         'expense_not_found': '❌ Трата не найдена',
+
+        # Напоминания
+        'expense_reminder': '''📝 <b>Напоминание о внесении трат</b>
+
+Привет! Давно не видел ваших трат.
+
+Не забудьте записать расходы за сегодня, чтобы вести точный учёт бюджета 💰
+
+Просто отправьте сообщение в формате:
+<i>"Кофе 200"</i> или <i>"Дизель 4095 АЗС"</i>''',
         
         # Категории
         'category': 'Категория',
@@ -904,7 +914,17 @@ PDF отчеты с графиками, экспорт в CSV и Excel дост�
         'expense_deleted': '❌ Expense deleted',
         'expense_updated': '✏️ Expense updated',
         'expense_not_found': '❌ Expense not found',
-        
+
+        # Reminders
+        'expense_reminder': '''📝 <b>Expense Reminder</b>
+
+Hi! Haven't seen your expenses in a while.
+
+Don't forget to record today's expenses to keep accurate track of your budget 💰
+
+Just send a message in the format:
+<i>"Coffee 200"</i> or <i>"Diesel 4095 gas station"</i>''',
+
         # Categories
         'category': 'Category',
         'categories': 'Categories',
