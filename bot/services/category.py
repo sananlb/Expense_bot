@@ -725,7 +725,6 @@ def create_default_income_categories(user_id: int) -> bool:
                 ('🏦 Bank Interest', '🏦'),
                 ('🏠 Rent Income', '🏠'),
                 ('💸 Refunds', '💸'),
-                ('💳 Cashback', '💳'),
                 ('🎉 Gifts', '🎉'),
                 ('💰 Other Income', '💰'),
             ]

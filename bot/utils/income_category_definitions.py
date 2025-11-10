@@ -71,16 +71,9 @@ INCOME_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'refund': {
         'name_ru': '💸 Возвраты и компенсации',
         'name_en': '💸 Refunds',
-        'keywords': ['возврат', 'компенсация', 'refund', 'reimbursement', 'compensation'],
-        'aliases': ['возврат', 'refund', 'reimbursement', 'compensation'],
+        'keywords': ['возврат', 'компенсация', 'refund', 'reimbursement', 'compensation', 'кешбек', 'кешбэк', 'cashback', 'cash back', 'rebate'],
+        'aliases': ['возврат', 'refund', 'reimbursement', 'compensation', 'cashback', 'cash back', 'кешбэк', 'кешбек'],
         'income_type': 'refund',
-    },
-    'cashback': {
-        'name_ru': '💳 Кешбэк',
-        'name_en': '💳 Cashback',
-        'keywords': ['кешбек', 'кешбэк', 'cashback', 'cash back', 'rebate'],
-        'aliases': ['cashback', 'cash back', 'кешбэк', 'кешбек'],
-        'income_type': 'cashback',
     },
     'gift': {
         'name_ru': '🎉 Подарки',
