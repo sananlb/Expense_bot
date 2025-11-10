@@ -1089,7 +1089,7 @@ DEFAULT_CATEGORIES = [
     ('Образование', '📚'),
     ('Подарки', '🎁'),
     ('Путешествия', '✈️'),
-    ('Коммунальные услуги и подписки', '📱'),
+    ('Коммуналка и подписки', '📱'),
     ('Накопления', '💎'),
     ('Прочие расходы', '💰')
 ]
@@ -1422,7 +1422,7 @@ CATEGORY_KEYWORDS = {
         'travel', 'trip', 'vacation', 'flight', 'plane', 'airport', 'hotel',
         'hostel', 'accommodation', 'tour', 'excursion', 'guide', 'visa', 'passport'
     ],
-    'Коммунальные услуги и подписки': [
+    'Коммуналка и подписки': [
         'интернет', 'мобильная связь', 'телефон', 'мтс', 'билайн', 'мегафон', 'теле2',
         'ростелеком', 'электричество', 'газ', 'вода', 'отопление', 'netflix', 'spotify',
         'youtube', 'подписка', 'apple', 'google', 'яндекс плюс', 'кинопоиск', 'иви',
@@ -1439,9 +1439,11 @@ CATEGORY_KEYWORDS = {
         'инвестировал', 'инвестирую', 'вложил', 'вкладываю', 'портфель',
         'акции', 'облигации', 'фонд', 'етф', 'etf', 'пиф', 'иис',
         # English keywords
-        'savings', 'investment', 'invested', 'deposit', 'broker', 'pension',
-        'retirement', 'saving account', 'brokerage', 'investing', 'portfolio',
-        'stocks', 'bonds', 'fund', 'mutual fund', 'ira', '401k', 'nest egg'
+        'savings', 'save', 'saving', 'nest egg', 'rainy day fund', 'emergency fund',
+        'investment', 'invested', 'investing', 'portfolio', 'broker', 'brokerage', 'brokerage account',
+        'stocks', 'bonds', 'fund', 'mutual fund', 'etf', 'index fund',
+        'deposit', 'bank deposit', 'term deposit', 'saving account',
+        'pension', 'retirement', 'ira', '401k'
     ]
 }
 
