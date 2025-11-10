@@ -18,6 +18,7 @@ from django.conf import settings
 from django.db.models import Sum, Count, Q
 from dateutil.relativedelta import relativedelta
 from bot.utils.formatters import truncate_text
+from bot.utils.language import get_text
 
 from expenses.models import Expense, ExpenseCategory, Profile, Cashback, Income, IncomeCategory, UserSettings
 
@@ -218,7 +219,7 @@ class PDFReportService:
                         if cat_name:
                             cat_name_truncated = truncate_text(cat_name, max_length=25, suffix="...")
                         else:
-                            cat_name_truncated = 'Без категории'
+                            cat_name_truncated = get_text('no_category', lang)
 
                         top_categories.append({
                             'name': cat_name_truncated,

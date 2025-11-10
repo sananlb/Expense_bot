@@ -19,7 +19,7 @@ from dateutil import parser
 from calendar import monthrange
 import re
 from bot.utils.category_helpers import get_category_display_name
-from ..utils.language import get_user_language, format_amount
+from ..utils.language import get_user_language, format_amount, get_text
 
 logger = logging.getLogger(__name__)
 
@@ -191,8 +191,8 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
                             lang = getattr(profile, 'language_code', 'ru') if profile else 'ru'
                         except:
                             lang = 'ru'
-                            
-                        category_name = get_category_display_name(exp.category, lang) if exp.category else 'Без категории'
+
+                        category_name = get_category_display_name(exp.category, lang) if exp.category else get_text('no_category', lang)
                         recent_expenses.append({
                             'date': exp.expense_date.isoformat(),
                             'amount': float(exp.amount),

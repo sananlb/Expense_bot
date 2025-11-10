@@ -9,6 +9,7 @@ from django.conf import settings
 from datetime import datetime, timedelta
 from django.core.cache import cache
 import os
+from bot.utils.language import get_text
 
 logger = logging.getLogger(__name__)
 
@@ -183,7 +184,7 @@ async def send_daily_report():
     )()
     
     categories_text = "\n".join([
-        f"  • {escape_markdown_v2(cat['category__name'] or 'Без категории')}: "
+        f"  • {escape_markdown_v2(cat['category__name'] or get_text('no_category', 'ru'))}: "
         f"{escape_markdown_v2(str(round(cat['total'], 2)))} \\({cat['count']} записей\\)"
         for cat in top_categories
     ])

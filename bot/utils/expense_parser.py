@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 from datetime import datetime, date, time
 from dateutil import parser as date_parser
 from asgiref.sync import sync_to_async
+from bot.utils.language import get_text
 
 logger = logging.getLogger(__name__)
 
@@ -963,7 +964,7 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
         income_type = get_income_type(category_key)
 
     # Формируем описание (используем текст без даты и без суммы)
-    description = text_without_amount if text_without_amount else (text_without_date if text_without_date else 'Доход')
+    description = text_without_amount if text_without_amount else (text_without_date if text_without_date else get_text('income', lang_code))
 
     # Убираем знак "+" из описания
     if description:
@@ -992,7 +993,7 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
                     'refund': 'Возврат',
                     'cashback': 'Кешбэк',
                     'gift': 'Подарок',
-                    'other': 'Доход',
+                    'other': get_text('income', 'ru'),
                 },
                 'en': {
                     'salary': 'Salary',
@@ -1009,7 +1010,7 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
             localized_map = type_descriptions['en'] if lang_code == 'en' else type_descriptions['ru']
             description = localized_map.get(income_type, localized_map['other'])
         else:
-            description = 'Income' if lang_code == 'en' else 'Доход'
+            description = get_text('income', lang_code)
     
     # Определяем валюту
     user_currency = (profile.currency if profile else 'RUB') or 'RUB'

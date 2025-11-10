@@ -11,6 +11,7 @@ from aiogram.fsm.storage.base import StorageKey
 from expenses.models import Profile, Expense
 from ..services.expense import get_expenses_summary
 from ..utils import format_amount, get_month_name
+from bot.utils.language import get_text
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +60,8 @@ class NotificationService:
 
                 if insight:
                     # Формируем текст инсайта и добавляем к caption
-                    insight_text = self._format_insight_text(insight, report_month, report_year)
+                    user_lang = profile.language_code or 'ru'
+                    insight_text = self._format_insight_text(insight, report_month, report_year, user_lang)
                     full_caption = f"{caption}\n\n{insight_text}\n\n💡 <i>Выберите формат отчета для скачивания:</i>"
 
                     # Telegram ограничивает текстовые сообщения до 4096 символов
@@ -105,7 +107,7 @@ class NotificationService:
         except Exception as e:
             logger.error(f"Error sending monthly report notification to user {user_id}: {e}")
 
-    def _format_insight_text(self, insight, month: int, year: int) -> str:
+    def _format_insight_text(self, insight, month: int, year: int, lang: str = 'ru') -> str:
         """Format insight for display in message"""
         text = ""
 
@@ -128,7 +130,7 @@ class NotificationService:
             for cat in insight.top_categories:
                 percentage = cat.get('percentage', 0)
                 amount = cat.get('amount', 0)
-                category_name = cat.get('category', 'Без категории')
+                category_name = cat.get('category', get_text('no_category', lang))
 
                 # Показываем только категории с ненулевыми расходами
                 if amount > 0:

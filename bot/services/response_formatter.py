@@ -310,10 +310,11 @@ def format_function_result(func_name: str, result: Dict) -> str:
         )
 
     if func_name == 'get_max_single_expense':
+        lang = _get_user_language(result)
         date_str = result.get('date', '')
         time_str = result.get('time')
         amount = result.get('amount', 0)
-        category = result.get('category', 'Без категории')
+        category = result.get('category', get_text('no_category', lang))
         description = result.get('description', '')
         lines = ["💸 Самая большая трата"]
         lines.append(f"Дата: {date_str}{(' ' + time_str) if time_str else ''}")
@@ -324,10 +325,11 @@ def format_function_result(func_name: str, result: Dict) -> str:
         return "\n".join(lines)
 
     if func_name == 'get_max_single_income':
+        lang = _get_user_language(result)
         inc = result.get('income') or {}
         date_str = inc.get('date', '')
         amount = inc.get('amount', 0)
-        category = inc.get('category', 'Без категории')
+        category = inc.get('category', get_text('no_category', lang))
         description = inc.get('description', '')
         lines = ["💰 Самый большой доход"]
         lines.append(f"Дата: {date_str}")
@@ -549,7 +551,7 @@ def format_function_result(func_name: str, result: Dict) -> str:
 
         if group_by == 'category':
             for it in items[:20]:
-                name = it.get('category') or 'Без категории'
+                name = it.get('category') or get_text('no_category', lang)
                 total = it.get('total') or it.get('sum') or it.get('amount') or 0
                 cnt = it.get('count', '')
                 avg = it.get('average')
@@ -576,7 +578,7 @@ def format_function_result(func_name: str, result: Dict) -> str:
             for it in items[:20]:
                 d = it.get('date', '')
                 amount = it.get('amount', 0)
-                cat = it.get('category') or 'Без категории'
+                cat = it.get('category') or get_text('no_category', lang)
                 desc = (it.get('description') or '')[:60]
                 lines.append(f"• {d} — {float(amount):,.0f} ₽ — {cat} — {desc}")
 
@@ -625,7 +627,7 @@ def _format_analytics_query_result(result: Dict) -> str:
             lines.append(f"Дата: {item.get('date', 'N/A')}")
             lines.append(f"Сумма: {item.get('amount', 0):,.0f} ₽")
             if 'category' in item:
-                lines.append(f"Категория: {item.get('category', 'Без категории')}")
+                lines.append(f"Категория: {item.get('category', get_text('no_category', lang))}")
             if 'description' in item:
                 lines.append(f"Описание: {item.get('description', '')}")
         elif entity == 'incomes':
@@ -633,7 +635,7 @@ def _format_analytics_query_result(result: Dict) -> str:
             lines.append(f"Дата: {item.get('date', 'N/A')}")
             lines.append(f"Сумма: {item.get('amount', 0):,.0f} ₽")
             if 'category' in item:
-                lines.append(f"Категория: {item.get('category', 'Без категории')}")
+                lines.append(f"Категория: {item.get('category', get_text('no_category', lang))}")
             if 'description' in item:
                 lines.append(f"Описание: {item.get('description', '')}")
         return "\n".join(lines)
@@ -687,7 +689,7 @@ def _format_analytics_query_result(result: Dict) -> str:
     elif group_by == 'category':
         lines.append("📦 Результаты по категориям:\n")
         for item in results[:20]:
-            category = item.get('category', 'Без категории')
+            category = item.get('category', get_text('no_category', lang))
             total = item.get('total', 0)
             count = item.get('count', 0)
             lines.append(f"• {category}: {total:,.0f} ₽ ({count} шт.)")

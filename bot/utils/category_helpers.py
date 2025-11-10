@@ -3,6 +3,7 @@ Helper функции для работы с мультиязычными кат
 """
 from typing import Optional
 from expenses.models import ExpenseCategory
+from bot.utils.language import get_text
 
 
 def get_category_display_name(category, language_code: str = 'ru') -> str:
@@ -24,23 +25,23 @@ def get_category_display_name(category, language_code: str = 'ru') -> str:
         if isinstance(category, ExpenseCategory):
             # Используем новый метод для объектов категорий
             result = category.get_display_name(language_code)
-            return result if result else 'Без категории'
+            return result if result else get_text('no_category', language_code)
         elif isinstance(category, str):
             # Для строк возвращаем как есть (обратная совместимость)
-            return category if category else 'Без категории'
+            return category if category else get_text('no_category', language_code)
         elif hasattr(category, 'name'):
             # Если это объект с полем name но не ExpenseCategory
             # (например, IncomeCategory)
             name = getattr(category, 'name', None)
-            return name if name else 'Без категории'
+            return name if name else get_text('no_category', language_code)
         else:
-            return str(category) if category else 'Без категории'
+            return str(category) if category else get_text('no_category', language_code)
     except Exception as e:
         # В случае любых проблем возвращаем fallback
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Error in get_category_display_name: {e}")
-        return 'Без категории'
+        return get_text('no_category', language_code)
 
 
 def get_category_name_without_emoji(category, language_code: str = 'ru') -> str:
@@ -60,7 +61,7 @@ def get_category_name_without_emoji(category, language_code: str = 'ru') -> str:
         # Получаем полное название
         full_name = get_category_display_name(category, language_code)
         if not full_name:
-            return 'Без категории'
+            return get_text('no_category', language_code)
         
         # Удаляем эмодзи
         emoji_pattern = re.compile(
@@ -75,12 +76,12 @@ def get_category_name_without_emoji(category, language_code: str = 'ru') -> str:
         )
         
         result = emoji_pattern.sub('', full_name).strip()
-        return result if result else 'Без категории'
+        return result if result else get_text('no_category', language_code)
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
         logger.error(f"Error in get_category_name_without_emoji: {e}")
-        return 'Без категории'
+        return get_text('no_category', language_code)
 
 
 def get_category_emoji(category) -> Optional[str]:

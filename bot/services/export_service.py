@@ -26,6 +26,7 @@ except ImportError:
     RichText = Paragraph = ParagraphProperties = CharacterProperties = None
 
 from expenses.models import Expense, Income, Cashback, Profile
+from bot.utils.language import get_text
 
 logger = logging.getLogger(__name__)
 
@@ -142,7 +143,8 @@ class ExportService:
     @staticmethod
     def prepare_operations_data(
         expenses: List[Expense],
-        incomes: List[Income]
+        incomes: List[Income],
+        lang: str = 'ru'
     ) -> List[Dict[str, Any]]:
         """
         Подготовить данные операций для экспорта.
@@ -150,6 +152,7 @@ class ExportService:
         Args:
             expenses: Список трат
             incomes: Список доходов
+            lang: Язык для категорий (ru/en)
 
         Returns:
             Список словарей с данными операций, отсортированный по дате (от новых к старым)
@@ -164,7 +167,7 @@ class ExportService:
                 'type': 'expense',
                 'amount': -float(expense.amount),  # Отрицательное для трат
                 'currency': expense.currency,
-                'category': expense.category.name if expense.category else '',
+                'category': expense.category.get_display_name(lang) if expense.category else get_text('no_category', lang),
                 'category_id': expense.category_id,  # ID категории для расчета кешбэка
                 'description': expense.description or '',
                 'object': expense  # Сохраняем объект для доступа к дополнительным полям
@@ -178,7 +181,7 @@ class ExportService:
                 'type': 'income',
                 'amount': float(income.amount),  # Положительное для доходов
                 'currency': income.currency,
-                'category': income.category.name if income.category else '',
+                'category': income.category.get_display_name(lang) if income.category else get_text('no_category', lang),
                 'category_id': income.category_id,  # ID категории
                 'description': income.description or '',
                 'object': income  # Сохраняем объект для доступа к дополнительным полям
@@ -214,7 +217,7 @@ class ExportService:
         Returns:
             Байты CSV файла (UTF-8 с BOM для корректного открытия в Excel)
         """
-        operations = ExportService.prepare_operations_data(expenses, incomes)
+        operations = ExportService.prepare_operations_data(expenses, incomes, lang)
 
         # Рассчитываем кешбэк для каждой траты
         expense_cashbacks = {}  # {expense_id: cashback_amount}
@@ -255,9 +258,7 @@ class ExportService:
 
         # Данные
         for op in operations:
-            type_text = 'Income' if op['type'] == 'income' else 'Expense'
-            if lang == 'ru':
-                type_text = 'Доход' if op['type'] == 'income' else 'Трата'
+            type_text = get_text('income', lang) if op['type'] == 'income' else get_text('expense', lang)
 
             # Санитизируем описание и категорию - убираем переносы строк и лишние пробелы
             description = str(op['description'] or '')
@@ -323,7 +324,7 @@ class ExportService:
         Returns:
             BytesIO объект с XLSX файлом
         """
-        operations = ExportService.prepare_operations_data(expenses, incomes)
+        operations = ExportService.prepare_operations_data(expenses, incomes, lang)
         category_cashbacks = ExportService.calculate_category_cashbacks(expenses, user_id, month, household_mode)
 
         # Рассчитываем кешбэк для каждой траты
@@ -415,9 +416,7 @@ class ExportService:
         total_cashback_by_currency = {}  # Для подсчета общего кешбэка по валютам
 
         for op in operations:
-            type_text = 'Доход' if op['type'] == 'income' else 'Трата'
-            if lang == 'en':
-                type_text = 'Income' if op['type'] == 'income' else 'Expense'
+            type_text = get_text('income', lang) if op['type'] == 'income' else get_text('expense', lang)
 
             # Санитизация
             description = str(op['description'] or '').replace('\n', ' ').replace('\r', ' ').strip()
@@ -610,7 +609,7 @@ class ExportService:
         category_stats = {}
         for op in operations:
             if op['type'] == 'expense':
-                category_name = op['category'] or ('Без категории' if lang == 'ru' else 'No category')
+                category_name = op['category'] or get_text('no_category', lang)
                 currency = op['currency']
                 amount = abs(op['amount'])
 
@@ -880,7 +879,7 @@ class ExportService:
 
             for op in operations:
                 if op['type'] == 'expense':
-                    category = op['category'] or ('Без категории' if lang == 'ru' else 'No category')
+                    category = op['category'] or get_text('no_category', lang)
                     all_categories.add(category)
                     category_to_id[category] = op.get('category_id')
 
@@ -1073,7 +1072,7 @@ class ExportService:
         income_category_stats = {}
         for op in operations:
             if op['type'] == 'income':
-                category_name = op['category'] or ('Без категории' if lang == 'ru' else 'No category')
+                category_name = op['category'] or get_text('no_category', lang)
                 currency = op['currency']
                 amount = abs(op['amount'])
 
@@ -1278,7 +1277,7 @@ class ExportService:
 
             for op in operations:
                 if op['type'] == 'income':
-                    category = op['category'] or ('Без категории' if lang == 'ru' else 'No category')
+                    category = op['category'] or get_text('no_category', lang)
                     income_categories.add(category)
 
                     day = op['date'].day

@@ -742,7 +742,7 @@ def get_today_incomes_summary(user_id: int) -> Dict:
                 'id': inc.id,
                 'amount': float(inc.amount),
                 'currency': inc.currency,
-                'category': get_category_display_name(inc.category, user_lang) if inc.category else f"❓ {get_text(user_lang, 'no_category')}",
+                'category': get_category_display_name(inc.category, user_lang) if inc.category else f"❓ {get_text('no_category', user_lang)}",
                 'description': inc.description,
                 'time': inc.income_time.strftime('%H:%M')
             }

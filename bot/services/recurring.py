@@ -194,6 +194,10 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
                     income_type='other'
                 )
                 operation_type = 'income'
+
+                # Сбрасываем флаг напоминания о внесении операций при автоматическом доходе
+                from expenses.tasks import clear_expense_reminder
+                clear_expense_reminder(payment.profile.telegram_id)
             else:
                 # Создаем расход
                 operation = Expense.objects.create(
@@ -206,7 +210,11 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
                     expense_time=datetime.now().time()
                 )
                 operation_type = 'expense'
-            
+
+                # Сбрасываем флаг напоминания о внесении трат при автоматическом платеже
+                from expenses.tasks import clear_expense_reminder
+                clear_expense_reminder(payment.profile.telegram_id)
+
             # Обновляем дату последней обработки
             payment.last_processed = today
             payment.save()

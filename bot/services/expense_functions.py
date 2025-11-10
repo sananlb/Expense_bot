@@ -10,7 +10,7 @@ from expenses.models import Expense, Profile, Income, IncomeCategory
 from django.db.models import Sum, Avg, Max, Min, Count, Q
 from collections import defaultdict
 from bot.utils.category_helpers import get_category_display_name
-from bot.utils.language import get_user_language
+from bot.utils.language import get_user_language, get_text
 import logging
 
 logger = logging.getLogger(__name__)
@@ -1568,7 +1568,7 @@ class ExpenseFunctions:
             for inc in day_incomes[:10]:
                 details.append({
                     'amount': float(inc.amount),
-                    'description': inc.description or get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else 'Доход',
+                    'description': inc.description or get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('income', profile.language_code or 'ru'),
                     'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru')
                 })
             
@@ -1673,7 +1673,7 @@ class ExpenseFunctions:
                 'success': True,
                 'income': {
                     'amount': float(max_income.amount),
-                    'description': max_income.description or 'Доход',
+                    'description': max_income.description or get_text('income', profile.language_code or 'ru'),
                     'category': get_category_display_name(max_income.category, profile.language_code or 'ru') if max_income.category else get_text('no_category', profile.language_code or 'ru'),
                     'date': max_income.income_date.isoformat()
                 }
@@ -1729,7 +1729,7 @@ class ExpenseFunctions:
                 'success': True,
                 'income': {
                     'amount': float(min_income.amount),
-                    'description': min_income.description or 'Доход',
+                    'description': min_income.description or get_text('income', profile.language_code or 'ru'),
                     'category': get_category_display_name(min_income.category, profile.language_code or 'ru') if min_income.category else get_text('no_category', profile.language_code or 'ru'),
                     'date': min_income.income_date.isoformat()
                 }
@@ -1857,7 +1857,7 @@ class ExpenseFunctions:
                 results.append({
                     'date': inc.income_date.isoformat(),
                     'amount': float(inc.amount),
-                    'description': inc.description or 'Доход',
+                    'description': inc.description or get_text('income', profile.language_code or 'ru'),
                     'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru')
                 })
             
@@ -2123,7 +2123,7 @@ class ExpenseFunctions:
                 results.append({
                     'date': inc.income_date.isoformat(),
                     'amount': float(inc.amount),
-                    'description': inc.description or 'Доход',
+                    'description': inc.description or get_text('income', profile.language_code or 'ru'),
                     'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru')
                 })
             
@@ -2245,7 +2245,7 @@ class ExpenseFunctions:
                 results.append({
                     'date': inc.income_date.isoformat(),
                     'amount': amount,
-                    'description': inc.description or 'Доход',
+                    'description': inc.description or get_text('income', profile.language_code or 'ru'),
                     'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru')
                 })
             

@@ -1233,7 +1233,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     user_id=user_id,
                     amount=parsed_income['amount'],
                     category_id=category.id if category else None,
-                    description=parsed_income.get('description', 'Доход'),
+                    description=parsed_income.get('description', get_text('income', lang)),
                     income_date=parsed_income.get('income_date'),
                     income_type=parsed_income.get('income_type', 'other'),
                     ai_categorized=parsed_income.get('ai_enhanced', False),
@@ -1825,7 +1825,7 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: s
             has_cashback = cashback > 0
     
     # Показываем меню выбора поля для редактирования
-    translated_category = get_category_display_name(expense.category, lang) if expense.category else ('Прочие доходы' if is_income else 'Без категории')
+    translated_category = get_category_display_name(expense.category, lang) if expense.category else (get_text('other_income', lang) if is_income else get_text('no_category', lang))
     
     # Получаем правильное поле для суммы и описания
     amount = expense.amount

@@ -265,7 +265,7 @@ def get_expenses_summary(
         categories = {}  # Категории с суммами по валютам
 
         # Получаем язык пользователя для мультиязычных категорий
-        from bot.utils.language import get_user_language
+        from bot.utils.language import get_user_language, get_text
         from asgiref.sync import async_to_sync
         user_lang = async_to_sync(get_user_language)(user_id)
 
@@ -299,7 +299,7 @@ def get_expenses_summary(
                 cat_icon = expense.category.icon or ''
             else:
                 cat_id = 0
-                cat_name = 'Без категории' if user_lang == 'ru' else 'No category'
+                cat_name = get_text('no_category', user_lang)
                 cat_icon = ''
 
             # Группируем по категориям, храним суммы по каждой валюте
