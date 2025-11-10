@@ -19,6 +19,7 @@ from dateutil import parser
 from calendar import monthrange
 import re
 from bot.utils.category_helpers import get_category_display_name
+from ..utils.language import get_user_language, format_amount
 
 logger = logging.getLogger(__name__)
 
@@ -279,16 +280,33 @@ async def get_simple_response(text: str, user_id: int) -> str:
             if not summary or summary['total'] == 0:
                 return "Сегодня трат пока нет."
             else:
+                lang = await get_user_language(user_id)
+                main_currency = summary.get('currency', 'RUB')
+                total_formatted = format_amount(float(summary['total']), main_currency, lang)
+
+                # Собираем отображение по категориям с несколькими валютами
+                category_lines = []
+                for cat in summary.get('categories', []):
+                    icon = cat.get('icon', '')
+                    name = cat.get('name', '')
+                    amounts = cat.get('amounts', {})
+                    if amounts:
+                        amounts_str = " / ".join([
+                            format_amount(float(amt), cur, lang)
+                            for cur, amt in amounts.items()
+                        ])
+                    else:
+                        amounts_str = format_amount(0, main_currency, lang)
+                    category_lines.append(f"{icon} {name}: {amounts_str}")
+
                 # Проверяем, спрашивают ли о категориях
                 if 'категори' in text_lower:
-                    response = f"Сегодня траты были в следующих категориях:\n\n"
-                    for cat in summary['categories']:
-                        response += f"{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽\n"
-                    response += f"\nОбщая сумма: {summary['total']:,.0f} ₽"
+                    response = "Сегодня траты были в следующих категориях:\n\n"
+                    response += "\n".join(category_lines)
+                    response += f"\n\nОбщая сумма: {total_formatted}"
                 else:
-                    response = f"Траты за сегодня: {summary['total']:,.0f} ₽\n\n"
-                    for cat in summary['categories']:
-                        response += f"{cat['icon']} {cat['name']}: {cat['amount']:,.0f} ₽\n"
+                    response = f"Траты за сегодня: {total_formatted}\n\n"
+                    response += "\n".join(category_lines)
                 return response
         
         elif 'вчера' in text_lower:
@@ -299,7 +317,6 @@ async def get_simple_response(text: str, user_id: int) -> str:
             # Показать траты за месяц
             from datetime import date
             from ..services.expense import get_expenses_summary
-            from ..utils.language import format_amount, get_user_language
             today = date.today()
             start_date = today.replace(day=1)
 
@@ -318,8 +335,13 @@ async def get_simple_response(text: str, user_id: int) -> str:
                 # Show total per currency
                 response = "Траты за текущий месяц:\n"
                 currency_totals = summary.get('currency_totals', {})
-                for currency, amount in currency_totals.items():
-                    response += f"  {format_amount(amount, currency, lang)}\n"
+                if currency_totals:
+                    for currency, amount in currency_totals.items():
+                        if amount:
+                            response += f"  {format_amount(float(amount), currency, lang)}\n"
+                else:
+                    # Fallback to основная валюта
+                    response += f"  {format_amount(float(summary.get('total', 0)), summary.get('currency', 'RUB'), lang)}\n"
 
                 response += "\n"
 
@@ -329,7 +351,13 @@ async def get_simple_response(text: str, user_id: int) -> str:
                     name = cat.get('name', '')
                     # Format amounts for all currencies
                     amounts = cat.get('amounts', {})
-                    amounts_str = " / ".join([format_amount(amt, cur, lang) for cur, amt in amounts.items()])
+                    if amounts:
+                        amounts_str = " / ".join([
+                            format_amount(float(amt), cur, lang)
+                            for cur, amt in amounts.items()
+                        ])
+                    else:
+                        amounts_str = format_amount(0, summary.get('currency', 'RUB'), lang)
                     response += f"{icon} {name}: {amounts_str}\n"
 
                 # Добавим информацию о доходах если есть

@@ -60,7 +60,12 @@ def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCate
         'образование': ['образование', 'курсы', 'учеба', 'обучение', 'education'],
         'подарки': ['подарки', 'подарок', 'цветы', 'букет', 'gifts'],
         'путешествия': ['путешествия', 'отпуск', 'поездка', 'тур', 'travel'],
-        'коммунальные услуги и подписки': ['коммуналка', 'жкх', 'квартплата', 'свет', 'вода', 'газ', 'интернет', 'связь', 'телефон', 'подписка', 'utilities', 'utilities and subscriptions'],
+        'коммуналка и подписки': [
+            'коммуналка', 'жкх', 'квартплата', 'свет', 'вода', 'газ',
+            'интернет', 'связь', 'телефон', 'подписка',
+            'коммунальные услуги и подписки',  # старое название для обратной совместимости
+            'utilities', 'utilities and subscriptions'
+        ],
         'прочие расходы': ['другое', 'прочее', 'разное', 'other'],
     }
     
@@ -602,12 +607,8 @@ def create_default_categories_sync(user_id: int) -> bool:
     if created:
         logger.info(f"Created new profile for user {user_id}")
 
-    # Проверяем количество категорий - должно быть минимум 16 для считать инициализированным
-    # Это защищает от race condition когда создалась только "Прочие расходы"
+    # Проверяем количество категорий - защищаемся от race conditions, когда создалась только "Прочие расходы"
     existing_count = ExpenseCategory.objects.filter(profile=profile).count()
-    if existing_count >= 16:
-        logger.debug(f"User {user_id} already has {existing_count} categories, skipping default creation")
-        return False
 
     try:
         lang = profile.language_code or 'ru'
@@ -635,6 +636,11 @@ def create_default_categories_sync(user_id: int) -> bool:
         else:
             from expenses.models import DEFAULT_CATEGORIES
             default_categories = DEFAULT_CATEGORIES
+
+        required_count = len(default_categories)
+        if existing_count >= required_count:
+            logger.debug(f"User {user_id} already has {existing_count} categories, skipping default creation")
+            return False
 
         # Если есть несколько категорий (например только "Прочие расходы" от fallback),
         # все равно создаем все остальные
@@ -705,12 +711,8 @@ def create_default_income_categories(user_id: int) -> bool:
         logger.info(f"Created new profile for user {user_id}")
 
     try:
-        # Проверяем количество категорий доходов - должно быть минимум 10 для считать инициализированным
-        # Это защищает от race condition когда создалась только одна категория как fallback
+        # Количество уже существующих категорий. Нужно чтобы добавить только недостающие.
         existing_count = IncomeCategory.objects.filter(profile=profile).count()
-        if existing_count >= 10:
-            logger.debug(f"User {user_id} already has {existing_count} income categories, skipping default creation")
-            return False
 
         # Определяем язык пользователя
         lang = profile.language_code or 'ru'
@@ -731,6 +733,11 @@ def create_default_income_categories(user_id: int) -> bool:
         else:
             # Используем категории по умолчанию из модели
             default_income_categories = DEFAULT_INCOME_CATEGORIES
+
+        required_count = len(default_income_categories)
+        if existing_count >= required_count:
+            logger.debug(f"User {user_id} already has {existing_count} income categories, skipping default creation")
+            return False
 
         # Если есть несколько категорий (например только fallback категория),
         # все равно создаем все остальные
@@ -1166,5 +1173,3 @@ async def learn_from_category_change(user_id: int, expense_id: int, new_category
 
     except Exception as e:
         logger.error(f"Error learning from category change: {e}")
-
-

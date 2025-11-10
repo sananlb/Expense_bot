@@ -300,6 +300,12 @@ def get_expenses_summary(
         else:
             categories_list = []
 
+        # Сохраняем суммы по валютам для повторного использования в интерфейсах
+        currency_totals = {
+            cur: data['total']
+            for cur, data in expenses_by_currency.items()
+        }
+
         # Определяем основную валюту и общие суммы (для обратной совместимости)
         if expenses_by_currency:
             main_currency = max(expenses_by_currency.items(), key=lambda x: x[1]['count'])[0]
@@ -429,6 +435,7 @@ def get_expenses_summary(
             'by_category': categories_list,
             'currency': main_currency,  # Используем валюту с наибольшим количеством операций
             'potential_cashback': potential_cashback,
+            'currency_totals': {k: float(v) for k, v in currency_totals.items()},
             # НОВЫЕ ПОЛЯ для доходов и баланса
             'income_total': income_total,
             'income_count': income_count,
@@ -444,6 +451,7 @@ def get_expenses_summary(
             'by_category': [],
             'currency': 'RUB',
             'potential_cashback': Decimal('0'),
+            'currency_totals': {},
             # НОВЫЕ ПОЛЯ для доходов и баланса
             'income_total': Decimal('0'),
             'income_count': 0,
