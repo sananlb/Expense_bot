@@ -290,6 +290,9 @@ def get_expenses_summary(
                 key=lambda x: x['total'],
                 reverse=True
             )
+
+            # Логируем список категорий для отладки
+            logger.info(f"Categories for main currency {main_currency}: {[(c['name'], c['total']) for c in categories_list]}")
         else:
             main_currency = 'RUB'
             total = Decimal('0')
