@@ -384,8 +384,7 @@ Task (general-purpose): "Где хранятся шаблоны для PDF от�
 ### КРИТИЧЕСКИЕ ФАЙЛЫ - НЕ УДАЛЯТЬ:
 - `.env` - содержит токены и пароли (ВСЕГДА делай backup перед изменением!)
 - `docker-compose.yml` - конфигурация контейнеров
-- `expense_bot.db` - локальная SQLite база (для разработки)
-- `/home/batman/expense_bot_backup_*.sql` - резервные копии БД
+- `/home/batman/expense_bot_backup_*.sql` - резервные копии БД на сервере
 
 ### ПРАВИЛЬНАЯ ПОСЛЕДОВАТЕЛЬНОСТЬ КОМАНД:
 ```bash
@@ -523,6 +522,8 @@ docker compose restart bot                 # Перезапустить
 **ВСЕГДА используй правильный синтаксис для PRIMARY SERVER!**
 
 ## Database
+
+### Production Database (on server)
 - Type: PostgreSQL 15 (Alpine)
 - Database name: expense_bot
 - User: expense_user (DB_USER в .env)
@@ -530,6 +531,35 @@ docker compose restart bot                 # Перезапустить
 - Default credentials: DB_USER=expense_user, DB_NAME=expense_bot
 - **ВАЖНО:** Пользователь БД - expense_user, НЕ batman!
 - Команда для создания дампа: `docker exec expense_bot_db pg_dump -U expense_user expense_bot > backup.sql`
+
+### Local Development Database
+- **Type:** PostgreSQL 17
+- **Database name:** expense_bot_local
+- **User:** expense_user
+- **Password:** local_password (из .env)
+- **Host:** localhost
+- **Port:** 5432
+- **PostgreSQL bin path:** `C:\Program Files\PostgreSQL\17\bin\`
+- **Админ:** postgres / Aa07900790
+
+**Загрузка дампа в локальную БД:**
+```bash
+# 1. Создать базу (если не существует)
+export PGPASSWORD=Aa07900790
+psql -h localhost -U postgres -c "CREATE DATABASE expense_bot_local OWNER expense_user;"
+
+# 2. Загрузить дамп
+export PGPASSWORD=local_password
+psql -h localhost -U expense_user -d expense_bot_local -f dump_file.sql
+
+# 3. Проверить данные
+psql -h localhost -U expense_user -d expense_bot_local -c "\dt"
+```
+
+**Или через Python скрипт:**
+```bash
+python load_dump.py  # Скрипт в корне проекта
+```
 
 ## Static Files
 - Container path: /app/staticfiles/

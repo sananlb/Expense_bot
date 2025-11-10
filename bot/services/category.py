@@ -551,28 +551,47 @@ def update_default_categories_language(user_id: int, new_lang: str) -> bool:
                 emoji, text = split_name(category.name)
                 if text not in default_ru and text not in default_en:
                     continue
-                
+
+                # ВСЕГДА заполняем оба языка при смене языка
                 if new_lang == 'ru':
-                    if category.name_ru:
-                        category.original_language = 'ru'
-                    else:
-                        translated_text = translate_category_name(text, 'ru')
+                    # Переключаемся на русский
+                    if not category.name_ru:
+                        # Переводим с английского если есть, иначе с текущего text
+                        source_text = category.name_en or text
+                        translated_text = translate_category_name(source_text, 'ru')
                         translated_text = emoji_strip_pattern.sub('', translated_text).strip()
                         category.name_ru = translated_text
-                        if not category.icon and emoji:
-                            category.icon = emoji
-                        category.original_language = 'ru'
-                else:
-                    if category.name_en:
-                        category.original_language = 'en'
-                    else:
-                        translated_text = translate_category_name(text, 'en')
+
+                    # Если нет английского - создаём перевод
+                    if not category.name_en:
+                        source_text = category.name_ru or text
+                        translated_text = translate_category_name(source_text, 'en')
                         translated_text = emoji_strip_pattern.sub('', translated_text).strip()
                         category.name_en = translated_text
-                        if not category.icon and emoji:
-                            category.icon = emoji
-                        category.original_language = 'en'
-                
+
+                    category.original_language = 'ru'
+                    if not category.icon and emoji:
+                        category.icon = emoji
+                else:
+                    # Переключаемся на английский
+                    if not category.name_en:
+                        # Переводим с русского если есть, иначе с текущего text
+                        source_text = category.name_ru or text
+                        translated_text = translate_category_name(source_text, 'en')
+                        translated_text = emoji_strip_pattern.sub('', translated_text).strip()
+                        category.name_en = translated_text
+
+                    # Если нет русского - создаём перевод
+                    if not category.name_ru:
+                        source_text = category.name_en or text
+                        translated_text = translate_category_name(source_text, 'ru')
+                        translated_text = emoji_strip_pattern.sub('', translated_text).strip()
+                        category.name_ru = translated_text
+
+                    category.original_language = 'en'
+                    if not category.icon and emoji:
+                        category.icon = emoji
+
                 category.save()
                 updated += 1
                 logger.info(
@@ -610,29 +629,27 @@ def create_default_categories_sync(user_id: int) -> bool:
     try:
         lang = profile.language_code or 'ru'
 
-        if lang == 'en':
-            default_categories = [
-                ('Groceries', '🛒'),
-                ('Cafes and Restaurants', '🍽️'),
-                ('Transport', '🚕'),
-                ('Car', '🚗'),
-                ('Housing', '🏠'),
-                ('Pharmacies', '💊'),
-                ('Medicine', '🏥'),
-                ('Beauty', '💄'),
-                ('Sports and Fitness', '🏃'),
-                ('Clothes and Shoes', '👔'),
-                ('Entertainment', '🎭'),
-                ('Education', '📚'),
-                ('Gifts', '🎁'),
-                ('Travel', '✈️'),
-                ('Utilities and Subscriptions', '📱'),
-                ('Savings', '💎'),
-                ('Other Expenses', '💰')
-            ]
-        else:
-            from expenses.models import DEFAULT_CATEGORIES
-            default_categories = DEFAULT_CATEGORIES
+        # Категории с ОБОИМИ языками сразу
+        # Формат: (name_ru, name_en, icon, original_language)
+        default_categories = [
+            ('Продукты', 'Groceries', '🛒', 'ru'),
+            ('Кафе и рестораны', 'Cafes and Restaurants', '🍽️', 'ru'),
+            ('Транспорт', 'Transport', '🚕', 'ru'),
+            ('Автомобиль', 'Car', '🚗', 'ru'),
+            ('Жилье', 'Housing', '🏠', 'ru'),
+            ('Аптеки', 'Pharmacies', '💊', 'ru'),
+            ('Медицина', 'Medicine', '🏥', 'ru'),
+            ('Красота', 'Beauty', '💄', 'ru'),
+            ('Спорт и фитнес', 'Sports and Fitness', '🏃', 'ru'),
+            ('Одежда и обувь', 'Clothes and Shoes', '👔', 'ru'),
+            ('Развлечения', 'Entertainment', '🎭', 'ru'),
+            ('Образование', 'Education', '📚', 'ru'),
+            ('Подарки', 'Gifts', '🎁', 'ru'),
+            ('Путешествия', 'Travel', '✈️', 'ru'),
+            ('Коммунальные услуги и подписки', 'Utilities and Subscriptions', '📱', 'ru'),
+            ('АЗС', 'Gas Station', '⛽', 'ru'),
+            ('Прочие расходы', 'Other Expenses', '💰', 'ru')
+        ]
 
         required_count = len(default_categories)
         if existing_count >= required_count:
@@ -661,17 +678,23 @@ def create_default_categories_sync(user_id: int) -> bool:
 
             # Создаем только те категории, которых еще нет
             categories_to_create = []
-            for name, icon in default_categories:
-                if name not in existing_names:
-                    full_name = f"{icon} {name}"
+            for name_ru, name_en, icon, orig_lang in default_categories:
+                # Проверяем оба языка для избежания дубликатов
+                if name_ru not in existing_names and name_en not in existing_names:
+                    # name для обратной совместимости зависит от языка пользователя
+                    if lang == 'en':
+                        full_name = f"{icon} {name_en}"
+                    else:
+                        full_name = f"{icon} {name_ru}"
+
                     categories_to_create.append(
                         ExpenseCategory(
                             profile=profile,
-                            name=full_name,  # Старое поле для обратной совместимости
-                            name_ru=name if lang == 'ru' else None,
-                            name_en=name if lang == 'en' else None,
-                            original_language=lang,
-                            is_translatable=True,  # Дефолтные категории переводятся
+                            name=full_name,
+                            name_ru=name_ru,
+                            name_en=name_en,
+                            original_language=orig_lang,
+                            is_translatable=True,
                             icon=icon,
                             is_active=True
                         )
@@ -681,19 +704,26 @@ def create_default_categories_sync(user_id: int) -> bool:
                 logger.info(f"Created {len(categories_to_create)} missing default categories for user {user_id}")
         else:
             # Создаем все категории с нуля
-            categories = [
-                ExpenseCategory(
-                    profile=profile,
-                    name=f"{icon} {name}",  # Старое поле для обратной совместимости
-                    name_ru=name if lang == 'ru' else None,
-                    name_en=name if lang == 'en' else None,
-                    original_language=lang,
-                    is_translatable=True,  # Дефолтные категории переводятся
-                    icon=icon,
-                    is_active=True
+            categories = []
+            for name_ru, name_en, icon, orig_lang in default_categories:
+                # name для обратной совместимости зависит от языка пользователя
+                if lang == 'en':
+                    full_name = f"{icon} {name_en}"
+                else:
+                    full_name = f"{icon} {name_ru}"
+
+                categories.append(
+                    ExpenseCategory(
+                        profile=profile,
+                        name=full_name,
+                        name_ru=name_ru,
+                        name_en=name_en,
+                        original_language=orig_lang,
+                        is_translatable=True,
+                        icon=icon,
+                        is_active=True
+                    )
                 )
-                for name, icon in default_categories
-            ]
             ExpenseCategory.objects.bulk_create(categories)
             logger.info(f"Created all {len(categories)} default categories for user {user_id}")
 
@@ -733,22 +763,19 @@ def create_default_income_categories(user_id: int) -> bool:
         # Определяем язык пользователя
         lang = profile.language_code or 'ru'
 
-        # Базовые категории доходов с переводами
-        if lang == 'en':
-            default_income_categories = [
-                ('💼 Salary', '💼'),
-                ('🎁 Bonuses', '🎁'),
-                ('💻 Freelance', '💻'),
-                ('📈 Investments', '📈'),
-                ('🏦 Bank Interest', '🏦'),
-                ('🏠 Rent Income', '🏠'),
-                ('💸 Refunds', '💸'),
-                ('🎉 Gifts', '🎉'),
-                ('💰 Other Income', '💰'),
-            ]
-        else:
-            # Используем категории по умолчанию из модели
-            default_income_categories = DEFAULT_INCOME_CATEGORIES
+        # Базовые категории доходов с ОБОИМИ языками
+        # Формат: (name_ru, name_en, icon, original_language)
+        default_income_categories = [
+            ('Зарплата', 'Salary', '💼', 'ru'),
+            ('Премии и бонусы', 'Bonuses', '🎁', 'ru'),
+            ('Фриланс', 'Freelance', '💻', 'ru'),
+            ('Инвестиции', 'Investments', '📈', 'ru'),
+            ('Проценты по вкладам', 'Bank Interest', '🏦', 'ru'),
+            ('Аренда недвижимости', 'Rent Income', '🏠', 'ru'),
+            ('Возвраты и компенсации', 'Refunds', '💸', 'ru'),
+            ('Подарки', 'Gifts', '🎉', 'ru'),
+            ('Прочие доходы', 'Other Income', '💰', 'ru'),
+        ]
 
         required_count = len(default_income_categories)
         if existing_count >= required_count:
@@ -766,19 +793,22 @@ def create_default_income_categories(user_id: int) -> bool:
             )
             # Создаем только те категории, которых еще нет
             categories_to_create = []
-            for name, icon in default_income_categories:
-                # Для английских категорий эмодзи уже включен в name
-                # Для русских категорий нужно добавить эмодзи к названию
+            for name_ru, name_en, icon, orig_lang in default_income_categories:
+                # name для обратной совместимости зависит от языка пользователя
                 if lang == 'en':
-                    category_name = name  # Эмодзи уже включен
+                    category_name = f"{icon} {name_en}"
                 else:
-                    category_name = f"{icon} {name}"  # Добавляем эмодзи к русскому названию
+                    category_name = f"{icon} {name_ru}"
 
                 if category_name not in existing_names:
                     categories_to_create.append(
                         IncomeCategory(
                             profile=profile,
                             name=category_name,
+                            name_ru=name_ru,
+                            name_en=name_en,
+                            original_language=orig_lang,
+                            is_translatable=True,
                             icon=icon,
                             is_active=True,
                             is_default=False
@@ -791,17 +821,20 @@ def create_default_income_categories(user_id: int) -> bool:
         else:
             # Создаем все категории доходов с нуля
             categories = []
-            for name, icon in default_income_categories:
-                # Для английских категорий эмодзи уже включен в name
-                # Для русских категорий нужно добавить эмодзи к названию
+            for name_ru, name_en, icon, orig_lang in default_income_categories:
+                # name для обратной совместимости зависит от языка пользователя
                 if lang == 'en':
-                    category_name = name  # Эмодзи уже включен
+                    category_name = f"{icon} {name_en}"
                 else:
-                    category_name = f"{icon} {name}"  # Добавляем эмодзи к русскому названию
+                    category_name = f"{icon} {name_ru}"
 
                 category = IncomeCategory(
                     profile=profile,
                     name=category_name,
+                    name_ru=name_ru,
+                    name_en=name_en,
+                    original_language=orig_lang,
+                    is_translatable=True,
                     icon=icon,
                     is_active=True,
                     is_default=False

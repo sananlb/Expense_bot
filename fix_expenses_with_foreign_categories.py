@@ -55,7 +55,7 @@ def find_expenses_with_foreign_categories():
     print()
 
     if total_found == 0:
-        print("✅ Трат с чужими категориями не найдено!")
+        print("[OK] Trat s chuzhimi kategoriyami ne naydeno!")
         return []
 
     # Группируем по пользователям
@@ -79,9 +79,11 @@ def find_expenses_with_foreign_categories():
 
         # Показываем первые 3 траты
         for exp in expenses[:3]:
-            cat_name = exp.category.name_ru or exp.category.name_en or exp.category.name or '(без названия)'
-            print(f"    - ID {exp.id}: {exp.description or '(без описания)'} "
-                  f"({exp.amount} {exp.currency}) → Категория '{cat_name}' "
+            cat_name = exp.category.name_ru or exp.category.name_en or exp.category.name or '(bez nazvaniya)'
+            desc_safe = (exp.description or '(bez opisaniya)').encode('ascii', 'ignore').decode('ascii')
+            cat_name_safe = cat_name.encode('ascii', 'ignore').decode('ascii')
+            print(f"    - ID {exp.id}: {desc_safe} "
+                  f"({exp.amount} {exp.currency}) -> Kategoriya '{cat_name_safe}' "
                   f"(profile_id={exp.category.profile_id})")
 
         if len(expenses) > 3:
@@ -115,7 +117,7 @@ def fix_expenses_with_foreign_categories(dry_run: bool = True):
     print()
 
     if dry_run:
-        print("⚠️  DRY RUN MODE - изменения НЕ будут сохранены")
+        print("[!] DRY RUN MODE - izmeneniya NE budut sokhraneny")
         print()
 
     fixed_count = 0
@@ -219,11 +221,11 @@ def fix_expenses_with_foreign_categories(dry_run: bool = True):
     print()
 
     if dry_run:
-        print("⚠️  Это был тестовый прогон. Данные НЕ изменены.")
-        print("Для применения изменений запустите:")
+        print("[!] Eto byl testovyy progon. Dannye NE izmeneny.")
+        print("Dlya primeneniya izmeneniy zapustite:")
         print("python fix_expenses_with_foreign_categories.py --apply")
     else:
-        print("✅ Траты успешно исправлены!")
+        print("[OK] Traty uspeshno ispravleny!")
         print()
         print("Проверка после исправления...")
         remaining = []
@@ -252,7 +254,7 @@ if __name__ == '__main__':
     apply_changes = '--apply' in sys.argv
 
     if apply_changes:
-        print("⚠️  РЕЖИМ ПРИМЕНЕНИЯ ИЗМЕНЕНИЙ")
+        print("[!] REZHIM PRIMENENIYA IZMENENIY")
         print()
         response = input("Вы уверены что хотите изменить данные? (yes/no): ")
         if response.lower() != 'yes':

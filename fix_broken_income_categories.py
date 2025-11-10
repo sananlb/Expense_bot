@@ -1,5 +1,5 @@
 """
-Скрипт для исправления категорий с пустыми name_ru/name_en
+Скрипт для исправления INCOME категорий с пустыми name_ru/name_en
 
 Проблема: При создании дефолтных категорий использовалось старое поле 'name',
 а мультиязычные поля name_ru/name_en оставались пустыми.
@@ -13,7 +13,7 @@ import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'expense_bot.settings')
 django.setup()
 
-from expenses.models import ExpenseCategory, Profile
+from expenses.models import IncomeCategory, Profile
 from django.db.models import Q
 import re
 
@@ -56,19 +56,19 @@ def detect_language(text: str) -> str:
 
 def fix_broken_categories(dry_run: bool = True):
     """
-    Исправить категории с пустыми name_ru/name_en
+    Исправить INCOME категории с пустыми name_ru/name_en
 
     Args:
         dry_run: Если True, только показывает что будет исправлено без изменений
     """
     print("=" * 70)
-    print("ПОИСК И ИСПРАВЛЕНИЕ БИТЫХ КАТЕГОРИЙ")
+    print("POISK I ISPRAVLENIE BITYKH INCOME KATEGORIY")
     print("=" * 70)
     print()
 
     # Находим все категории где ОБА мультиязычных поля пустые
     # Используем & (AND) чтобы найти только полностью битые категории
-    broken_categories = ExpenseCategory.objects.filter(
+    broken_categories = IncomeCategory.objects.filter(
         Q(name_ru__isnull=True) | Q(name_ru='')
     ).filter(
         Q(name_en__isnull=True) | Q(name_en='')
@@ -175,12 +175,12 @@ def fix_broken_categories(dry_run: bool = True):
     if dry_run:
         print("[!] Eto byl testovyy progon. Dannye NE izmeneny.")
         print("Dlya primeneniya izmeneniy zapustite:")
-        print("python fix_broken_categories.py --apply")
+        print("python fix_broken_income_categories.py --apply")
     else:
-        print("[OK] Kategorii uspeshno ispravleny!")
+        print("[OK] Income kategorii uspeshno ispravleny!")
         print()
-        print("Проверка после исправления...")
-        remaining_broken = ExpenseCategory.objects.filter(
+        print("Proverka posle ispravleniya...")
+        remaining_broken = IncomeCategory.objects.filter(
             Q(name_ru__isnull=True) | Q(name_ru='')
         ).filter(
             Q(name_en__isnull=True) | Q(name_en='')
