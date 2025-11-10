@@ -69,12 +69,7 @@ TEXTS = {
         # Напоминания
         'expense_reminder': '''📝 <b>Напоминание о внесении трат</b>
 
-Привет! Давно не видел ваших трат.
-
-Не забудьте записать расходы за сегодня, чтобы вести точный учёт бюджета 💰
-
-Просто отправьте сообщение в формате:
-<i>"Кофе 200"</i> или <i>"Дизель 4095 АЗС"</i>''',
+Не забудьте записать расходы за сегодня, чтобы вести точный учёт бюджета 💰''',
         
         # Категории
         'category': 'Категория',
@@ -918,12 +913,7 @@ PDF отчеты с графиками, экспорт в CSV и Excel дост�
         # Reminders
         'expense_reminder': '''📝 <b>Expense Reminder</b>
 
-Hi! Haven't seen your expenses in a while.
-
-Don't forget to record today's expenses to keep accurate track of your budget 💰
-
-Just send a message in the format:
-<i>"Coffee 200"</i> or <i>"Diesel 4095 gas station"</i>''',
+Don't forget to record today's expenses to keep accurate track of your budget 💰''',
 
         # Categories
         'category': 'Category',
