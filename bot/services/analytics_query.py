@@ -18,6 +18,7 @@ from django.db import transaction
 from asgiref.sync import sync_to_async
 
 from expenses.models import Expense, Income, Profile, ExpenseCategory, IncomeCategory
+from bot.utils.language import get_text
 
 logger = logging.getLogger(__name__)
 
@@ -438,12 +439,14 @@ class AnalyticsQueryExecutor:
         limited_expenses = expenses.order_by('-expense_date')[:spec.limit]
         limited_incomes = incomes.order_by('-income_date')[:spec.limit]
 
+        user_lang = profile.language_code or 'ru'
+
         for expense in limited_expenses:
             operations.append({
                 'type': 'expense',
                 'date': expense.expense_date,
                 'amount': float(expense.amount),
-                'category': expense.category.name if expense.category else None,
+                'category': expense.category.get_display_name(user_lang) if expense.category else None,
                 'description': expense.description,
                 'currency': expense.currency
             })
@@ -453,7 +456,7 @@ class AnalyticsQueryExecutor:
                 'type': 'income',
                 'date': income.income_date,
                 'amount': float(income.amount),
-                'category': income.category.name if income.category else None,
+                'category': income.category.get_display_name(user_lang) if income.category else None,
                 'description': income.description,
                 'currency': income.currency
             })
@@ -480,6 +483,8 @@ class AnalyticsQueryExecutor:
 
     def _format_results(self, qs: QuerySet, spec: AnalyticsQuerySpec) -> List[Dict]:
         """Format query results for output."""
+        profile = self._get_profile()
+        user_lang = profile.language_code or 'ru'
         results = []
 
         if spec.group_by != 'none':
@@ -490,12 +495,30 @@ class AnalyticsQueryExecutor:
                 if spec.group_by == 'date':
                     result['date'] = item['group_date'].isoformat() if item['group_date'] else None
                 elif spec.group_by == 'category':
-                    result['category'] = item['category__name']
-                    result['category_id'] = item['category__id']
+                    # Получаем мультиязычное название категории
+                    category_id = item['category__id']
+                    if category_id:
+                        try:
+                            if spec.entity == 'expenses':
+                                from expenses.models import ExpenseCategory
+                                category = ExpenseCategory.objects.get(id=category_id)
+                            else:  # incomes
+                                from expenses.models import IncomeCategory
+                                category = IncomeCategory.objects.get(id=category_id)
+                            result['category'] = category.get_display_name(user_lang)
+                        except:
+                            result['category'] = item.get('category__name', '')
+                    else:
+                        result['category'] = get_text(user_lang, 'no_category')
+                    result['category_id'] = category_id
                 elif spec.group_by == 'weekday':
-                    weekdays = ['', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
-                    result['weekday'] = weekdays[item['weekday']] if item['weekday'] else None
-                    result['weekday_num'] = item['weekday']
+                    weekday_keys = ['', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+                    weekday_num = item['weekday']
+                    if weekday_num and 0 < weekday_num < len(weekday_keys):
+                        result['weekday'] = get_text(user_lang, weekday_keys[weekday_num])
+                    else:
+                        result['weekday'] = None
+                    result['weekday_num'] = weekday_num
 
                 # Add aggregations
                 if 'total' in item:
@@ -526,7 +549,7 @@ class AnalyticsQueryExecutor:
                         elif field == 'amount':
                             result['amount'] = float(item.amount)
                         elif field == 'category':
-                            result['category'] = item.category.name if item.category else None
+                            result['category'] = item.category.get_display_name(user_lang) if item.category else None
                         elif field == 'description':
                             result['description'] = item.description
                         elif field == 'currency':
@@ -539,7 +562,7 @@ class AnalyticsQueryExecutor:
                         result['date'] = item.income_date.isoformat()
 
                     result['amount'] = float(item.amount)
-                    result['category'] = item.category.name if item.category else None
+                    result['category'] = item.category.get_display_name(user_lang) if item.category else None
                     result['description'] = item.description
 
                 results.append(result)
