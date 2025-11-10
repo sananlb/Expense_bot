@@ -509,13 +509,13 @@ class AnalyticsQueryExecutor:
                         except:
                             result['category'] = item.get('category__name', '')
                     else:
-                        result['category'] = get_text(user_lang, 'no_category')
+                        result['category'] = get_text('no_category', user_lang)
                     result['category_id'] = category_id
                 elif spec.group_by == 'weekday':
                     weekday_keys = ['', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
                     weekday_num = item['weekday']
                     if weekday_num and 0 < weekday_num < len(weekday_keys):
-                        result['weekday'] = get_text(user_lang, weekday_keys[weekday_num])
+                        result['weekday'] = get_text(weekday_keys[weekday_num], user_lang)
                     else:
                         result['weekday'] = None
                     result['weekday_num'] = weekday_num

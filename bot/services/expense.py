@@ -390,9 +390,9 @@ def get_expenses_summary(
                     category = IncomeCategory.objects.get(id=category_id)
                     cat_name = category.get_display_name(user_lang)
                 except IncomeCategory.DoesNotExist:
-                    cat_name = f"💰 {get_text(user_lang, 'other_income')}"
+                    cat_name = f"💰 {get_text('other_income', user_lang)}"
             else:
-                cat_name = f"💰 {get_text(user_lang, 'other_income')}"
+                cat_name = f"💰 {get_text('other_income', user_lang)}"
 
             # Извлекаем иконку из названия
             icon = cat_name.split()[0] if cat_name else '💰'

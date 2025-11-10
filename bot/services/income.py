@@ -245,7 +245,7 @@ def get_incomes_summary(
 
         for income in incomes:
             # По категориям
-            category_name = get_category_display_name(income.category, user_lang) if income.category else f"❓ {get_text(user_lang, 'no_category')}"
+            category_name = get_category_display_name(income.category, user_lang) if income.category else f"❓ {get_text('no_category', user_lang)}"
             if category_name not in category_stats:
                 category_stats[category_name] = {'amount': 0, 'count': 0}
             category_stats[category_name]['amount'] += float(income.amount)
@@ -456,7 +456,7 @@ def get_incomes_by_period(
         user_lang = profile.language_code or 'ru'
         by_category = {}
         for income in incomes:
-            cat_name = get_category_display_name(income.category, user_lang) if income.category else get_text(user_lang, 'no_category')
+            cat_name = get_category_display_name(income.category, user_lang) if income.category else get_text('no_category', user_lang)
             if cat_name not in by_category:
                 by_category[cat_name] = 0
             by_category[cat_name] += float(income.amount)
@@ -721,7 +721,7 @@ def get_today_incomes_summary(user_id: int) -> Dict:
             currency_totals[currency] += float(income.amount)
 
             # Суммируем по категориям
-            cat_name = get_category_display_name(income.category, user_lang) if income.category else f"❓ {get_text(user_lang, 'no_category')}"
+            cat_name = get_category_display_name(income.category, user_lang) if income.category else f"❓ {get_text('no_category', user_lang)}"
             if cat_name not in categories:
                 categories[cat_name] = 0
             categories[cat_name] += float(income.amount)
@@ -833,7 +833,7 @@ def get_month_incomes_summary(
             currency_totals[currency] += float(income.amount)
 
             # Суммируем по категориям
-            cat_name = get_category_display_name(income.category, user_lang) if income.category else f"❓ {get_text(user_lang, 'no_category')}"
+            cat_name = get_category_display_name(income.category, user_lang) if income.category else f"❓ {get_text('no_category', user_lang)}"
             if cat_name not in categories:
                 categories[cat_name] = 0
             categories[cat_name] += float(income.amount)
