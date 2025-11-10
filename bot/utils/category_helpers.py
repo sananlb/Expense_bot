@@ -2,7 +2,6 @@
 Helper функции для работы с мультиязычными категориями
 """
 from typing import Optional
-from expenses.models import ExpenseCategory
 from bot.utils.language import get_text
 
 
