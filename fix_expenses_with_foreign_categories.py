@@ -177,13 +177,25 @@ def fix_expenses_with_foreign_categories(dry_run: bool = True):
                 # Создаем категорию "Прочие расходы" если её нет
                 lang = user_profile.language_code or 'ru'
 
+                # Определяем поля в зависимости от языка (fallback на английский)
+                if lang == 'ru':
+                    name_text = "Прочие расходы"
+                    name_ru_val = "Прочие расходы"
+                    name_en_val = None
+                    orig_lang = 'ru'
+                else:  # 'en' и все остальные неподдерживаемые языки
+                    name_text = "Other Expenses"
+                    name_ru_val = None
+                    name_en_val = "Other Expenses"
+                    orig_lang = 'en'
+
                 if not dry_run:
                     other_category = ExpenseCategory.objects.create(
                         profile=user_profile,
-                        name="💰 Прочие расходы" if lang == 'ru' else "💰 Other Expenses",
-                        name_ru="Прочие расходы" if lang == 'ru' else None,
-                        name_en="Other Expenses" if lang == 'en' else None,
-                        original_language=lang,
+                        name=f"💰 {name_text}",
+                        name_ru=name_ru_val,
+                        name_en=name_en_val,
+                        original_language=orig_lang,
                         is_translatable=True,
                         icon='💰',
                         is_active=True

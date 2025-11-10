@@ -655,9 +655,9 @@ def create_default_categories_sync(user_id: int) -> bool:
                     existing_names.add(cat.name_en)
                 # Fallback для старых категорий без мультиязычных полей
                 elif cat.name:
-                    # Убираем эмодзи из старого названия для сравнения
-                    name_without_emoji = cat.name.lstrip('🍔🍽️🚗🚕🏠💊💄🏃👕🎭📚🎁✈️💰📝💵💸')
-                    existing_names.add(name_without_emoji.strip())
+                    # Убираем ВСЕ эмодзи из старого названия для сравнения
+                    name_without_emoji = EMOJI_PREFIX_RE.sub('', cat.name).strip()
+                    existing_names.add(name_without_emoji)
 
             # Создаем только те категории, которых еще нет
             categories_to_create = []
