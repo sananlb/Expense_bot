@@ -13,6 +13,7 @@ from django.utils import timezone
 from expenses.models import Income, IncomeCategory, Profile
 from bot.utils.db_utils import get_or_create_user_profile_sync
 from bot.utils.category_helpers import get_category_display_name, get_category_name_without_emoji
+from bot.utils.language import get_text
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +127,11 @@ def create_income(
             ai_confidence=ai_confidence,
             currency=currency.upper()
         )
-        
+
+        # Сбрасываем флаг напоминания о внесении операций
+        from expenses.tasks import clear_expense_reminder
+        clear_expense_reminder(user_id)
+
         logger.info(f"Created income {income.id} for user {user_id}: {amount} {currency}")
         return income
         
@@ -235,9 +240,12 @@ def get_incomes_summary(
         category_stats = {}
         type_stats = {}
         
+        # Определяем язык пользователя
+        user_lang = profile.language_code or 'ru'
+
         for income in incomes:
             # По категориям
-            category_name = get_category_display_name(income.category, 'ru') if income.category else "❓ Без категории"
+            category_name = get_category_display_name(income.category, user_lang) if income.category else f"❓ {get_text(user_lang, 'no_category')}"
             if category_name not in category_stats:
                 category_stats[category_name] = {'amount': 0, 'count': 0}
             category_stats[category_name]['amount'] += float(income.amount)
@@ -445,9 +453,10 @@ def get_incomes_by_period(
             total_amount += float(income.amount)
             
         # По категориям
+        user_lang = profile.language_code or 'ru'
         by_category = {}
         for income in incomes:
-            cat_name = get_category_display_name(income.category, 'ru') if income.category else 'Без категории'
+            cat_name = get_category_display_name(income.category, user_lang) if income.category else get_text(user_lang, 'no_category')
             if cat_name not in by_category:
                 by_category[cat_name] = 0
             by_category[cat_name] += float(income.amount)
@@ -699,23 +708,24 @@ def get_today_incomes_summary(user_id: int) -> Dict:
             }
         
         # Группируем по валютам
+        user_lang = profile.language_code or 'ru'
         currency_totals = {}
         categories = {}
-        
+
         for income in incomes:
             currency = income.currency
-            
+
             # Суммируем по валютам
             if currency not in currency_totals:
                 currency_totals[currency] = 0
             currency_totals[currency] += float(income.amount)
-            
+
             # Суммируем по категориям
-            cat_name = get_category_display_name(income.category, 'ru') if income.category else "❓ Без категории"
+            cat_name = get_category_display_name(income.category, user_lang) if income.category else f"❓ {get_text(user_lang, 'no_category')}"
             if cat_name not in categories:
                 categories[cat_name] = 0
             categories[cat_name] += float(income.amount)
-        
+
         # Сортируем категории по сумме
         sorted_categories = [
             {'name': name, 'amount': amount}
@@ -725,14 +735,14 @@ def get_today_incomes_summary(user_id: int) -> Dict:
                 reverse=True
             )
         ]
-        
+
         # Последние доходы
         last_incomes = [
             {
                 'id': inc.id,
                 'amount': float(inc.amount),
                 'currency': inc.currency,
-                'category': get_category_display_name(inc.category, 'ru') if inc.category else "❓ Без категории",
+                'category': get_category_display_name(inc.category, user_lang) if inc.category else f"❓ {get_text(user_lang, 'no_category')}",
                 'description': inc.description,
                 'time': inc.income_time.strftime('%H:%M')
             }
@@ -809,20 +819,21 @@ def get_month_incomes_summary(
             }
         
         # Группируем по валютам
+        user_lang = profile.language_code or 'ru'
         currency_totals = {}
         categories = {}
         types = {}
-        
+
         for income in incomes:
             currency = income.currency
-            
+
             # Суммируем по валютам
             if currency not in currency_totals:
                 currency_totals[currency] = 0
             currency_totals[currency] += float(income.amount)
-            
+
             # Суммируем по категориям
-            cat_name = get_category_display_name(income.category, 'ru') if income.category else "❓ Без категории"
+            cat_name = get_category_display_name(income.category, user_lang) if income.category else f"❓ {get_text(user_lang, 'no_category')}"
             if cat_name not in categories:
                 categories[cat_name] = 0
             categories[cat_name] += float(income.amount)
@@ -948,6 +959,7 @@ def find_similar_incomes(
                 similar_incomes = similar_incomes.filter(q_filter)
         
         # Группируем по уникальным суммам
+        user_lang = profile.language_code or 'ru'
         unique_amounts = {}
         for income in similar_incomes.select_related('category'):
             amount_key = f"{income.amount}_{income.currency}"
@@ -955,7 +967,7 @@ def find_similar_incomes(
                 unique_amounts[amount_key] = {
                     'amount': float(income.amount),
                     'currency': income.currency,
-                    'category': get_category_display_name(income.category, 'ru') if income.category else None,
+                    'category': get_category_display_name(income.category, user_lang) if income.category else None,
                     'description': income.description,
                     'count': 1,
                     'last_date': income.income_date
