@@ -10,7 +10,7 @@ from expenses.models import Expense, Profile, Income, IncomeCategory
 from django.db.models import Sum, Avg, Max, Min, Count, Q
 from collections import defaultdict
 from bot.utils.category_helpers import get_category_display_name
-from bot.utils.language import get_user_language, translate_category_name
+from bot.utils.language import get_user_language
 import logging
 
 logger = logging.getLogger(__name__)
@@ -86,9 +86,9 @@ class ExpenseFunctions:
                 profile=profile,
                 expense_date=max_day['expense_date']
             ).select_related('category')
-            
-            from bot.utils import get_text, translate_category_name
-            
+
+            from bot.utils import get_text
+
             details = []
             for exp in day_expenses:
                 category_name = get_category_display_name(exp.category, lang) if exp.category else get_text('no_category', lang)
@@ -173,21 +173,26 @@ class ExpenseFunctions:
             count = expenses.count()
             
             # Получаем язык пользователя
-            from bot.utils import get_text, translate_category_name
+            from bot.utils import get_text
             lang = profile.language_code or 'ru'
-            
-            # Группируем по категориям
-            by_category = expenses.values('category__name').annotate(
+
+            # Группируем по категориям (используем category__id вместо category__name)
+            by_category = expenses.values('category__id').annotate(
                 total=Sum('amount')
             ).order_by('-total')
-            
+
             categories = []
             for cat in by_category:
-                category_name = cat['category__name'] or get_text('no_category', lang)
-                # Переводим название категории
-                if cat['category__name']:
-                    category_name = translate_category_name(category_name, lang)
-                    
+                category_id = cat['category__id']
+                if category_id:
+                    try:
+                        category = ExpenseCategory.objects.get(id=category_id)
+                        category_name = category.get_display_name(lang)
+                    except ExpenseCategory.DoesNotExist:
+                        category_name = get_text('no_category', lang)
+                else:
+                    category_name = get_text('no_category', lang)
+
                 categories.append({
                     'name': category_name,
                     'amount': float(cat['total'])
@@ -1358,21 +1363,27 @@ class ExpenseFunctions:
             count = incomes.count()
             
             # Получаем язык пользователя
-            from bot.utils import get_text, translate_category_name
+            from bot.utils import get_text
             lang = profile.language_code or 'ru'
-            
-            # Группируем по категориям
-            by_category = incomes.values('category__name').annotate(
+
+            # Группируем по категориям (используем category__id вместо category__name)
+            by_category = incomes.values('category__id').annotate(
                 total=Sum('amount')
             ).order_by('-total')
-            
+
             categories = []
             for cat in by_category:
-                category_name = cat['category__name'] or get_text('no_category', lang)
-                # Переводим название категории
-                if cat['category__name']:
-                    category_name = translate_category_name(category_name, lang)
-                    
+                category_id = cat['category__id']
+                if category_id:
+                    try:
+                        from expenses.models import IncomeCategory
+                        category = IncomeCategory.objects.get(id=category_id)
+                        category_name = category.get_display_name(lang)
+                    except IncomeCategory.DoesNotExist:
+                        category_name = get_text('no_category', lang)
+                else:
+                    category_name = get_text('no_category', lang)
+
                 categories.append({
                     'name': category_name,
                     'amount': float(cat['total'])

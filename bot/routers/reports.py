@@ -375,18 +375,14 @@ async def show_expenses_summary(
                 if total_income_categories <= 22:
                     # Показываем все категории доходов
                     for cat in income_categories:
-                        # Категория в словаре содержит только имя, поэтому создаем псевдо-объект
-                        from types import SimpleNamespace
-                        cat_obj = SimpleNamespace(icon=cat.get('icon'), name=cat['name'])
-                        category_display = get_category_display_name(cat_obj, lang)
+                        # Имя уже переведено в expense.py через get_display_name()
+                        category_display = cat['name']
                         text += f"  {category_display}: {format_amount(cat['total'], summary['currency'], lang)}\n"
                 else:
                     # Показываем первые 20 категорий доходов
                     for cat in income_categories[:20]:
-                        # Категория в словаре содержит только имя, поэтому создаем псевдо-объект
-                        from types import SimpleNamespace
-                        cat_obj = SimpleNamespace(icon=cat.get('icon'), name=cat['name'])
-                        category_display = get_category_display_name(cat_obj, lang)
+                        # Имя уже переведено в expense.py через get_display_name()
+                        category_display = cat['name']
                         text += f"  {category_display}: {format_amount(cat['total'], summary['currency'], lang)}\n"
                     
                     # Добавляем "остальные доходы"
