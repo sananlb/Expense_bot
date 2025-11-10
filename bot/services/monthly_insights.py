@@ -91,10 +91,11 @@ class MonthlyInsightsService:
         total_incomes = sum(i.amount for i in incomes)
 
         # Group by categories
+        user_lang = profile.language_code or 'ru'
         expenses_by_category = {}
         for expense in expenses:
             if expense.category:
-                cat_name = expense.category.get_display_name('ru')
+                cat_name = expense.category.get_display_name(user_lang)
                 if cat_name not in expenses_by_category:
                     expenses_by_category[cat_name] = {
                         'amount': Decimal('0'),

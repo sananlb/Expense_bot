@@ -402,7 +402,7 @@ async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext, 
     text = get_text('edit_payment_text', lang).format(
         description=payment.description,
         amount=format_currency(payment.amount, 'RUB'),
-        category=get_category_display_name(payment.category, lang) if payment.category else ('Без категории' if lang == 'ru' else 'No Category'),
+        category=get_category_display_name(payment.category, lang) if payment.category else get_text('no_category', lang),
         day=payment.day_of_month,
         status=status_text
     )
@@ -549,11 +549,11 @@ async def edit_category_start(callback: types.CallbackQuery, state: FSMContext, 
     # Определяем тип операции и показываем соответствующие категории
     if payment.operation_type == RecurringPayment.OPERATION_TYPE_INCOME:
         categories = await get_user_income_categories(user_id)
-        cat_display = get_category_display_name(payment.category, lang) if payment.category else ('Без категории' if lang == 'ru' else 'No Category')
+        cat_display = get_category_display_name(payment.category, lang) if payment.category else get_text('no_category', lang)
         text = f"{get_text('choose_new_category', lang)}\n\n💰 Доход: <i>{cat_display}</i>"
     else:
         categories = await get_user_categories(user_id)
-        cat_display = get_category_display_name(payment.category, lang) if payment.category else ('Без категории' if lang == 'ru' else 'No Category')
+        cat_display = get_category_display_name(payment.category, lang) if payment.category else get_text('no_category', lang)
         text = f"{get_text('choose_new_category', lang)}\n\n💸 Расход: <i>{cat_display}</i>"
     
     # Формируем клавиатуру с категориями

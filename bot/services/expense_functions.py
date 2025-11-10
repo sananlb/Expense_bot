@@ -684,9 +684,11 @@ class ExpenseFunctions:
                 }
             
             # Добавляем день недели
-            weekdays = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
-            weekday = weekdays[max_expense.expense_date.weekday()]
-            
+            from bot.utils.language import get_text
+            user_lang = profile.language_code or 'ru'
+            weekday_keys = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+            weekday = get_text(weekday_keys[max_expense.expense_date.weekday()], user_lang)
+
             return {
                 'success': True,
                 'date': max_expense.expense_date.isoformat(),
@@ -744,8 +746,10 @@ class ExpenseFunctions:
                 }
 
             # Добавляем день недели
-            weekdays = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
-            weekday = weekdays[min_expense.expense_date.weekday()]
+            from bot.utils.language import get_text
+            user_lang = profile.language_code or 'ru'
+            weekday_keys = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+            weekday = get_text(weekday_keys[min_expense.expense_date.weekday()], user_lang)
 
             return {
                 'success': True,
@@ -1068,23 +1072,26 @@ class ExpenseFunctions:
             )
             end_date = date.today()
             start_date = end_date - timedelta(days=period_days)
-            
-            weekdays = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
+
+            from bot.utils.language import get_text
+            user_lang = profile.language_code or 'ru'
+            weekday_keys = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
             stats = {i: {'total': 0, 'count': 0} for i in range(7)}
-            
+
             expenses = Expense.objects.filter(
                 profile=profile,
                 expense_date__gte=start_date,
                 expense_date__lte=end_date
             )
-            
+
             for exp in expenses:
                 weekday = exp.expense_date.weekday()
                 stats[weekday]['total'] += float(exp.amount)
                 stats[weekday]['count'] += 1
-            
+
             result = []
-            for i, day_name in enumerate(weekdays):
+            for i in range(7):
+                day_name = get_text(weekday_keys[i], user_lang)
                 avg = stats[i]['total'] / stats[i]['count'] if stats[i]['count'] > 0 else 0
                 result.append({
                     'weekday': day_name,
@@ -1866,15 +1873,19 @@ class ExpenseFunctions:
             )
             
             incomes = Income.objects.filter(profile=profile)
-            
+
+            from bot.utils.language import get_text
+            user_lang = profile.language_code or 'ru'
+            weekday_keys = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+
             weekday_stats = {}
-            weekdays = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье']
-            
-            for i, day_name in enumerate(weekdays):
+
+            for i in range(7):
+                day_name = get_text(weekday_keys[i], user_lang)
                 day_incomes = incomes.filter(income_date__week_day=(i + 2) % 7 or 7)  # Django week_day: 1=Sunday
                 total = day_incomes.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
                 count = day_incomes.count()
-                
+
                 weekday_stats[day_name] = {
                     'total': float(total),
                     'count': count,

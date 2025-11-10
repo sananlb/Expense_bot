@@ -273,7 +273,8 @@ class PDFReportService:
                     if expense.category:
                         cat_name = categories_with_multilang.get(expense.category.id, expense.category.name)
                     else:
-                        cat_name = 'Без категории'
+                        from bot.utils.language import get_text
+                        cat_name = get_text('no_category', lang)
                     
                     if cat_name not in daily_categories[day]:
                         daily_categories[day][cat_name] = 0
