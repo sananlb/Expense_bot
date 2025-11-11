@@ -573,6 +573,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         # ВАЖНО: Ищем в ОБОИХ словарях (и русском, и английском)
         # чтобы пользователи могли вводить траты на любом языке
         found_category_name = None
+        found_language = None  # В каком словаре нашли: 'ru' или 'en'
 
         # Сначала ищем в русском словаре
         for cat_name, keywords in CATEGORY_KEYWORDS_RU.items():
@@ -580,6 +581,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             if score > max_score:
                 max_score = score
                 found_category_name = cat_name  # Русское название
+                found_language = 'ru'
 
         # Затем ищем в английском словаре
         for cat_name, keywords in CATEGORY_KEYWORDS_EN.items():
@@ -587,15 +589,17 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             if score > max_score:
                 max_score = score
                 found_category_name = cat_name  # Английское название
+                found_language = 'en'
 
         # Если нашли категорию, конвертируем название на нужный язык
+        # ТОЛЬКО если язык найденной категории не совпадает с языком пользователя
         if found_category_name:
-            if lang_code == 'en':
-                # Нужен английский - конвертируем если нашли русское название
+            if found_language != lang_code:
+                # Язык найденной категории отличается от языка пользователя - конвертируем
                 category = CATEGORY_NAME_MAPPING.get(found_category_name, found_category_name)
             else:
-                # Нужен русский - конвертируем если нашли английское название
-                category = CATEGORY_NAME_MAPPING.get(found_category_name, found_category_name)
+                # Язык совпадает - оставляем как есть
+                category = found_category_name
     
     # Формируем описание (текст без суммы и без даты)
     description = text_without_amount if text_without_amount is not None else text_without_date
