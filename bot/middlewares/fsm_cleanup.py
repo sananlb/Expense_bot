@@ -3,7 +3,7 @@ Middleware для очистки PII из старых FSM states
 Удаляет username, first_name, last_name из pending_profile_data
 """
 from aiogram import BaseMiddleware
-from aiogram.types import Update
+from aiogram.types import TelegramObject
 from aiogram.fsm.context import FSMContext
 from typing import Callable, Dict, Any, Awaitable
 import logging
@@ -19,18 +19,21 @@ class FSMCleanupMiddleware(BaseMiddleware):
 
     async def __call__(
         self,
-        handler: Callable[[Update, Dict[str, Any]], Awaitable[Any]],
-        event: Update,
+        handler: Callable[[TelegramObject, Dict[str, Any]], Awaitable[Any]],
+        event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
+        from aiogram.types import Message, CallbackQuery
+
         state: FSMContext = data.get('state')
 
         if state:
             user_id = None
-            if event.message:
-                user_id = event.message.from_user.id
-            elif event.callback_query:
-                user_id = event.callback_query.from_user.id
+            # Определяем тип события и извлекаем user_id
+            if isinstance(event, Message):
+                user_id = event.from_user.id
+            elif isinstance(event, CallbackQuery):
+                user_id = event.from_user.id
 
             # Очищаем только один раз на пользователя
             if user_id and user_id not in self.cleaned_users:
