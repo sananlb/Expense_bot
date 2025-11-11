@@ -183,7 +183,7 @@ class HTMLPDFReportService:
             'currency_totals': formatted_totals,
             'categories': formatted_categories,
             'cashback_amount': format_currency(cashback_total, 'RUB'),
-            'user_name': profile.full_name or f"@{profile.username}" if profile.username else "Пользователь",
+            'user_name': f"User {profile.telegram_id}",
             'report_date': datetime.now().strftime('%d.%m.%Y')
         }
     

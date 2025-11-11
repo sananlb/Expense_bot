@@ -374,20 +374,9 @@ async def process_family_invite(message: Message, token: str):
         )
     )()
 
-    # Получаем информацию о приглашающем пользователе
-    try:
-        inviter_chat = await message.bot.get_chat(inviter_telegram_id)
-        inviter_name = inviter_chat.first_name or get_text('invite_user_fallback', lang).format(user_id=inviter_telegram_id)
-        # ВАЖНО: Экранируем HTML-символы для безопасного отображения
-        inviter_name_escaped = html.escape(inviter_name)
-        if inviter_chat.username:
-            # Экранируем username на всякий случай (хотя он не должен содержать HTML)
-            username_escaped = html.escape(inviter_chat.username)
-            inviter_display = f"<a href='https://t.me/{username_escaped}'>{inviter_name_escaped}</a>"
-        else:
-            inviter_display = inviter_name_escaped
-    except Exception:
-        inviter_display = html.escape(get_text('invite_user_fallback', lang).format(user_id=inviter_telegram_id))
+    # Используем только User ID для privacy (GDPR compliance)
+    # НЕ показываем first_name, username или другие персональные данные
+    inviter_display = f"User {inviter_telegram_id}"
 
     # Экранируем название домохозяйства
     household_name_escaped = html.escape(household_name)

@@ -53,7 +53,7 @@ class ActivityTrackerMiddleware(BaseMiddleware):
                 self.stats['commands'][command] = self.stats['commands'].get(command, 0) + 1
             
             # Отслеживаем активность пользователя
-            await self._track_user_activity(user.id, user.username or user.first_name)
+            await self._track_user_activity(user.id)
         
         try:
             # Вызываем основной обработчик
@@ -74,7 +74,7 @@ class ActivityTrackerMiddleware(BaseMiddleware):
                 
             raise
             
-    async def _track_user_activity(self, user_id: int, username: str):
+    async def _track_user_activity(self, user_id: int):
         """Отслеживание активности пользователя"""
         activity_key = f"user_activity:{user_id}"
         last_activity_key = f"user_last_activity:{user_id}"
@@ -89,10 +89,10 @@ class ActivityTrackerMiddleware(BaseMiddleware):
         
         # Проверяем подозрительную активность
         if activity_count > 100:  # Более 100 запросов в час
-            await self._send_suspicious_activity_alert(user_id, username, activity_count)
+            await self._send_suspicious_activity_alert(user_id, activity_count)
             
                 
-    async def _send_suspicious_activity_alert(self, user_id: int, username: str, activity_count: int):
+    async def _send_suspicious_activity_alert(self, user_id: int, activity_count: int):
         """Отправка уведомления о подозрительной активности"""
         alert_key = f"suspicious_alert_sent:{user_id}"
         
@@ -101,7 +101,7 @@ class ActivityTrackerMiddleware(BaseMiddleware):
             
             message = (
                 f"⚠️ *\\[Coins\\] Подозрительная активность*\n\n"
-                f"Пользователь: {username} \\(ID: `{user_id}`\\)\n"
+                f"User ID: `{user_id}`\n"
                 f"Количество запросов за час: {activity_count}\n"
                 f"Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
                 f"Возможно, это спам или автоматизированные запросы"

@@ -652,6 +652,9 @@ docker image prune -f
 **ВАЖНО:** Вся документация проекта хранится в папке `docs/`
 - `docs/CELERY_DOCUMENTATION.md` - полная документация по Celery (конфигурация, задачи, troubleshooting)
 - `docs/MONITORING_DOCUMENTATION.md` - система мониторинга, Sentry, health checks, уведомления админу
+- `docs/INCOME_KEYWORDS_UNIQUENESS_PLAN.md` - план реализации уникальности ключевых слов для доходов (симметрия с расходами)
+- `docs/PII_REMOVAL_PLAN_ACTUAL.md` - **АКТУАЛЬНЫЙ** план удаления PII из кода (6 файлов, 3-4 часа)
+- ~~`docs/PII_REMOVAL_PLAN.md`~~ - устаревший, не использовать (описывает уже выполненную миграцию БД)
 
 ## Обновление лендинга на сервере
 

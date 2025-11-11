@@ -43,6 +43,7 @@ from .middlewares import (
     LoggingMiddleware,
     PrivacyCheckMiddleware
 )
+from .middlewares.fsm_cleanup import FSMCleanupMiddleware
 from .middlewares.state_reset import StateResetMiddleware
 from .middleware import ActivityTrackerMiddleware, RateLimitMiddleware as AdminRateLimitMiddleware
 from .utils.commands import set_bot_commands
@@ -64,15 +65,24 @@ logger = logging.getLogger(__name__)
 async def on_startup(bot: Bot):
     """Действия при запуске бота"""
     await set_bot_commands(bot)
-    
+
+    # Предзагрузка модулей для устранения "холодного старта" Celery задач
+    # Это загружает модули expense.py и income.py сразу при старте бота,
+    # а значит импорты Celery задач в них выполнятся сразу (не при первом запросе)
+    try:
+        from bot.services import expense, income
+        logger.info("Preloaded expense and income modules with Celery tasks")
+    except Exception as e:
+        logger.warning(f"Could not preload service modules: {e}")
+
     # Запускаем задачу уведомлений о подписках
     from bot.tasks.subscription_notifications import run_notification_task
     asyncio.create_task(run_notification_task(bot))
-    
+
     # Отправляем уведомление админу о запуске бота - отключено
     # from bot.services.admin_notifier import notify_bot_started
     # asyncio.create_task(notify_bot_started())
-    
+
     logger.info("Бот запущен и готов к работе")
 
 
@@ -168,8 +178,12 @@ def create_dispatcher() -> Dispatcher:
     # 8. Localization - устанавливает язык
     dp.message.middleware(LocalizationMiddleware())
     dp.callback_query.middleware(LocalizationMiddleware())
-    
-    # 8. Menu Cleanup и State Reset
+
+    # 8.5. FSM Cleanup - очищает PII из старых FSM states
+    dp.message.middleware(FSMCleanupMiddleware())
+    dp.callback_query.middleware(FSMCleanupMiddleware())
+
+    # 9. Menu Cleanup и State Reset
     dp.message.middleware(MenuCleanupMiddleware())
     dp.message.middleware(StateResetMiddleware())
     

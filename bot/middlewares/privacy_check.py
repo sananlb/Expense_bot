@@ -95,9 +95,7 @@ class PrivacyCheckMiddleware(BaseMiddleware):
                         'telegram_id': user.id,
                         'language_code': display_lang,
                         'raw_language_code': user.language_code,
-                        'username': user.username,
-                        'first_name': user.first_name,
-                        'last_name': user.last_name,
+                        # username, first_name, last_name - УДАЛЕНЫ для privacy (GDPR compliance)
                     }
                 )
 

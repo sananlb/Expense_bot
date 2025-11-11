@@ -59,7 +59,7 @@ class LoggingMiddleware(BaseMiddleware):
             'request_id': self.request_count,
             'timestamp': datetime.now().isoformat(),
             'user_id': user.id if user else None,
-            'username': user.username if user else None,
+            # 'username': УДАЛЕНО для privacy (GDPR compliance)
             'chat_id': chat.id if chat else None,
             'chat_type': chat.type if chat else None,
         }

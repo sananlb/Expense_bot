@@ -232,9 +232,7 @@ async def cmd_start(
                 'telegram_id': user_id,
                 'language_code': display_lang,
                 'raw_language_code': message.from_user.language_code,
-                'username': message.from_user.username,
-                'first_name': message.from_user.first_name,
-                'last_name': message.from_user.last_name,
+                # username, first_name, last_name - УДАЛЕНЫ для privacy (GDPR compliance)
             },
         )
 

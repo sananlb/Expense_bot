@@ -267,28 +267,22 @@ async def notify_critical_error(error_type: str, details: str, user_id: Optional
         logger.error(f"Не удалось отправить критическое уведомление: {e}")
 
 
-async def notify_new_user(user_id: int, username: Optional[str] = None, first_name: Optional[str] = None):
+async def notify_new_user(user_id: int):
     """
     Уведомление о новом пользователе
-    
+
     Args:
         user_id: ID пользователя
-        username: Username пользователя
-        first_name: Имя пользователя
     """
     message = (
         f"🎉 *Новый пользователь\\!*\n\n"
         f"ID: `{user_id}`\n"
     )
-    
-    if first_name:
-        message += f"Имя: {escape_markdown_v2(first_name)}\n"
-    
-    if username:
-        message += f"Username: @{escape_markdown_v2(username)}\n"
-    
+
+    # Блоки с first_name и username УДАЛЕНЫ для privacy (GDPR compliance)
+
     message += f"Время: {escape_markdown_v2(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}"
-    
+
     try:
         await send_admin_alert(message, disable_notification=True)
     except Exception as e:
