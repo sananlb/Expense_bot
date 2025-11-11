@@ -21,6 +21,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'expense_bot.settings')
 django.setup()
 
 from bot.utils.expense_parser import parse_expense_message
+from bot.utils.expense_category_definitions import strip_leading_emoji
 from expenses.models import Profile
 
 
@@ -45,9 +46,9 @@ def create_test_profile(telegram_id, language_code):
 async def test_category_language_conversion(ru_profile, en_profile):
     """Тестирует правильность языковой конвертации категорий"""
 
-    print("=" * 80)
-    print("ТЕСТ ЯЗЫКОВОЙ КОНВЕРТАЦИИ КАТЕГОРИЙ")
-    print("=" * 80)
+    print("="*80)
+    print("TEST: Category Language Conversion")
+    print("="*80)
 
     test_cases = [
         # (text, profile, expected_category, test_description)
@@ -75,21 +76,18 @@ async def test_category_language_conversion(ru_profile, en_profile):
         result = await parse_expense_message(text, profile=profile)
         actual_category = result.get('category')
 
-        status = "[PASS]" if actual_category == expected_category else "[FAIL]"
-        if actual_category == expected_category:
+        # Убираем эмодзи для сравнения
+        actual_category_clean = strip_leading_emoji(actual_category) if actual_category else None
+
+        if actual_category_clean == expected_category:
             passed += 1
+            status = "PASS"
         else:
             failed += 1
-
-        print(f"\n{status}")
-        print(f"  Test: {description}")
-        print(f"  Text: '{text}'")
-        print(f"  User language: {profile.language_code}")
-        print(f"  Expected: '{expected_category}'")
-        print(f"  Got: '{actual_category}'")
-
-        if actual_category != expected_category:
-            print(f"  [!] MISMATCH!")
+            status = "FAIL"
+            print(f"[{status}] {description}")
+            print(f"  Text: {text}, Lang: {profile.language_code}")
+            print(f"  Expected: {expected_category}, Got: {actual_category_clean}")
 
     print("\n" + "=" * 80)
     print(f"РЕЗУЛЬТАТЫ: {passed} успешных, {failed} провальных")

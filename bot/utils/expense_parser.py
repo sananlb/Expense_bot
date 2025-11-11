@@ -165,16 +165,14 @@ EXPENSE_PATTERNS = [
     r'^minus\s*\d',  # "minus" и цифры с возможным пробелом
 ]
 
-# Импортируем словари ключевых слов из models (разделённые по языкам)
-from expenses.models import (
-    CATEGORY_KEYWORDS,  # Для обратной совместимости (русские категории)
-    CATEGORY_KEYWORDS_RU,
-    CATEGORY_KEYWORDS_EN,
-    CATEGORY_NAME_MAPPING  # Маппинг между русскими и английскими названиями
-)
-
-# Импортируем helper функцию для работы с категориями
+# Импортируем helper функции для работы с категориями
 from bot.utils.category_helpers import get_category_display_name
+from bot.utils.expense_category_definitions import (
+    DEFAULT_EXPENSE_CATEGORY_KEY,
+    detect_expense_category_key,
+    get_expense_category_display_name as get_expense_category_display_for_key,
+    normalize_expense_category_key,
+)
 from bot.utils.income_category_definitions import (
     DEFAULT_INCOME_CATEGORY_KEY,
     detect_income_category_key,
@@ -565,42 +563,21 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             if category:
                 break
     
+    # Переменная для хранения category_key
+    category_key = None
+
     # Если не нашли в пользовательских, ищем в стандартных
     if not category:
         # Определяем язык пользователя для отображения результата
         lang_code = profile.language_code if profile and hasattr(profile, 'language_code') else 'ru'
 
-        # ВАЖНО: Ищем в ОБОИХ словарях (и русском, и английском)
-        # чтобы пользователи могли вводить траты на любом языке
-        found_category_name = None
-        found_language = None  # В каком словаре нашли: 'ru' или 'en'
+        # Используем новую систему с category_key (аналогично доходам)
+        # Ищем по объединенным ключевым словам (русские + английские)
+        detected_key = detect_expense_category_key(text_lower)
+        if detected_key:
+            category_key = detected_key
+            category = get_expense_category_display_for_key(category_key, lang_code)
 
-        # Сначала ищем в русском словаре
-        for cat_name, keywords in CATEGORY_KEYWORDS_RU.items():
-            score = sum(1 for keyword in keywords if keyword.lower() in text_lower)
-            if score > max_score:
-                max_score = score
-                found_category_name = cat_name  # Русское название
-                found_language = 'ru'
-
-        # Затем ищем в английском словаре
-        for cat_name, keywords in CATEGORY_KEYWORDS_EN.items():
-            score = sum(1 for keyword in keywords if keyword.lower() in text_lower)
-            if score > max_score:
-                max_score = score
-                found_category_name = cat_name  # Английское название
-                found_language = 'en'
-
-        # Если нашли категорию, конвертируем название на нужный язык
-        # ТОЛЬКО если язык найденной категории не совпадает с языком пользователя
-        if found_category_name:
-            if found_language != lang_code:
-                # Язык найденной категории отличается от языка пользователя - конвертируем
-                category = CATEGORY_NAME_MAPPING.get(found_category_name, found_category_name)
-            else:
-                # Язык совпадает - оставляем как есть
-                category = found_category_name
-    
     # Формируем описание (текст без суммы и без даты)
     description = text_without_amount if text_without_amount is not None else text_without_date
     
@@ -638,6 +615,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         'amount': float(amount),
         'description': description or 'Расход',
         'category': category,  # Оставляем None если не найдено
+        'category_key': category_key,  # Язык-независимый ключ категории
         'currency': currency,
         'confidence': 0.5 if category else 0.2,
         'expense_date': expense_date  # Добавляем дату, если она была указана
@@ -770,6 +748,9 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                     if ai_result:
                         # Обновляем только категорию из AI
                         result['category'] = ai_result.get('category', result['category'])
+                        # Определяем category_key для AI категории
+                        if result['category']:
+                            result['category_key'] = normalize_expense_category_key(result['category'])
                         result['confidence'] = ai_result.get('confidence', result['confidence'])
                         result['ai_enhanced'] = True
                         result['ai_provider'] = ai_result.get('provider', 'unknown')
@@ -791,8 +772,11 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     
     # Финальный fallback - если категория все еще не определена
     if not result['category']:
-        result['category'] = 'Прочие расходы'
-        logger.info(f"Using default category 'Прочие расходы' for '{original_text}'")
+        # Определяем язык пользователя для дефолтной категории
+        lang_code = profile.language_code if profile and hasattr(profile, 'language_code') else 'ru'
+        result['category'] = get_expense_category_display_for_key(DEFAULT_EXPENSE_CATEGORY_KEY, lang_code)
+        result['category_key'] = DEFAULT_EXPENSE_CATEGORY_KEY
+        logger.info(f"Using default category '{result['category']}' for '{original_text}'")
     
     return result
 

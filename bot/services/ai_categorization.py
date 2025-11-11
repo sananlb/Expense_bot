@@ -314,16 +314,24 @@ class ExpenseCategorizer(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
                     for category in queryset
                 ]
             else:
+                # Если нет профиля, используем дефолтные категории на русском
                 if self.operation_type == 'income':
+                    from bot.utils.income_category_definitions import (
+                        INCOME_CATEGORY_DEFINITIONS,
+                        get_income_category_display_name
+                    )
                     return [
-                        "Зарплата", "Премии и бонусы", "Фриланс",
-                        "Инвестиции", "Проценты по вкладам", "Прочие доходы"
+                        get_income_category_display_name(key, 'ru')
+                        for key in INCOME_CATEGORY_DEFINITIONS.keys()
                     ]
                 else:
+                    from bot.utils.expense_category_definitions import (
+                        EXPENSE_CATEGORY_DEFINITIONS,
+                        get_expense_category_display_name
+                    )
                     return [
-                        "Продукты", "Транспорт", "Кафе и рестораны", 
-                        "Развлечения", "Здоровье", "Одежда и обувь",
-                        "Связь и интернет", "Дом и ЖКХ", "Подарки", "Прочие расходы"
+                        get_expense_category_display_name(key, 'ru')
+                        for key in EXPENSE_CATEGORY_DEFINITIONS.keys()
                     ]
         
         categories = await get_user_categories()
