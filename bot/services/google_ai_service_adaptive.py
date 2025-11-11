@@ -679,7 +679,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                         operation_type='chat_with_functions',
                         response_time=response_time,
                         success=True,
-                        model_used='gemini-2.0-flash-exp',
+                        model_used='gemini-2.5-flash',
                         characters_processed=len(message),
                         user_id=user_id
                     )

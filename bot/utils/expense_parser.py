@@ -165,8 +165,12 @@ EXPENSE_PATTERNS = [
     r'^minus\s*\d',  # "minus" и цифры с возможным пробелом
 ]
 
-# Импортируем словарь ключевых слов из models
-from expenses.models import CATEGORY_KEYWORDS as MODEL_CATEGORY_KEYWORDS
+# Импортируем словари ключевых слов из models (разделённые по языкам)
+from expenses.models import (
+    CATEGORY_KEYWORDS,  # Для обратной совместимости (русские категории)
+    CATEGORY_KEYWORDS_RU,
+    CATEGORY_KEYWORDS_EN
+)
 
 # Импортируем helper функцию для работы с категориями
 from bot.utils.category_helpers import get_category_display_name
@@ -562,7 +566,14 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     
     # Если не нашли в пользовательских, ищем в стандартных
     if not category:
-        for cat_name, keywords in MODEL_CATEGORY_KEYWORDS.items():
+        # Выбираем словарь ключевых слов по языку пользователя
+        lang_code = profile.language_code if profile and hasattr(profile, 'language_code') else 'ru'
+        if lang_code == 'en':
+            keywords_dict = CATEGORY_KEYWORDS_EN
+        else:
+            keywords_dict = CATEGORY_KEYWORDS_RU
+
+        for cat_name, keywords in keywords_dict.items():
             score = sum(1 for keyword in keywords if keyword.lower() in text_lower)
             if score > max_score:
                 max_score = score
@@ -1046,13 +1057,14 @@ async def extract_amount_from_text(text: str) -> Optional[float]:
 def suggest_category(description: str) -> str:
     """
     Предлагает категорию на основе описания
+    Использует словарь по умолчанию (русские категории)
     """
     description_lower = description.lower()
-    
-    # Используем новые категории из models.py
-    for category, keywords in MODEL_CATEGORY_KEYWORDS.items():
+
+    # Используем словарь по умолчанию для обратной совместимости
+    for category, keywords in CATEGORY_KEYWORDS.items():
         for keyword in keywords:
             if keyword.lower() in description_lower:
                 return category
-    
+
     return 'Прочие расходы'
