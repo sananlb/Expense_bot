@@ -1171,31 +1171,57 @@ async def optimize_keywords_for_new_category(user_id: int, new_category_id: int)
         logger.error(f"Error optimizing keywords for new category: {e}")
 
 
-async def learn_from_category_change(user_id: int, expense_id: int, new_category_id: int, description: str):
+async def learn_from_category_change(user_id: int, expense_id: int, new_category_id: int, description: str, old_category_id: int = None):
     """
     Обучается на основе изменения категории расхода пользователем.
-    Добавляет ключевые слова из описания в новую категорию с высоким приоритетом (usage_count = 1.0).
+
+    ВАЖНО: Ключевые слова должны быть уникальными - одно слово может быть только в одной категории!
+
+    Логика:
+    1. Извлекаем слова из описания траты
+    2. Удаляем эти слова из ВСЕХ категорий пользователя (включая старую категорию)
+    3. Добавляем эти слова в новую категорию
+
+    Args:
+        user_id: ID пользователя
+        expense_id: ID траты
+        new_category_id: ID новой категории
+        description: Описание траты
+        old_category_id: ID старой категории (optional)
     """
     try:
         from expenses.models import Expense, Profile
         from expense_bot.celery_tasks import extract_words_from_description, recalculate_normalized_weights, cleanup_old_keywords
 
         @sync_to_async
-        def add_keywords_from_description():
+        def update_keywords_for_category_change():
             # Получаем категорию и профиль
-            category = ExpenseCategory.objects.get(id=new_category_id)
+            new_category = ExpenseCategory.objects.get(id=new_category_id)
             profile = Profile.objects.get(telegram_id=user_id)
 
             # Извлекаем слова из описания используя общую функцию
             words = extract_words_from_description(description)
 
-            # Добавляем/обновляем ключевые слова
+            # ШАБЛОН 1: Удаляем эти слова из ВСЕХ категорий пользователя
+            removed_count = 0
+            for word in words:
+                if len(word) >= 3:  # Минимум 3 буквы
+                    # Удаляем слово из всех категорий пользователя
+                    deleted = CategoryKeyword.objects.filter(
+                        category__profile=profile,
+                        keyword=word.lower()
+                    ).delete()
+                    if deleted[0] > 0:
+                        removed_count += deleted[0]
+                        logger.debug(f"Removed keyword '{word}' from {deleted[0]} categories")
+
+            # ШАБЛОН 2: Добавляем слова в новую категорию
             added_keywords = []
             any_created = False  # Флаг что хотя бы одно новое слово создано
             for word in words:
                 if len(word) >= 3:  # Минимум 3 буквы
                     keyword, created = CategoryKeyword.objects.get_or_create(
-                        category=category,
+                        category=new_category,
                         keyword=word.lower(),
                         defaults={'normalized_weight': 1.0, 'usage_count': 1}
                     )
@@ -1217,12 +1243,14 @@ async def learn_from_category_change(user_id: int, expense_id: int, new_category
             if words:
                 recalculate_normalized_weights(profile.id, words)
 
-            return added_keywords
+            return added_keywords, removed_count
 
-        added = await add_keywords_from_description()
+        added, removed = await update_keywords_for_category_change()
 
         if added:
             logger.info(f"Learned keywords {added} for category {new_category_id} from manual change (expense {expense_id})")
+        if removed > 0:
+            logger.info(f"Removed {removed} duplicate keywords from other categories")
 
     except Exception as e:
         logger.error(f"Error learning from category change: {e}")

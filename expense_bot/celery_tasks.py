@@ -1235,6 +1235,19 @@ def learn_keywords_on_create(expense_id: int, category_id: int):
 
         words = corrected_words
 
+        # ВАЖНО: Ключевые слова должны быть уникальными!
+        # Удаляем эти слова из ВСЕХ категорий пользователя перед добавлением
+        removed_count = 0
+        for word in words:
+            # Удаляем слово из всех категорий этого пользователя
+            deleted = CategoryKeyword.objects.filter(
+                category__profile=expense.profile,
+                keyword=word
+            ).delete()
+            if deleted[0] > 0:
+                removed_count += deleted[0]
+                logger.debug(f"Removed keyword '{word}' from {deleted[0]} categories before adding to new category")
+
         # Добавляем ключевые слова для категории
         any_created = False  # Флаг что хотя бы одно новое слово создано
         for word in words:
@@ -1253,6 +1266,9 @@ def learn_keywords_on_create(expense_id: int, category_id: int):
                 keyword.save()
 
             logger.info(f"Learned keyword '{word}' for category '{category.name}' from AI (user {expense.profile.telegram_id})")
+
+        if removed_count > 0:
+            logger.info(f"Removed {removed_count} duplicate keywords from other categories")
 
         # Очистка старых ключевых слов только если добавили новые
         if any_created:

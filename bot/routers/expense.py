@@ -2210,10 +2210,11 @@ async def process_edit_category(callback: types.CallbackQuery, state: FSMContext
             # Запускаем в фоне, не ждём завершения
             asyncio.create_task(
                 learn_from_category_change(
-                    callback.from_user.id, 
-                    item_id, 
-                    category_id, 
-                    description
+                    callback.from_user.id,
+                    item_id,
+                    category_id,
+                    description,
+                    old_category_id  # Передаем старую категорию для удаления ключевых слов
                 )
             )
         
