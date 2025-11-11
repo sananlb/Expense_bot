@@ -1101,58 +1101,76 @@ def update_keywords_weights(expense_id: int, old_category_id: int, new_category_
     """
     Обновление весов ключевых слов после изменения категории пользователем.
     Запускается в фоне после редактирования.
+
+    ВАЖНО: Ключевые слова должны быть уникальными - одно слово может быть только в одной категории!
+    Если слово уже существует в другой категории, оно будет удалено оттуда.
     """
     try:
         from expenses.models import Expense, ExpenseCategory, CategoryKeyword
-        
+
         # Попробуем импортировать spellchecker, если не получится - используем без проверки
         try:
             from bot.utils.spellchecker import check_and_correct_text
         except ImportError:
             def check_and_correct_text(text):
                 return text  # Возвращаем текст без изменений
-        
+
         # Получаем объекты
-        expense = Expense.objects.get(id=expense_id)
-        new_category = ExpenseCategory.objects.get(id=new_category_id)
+        expense = Expense.objects.select_related('profile').get(id=expense_id)
+        new_category = ExpenseCategory.objects.select_related('profile').get(id=new_category_id)
         old_category = ExpenseCategory.objects.get(id=old_category_id) if old_category_id else None
-        
+
         # Извлекаем и очищаем слова из описания
         words = extract_words_from_description(expense.description)
-        
+
         # Проверяем правописание
         corrected_words = []
         for word in words:
             corrected = check_and_correct_text(word)
             if corrected and len(corrected) >= 3:  # Минимум 3 буквы
                 corrected_words.append(corrected.lower())
-        
+
         words = corrected_words
-        
-        # Обновляем ключевые слова для НОВОЙ категории (пользователь исправил)
+
+        # Обновляем ключевые слова для НОВОЙ категории с гарантией уникальности
+        removed_count = 0
         for word in words:
+            # ШАБЛОН УНИКАЛЬНОСТИ: Удаляем это слово из ВСЕХ категорий пользователя
+            deleted = CategoryKeyword.objects.filter(
+                category__profile=expense.profile,
+                keyword=word
+            ).delete()
+
+            if deleted[0] > 0:
+                removed_count += deleted[0]
+                logger.debug(f"Removed keyword '{word}' from {deleted[0]} other categories to maintain uniqueness")
+
+            # Добавляем слово в целевую категорию
             keyword, created = CategoryKeyword.objects.get_or_create(
                 category=new_category,
                 keyword=word,
                 defaults={'normalized_weight': 1.0, 'usage_count': 0}
             )
-            
+
             # Увеличиваем счетчик использований
             keyword.usage_count += 1
             keyword.save()
-            
+
             logger.info(f"Updated keyword '{word}' for category '{new_category.name}' (user {expense.profile.telegram_id})")
-        
+
+        if removed_count > 0:
+            logger.info(f"Removed {removed_count} duplicate keywords to maintain uniqueness")
+
         # Пересчитываем нормализованные веса для конфликтующих слов
         recalculate_normalized_weights(expense.profile.id, words)
-        
+
         # Проверяем лимит 50 слов на категорию
         check_category_keywords_limit(new_category)
         if old_category:
             check_category_keywords_limit(old_category)
-        
+
         logger.info(f"Successfully updated keywords weights for expense {expense_id}")
-        
+
     except Exception as e:
         logger.error(f"Error in update_keywords_weights task: {e}")
 
@@ -1347,25 +1365,43 @@ def recalculate_normalized_weights(profile_id: int, words: List[str]):
 
 
 def check_category_keywords_limit(category):
-    """Проверяет и ограничивает количество ключевых слов в категории (максимум 50)"""
-    from expenses.models import CategoryKeyword
-    
+    """
+    Проверяет и ограничивает количество ключевых слов в категории (максимум 50)
+
+    Работает как для расходов (ExpenseCategory), так и для доходов (IncomeCategory)
+    через duck typing - определяет тип модели автоматически.
+    """
+    from expenses.models import CategoryKeyword, IncomeCategoryKeyword, ExpenseCategory, IncomeCategory
+
     try:
-        keywords = CategoryKeyword.objects.filter(category=category)
-        
+        # Определяем тип категории через duck typing
+        if isinstance(category, IncomeCategory):
+            KeywordModel = IncomeCategoryKeyword
+            category_type = "income"
+        elif isinstance(category, ExpenseCategory):
+            KeywordModel = CategoryKeyword
+            category_type = "expense"
+        else:
+            logger.warning(f"Unknown category type: {type(category)}")
+            return
+
+        keywords = KeywordModel.objects.filter(category=category)
+
         if keywords.count() > 50:
             # Оставляем топ-50 по usage_count
             keywords_list = list(keywords)
             keywords_list.sort(key=lambda k: k.usage_count, reverse=True)
-            
+
             # Удаляем слова с наименьшим использованием
             keywords_to_delete = keywords_list[50:]
             for kw in keywords_to_delete:
-                logger.info(f"Deleting keyword '{kw.keyword}' from category '{category.name}' (low usage)")
+                cat_name = category.name or category.name_ru or category.name_en or '(no name)'
+                logger.info(f"Deleting {category_type} keyword '{kw.keyword}' from category '{cat_name}' (low usage)")
                 kw.delete()
-            
-            logger.info(f"Limited keywords for category '{category.name}' to 50 items")
-    
+
+            cat_name = category.name or category.name_ru or category.name_en or '(no name)'
+            logger.info(f"Limited {category_type} keywords for category '{cat_name}' to 50 items")
+
     except Exception as e:
         logger.error(f"Error checking category keywords limit: {e}")
 
@@ -1428,3 +1464,133 @@ def update_top5_keyboards():
         logger.info(f"Top-5 updated for {updated} pinned messages (profiles processed: {len(profiles)})")
     except Exception as e:
         logger.error(f"Error in update_top5_keyboards: {e}")
+
+
+# ==================== INCOME KEYWORDS LEARNING ====================
+# Задачи для обучения ключевых слов доходов (аналог расходов)
+
+
+@shared_task
+def update_income_keywords(income_id: int, old_category_id: int, new_category_id: int):
+    """
+    Обновление ключевых слов после изменения категории дохода пользователем.
+    Запускается в фоне после редактирования.
+
+    ВАЖНО: Использует строгую уникальность - одно слово только в одной категории!
+    Никаких normalized_weights - только строгое удаление дубликатов.
+    """
+    try:
+        from expenses.models import Income, IncomeCategory, IncomeCategoryKeyword
+        from bot.services.income_categorization import ensure_unique_income_keyword
+
+        # Получаем объекты
+        income = Income.objects.select_related('profile').get(id=income_id)
+        new_category = IncomeCategory.objects.select_related('profile').get(id=new_category_id)
+        old_category = IncomeCategory.objects.get(id=old_category_id) if old_category_id else None
+
+        # Извлекаем и очищаем слова из описания
+        words = extract_words_from_description(income.description)
+
+        # Обновляем ключевые слова для НОВОЙ категории с гарантией строгой уникальности
+        total_removed = 0
+        for word in words:
+            # ПАТТЕРН СТРОГОЙ УНИКАЛЬНОСТИ через helper функцию
+            keyword, created, removed = ensure_unique_income_keyword(
+                profile=income.profile,
+                category=new_category,
+                word=word
+            )
+            total_removed += removed
+
+            # Увеличиваем счетчик использований
+            keyword.usage_count += 1
+            keyword.save()
+
+        # Логируем итоги
+        old_cat_name = old_category.name if old_category else 'None'
+        new_cat_name = new_category.name or new_category.name_ru or new_category.name_en or f'ID:{new_category.id}'
+
+        logger.info(
+            f"[CELERY] Income keywords update completed for income {income_id}: "
+            f"moved {len(words)} words from '{old_cat_name}' to '{new_cat_name}' "
+            f"(removed {total_removed} duplicates, user {income.profile.telegram_id})"
+        )
+
+        # Проверяем лимит 50 слов на категорию (используем универсальную функцию)
+        check_category_keywords_limit(new_category)
+        if old_category:
+            check_category_keywords_limit(old_category)
+
+        logger.info(f"Successfully updated income keywords for income {income_id}")
+
+    except Exception as e:
+        logger.error(f"Error in update_income_keywords task: {e}")
+
+
+@shared_task
+def learn_income_keywords_on_create(income_id: int):
+    """
+    Обучение системы при создании нового дохода с AI-категоризацией.
+    Запускается при ЛЮБОЙ AI-категоризации для автоматического сохранения слов.
+
+    ВАЖНО: Использует строгую уникальность - одно слово только в одной категории!
+    """
+    try:
+        from expenses.models import Income, IncomeCategory, IncomeCategoryKeyword
+        from bot.services.income_categorization import ensure_unique_income_keyword
+
+        # Получаем объекты
+        income = Income.objects.select_related('profile', 'category').get(id=income_id)
+
+        # Только если была AI-категоризация
+        if not income.ai_categorized or not income.category:
+            logger.info(f"Income {income_id} was not AI-categorized, skipping keyword learning")
+            return
+
+        category = income.category
+
+        # Извлекаем и очищаем слова из описания
+        words = extract_words_from_description(income.description)
+
+        # Добавляем ключевые слова с гарантией строгой уникальности
+        any_created = False  # Флаг что хотя бы одно новое слово создано
+        total_removed = 0
+
+        for word in words:
+            # ПАТТЕРН СТРОГОЙ УНИКАЛЬНОСТИ через helper функцию
+            keyword, created, removed = ensure_unique_income_keyword(
+                profile=income.profile,
+                category=category,
+                word=word
+            )
+            total_removed += removed
+
+            if created:
+                any_created = True
+                keyword.usage_count = 1  # Первое использование
+            else:
+                keyword.usage_count += 1  # Увеличиваем счетчик
+
+            keyword.save()
+
+        # Логируем итоги
+        cat_name = category.name or category.name_ru or category.name_en or f'ID:{category.id}'
+
+        logger.info(
+            f"[CELERY] Income keywords learned from AI for income {income_id}: "
+            f"added {len(words)} words to '{cat_name}' "
+            f"({sum(1 for w in words if len(w) >= 3)} valid, "
+            f"removed {total_removed} duplicates, user {income.profile.telegram_id})"
+        )
+
+        # Очистка старых ключевых слов только если добавили новые
+        if any_created:
+            cleanup_old_keywords(profile_id=income.profile.id, is_income=True)
+
+        # Проверяем лимит 50 слов на категорию
+        check_category_keywords_limit(category)
+
+        logger.info(f"Successfully learned income keywords from AI for income {income_id}")
+
+    except Exception as e:
+        logger.error(f"Error in learn_income_keywords_on_create task: {e}")

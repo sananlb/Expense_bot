@@ -14,6 +14,15 @@ from django.utils import timezone
 from bot.utils.db_utils import get_or_create_user_profile_sync
 from bot.utils.category_helpers import get_category_display_name
 
+# Предзагрузка Celery задач для устранения "холодного старта"
+# Импортируем заранее, чтобы при первом вызове не было задержки 6+ секунд
+try:
+    from expense_bot.celery_tasks import learn_keywords_on_create, update_keywords_weights
+except ImportError:
+    # На случай если Celery не установлен (например, в тестах)
+    learn_keywords_on_create = None
+    update_keywords_weights = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -134,24 +143,16 @@ def create_expense(
         expense.profile = profile
 
         # Если категория определена AI, обучаем систему (сохраняем слова в БД)
-        if ai_categorized and category_id and description:
-            from expense_bot.celery_tasks import learn_keywords_on_create
-            from django.conf import settings
-
-            # В режиме разработки - синхронно (Celery worker может не работать на Windows)
-            # В продакшене - асинхронно через Celery
-            if settings.DEBUG:
-                logger.info(f"[DEBUG MODE] Running keywords learning synchronously for expense {expense.id}")
-                learn_keywords_on_create(
-                    expense_id=expense.id,
-                    category_id=category_id
-                )
-            else:
-                learn_keywords_on_create.delay(
-                    expense_id=expense.id,
-                    category_id=category_id
+        if ai_categorized and category_id and description and learn_keywords_on_create:
+            try:
+                # Запускаем обучение в фоне через Celery (не блокирует пользователя!)
+                learn_keywords_on_create.apply_async(
+                    args=(expense.id, category_id),
+                    countdown=0
                 )
                 logger.info(f"Triggered async keywords learning for new expense {expense.id}")
+            except Exception as e:
+                logger.warning(f"Failed to trigger keywords learning task: {e}")
 
         # Сбрасываем флаг напоминания о внесении трат
         from expenses.tasks import clear_expense_reminder
@@ -626,14 +627,17 @@ def update_expense(
                 logger.info(f"Updated cashback for expense {expense_id}: {new_cashback}")
         
         # Если категория изменилась, запускаем фоновую задачу для обновления весов
-        if category_changed and old_category_id:
-            from expense_bot.celery_tasks import update_keywords_weights
-            update_keywords_weights.delay(
-                expense_id=expense_id,
-                old_category_id=old_category_id,
-                new_category_id=new_category_id
-            )
-            logger.info(f"Triggered keywords weights update for expense {expense_id}")
+        if category_changed and old_category_id and update_keywords_weights:
+            try:
+                # Используем apply_async с countdown=0 для немедленного выполнения
+                # Это быстрее чем .delay() и не блокирует вызывающий поток
+                update_keywords_weights.apply_async(
+                    args=(expense_id, old_category_id, new_category_id),
+                    countdown=0
+                )
+                logger.info(f"Triggered keywords weights update for expense {expense_id}")
+            except Exception as e:
+                logger.warning(f"Failed to trigger keywords update task: {e}")
         
         return True
         

@@ -15,6 +15,15 @@ from bot.utils.db_utils import get_or_create_user_profile_sync
 from bot.utils.category_helpers import get_category_display_name, get_category_name_without_emoji
 from bot.utils.language import get_text
 
+# Предзагрузка Celery задач для устранения "холодного старта"
+# Импортируем заранее, чтобы при первом вызове не было задержки 6+ секунд
+try:
+    from expense_bot.celery_tasks import learn_income_keywords_on_create, update_income_keywords
+except ImportError:
+    # На случай если Celery не установлен (например, в тестах)
+    learn_income_keywords_on_create = None
+    update_income_keywords = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -127,6 +136,21 @@ def create_income(
             ai_confidence=ai_confidence,
             currency=currency.upper()
         )
+
+        # Если была AI-категоризация, обучаем систему
+        if ai_categorized and category and learn_income_keywords_on_create:
+            try:
+                # Запускаем обучение в фоне через Celery (не блокирует пользователя!)
+                learn_income_keywords_on_create.apply_async(
+                    args=(income.id,),
+                    countdown=0
+                )
+                logger.info(
+                    f"Scheduled background keyword learning for AI-categorized income "
+                    f"{income.id} (category: {category.name})"
+                )
+            except Exception as e:
+                logger.warning(f"Could not schedule income keyword learning task: {e}")
 
         # Сбрасываем флаг напоминания о внесении операций
         from expenses.tasks import clear_expense_reminder
@@ -307,48 +331,46 @@ def get_incomes_summary(
         }
 
 
-@sync_to_async
-def get_today_income_summary(user_id: int) -> Dict:
+async def get_today_income_summary(user_id: int) -> Dict:
     """
-    Получить сводку по доходам за сегодня
-    
+    Получить сводку по доходам за сегодня (async версия как у расходов)
+
     Args:
         user_id: ID пользователя в Telegram
-        
+
     Returns:
         Словарь с суммами по валютам
     """
+    from expenses.models import Profile
+
     try:
-        from expenses.models import Profile, Income
-        from django.utils import timezone
-        from django.db.models import Sum
-        from decimal import Decimal
-        
-        profile = Profile.objects.get(telegram_id=user_id)
-        today = timezone.now().date()
-        
-        # Получаем все доходы за сегодня с категориями
-        incomes = Income.objects.filter(
-            profile=profile,
-            income_date=today
-        ).select_related('category')
-        
+        profile = await Profile.objects.aget(telegram_id=user_id)
+        today = date.today()
+
+        @sync_to_async
+        def get_today_incomes():
+            return list(
+                Income.objects.filter(
+                    profile=profile,
+                    income_date=today
+                ).select_related('category')
+            )
+
+        incomes = await get_today_incomes()
+
         # Группируем по валютам
         currency_totals = {}
         for income in incomes:
             currency = income.currency or 'RUB'
             if currency not in currency_totals:
-                currency_totals[currency] = Decimal('0')
-            currency_totals[currency] += income.amount
-        
-        # Преобразуем Decimal в float для сериализации
-        currency_totals = {k: float(v) for k, v in currency_totals.items()}
-        
+                currency_totals[currency] = 0.0
+            currency_totals[currency] += float(income.amount)
+
         return {
             'currency_totals': currency_totals,
-            'count': incomes.count()
+            'count': len(incomes)
         }
-        
+
     except Profile.DoesNotExist:
         return {'currency_totals': {}, 'count': 0}
     except Exception as e:
@@ -356,47 +378,46 @@ def get_today_income_summary(user_id: int) -> Dict:
         return {'currency_totals': {}, 'count': 0}
 
 
-@sync_to_async
-def get_date_income_summary(user_id: int, target_date: date) -> Dict:
+async def get_date_income_summary(user_id: int, target_date: date) -> Dict:
     """
-    Получить сводку по доходам за конкретную дату
-    
+    Получить сводку по доходам за конкретную дату (async версия)
+
     Args:
         user_id: ID пользователя в Telegram
         target_date: Дата для получения сводки
-        
+
     Returns:
         Словарь с суммами по валютам
     """
+    from expenses.models import Profile
+
     try:
-        from expenses.models import Profile, Income
-        from django.db.models import Sum
-        from decimal import Decimal
-        
-        profile = Profile.objects.get(telegram_id=user_id)
-        
-        # Получаем все доходы за указанную дату с категориями
-        incomes = Income.objects.filter(
-            profile=profile,
-            income_date=target_date
-        ).select_related('category')
-        
+        profile = await Profile.objects.aget(telegram_id=user_id)
+
+        @sync_to_async
+        def get_incomes_for_date():
+            return list(
+                Income.objects.filter(
+                    profile=profile,
+                    income_date=target_date
+                ).select_related('category')
+            )
+
+        incomes = await get_incomes_for_date()
+
         # Группируем по валютам
         currency_totals = {}
         for income in incomes:
             currency = income.currency or 'RUB'
             if currency not in currency_totals:
-                currency_totals[currency] = Decimal('0')
-            currency_totals[currency] += income.amount
-        
-        # Преобразуем Decimal в float для сериализации
-        currency_totals = {k: float(v) for k, v in currency_totals.items()}
-        
+                currency_totals[currency] = 0.0
+            currency_totals[currency] += float(income.amount)
+
         return {
             'currency_totals': currency_totals,
-            'count': incomes.count()
+            'count': len(incomes)
         }
-        
+
     except Profile.DoesNotExist:
         return {'currency_totals': {}, 'count': 0}
     except Exception as e:
@@ -507,32 +528,49 @@ def update_income(
         
         # Сохраняем старую категорию для обучения
         old_category = income.category if hasattr(income, 'category') else None
-        
+        old_category_id = old_category.id if old_category else None
+
         # Обновляем поля
         for field, value in kwargs.items():
             if hasattr(income, field):
-                setattr(income, field, value)
-        
-        # Если изменилась категория, обучаем систему
-        if 'category' in kwargs and old_category != income.category:
-            try:
-                from bot.services.income_categorization import learn_from_income_category_change
-                import asyncio
-                
-                # Запускаем асинхронную функцию в синхронном контексте
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                loop.run_until_complete(
-                    learn_from_income_category_change(income, old_category, income.category)
-                )
-                loop.close()
-                
-                logger.info(f"Learned from income category change for income {income_id}")
-            except Exception as e:
-                logger.warning(f"Could not learn from income category change: {e}")
-        
-        # Сохраняем изменения
+                # Для category_id получаем объект категории
+                if field == 'category_id' and value:
+                    try:
+                        category_obj = IncomeCategory.objects.get(
+                            id=value,
+                            profile=profile,
+                            is_active=True
+                        )
+                        setattr(income, 'category', category_obj)
+                    except IncomeCategory.DoesNotExist:
+                        logger.warning(f"Income category {value} not found for user {user_id}")
+                        continue
+                else:
+                    setattr(income, field, value)
+
+        # Сохраняем изменения ПЕРЕД запуском Celery задачи
         income.save()
+
+        # Если изменилась категория, обучаем систему В ФОНЕ через Celery
+        # ВАЖНО: Проверяем category_id (приходит из роутера), а не category!
+        if 'category_id' in kwargs and old_category_id != income.category_id and update_income_keywords:
+            try:
+                # Запускаем обучение в фоне (не блокирует пользователя!)
+                update_income_keywords.apply_async(
+                    kwargs={
+                        'income_id': income.id,
+                        'old_category_id': old_category_id,
+                        'new_category_id': income.category_id
+                    },
+                    countdown=0
+                )
+
+                logger.info(
+                    f"Scheduled background learning for income category change: "
+                    f"{old_category} -> {income.category} (income {income_id})"
+                )
+            except Exception as e:
+                logger.warning(f"Could not schedule income keyword learning task: {e}")
         
         logger.info(f"Updated income {income_id} for user {user_id}")
         return True

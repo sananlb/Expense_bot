@@ -941,29 +941,37 @@ def get_icon_for_category(category_name: str) -> str:
 
 @sync_to_async
 def add_category_keyword(user_id: int, category_id: int, keyword: str) -> bool:
-    """Добавить ключевое слово к категории"""
+    """
+    Добавить ключевое слово к категории.
+
+    ВАЖНО: Ключевые слова должны быть уникальными - одно слово может быть только в одной категории!
+    Если слово уже существует в другой категории пользователя, оно будет удалено оттуда.
+    """
     try:
-        category = ExpenseCategory.objects.get(
+        category = ExpenseCategory.objects.select_related('profile').get(
             id=category_id,
             profile__telegram_id=user_id
         )
-        
-        # Проверяем, нет ли уже такого ключевого слова
+
         keyword_lower = keyword.lower().strip()
-        if CategoryKeyword.objects.filter(
-            category=category,
-            keyword__iexact=keyword_lower
-        ).exists():
-            logger.warning(f"Keyword '{keyword}' already exists for category {category_id}")
-            return False
-        
+
+        # ШАБЛОН УНИКАЛЬНОСТИ: Удаляем это слово из ВСЕХ категорий пользователя
+        deleted = CategoryKeyword.objects.filter(
+            category__profile=category.profile,
+            keyword=keyword_lower
+        ).delete()
+
+        if deleted[0] > 0:
+            logger.info(f"Removed keyword '{keyword}' from {deleted[0]} other categories to maintain uniqueness")
+
+        # Добавляем слово в целевую категорию
         CategoryKeyword.objects.create(
             category=category,
             keyword=keyword_lower
         )
         logger.info(f"Added keyword '{keyword}' to category {category_id}")
         return True
-        
+
     except ExpenseCategory.DoesNotExist:
         logger.error(f"Category {category_id} not found for user {user_id}")
         return False
@@ -1021,25 +1029,28 @@ def auto_learn_keywords(user_id: int) -> dict:
     Автоматически обучаться на основе трат пользователя.
     Анализирует описания трат и добавляет часто встречающиеся слова
     как ключевые слова к соответствующим категориям.
+
+    ВАЖНО: Ключевые слова должны быть уникальными - одно слово может быть только в одной категории!
+    Если слово уже существует в другой категории, оно будет удалено оттуда.
     """
     try:
         profile = Profile.objects.get(telegram_id=user_id)
-        
+
         # Получаем последние 100 трат с категориями
         from expenses.models import Expense
         expenses = Expense.objects.filter(
             profile=profile,
             category__isnull=False
         ).select_related('category').order_by('-created_at')[:100]
-        
+
         # Словарь для подсчета слов по категориям
         category_words = {}
-        
+
         for expense in expenses:
             category_name = expense.category.name
             if category_name not in category_words:
                 category_words[category_name] = {}
-            
+
             # Разбиваем описание на слова
             words = expense.description.lower().split()
             for word in words:
@@ -1048,35 +1059,46 @@ def auto_learn_keywords(user_id: int) -> dict:
                     if word not in category_words[category_name]:
                         category_words[category_name][word] = 0
                     category_words[category_name][word] += 1
-        
+
         # Добавляем популярные слова как ключевые
         added_keywords = {}
+        total_removed = 0
+
         for category_name, words in category_words.items():
             # Берем слова, которые встречаются минимум 3 раза
             popular_words = [word for word, count in words.items() if count >= 3]
-            
+
             if popular_words:
                 category = ExpenseCategory.objects.get(
                     profile=profile,
                     name=category_name
                 )
-                
+
                 added = []
                 for word in popular_words[:5]:  # Максимум 5 слов на категорию
-                    # Проверяем, нет ли уже такого ключевого слова
-                    if not CategoryKeyword.objects.filter(
+                    # ШАБЛОН УНИКАЛЬНОСТИ: Удаляем это слово из ВСЕХ категорий пользователя
+                    deleted = CategoryKeyword.objects.filter(
+                        category__profile=profile,
+                        keyword=word
+                    ).delete()
+
+                    if deleted[0] > 0:
+                        total_removed += deleted[0]
+                        logger.debug(f"Removed keyword '{word}' from {deleted[0]} other categories during auto-learn")
+
+                    # Добавляем слово в целевую категорию
+                    CategoryKeyword.objects.create(
                         category=category,
-                        keyword__iexact=word
-                    ).exists():
-                        CategoryKeyword.objects.create(
-                            category=category,
-                            keyword=word
-                        )
-                        added.append(word)
-                
+                        keyword=word
+                    )
+                    added.append(word)
+
                 if added:
                     added_keywords[category_name] = added
-        
+
+        if total_removed > 0:
+            logger.info(f"Auto-learn: removed {total_removed} duplicate keywords to maintain uniqueness")
+
         return added_keywords
         
     except Profile.DoesNotExist:
@@ -1150,13 +1172,25 @@ async def optimize_keywords_for_new_category(user_id: int, new_category_id: int)
                         else:
                             continue
                     
-                    # Добавляем новые ключевые слова
+                    # Добавляем новые ключевые слова с гарантией уникальности
                     for keyword in changes.get('add', []):
+                        keyword_lower = keyword.lower().strip()
+
+                        # ШАБЛОН УНИКАЛЬНОСТИ: Удаляем это слово из ВСЕХ категорий пользователя
+                        deleted = CategoryKeyword.objects.filter(
+                            category__profile=category_obj.profile,
+                            keyword=keyword_lower
+                        ).delete()
+
+                        if deleted[0] > 0:
+                            logger.debug(f"Removed keyword '{keyword}' from {deleted[0]} other categories during AI optimization")
+
+                        # Добавляем слово в целевую категорию
                         CategoryKeyword.objects.get_or_create(
                             category=category_obj,
-                            keyword=keyword.lower().strip()
+                            keyword=keyword_lower
                         )
-                    
+
                     # Удаляем ключевые слова
                     for keyword in changes.get('remove', []):
                         CategoryKeyword.objects.filter(

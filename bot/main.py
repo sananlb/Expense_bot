@@ -72,6 +72,25 @@ async def on_startup(bot: Bot):
     try:
         from bot.services import expense, income
         logger.info("Preloaded expense and income modules with Celery tasks")
+
+        # Прогреваем @sync_to_async функции для устранения холодного старта
+        # ВАЖНО: Thread pool инициализируется при первом ПОЛНОМ выполнении запроса к БД
+        # Вызываем функцию которая ГАРАНТИРОВАННО выполнит запрос
+        import time
+        from asgiref.sync import sync_to_async
+        from bot.utils.db_utils import get_or_create_user_profile_sync
+
+        warmup_start = time.time()
+        try:
+            # Вызываем СИНХРОННУЮ функцию через sync_to_async - это гарантирует полную инициализацию
+            # Создаем временный профиль, который выполнит реальный запрос к БД
+            warmup_profile = await sync_to_async(get_or_create_user_profile_sync)(999999999)
+            warmup_duration = time.time() - warmup_start
+            logger.info(f"Warmed up @sync_to_async thread pool in {warmup_duration:.2f}s")
+        except Exception as e:
+            warmup_duration = time.time() - warmup_start
+            logger.warning(f"Warmup completed in {warmup_duration:.2f}s with error: {e}")
+
     except Exception as e:
         logger.warning(f"Could not preload service modules: {e}")
 

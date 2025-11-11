@@ -2203,21 +2203,9 @@ async def process_edit_category(callback: types.CallbackQuery, state: FSMContext
         success = await update_expense(callback.from_user.id, item_id, category_id=category_id)
     
     if success:
-        # Если категория изменилась и это расход, запускаем обучение
-        if not is_income and old_category_id != category_id:
-            from ..services.category import learn_from_category_change
-            import asyncio
-            # Запускаем в фоне, не ждём завершения
-            asyncio.create_task(
-                learn_from_category_change(
-                    callback.from_user.id,
-                    item_id,
-                    category_id,
-                    description,
-                    old_category_id  # Передаем старую категорию для удаления ключевых слов
-                )
-            )
-        
+        # Обучение ключевым словам теперь происходит через Celery задачу
+        # Вызов update_keywords_weights.delay() находится в update_expense()
+
         # Показываем обновленную операцию
         await show_updated_expense_callback(callback, state, item_id, lang)
     else:

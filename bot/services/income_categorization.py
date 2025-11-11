@@ -18,6 +18,90 @@ from bot.utils.income_category_definitions import (
 logger = logging.getLogger(__name__)
 
 
+def ensure_unique_income_keyword(
+    profile: Profile,
+    category: IncomeCategory,
+    word: str,
+    defaults: Optional[Dict[str, Any]] = None
+) -> tuple[IncomeCategoryKeyword, bool, int]:
+    """
+    Гарантирует строгую уникальность ключевого слова дохода.
+
+    ВАЖНО: Одно слово может быть только в ОДНОЙ категории дохода пользователя!
+
+    Алгоритм:
+    1. Нормализует слово (lower, strip)
+    2. УДАЛЯЕТ слово из ВСЕХ категорий доходов пользователя
+    3. Создает/получает слово в целевой категории
+    4. Логирует удаления
+
+    Args:
+        profile: Профиль пользователя
+        category: Целевая категория дохода
+        word: Ключевое слово
+        defaults: Дефолтные значения для создания (опционально)
+
+    Returns:
+        (keyword, created, removed_count):
+            - keyword: объект IncomeCategoryKeyword
+            - created: True если слово создано, False если существовало
+            - removed_count: количество удаленных дубликатов
+
+    Example:
+        Пользователь вводит: "зарплата 50000"
+        Система находит: категория "Фриланс" (там есть "зарплата")
+        Пользователь меняет на: "Основная работа"
+
+        ensure_unique_income_keyword() делает:
+        1. Удаляет "зарплата" из "Фриланс"
+        2. Создает "зарплата" в "Основная работа"
+        3. Теперь "зарплата" только в "Основная работа"
+    """
+    # 1. Нормализовать слово
+    word = word.lower().strip()
+
+    # 2. Удалить из ВСЕХ категорий доходов профиля (строгая уникальность!)
+    # Сначала получаем информацию ДО удаления для детального логирования
+    existing_keywords = IncomeCategoryKeyword.objects.filter(
+        category__profile=profile,
+        keyword=word
+    ).select_related('category')
+
+    # Собираем информацию о том, откуда удаляем
+    removed_from_categories = []
+    for kw in existing_keywords:
+        cat_name = kw.category.name or kw.category.name_ru or kw.category.name_en or f'ID:{kw.category.id}'
+        removed_from_categories.append(cat_name)
+
+    # Удаляем
+    deleted = existing_keywords.delete()
+    removed_count = deleted[0]
+
+    # 3. Создать/получить в целевой категории
+    keyword, created = IncomeCategoryKeyword.objects.get_or_create(
+        category=category,
+        keyword=word,
+        defaults=defaults or {'usage_count': 0}
+    )
+
+    # 4. Логировать удаления для отладки с ПОЛНОЙ информацией
+    target_cat_name = category.name or category.name_ru or category.name_en or f'ID:{category.id}'
+
+    if removed_count > 0:
+        logger.info(
+            f"[INCOME KEYWORD MOVE] User {profile.telegram_id}: '{word}' "
+            f"removed from {removed_from_categories} ({removed_count} duplicates) → "
+            f"moved to '{target_cat_name}'"
+        )
+    elif created:
+        logger.info(
+            f"[INCOME KEYWORD NEW] User {profile.telegram_id}: '{word}' "
+            f"created in '{target_cat_name}'"
+        )
+
+    return keyword, created, removed_count
+
+
 async def categorize_income(text: str, user_id: int, profile: Optional[Profile] = None) -> Optional[Dict[str, Any]]:
     """
     Категоризация дохода через AI
@@ -79,6 +163,9 @@ async def categorize_income(text: str, user_id: int, profile: Optional[Profile] 
 def find_category_by_keywords(text: str, profile: Profile) -> Optional[IncomeCategory]:
     """
     Поиск категории по ключевым словам
+
+    ВАЖНО: Использует строгую уникальность - одно слово = одна категория!
+    Если нашли совпадение, сразу возвращаем (никаких весов!)
     """
     text_lower = text.lower()
 
@@ -88,24 +175,19 @@ def find_category_by_keywords(text: str, profile: Profile) -> Optional[IncomeCat
         category__is_active=True
     ).select_related('category')
 
-    best_match = None
-    best_weight = 0
-    best_keyword_id = None
-
+    # СТРОГАЯ УНИКАЛЬНОСТЬ: одно слово может быть только в одной категории
+    # Поэтому если нашли совпадение - сразу возвращаем, без сравнения весов!
     for keyword_obj in keywords:
         if keyword_obj.keyword.lower() in text_lower:
-            if keyword_obj.normalized_weight > best_weight:
-                best_match = keyword_obj.category
-                best_weight = keyword_obj.normalized_weight
-                best_keyword_id = keyword_obj.id
+            # Нашли совпадение! Благодаря строгой уникальности это единственная категория с этим словом
+            # Обновляем статистику использования
+            keyword_obj.usage_count += 1
+            keyword_obj.save(update_fields=['usage_count', 'last_used'])  # last_used обновится auto_now
 
-    # Обновляем last_used и usage_count для использованного ключевого слова
-    if best_keyword_id:
-        keyword = IncomeCategoryKeyword.objects.get(id=best_keyword_id)
-        keyword.usage_count += 1
-        keyword.save(update_fields=['usage_count', 'last_used'])  # last_used обновится auto_now
+            return keyword_obj.category
 
-    return best_match
+    # Ничего не найдено
+    return None
 
 
 @sync_to_async
@@ -201,42 +283,44 @@ def learn_from_income_category_change_sync(
 ) -> None:
     """
     Обучение системы при изменении категории дохода пользователем (синхронная версия)
+
+    ВАЖНО: Использует строгую уникальность - одно слово только в одной категории!
     """
     if not income.description:
         return
-    
+
     description_lower = income.description.lower()
-    
-    # Уменьшаем вес ключевых слов старой категории
-    if old_category:
-        old_keywords = IncomeCategoryKeyword.objects.filter(
-            category=old_category,
-            keyword__icontains=description_lower
-        )
-        for kw in old_keywords:
-            kw.normalized_weight = max(0.1, kw.normalized_weight - 0.1)
-            kw.save()
-    
-    # Увеличиваем вес или создаем ключевые слова для новой категории
+
     # Извлекаем ключевые слова из описания
     words = description_lower.split()
-    
+
+    total_removed = 0
     for word in words:
         if len(word) < 3:  # Пропускаем короткие слова
             continue
-            
-        keyword, created = IncomeCategoryKeyword.objects.get_or_create(
+
+        # ПАТТЕРН СТРОГОЙ УНИКАЛЬНОСТИ:
+        # Удаляет из ВСЕХ категорий → создает в целевой
+        keyword, created, removed = ensure_unique_income_keyword(
+            profile=income.profile,
             category=new_category,
-            keyword=word,
-            defaults={'normalized_weight': 1.0}
+            word=word
         )
-        
+
+        total_removed += removed
+
+        # Увеличиваем счетчик использований
         if not created:
             keyword.usage_count += 1
-            keyword.normalized_weight = min(2.0, keyword.normalized_weight + 0.1)
             keyword.save()
-    
-    logger.info(f"Learned from income category change: {old_category} -> {new_category} for '{income.description}'")
+
+    if total_removed > 0:
+        logger.info(
+            f"Removed {total_removed} duplicate keywords while learning from income category change: "
+            f"{old_category} -> {new_category} for '{income.description}'"
+        )
+    else:
+        logger.info(f"Learned from income category change: {old_category} -> {new_category} for '{income.description}'")
 
 
 async def learn_from_income_category_change(
@@ -257,6 +341,8 @@ def generate_keywords_for_income_category_sync(
 ) -> List[str]:
     """
     Сохранение ключевых слов для категории доходов (синхронная версия)
+
+    ВАЖНО: Использует строгую уникальность - одно слово только в одной категории!
     """
     # Базовые ключевые слова по умолчанию
     default_keywords = {
@@ -271,16 +357,27 @@ def generate_keywords_for_income_category_sync(
         'Подарки': ['подарок', 'подарили', 'презент', 'дарение'],
         'Прочие доходы': ['доход', 'получил', 'заработал', 'прибыль']
     }
-    
+
     keywords = default_keywords.get(category_name, ['доход'])
-    
+
+    total_removed = 0
     for keyword in keywords:
-        IncomeCategoryKeyword.objects.get_or_create(
+        # ПАТТЕРН СТРОГОЙ УНИКАЛЬНОСТИ:
+        # Удаляет из ВСЕХ категорий → создает в целевой
+        _, _, removed = ensure_unique_income_keyword(
+            profile=category.profile,
             category=category,
-            keyword=keyword.lower(),
-            defaults={'normalized_weight': 1.0}
+            word=keyword
         )
-    
+        total_removed += removed
+
+    if total_removed > 0:
+        logger.info(
+            f"Removed {total_removed} duplicate keywords while generating default keywords "
+            f"for income category '{category_name}'"
+        )
+
+    # ВАЖНО: Возвращаем список ключевых слов для вызывающей функции
     return keywords
 
 
@@ -332,10 +429,22 @@ async def generate_keywords_for_income_category(
 def save_income_category_keywords(category: IncomeCategory, keywords: List[str]) -> None:
     """
     Сохранение ключевых слов для категории
+
+    ВАЖНО: Использует строгую уникальность - одно слово только в одной категории!
     """
+    total_removed = 0
     for keyword in keywords:
-        IncomeCategoryKeyword.objects.get_or_create(
+        # ПАТТЕРН СТРОГОЙ УНИКАЛЬНОСТИ:
+        # Удаляет из ВСЕХ категорий → создает в целевой
+        _, _, removed = ensure_unique_income_keyword(
+            profile=category.profile,
             category=category,
-            keyword=keyword.lower(),
-            defaults={'normalized_weight': 1.0}
+            word=keyword
+        )
+        total_removed += removed
+
+    if total_removed > 0:
+        logger.info(
+            f"Removed {total_removed} duplicate keywords while saving AI-generated keywords "
+            f"for income category '{category.name}'"
         )
