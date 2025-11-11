@@ -34,6 +34,8 @@ async def categorize_income(text: str, user_id: int, profile: Optional[Profile] 
     if not profile:
         logger.warning(f"No profile provided for user {user_id}")
         return None
+
+    lang_code = getattr(profile, 'language_code', None) or 'ru'
     
     # Сначала проверяем ключевые слова
     category_from_keywords = await find_category_by_keywords(text, profile)
@@ -42,7 +44,7 @@ async def categorize_income(text: str, user_id: int, profile: Optional[Profile] 
         categories = await get_user_income_categories(profile)
         result = await base_categorizer.categorize(text, user_id, profile)
         if result:
-            result['category'] = category_from_keywords.name
+            result['category'] = get_category_display_name(category_from_keywords, lang_code)
             result['confidence'] = 1.0  # Максимальная уверенность для ключевых слов
             return result
     
@@ -111,12 +113,16 @@ def get_user_income_categories(profile: Profile) -> List[str]:
     """
     Получение списка категорий доходов пользователя
     """
+    lang_code = getattr(profile, 'language_code', None) or 'ru'
     categories = IncomeCategory.objects.filter(
         profile=profile,
         is_active=True
-    ).values_list('name', flat=True)
+    )
     
-    return list(categories)
+    return [
+        get_category_display_name(category, lang_code)
+        for category in categories
+    ]
 
 
 @sync_to_async

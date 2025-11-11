@@ -213,6 +213,50 @@ CATEGORY_KEYWORDS_EN = {
     ],
 }
 
+# Маппинг между русскими и английскими названиями категорий
+# Используется для конвертации названий категорий между языками
+CATEGORY_NAME_MAPPING = {
+    # Русский -> Английский
+    'Продукты': 'Groceries',
+    'Кафе и рестораны': 'Cafes and Restaurants',
+    'АЗС': 'Gas Station',
+    'Транспорт': 'Transport',
+    'Автомобиль': 'Car',
+    'Жилье': 'Housing',
+    'Аптеки': 'Pharmacies',
+    'Медицина': 'Medicine',
+    'Красота': 'Beauty',
+    'Спорт и фитнес': 'Sports and Fitness',
+    'Одежда и обувь': 'Clothes and Shoes',
+    'Развлечения': 'Entertainment',
+    'Образование': 'Education',
+    'Подарки': 'Gifts',
+    'Путешествия': 'Travel',
+    'Коммуналка и подписки': 'Utilities and Subscriptions',
+    'Накопления': 'Savings',
+    'Прочие расходы': 'Other Expenses',
+
+    # Английский -> Русский (обратный маппинг)
+    'Groceries': 'Продукты',
+    'Cafes and Restaurants': 'Кафе и рестораны',
+    'Gas Station': 'АЗС',
+    'Transport': 'Транспорт',
+    'Car': 'Автомобиль',
+    'Housing': 'Жилье',
+    'Pharmacies': 'Аптеки',
+    'Medicine': 'Медицина',
+    'Beauty': 'Красота',
+    'Sports and Fitness': 'Спорт и фитнес',
+    'Clothes and Shoes': 'Одежда и обувь',
+    'Entertainment': 'Развлечения',
+    'Education': 'Образование',
+    'Gifts': 'Подарки',
+    'Travel': 'Путешествия',
+    'Utilities and Subscriptions': 'Коммуналка и подписки',
+    'Savings': 'Накопления',
+    'Other Expenses': 'Прочие расходы',
+}
+
 # Старый словарь оставляем для обратной совместимости
 # Используется как fallback если язык не определён
 CATEGORY_KEYWORDS = CATEGORY_KEYWORDS_RU

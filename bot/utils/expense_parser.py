@@ -169,7 +169,8 @@ EXPENSE_PATTERNS = [
 from expenses.models import (
     CATEGORY_KEYWORDS,  # Для обратной совместимости (русские категории)
     CATEGORY_KEYWORDS_RU,
-    CATEGORY_KEYWORDS_EN
+    CATEGORY_KEYWORDS_EN,
+    CATEGORY_NAME_MAPPING  # Маппинг между русскими и английскими названиями
 )
 
 # Импортируем helper функцию для работы с категориями
@@ -566,18 +567,35 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     
     # Если не нашли в пользовательских, ищем в стандартных
     if not category:
-        # Выбираем словарь ключевых слов по языку пользователя
+        # Определяем язык пользователя для отображения результата
         lang_code = profile.language_code if profile and hasattr(profile, 'language_code') else 'ru'
-        if lang_code == 'en':
-            keywords_dict = CATEGORY_KEYWORDS_EN
-        else:
-            keywords_dict = CATEGORY_KEYWORDS_RU
 
-        for cat_name, keywords in keywords_dict.items():
+        # ВАЖНО: Ищем в ОБОИХ словарях (и русском, и английском)
+        # чтобы пользователи могли вводить траты на любом языке
+        found_category_name = None
+
+        # Сначала ищем в русском словаре
+        for cat_name, keywords in CATEGORY_KEYWORDS_RU.items():
             score = sum(1 for keyword in keywords if keyword.lower() in text_lower)
             if score > max_score:
                 max_score = score
-                category = cat_name
+                found_category_name = cat_name  # Русское название
+
+        # Затем ищем в английском словаре
+        for cat_name, keywords in CATEGORY_KEYWORDS_EN.items():
+            score = sum(1 for keyword in keywords if keyword.lower() in text_lower)
+            if score > max_score:
+                max_score = score
+                found_category_name = cat_name  # Английское название
+
+        # Если нашли категорию, конвертируем название на нужный язык
+        if found_category_name:
+            if lang_code == 'en':
+                # Нужен английский - конвертируем если нашли русское название
+                category = CATEGORY_NAME_MAPPING.get(found_category_name, found_category_name)
+            else:
+                # Нужен русский - конвертируем если нашли английское название
+                category = CATEGORY_NAME_MAPPING.get(found_category_name, found_category_name)
     
     # Формируем описание (текст без суммы и без даты)
     description = text_without_amount if text_without_amount is not None else text_without_date

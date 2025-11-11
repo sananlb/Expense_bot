@@ -15,6 +15,7 @@ import google.generativeai as genai
 from aiogram.types import User
 
 from expenses.models import ExpenseCategory, Expense, IncomeCategory, Income, Profile
+from bot.utils.category_helpers import get_category_display_name
 from .key_rotation_mixin import GoogleKeyRotationMixin, OpenAIKeyRotationMixin
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,7 @@ class ExpenseCategorizer(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
     def __init__(self):
         self.usage_limiter = AIUsageLimiter()
         self.cache = AIResponseCache()
+        self.operation_type = 'expense'
         
         # Не инициализируем ключи здесь, будем использовать ротацию при каждом вызове
     
@@ -295,14 +297,22 @@ class ExpenseCategorizer(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
         @sync_to_async
         def get_user_categories():
             if profile:
+                lang_code = getattr(profile, 'language_code', None) or 'ru'
                 if self.operation_type == 'income':
-                    return list(IncomeCategory.objects.filter(
-                        profile=profile
-                    ).values_list('name', flat=True))
+                    queryset = IncomeCategory.objects.filter(
+                        profile=profile,
+                        is_active=True
+                    )
                 else:
-                    return list(ExpenseCategory.objects.filter(
-                        profile=profile
-                    ).values_list('name', flat=True))
+                    queryset = ExpenseCategory.objects.filter(
+                        profile=profile,
+                        is_active=True
+                    )
+
+                return [
+                    get_category_display_name(category, lang_code)
+                    for category in queryset
+                ]
             else:
                 if self.operation_type == 'income':
                     return [
@@ -323,35 +333,34 @@ class ExpenseCategorizer(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
         def get_user_context():
             context = {}
             if profile:
+                lang_code = getattr(profile, 'language_code', None) or 'ru'
+
                 # Get recent categories based on operation type
                 if self.operation_type == 'income':
                     recent_items = Income.objects.filter(
                         profile=profile
                     ).order_by('-income_date', '-income_time')[:10]
-                    
-                    recent_categories = list(set([
-                        item.category.name for item in recent_items 
-                        if item.category
-                    ]))[:5]
                 else:
                     recent_items = Expense.objects.filter(
                         profile=profile
                     ).order_by('-created_at')[:10]
-                    
-                    recent_categories = list(set([
-                        item.category.name for item in recent_items 
-                        if item.category
-                    ]))[:5]
-            
+
+                recent_items = list(recent_items)
+                recent_categories = [
+                    get_category_display_name(item.category, lang_code)
+                    for item in recent_items
+                    if getattr(item, 'category', None)
+                ]
                 if recent_categories:
-                    context['recent_categories'] = recent_categories
-                
+                    # dict.fromkeys сохраняет порядок появления
+                    context['recent_categories'] = list(dict.fromkeys(recent_categories))[:5]
+            
                 # Get preferred currency
-                if self.operation_type == 'income':
-                    currencies = list(recent_items.values_list('currency', flat=True))
-                else:
-                    currencies = list(recent_items.values_list('currency', flat=True))
-                    
+                currencies = [
+                    getattr(item, 'currency', None)
+                    for item in recent_items
+                    if getattr(item, 'currency', None)
+                ]
                 if currencies:
                     from collections import Counter
                     currency_counts = Counter(currencies)
