@@ -637,8 +637,10 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             from asgiref.sync import sync_to_async
             @sync_to_async
             def get_user_category_names():
-                return list(ExpenseCategory.objects.filter(profile=profile).values_list('name', flat=True))
-            
+                categories = ExpenseCategory.objects.filter(profile=profile)
+                lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
+                return [get_category_display_name(cat, lang_code) for cat in categories]
+
             user_categories = await get_user_category_names()
             
             # Проверяем точное и частичное совпадение
@@ -655,11 +657,14 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             try:
                 from bot.services.ai_selector import get_service
                 
-                # Получаем категории пользователя
+                # Получаем категории пользователя на нужном языке
                 @sync_to_async
                 def get_profile_categories():
-                    return list(ExpenseCategory.objects.filter(profile=profile).values_list('name', flat=True))
-                
+                    categories = ExpenseCategory.objects.filter(profile=profile)
+                    # Используем язык пользователя для отображения категорий
+                    lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
+                    return [get_category_display_name(cat, lang_code) for cat in categories]
+
                 user_categories = await get_profile_categories()
                 
                 if user_categories:
@@ -946,7 +951,9 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
         if not category:
             @sync_to_async
             def get_income_category_names():
-                return list(IncomeCategory.objects.filter(profile=profile).values_list('name', flat=True))
+                categories = IncomeCategory.objects.filter(profile=profile)
+                lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
+                return [get_category_display_name(cat, lang_code) for cat in categories]
 
             user_income_categories = await get_income_category_names()
 

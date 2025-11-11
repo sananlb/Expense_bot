@@ -45,19 +45,23 @@ def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCate
     logger.info(f"Looking for category '{effective_name}' for user {user_id}")
 
     profile = get_or_create_user_profile_sync(user_id)
-    
+
+    # Определяем язык пользователя для правильного отображения категорий
+    lang_code = profile.language_code if profile and hasattr(profile, 'language_code') and profile.language_code else 'ru'
+
     # Словарь для сопоставления категорий из парсера с реальными категориями
+    # Поддерживает и русские, и английские названия для мультиязычности
     category_mapping = {
-        'продукты': ['продукты', 'еда', 'супермаркет', 'магазин', 'groceries'],
-        'кафе и рестораны': ['кафе', 'ресторан', 'рестораны', 'обед', 'кофе', 'cafe', 'restaurant'],
-        'транспорт': ['транспорт', 'такси', 'метро', 'автобус', 'транспорт', 'transport', 'taxi', 'bus'],
-        'автомобиль': ['автомобиль', 'машина', 'авто', 'бензин', 'дизель', 'заправка', 'азс', 'топливо', 'car'],
-        'жилье': ['жилье', 'квартира', 'дом', 'аренда', 'housing'],
-        'аптеки': ['аптека', 'аптеки', 'лекарства', 'таблетки', 'витамины', 'pharmacy'],
-        'медицина': ['медицина', 'врач', 'доктор', 'больница', 'клиника', 'medicine', 'doctor'],
-        'красота': ['красота', 'салон', 'парикмахерская', 'косметика', 'маникюр', 'beauty'],
-        'спорт и фитнес': ['спорт', 'фитнес', 'тренажерный зал', 'йога', 'бассейн', 'sports', 'fitness'],
-        'одежда и обувь': ['одежда', 'обувь', 'вещи', 'одежда', 'clothes', 'shoes'],
+        'продукты': ['продукты', 'еда', 'супермаркет', 'магазин', 'groceries', 'food', 'supermarket'],
+        'кафе и рестораны': ['кафе', 'ресторан', 'рестораны', 'обед', 'кофе', 'cafe', 'cafes', 'restaurant', 'restaurants'],
+        'транспорт': ['транспорт', 'такси', 'метро', 'автобус', 'транспорт', 'transport', 'taxi', 'bus', 'metro'],
+        'автомобиль': ['автомобиль', 'машина', 'авто', 'бензин', 'дизель', 'заправка', 'азс', 'топливо', 'car', 'gas station', 'fuel', 'petrol'],
+        'жилье': ['жилье', 'квартира', 'дом', 'аренда', 'housing', 'rent', 'apartment'],
+        'аптеки': ['аптека', 'аптеки', 'лекарства', 'таблетки', 'витамины', 'pharmacy', 'pharmacies', 'medicine'],
+        'медицина': ['медицина', 'врач', 'доктор', 'больница', 'клиника', 'medicine', 'doctor', 'hospital', 'clinic'],
+        'красота': ['красота', 'салон', 'парикмахерская', 'косметика', 'маникюр', 'beauty', 'salon', 'cosmetics'],
+        'спорт и фитнес': ['спорт', 'фитнес', 'тренажерный зал', 'йога', 'бассейн', 'sports', 'fitness', 'gym', 'yoga'],
+        'одежда и обувь': ['одежда', 'обувь', 'вещи', 'одежда', 'clothes', 'clothing', 'shoes', 'apparel'],
         'развлечения': ['развлечения', 'кино', 'театр', 'концерт', 'отдых', 'entertainment'],
         'образование': ['образование', 'курсы', 'учеба', 'обучение', 'education'],
         'подарки': ['подарки', 'подарок', 'цветы', 'букет', 'gifts'],
@@ -140,7 +144,7 @@ def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCate
                 ).first()
                 
                 if category:
-                    display_name = get_category_display_name(category, 'ru')
+                    display_name = get_category_display_name(category, lang_code)
                     safe_name = display_name.encode('ascii', 'ignore').decode('ascii').strip()
                     if not safe_name:
                         safe_name = f"category with emoji (id={category.id})"
@@ -155,7 +159,7 @@ def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCate
             name_en = cat.name_en or ''
             if ('кафе' in name_ru.lower() or 'ресторан' in name_ru.lower() or
                 'cafe' in name_en.lower() or 'restaurant' in name_en.lower()):
-                display_name = get_category_display_name(cat, 'ru')
+                display_name = get_category_display_name(cat, lang_code)
                 safe_name = display_name.encode('ascii', 'ignore').decode('ascii').strip()
                 if not safe_name:
                     safe_name = f"category with emoji (id={cat.id})"
@@ -178,7 +182,7 @@ def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCate
             if close_matches:
                 matched_key = close_matches[0]
                 category = candidate_map[matched_key]
-                display_name = get_category_display_name(category, 'ru')
+                display_name = get_category_display_name(category, lang_code)
                 safe_name = display_name.encode('ascii', 'ignore').decode('ascii').strip() or f"category id={category.id}"
                 logger.info(f"Found category '{safe_name}' by fuzzy match (input='{original_category_name}', matched='{matched_key}')")
                 return category
