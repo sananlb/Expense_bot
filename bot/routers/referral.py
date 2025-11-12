@@ -267,6 +267,59 @@ async def show_referral_rewards(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
 
 
+@router.callback_query(F.data == "telegram_stars_info")
+async def show_telegram_stars_info(callback: CallbackQuery, state: FSMContext):
+    """Показать информацию о программе Telegram Stars (только информация, без функционала)"""
+    lang = await get_user_language(callback.from_user.id)
+
+    if lang == 'en':
+        text = (
+            "⭐ <b>Telegram Stars Affiliate Program</b>\n\n"
+            "Telegram has an official affiliate program where you can earn Stars "
+            "by inviting users to bots.\n\n"
+            "💰 <b>How it works:</b>\n"
+            "1. Open Telegram: Settings → My Stars → Earn Stars\n"
+            "2. Find our bot in the list\n"
+            "3. Get your unique affiliate link from Telegram\n"
+            "4. Share it with friends\n"
+            "5. Earn up to 20% Stars from their purchases"
+        )
+    else:
+        text = (
+            "⭐ <b>Программа Telegram Stars</b>\n\n"
+            "Telegram запустил официальную реферальную программу, где можно зарабатывать Stars, "
+            "приглашая пользователей в ботов.\n\n"
+            "💰 <b>Как это работает:</b>\n"
+            "1. Откройте Telegram: Настройки → My Stars → Earn Stars\n"
+            "2. Найдите нашего бота в списке\n"
+            "3. Получите свою уникальную affiliate-ссылку от Telegram\n"
+            "4. Поделитесь ей с друзьями\n"
+            "5. Получайте до 20% Stars от их покупок"
+        )
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text=get_text('back', lang), callback_data="menu_subscription")
+    builder.button(text=get_text('close', lang), callback_data="close")
+    builder.adjust(1)
+
+    try:
+        await callback.message.edit_text(
+            text=text,
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML"
+        )
+    except Exception:
+        await send_message_with_cleanup(
+            callback,
+            state,
+            text,
+            reply_markup=builder.as_markup(),
+            parse_mode="HTML"
+        )
+
+    await callback.answer()
+
+
 @router.message(Command("referral"))
 async def cmd_referral(message: Message, state: FSMContext):
     """Команда для шаринга бота и реферальной программы"""
