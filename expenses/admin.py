@@ -138,12 +138,10 @@ class ProfileAdmin(admin.ModelAdmin):
                     color, total_days, sub_count
                 )
             else:
-                # Определяем тип подписки для единственной
-                sub_type = active_subs.first().type
-                type_label = {'trial': 'проб.', 'month': 'мес.', 'six_months': '6 мес.'}.get(sub_type, '')
+                # Показываем только количество дней
                 return format_html(
-                    '<span style="color: {};">✅ {} дней {}</span>',
-                    color, total_days, f'({type_label})' if type_label else ''
+                    '<span style="color: {};">✅ {}</span>',
+                    color, total_days
                 )
         return format_html('<span style="color: red;">❌ Нет</span>')
     
