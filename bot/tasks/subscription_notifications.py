@@ -110,7 +110,16 @@ async def check_expiring_subscriptions(bot: Bot):
             logger.info(f"Отправлено уведомление пользователю {subscription.profile.telegram_id}")
             
         except Exception as e:
-            logger.error(f"Ошибка при отправке уведомления пользователю {subscription.profile.telegram_id}: {e}")
+            # Проверяем, заблокировал ли пользователь бота
+            error_message = str(e)
+            if "bot was blocked by the user" in error_message.lower() or "forbidden" in error_message.lower():
+                # Отмечаем что пользователь заблокировал бота
+                subscription.profile.bot_blocked = True
+                subscription.profile.bot_blocked_at = timezone.now()
+                await subscription.profile.asave(update_fields=['bot_blocked', 'bot_blocked_at'])
+                logger.warning(f"Пользователь {subscription.profile.telegram_id} заблокировал бота. Профиль помечен.")
+            else:
+                logger.error(f"Ошибка при отправке уведомления пользователю {subscription.profile.telegram_id}: {e}")
 
 
 async def run_notification_task(bot: Bot):

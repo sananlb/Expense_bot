@@ -53,12 +53,12 @@ class SubscriptionInline(admin.TabularInline):
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ['telegram_id', 'subscription_status',
+    list_display = ['telegram_id', 'subscription_status', 'bot_blocked_display',
                     'is_beta_tester', 'referrals_count_display', 'payment_stats',
                     'language_code', 'currency', 'is_active', 'acquisition_source_display', 'created_at']
-    list_filter = ['is_active', 'is_beta_tester', 'language_code', 'currency', 'acquisition_source', 'created_at']
+    list_filter = ['is_active', 'bot_blocked', 'is_beta_tester', 'language_code', 'currency', 'acquisition_source', 'created_at']
     search_fields = ['telegram_id', 'beta_access_key', 'acquisition_campaign']
-    readonly_fields = ['created_at', 'updated_at',
+    readonly_fields = ['created_at', 'updated_at', 'bot_blocked_at',
                        'referrals_count', 'active_referrals_count',
                        'total_payments_count', 'total_stars_paid',
                        'acquisition_date']
@@ -86,6 +86,10 @@ class ProfileAdmin(admin.ModelAdmin):
         ('Реферальная программа', {
             'fields': ('referrals_count', 'active_referrals_count'),
             'classes': ('collapse',)
+        }),
+        ('Статус бота', {
+            'fields': ('bot_blocked', 'bot_blocked_at'),
+            'description': 'Информация о блокировке бота пользователем'
         }),
         ('Статус', {
             'fields': ('is_active', 'created_at', 'updated_at')
@@ -144,7 +148,23 @@ class ProfileAdmin(admin.ModelAdmin):
         return format_html('<span style="color: red;">❌ Нет</span>')
     
     subscription_status.short_description = 'Подписка'
-    
+
+    def bot_blocked_display(self, obj):
+        """Статус блокировки бота"""
+        if obj.bot_blocked:
+            if obj.bot_blocked_at:
+                from django.utils import timezone
+                days_ago = (timezone.now() - obj.bot_blocked_at).days
+                return format_html(
+                    '<span style="color: red;" title="Заблокирован {} дней назад">🚫 Да</span>',
+                    days_ago
+                )
+            return format_html('<span style="color: red;">🚫 Да</span>')
+        return format_html('<span style="color: green;">✅ Нет</span>')
+
+    bot_blocked_display.short_description = 'Бот заблокирован'
+    bot_blocked_display.admin_order_field = 'bot_blocked'
+
     def referrals_count_display(self, obj):
         """Количество рефералов"""
         total = getattr(obj, '_referrals_count', 0)

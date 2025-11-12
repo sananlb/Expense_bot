@@ -14,11 +14,12 @@ from .referral import router as referral_router
 from .top5 import router as top5_router
 from .household import router as household_router
 from .blogger_stats import router as blogger_stats_router
+from .inline_router import router as inline_router
 # from .pdf_report import router as pdf_report_router  # Временно отключено из-за проблем с playwright
 
 __all__ = [
     "start_router",
-    "menu_router", 
+    "menu_router",
     "expense_router",
     "cashback_router",
     "category_router",
@@ -32,5 +33,6 @@ __all__ = [
     "top5_router",
     "household_router",
     "blogger_stats_router",
+    "inline_router",
     # "pdf_report_router"  # Временно отключено
 ]

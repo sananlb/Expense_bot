@@ -29,7 +29,10 @@ def get_household_settings_keyboard(is_creator: bool = False, lang: str = 'ru') 
     ]
     
     if is_creator:
-        keyboard.insert(0, [InlineKeyboardButton(text=get_text('invite_member_button', lang), callback_data="generate_invite")])
+        keyboard.insert(0, [
+            InlineKeyboardButton(text=get_text('send_invite_inline_button', lang), switch_inline_query="household_invite"),
+            InlineKeyboardButton(text=get_text('invite_member_button', lang), callback_data="generate_invite")
+        ])
         keyboard.append([InlineKeyboardButton(text=get_text('rename_household_button', lang), callback_data="rename_household")])
     
     keyboard.extend([

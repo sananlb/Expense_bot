@@ -284,27 +284,86 @@ class HouseholdService:
     def rename_household(household: Household, new_name: str) -> Tuple[bool, str]:
         """
         Переименование домохозяйства
-        
+
         Args:
             household: Домохозяйство
             new_name: Новое название
-            
+
         Returns:
             Tuple[успех, сообщение]
         """
         try:
             new_name = new_name.strip()
-            
+
             if len(new_name) < MIN_HOUSEHOLD_NAME_LENGTH:
                 return False, f"Название должно быть не менее {MIN_HOUSEHOLD_NAME_LENGTH} символов"
             if len(new_name) > MAX_HOUSEHOLD_NAME_LENGTH:
                 return False, f"Название должно быть не более {MAX_HOUSEHOLD_NAME_LENGTH} символов"
-            
+
             household.name = new_name
             household.save()
-            
+
             return True, "Название семейного бюджета изменено"
-            
+
         except Exception as e:
             logger.error(f"Error renaming household: {e}")
             return False, "Ошибка при изменении названия"
+
+    @staticmethod
+    def generate_invite_message_text(profile: Profile, lang: str = 'ru') -> str:
+        """
+        Генерирует красивый текст приглашения для inline mode
+
+        Args:
+            profile: Профиль приглашающего
+            lang: Код языка ('ru' или 'en')
+
+        Returns:
+            Форматированный HTML текст приглашения
+
+        ВАЖНО: НЕ включаем PII (имена, username) для GDPR compliance
+        """
+        household = profile.household
+
+        if lang == 'ru':
+            household_name = household.name or "Семейный бюджет"
+            members_count = household.members_count
+            max_members = household.max_members
+
+            # Используем только User ID для privacy
+            inviter_display = f"User {profile.telegram_id}"
+
+            text = (
+                f"🏠 <b>Приглашение в семейный бюджет!</b>\n\n"
+                f"{inviter_display} приглашает вас в домохозяйство:\n"
+                f"👥 <b>\"{household_name}\"</b>\n"
+                f"Участников: {members_count}/{max_members}\n\n"
+                f"💰 <b>Вместе вы сможете:</b>\n"
+                f"• Вести общий учет трат и доходов\n"
+                f"• Видеть расходы всех участников\n"
+                f"• Планировать семейный бюджет\n"
+                f"• Анализировать общую статистику\n\n"
+                f"👇 Нажмите кнопку ниже, чтобы присоединиться!"
+            )
+        else:  # en
+            household_name = household.name or "Household"
+            members_count = household.members_count
+            max_members = household.max_members
+
+            # Используем только User ID для privacy
+            inviter_display = f"User {profile.telegram_id}"
+
+            text = (
+                f"🏠 <b>Household invitation!</b>\n\n"
+                f"{inviter_display} invites you to the household:\n"
+                f"👥 <b>\"{household_name}\"</b>\n"
+                f"Members: {members_count}/{max_members}\n\n"
+                f"💰 <b>Together you can:</b>\n"
+                f"• Track shared expenses and income\n"
+                f"• See all members' expenses\n"
+                f"• Plan household budget\n"
+                f"• Analyze combined statistics\n\n"
+                f"👇 Click the button below to join!"
+            )
+
+        return text

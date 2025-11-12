@@ -66,14 +66,10 @@ def main():
         async def clear_all_fsm_states():
             """Очистка всех FSM состояний из Redis"""
             try:
-                # Подключаемся к Redis используя переменные окружения
-                r = redis.Redis(
-                    host=os.getenv('REDIS_HOST', 'localhost'),
-                    port=int(os.getenv('REDIS_PORT', 6379)),
-                    db=int(os.getenv('REDIS_DB', 0)),
-                    decode_responses=True
-                )
-                
+                # Подключаемся к Redis используя REDIS_URL (с поддержкой пароля)
+                redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+                r = redis.from_url(redis_url, decode_responses=True)
+
                 # Проверяем подключение
                 r.ping()
                 

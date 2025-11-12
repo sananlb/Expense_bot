@@ -32,6 +32,7 @@ from .routers import (
     top5_router,
     household_router,
     blogger_stats_router,
+    inline_router,
     # pdf_report_router  # Временно отключено
 )
 from .middlewares import (
@@ -72,25 +73,6 @@ async def on_startup(bot: Bot):
     try:
         from bot.services import expense, income
         logger.info("Preloaded expense and income modules with Celery tasks")
-
-        # Прогреваем @sync_to_async функции для устранения холодного старта
-        # ВАЖНО: Thread pool инициализируется при первом ПОЛНОМ выполнении запроса к БД
-        # Вызываем функцию которая ГАРАНТИРОВАННО выполнит запрос
-        import time
-        from asgiref.sync import sync_to_async
-        from bot.utils.db_utils import get_or_create_user_profile_sync
-
-        warmup_start = time.time()
-        try:
-            # Вызываем СИНХРОННУЮ функцию через sync_to_async - это гарантирует полную инициализацию
-            # Создаем временный профиль, который выполнит реальный запрос к БД
-            warmup_profile = await sync_to_async(get_or_create_user_profile_sync)(999999999)
-            warmup_duration = time.time() - warmup_start
-            logger.info(f"Warmed up @sync_to_async thread pool in {warmup_duration:.2f}s")
-        except Exception as e:
-            warmup_duration = time.time() - warmup_start
-            logger.warning(f"Warmup completed in {warmup_duration:.2f}s with error: {e}")
-
     except Exception as e:
         logger.warning(f"Could not preload service modules: {e}")
 
@@ -215,6 +197,7 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(subscription_router)  # Роутер подписок - ДОЛЖЕН БЫТЬ ДО expense_router для промокодов!
     dp.include_router(referral_router)     # Роутер реферальной системы
     dp.include_router(household_router)     # Роутер семейного бюджета (FSM состояния) - ДОЛЖЕН БЫТЬ ДО expense_router!
+    dp.include_router(inline_router)        # Роутер inline queries для приглашений
     dp.include_router(expense_router)  # Команды должны быть выше FSM состояний
     dp.include_router(reports_router)  # Команды должны быть выше FSM состояний
     dp.include_router(top5_router)
@@ -270,7 +253,7 @@ async def main_webhook():
         try:
             webhook_info = await bot.set_webhook(
                 url=full_webhook_url,
-                allowed_updates=["message", "callback_query", "pre_checkout_query"],
+                allowed_updates=["message", "callback_query", "pre_checkout_query", "inline_query", "chosen_inline_result"],
                 drop_pending_updates=False
             )
             logger.info(f"✅ Webhook установлен успешно: {full_webhook_url}")

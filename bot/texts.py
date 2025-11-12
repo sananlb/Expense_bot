@@ -52,6 +52,14 @@ TEXTS = {
         'action_cancelled': 'Действие отменено',
         'member_left_notification': '👤 Пользователь {user_id} вышел из семейного бюджета',
         'household_disbanded_notification': '⚠️ Домохозяйство расформировано создателем {user_id}',
+        # Inline mode для приглашений
+        'send_invite_inline_button': '📤 Отправить приглашение',
+        'inline_invite_title': '🏠 Приглашение в семейный бюджет',
+        'inline_invite_description': 'Отправить приглашение этому контакту',
+        'join_household_button': '✅ Присоединиться',
+        'only_creator_can_invite': 'Только создатель может приглашать участников',
+        'error_generating_invite': 'Ошибка при создании приглашения',
+        'error_try_again': 'Ошибка. Попробуйте позже',
         # Основные сообщения
         'welcome': '💰 Добро пожаловать в Coins!',
         'welcome_text': '''Я помогу вам вести учет трат и отслеживать кешбэки.
@@ -894,6 +902,14 @@ PDF отчеты с графиками, экспорт в CSV и Excel дост�
         'action_cancelled': 'Action cancelled',
         'member_left_notification': '👤 User {user_id} left the household',
         'household_disbanded_notification': '⚠️ Household was disbanded by creator {user_id}',
+        # Inline mode for invitations
+        'send_invite_inline_button': '📤 Send invitation',
+        'inline_invite_title': '🏠 Household invitation',
+        'inline_invite_description': 'Send invitation to this contact',
+        'join_household_button': '✅ Join',
+        'only_creator_can_invite': 'Only the creator can invite members',
+        'error_generating_invite': 'Error creating invitation',
+        'error_try_again': 'Error. Try again later',
         # Basic messages
         'welcome': '💰 Welcome to Coins!',
         'welcome_text': '''I'll help you track expenses and monitor cashbacks.

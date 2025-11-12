@@ -25,6 +25,18 @@ class Profile(models.Model):
     
     # Активность
     is_active = models.BooleanField(default=True)
+    bot_blocked = models.BooleanField(
+        default=False,
+        verbose_name='Бот заблокирован',
+        help_text='Пользователь заблокировал бота',
+        db_index=True
+    )
+    bot_blocked_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Дата блокировки',
+        help_text='Когда пользователь заблокировал бота'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
