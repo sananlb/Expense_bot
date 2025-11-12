@@ -397,16 +397,19 @@ async def process_family_invite(message: Message, token: str):
 async def confirm_join(callback: CallbackQuery):
     """Подтверждение присоединения к домохозяйству"""
     await callback.answer()
-    
+
     token = callback.data.split(":")[1]
     profile = await get_or_create_profile(callback.from_user.id)
-    
+
+    # Определяем язык пользователя
+    lang = profile.language_code if profile and profile.language_code else 'ru'
+
     success, msg = await sync_to_async(HouseholdService.join_household)(profile, token)
-    
+
     if success:
         await callback.message.edit_text(
             f"✅ {msg}\n\n"
-            "Теперь вы ведете общий учет финансов с другими участниками.",
+            f"{get_text('joined_household_success', lang)}",
             parse_mode="HTML"
         )
     else:

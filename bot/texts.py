@@ -60,6 +60,7 @@ TEXTS = {
         'only_creator_can_invite': 'Только создатель может приглашать участников',
         'error_generating_invite': 'Ошибка при создании приглашения',
         'error_try_again': 'Ошибка. Попробуйте позже',
+        'joined_household_success': 'Теперь вы ведете общий учет финансов с другими участниками.',
         # Основные сообщения
         'welcome': '💰 Добро пожаловать в Coins!',
         'welcome_text': '''Я помогу вам вести учет трат и отслеживать кешбэки.
@@ -910,6 +911,7 @@ PDF отчеты с графиками, экспорт в CSV и Excel дост�
         'only_creator_can_invite': 'Only the creator can invite members',
         'error_generating_invite': 'Error creating invitation',
         'error_try_again': 'Error. Try again later',
+        'joined_household_success': 'You are now managing finances together with other members.',
         # Basic messages
         'welcome': '💰 Welcome to Coins!',
         'welcome_text': '''I'll help you track expenses and monitor cashbacks.
@@ -925,7 +927,7 @@ PDF отчеты с графиками, экспорт в CSV и Excel дост�
         'expense_not_found': '❌ Expense not found',
 
         # Reminders
-        'expense_reminder': '''💡 <i>Don't forget to record today's expenses to keep accurate track of your budget 💰</i>''',
+        'expense_reminder': '''💡 <i>Don't forget to record today's expenses to keep accurate track of your budget</i>''',
 
         # Categories
         'category': 'Category',

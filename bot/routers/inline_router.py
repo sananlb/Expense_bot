@@ -7,11 +7,29 @@ from bot.services.profile import get_or_create_profile
 from bot.services.household import HouseholdService
 from asgiref.sync import sync_to_async
 from bot.utils import get_text
+from expenses.models import Household
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = Router(name='inline')
+
+
+@sync_to_async
+def get_profile_with_household(profile_id: int):
+    """Загрузка профиля с household для async контекста"""
+    from expenses.models import Profile
+    return Profile.objects.select_related('household').get(id=profile_id)
+
+
+@sync_to_async
+def check_household_can_add_member(household_id: int) -> bool:
+    """Проверка возможности добавления участника в async контексте"""
+    try:
+        household = Household.objects.get(id=household_id)
+        return household.can_add_member()
+    except Household.DoesNotExist:
+        return False
 
 
 @router.inline_query(F.query.startswith("household_invite"))
@@ -30,8 +48,8 @@ async def household_invite_inline(inline_query: InlineQuery):
         # Определяем язык пользователя
         lang = profile.language_code if profile and profile.language_code else 'ru'
 
-        # Проверка 1: У пользователя должен быть household
-        if not profile.household:
+        # Проверка 1: У пользователя должен быть household (используем household_id чтобы не делать запрос к БД)
+        if not profile.household_id:
             await inline_query.answer(
                 results=[],
                 switch_pm_text=get_text('not_in_household', lang),
@@ -41,6 +59,8 @@ async def household_invite_inline(inline_query: InlineQuery):
             )
             return
 
+        # Загружаем профиль с household для дальнейших проверок
+        profile = await get_profile_with_household(profile.id)
         household = profile.household
 
         # Проверка 2: Пользователь должен быть создателем
@@ -55,7 +75,8 @@ async def household_invite_inline(inline_query: InlineQuery):
             return
 
         # Проверка 3: Должны быть свободные места
-        if not household.can_add_member():
+        can_add = await check_household_can_add_member(household.id)
+        if not can_add:
             await inline_query.answer(
                 results=[],
                 switch_pm_text=get_text('household_full', lang),
@@ -80,8 +101,8 @@ async def household_invite_inline(inline_query: InlineQuery):
             )
             return
 
-        # Генерируем красивый текст приглашения
-        invite_text = HouseholdService.generate_invite_message_text(profile, lang)
+        # Генерируем красивый текст приглашения (обернем в sync_to_async т.к. обращается к household)
+        invite_text = await sync_to_async(HouseholdService.generate_invite_message_text)(profile, lang)
 
         # Создаем кнопку "Присоединиться"
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
