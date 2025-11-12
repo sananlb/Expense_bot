@@ -3,6 +3,7 @@ Helper функции для работы с мультиязычными кат
 """
 from typing import Optional
 from bot.utils.language import get_text
+from bot.utils.emoji_utils import strip_leading_emoji, EMOJI_PREFIX_RE
 
 
 def get_category_display_name(category, language_code: str = 'ru') -> str:
@@ -46,35 +47,22 @@ def get_category_display_name(category, language_code: str = 'ru') -> str:
 def get_category_name_without_emoji(category, language_code: str = 'ru') -> str:
     """
     Получить название категории без эмодзи
-    
+
     Args:
         category: Объект ExpenseCategory или строка
         language_code: Код языка
-        
+
     Returns:
         Название без эмодзи
     """
     try:
-        import re
-        
         # Получаем полное название
         full_name = get_category_display_name(category, language_code)
         if not full_name:
             return get_text('no_category', language_code)
-        
-        # Удаляем эмодзи
-        emoji_pattern = re.compile(
-            "["
-            "\U0001F600-\U0001F64F"
-            "\U0001F300-\U0001F5FF"
-            "\U0001F680-\U0001F6FF"
-            "\U0001F1E0-\U0001F1FF"
-            "\U00002702-\U000027B0"
-            "\U000024C2-\U0001F251"
-            "]+", flags=re.UNICODE
-        )
-        
-        result = emoji_pattern.sub('', full_name).strip()
+
+        # Удаляем эмодзи используя централизованную функцию (включает ZWJ/VS-16)
+        result = strip_leading_emoji(full_name)
         return result if result else get_text('no_category', language_code)
     except Exception as e:
         import logging
@@ -94,27 +82,15 @@ def get_category_emoji(category) -> Optional[str]:
         Эмодзи или None
     """
     try:
-        import re
-
         # Duck typing: проверяем наличие поля icon
         # Работает для ExpenseCategory, IncomeCategory и других объектов с полем icon
         if hasattr(category, 'icon'):
             icon = getattr(category, 'icon', None)
             return icon if icon else None
         elif isinstance(category, str):
-            # Для строк извлекаем эмодзи
-            emoji_pattern = re.compile(
-                "["
-                "\U0001F600-\U0001F64F"
-                "\U0001F300-\U0001F5FF"
-                "\U0001F680-\U0001F6FF"
-                "\U0001F1E0-\U0001F1FF"
-                "\U00002702-\U000027B0"
-                "\U000024C2-\U0001F251"
-                "]+", flags=re.UNICODE
-            )
-            emojis = emoji_pattern.findall(category)
-            return emojis[0] if emojis else None
+            # Для строк извлекаем эмодзи используя централизованный паттерн (включает ZWJ/VS-16)
+            match = EMOJI_PREFIX_RE.match(category)
+            return match.group(0).strip() if match else None
         else:
             return None
     except Exception as e:

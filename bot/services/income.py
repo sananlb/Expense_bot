@@ -14,6 +14,7 @@ from expenses.models import Income, IncomeCategory, Profile
 from bot.utils.db_utils import get_or_create_user_profile_sync
 from bot.utils.category_helpers import get_category_display_name, get_category_name_without_emoji
 from bot.utils.language import get_text
+from bot.utils.emoji_utils import EMOJI_PREFIX_RE
 
 # Предзагрузка Celery задач для устранения "холодного старта"
 # Импортируем заранее, чтобы при первом вызове не было задержки 6+ секунд
@@ -1124,15 +1125,13 @@ def create_income_category(
         if existing:
             raise ValueError("Категория с таким названием уже существует")
         
-        # Разбираем имя и иконку
-        import re
-        emoji_pattern = r'^([\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u200d\uFE0F]+)\s*'
-        match = re.match(emoji_pattern, name)
+        # Разбираем имя и иконку используя централизованный паттерн (включает ZWJ/VS-16)
+        match = EMOJI_PREFIX_RE.match(name)
         parsed_icon = ''
         text = name
         if match:
-            parsed_icon = match.group(1)
-            text = name[len(match.group(0)):].strip()
+            parsed_icon = match.group().strip()
+            text = name[len(match.group()):].strip()
         if icon and not parsed_icon:
             parsed_icon = icon
 
@@ -1224,15 +1223,13 @@ def update_income_category(
             raise ValueError("Категория не найдена")
             
         if new_name:
-            # Разбираем эмодзи и текст
-            import re
-            emoji_pattern = r'^([\U0001F000-\U0001FAFF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u200d\uFE0F]+)\s*'
-            match = re.match(emoji_pattern, new_name)
+            # Разбираем эмодзи и текст используя централизованный паттерн (включает ZWJ/VS-16)
+            match = EMOJI_PREFIX_RE.match(new_name)
             parsed_icon = None
             text = new_name
             if match:
-                parsed_icon = match.group(1)
-                text = new_name[len(match.group(0)):].strip()
+                parsed_icon = match.group().strip()
+                text = new_name[len(match.group()):].strip()
 
             # Проверяем уникальность по собранному отображаемому имени
             display_name = f"{parsed_icon} {text}".strip() if parsed_icon else text

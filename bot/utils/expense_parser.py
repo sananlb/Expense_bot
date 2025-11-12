@@ -746,14 +746,27 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                             logger.error(f"OpenAI fallback failed: {e}")
                     
                     if ai_result:
-                        # Обновляем только категорию из AI
-                        result['category'] = ai_result.get('category', result['category'])
-                        # Определяем category_key для AI категории
-                        if result['category']:
-                            result['category_key'] = normalize_expense_category_key(result['category'])
-                        result['confidence'] = ai_result.get('confidence', result['confidence'])
-                        result['ai_enhanced'] = True
-                        result['ai_provider'] = ai_result.get('provider', 'unknown')
+                        # Централизованная валидация категории (как у доходов)
+                        from bot.services.expense_categorization import find_best_matching_expense_category
+
+                        # AI вернул сырую категорию - нужно найти соответствие среди категорий пользователя
+                        raw_category = ai_result.get('category', '')
+                        matched_category = await find_best_matching_expense_category(
+                            raw_category,
+                            user_categories
+                        )
+
+                        # Обновляем только если нашли валидную категорию
+                        if matched_category:
+                            result['category'] = matched_category
+                            # Определяем category_key для AI категории
+                            result['category_key'] = normalize_expense_category_key(matched_category)
+                            result['confidence'] = ai_result.get('confidence', result['confidence'])
+                            result['ai_enhanced'] = True
+                            result['ai_provider'] = ai_result.get('provider', 'unknown')
+                        else:
+                            logger.warning(f"AI suggested category '{raw_category}' but no match found in user categories")
+                            # AI не смог подобрать категорию - оставляем result без изменений
                         
                         # Безопасное логирование без Unicode
                         try:

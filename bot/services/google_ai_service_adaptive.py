@@ -189,9 +189,11 @@ if IS_WINDOWS:
 
             result = json.loads(text_response)
 
-            if result.get('category') in categories:
+            # Возвращаем сырой результат - валидация категории будет в parser
+            # (централизованный подход как у доходов через find_best_matching_expense_category)
+            if result and 'category' in result:
                 return {
-                    'category': result['category'],
+                    'category': result.get('category'),  # Сырая категория от AI
                     'confidence': result.get('confidence', 0.8),
                     'reasoning': result.get('reasoning', ''),
                     'provider': 'google'
@@ -457,11 +459,10 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                 
                 result = json.loads(text_response)
 
-                if result.get('category') not in categories:
-                    logger.warning(f"[GoogleAI-Adaptive] Invalid category: {result.get('category')}")
-                    # Помечаем ключ как рабочий - API запрос был успешным
-                    self.mark_key_success(key_index)
-                    return None
+                # Возвращаем сырой результат - валидация категории будет в parser
+                # (централизованный подход как у доходов через find_best_matching_expense_category)
+                # Помечаем ключ как успешный
+                self.mark_key_success(key_index)
             
             if result:
                 # Безопасное логирование для Windows

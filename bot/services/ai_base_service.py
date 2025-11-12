@@ -67,12 +67,19 @@ class AIBaseService(ABC):
         Создает универсальный языконезависимый промпт для категоризации расхода.
         Работает с категориями на разных языках, с emoji и без.
         """
+        from bot.utils.emoji_utils import EMOJI_PREFIX_RE
+
+        # Убираем эмодзи из категорий для промпта (включая композитные с ZWJ)
+        categories_clean = [EMOJI_PREFIX_RE.sub('', cat).strip() for cat in categories]
+
         context_info = ""
         if user_context:
             if 'recent_categories' in user_context:
-                context_info += f"\nRecently used categories: {', '.join(user_context['recent_categories'][:3])}"
+                # Также убираем эмодзи из недавних категорий
+                recent_clean = [EMOJI_PREFIX_RE.sub('', cat).strip() for cat in user_context['recent_categories'][:3]]
+                context_info += f"\nRecently used categories: {', '.join(recent_clean)}"
 
-        categories_list = '\n'.join([f"- {cat}" for cat in categories])
+        categories_list = '\n'.join([f"- {cat}" for cat in categories_clean])
 
         return f"""You are an expense categorization assistant for a personal finance bot. Your task is to categorize the expense.
 
@@ -85,9 +92,9 @@ User's available categories:
 {categories_list}
 
 IMPORTANT INSTRUCTIONS:
-1. Choose ONLY from the list above - return the exact category name including emoji if present
+1. Choose ONLY from the list above - return the exact category name WITHOUT any emoji
 2. Categories may be in different languages (English, Russian, Spanish, etc.) - match semantically
-3. Some categories have emoji (🍔, 🚗, 💰), some don't - both are valid
+3. Return ONLY the text part of the category name, NO emojis
 4. Match by meaning, not language:
    - "cookie" or "cookies" or "печенье" or "biscuit" → food/groceries category
    - "coffee" or "кофе" or "café" → cafe/restaurant category
@@ -100,7 +107,7 @@ IMPORTANT INSTRUCTIONS:
 
 Return JSON:
 {{
-    "category": "exact category name from the list",
+    "category": "exact category name from the list WITHOUT emoji",
     "confidence": number from 0 to 1,
     "reasoning": "brief explanation of the choice"
 }}"""

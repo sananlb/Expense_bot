@@ -11,7 +11,7 @@ import asyncio
 from typing import List
 
 from ..services.category import (
-    get_user_categories, create_category, update_category, 
+    get_user_categories, create_category, update_category,
     delete_category, get_icon_for_category, get_category_by_id,
     add_category_keyword, remove_category_keyword, get_category_keywords
 )
@@ -19,6 +19,7 @@ from ..utils.message_utils import send_message_with_cleanup
 from ..utils import get_text, get_user_language
 from ..utils.category_helpers import get_category_display_name
 from ..utils.category_ui import build_icon_keyboard
+from ..utils.emoji_utils import EMOJI_PREFIX_RE, strip_leading_emoji
 from datetime import date
 
 router = Router(name="categories")
@@ -474,10 +475,8 @@ async def process_category_name(message: types.Message, state: FSMContext):
         await send_message_with_cleanup(message, state, "❌ Название слишком длинное. Максимум 50 символов.")
         return
     
-    # Проверяем, есть ли уже эмодзи в начале названия
-    import re
-    emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]'
-    has_emoji = bool(re.match(emoji_pattern, name))
+    # Проверяем, есть ли уже эмодзи в начале названия (включая композитные с ZWJ)
+    has_emoji = bool(EMOJI_PREFIX_RE.match(name))
     
     # Удаляем сообщение пользователя
     try:
@@ -549,21 +548,12 @@ async def process_custom_icon(message: types.Message, state: FSMContext):
     if current_state != CategoryForm.waiting_for_custom_icon.state:
         return
     
-    import re
-    
     custom_icon = message.text.strip()
-    
-    # Разрешаем несколько и составные эмодзи (ZWJ/variation/skin tones)
-    emoji_pattern = (
-        r'^[\u200d\uFE0F'
-        r'\U0001F000-\U0001FAFF'
-        r'\U00002600-\U000027BF'
-        r'\U0001F300-\U0001F64F'
-        r'\U0001F680-\U0001F6FF'
-        r'\U0001F3FB-\U0001F3FF]+'
-        r'$'
-    )
-    if not re.match(emoji_pattern, custom_icon) or len(custom_icon) > 24:
+
+    # Проверяем что введены ТОЛЬКО эмодзи (используем централизованный паттерн с ZWJ/VS-16)
+    match = EMOJI_PREFIX_RE.match(custom_icon)
+    # Должен быть match И он должен покрывать всю строку (нет текста после эмодзи)
+    if not match or match.group().strip() != custom_icon or len(custom_icon) > 24:
         await send_message_with_cleanup(message, state, "❌ Пожалуйста, отправьте один или несколько эмодзи без текста.")
         return
 
@@ -811,9 +801,8 @@ async def edit_category_icon_start(callback: types.CallbackQuery, state: FSMCont
     category = await get_category_by_id(user_id, cat_id)
 
     if category:
-        # Извлекаем чистое название без эмодзи
-        emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+\s*'
-        name_without_emoji = re.sub(emoji_pattern, '', category.name)
+        # Извлекаем чистое название без эмодзи (включая композитные с ZWJ)
+        name_without_emoji = strip_leading_emoji(category.name)
 
         await state.update_data(
             editing_category_id=cat_id,
@@ -868,14 +857,12 @@ async def process_edit_category_name(message: types.Message, state: FSMContext):
         await state.clear()
         return
     
-    # Проверяем, есть ли эмодзи в текущем названии категории
-    import re
-    emoji_pattern = r'^([\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+)\s*'
-    current_emoji_match = re.match(emoji_pattern, current_category.name)
-    current_emoji = current_emoji_match.group(1) if current_emoji_match else None
-    
+    # Проверяем, есть ли эмодзи в текущем названии категории (включая композитные с ZWJ)
+    current_emoji_match = EMOJI_PREFIX_RE.match(current_category.name)
+    current_emoji = current_emoji_match.group(0).strip() if current_emoji_match else None
+
     # Проверяем, есть ли эмодзи в новом названии
-    new_emoji_match = re.match(emoji_pattern, new_name)
+    new_emoji_match = EMOJI_PREFIX_RE.match(new_name)
     has_new_emoji = bool(new_emoji_match)
     
     if has_new_emoji:
@@ -978,10 +965,8 @@ async def process_income_category_name(message: types.Message, state: FSMContext
         await send_message_with_cleanup(message, state, "❌ Название слишком длинное. Максимум 50 символов.")
         return
     
-    # Проверяем, есть ли уже эмодзи в начале названия
-    import re
-    emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]'
-    has_emoji = bool(re.match(emoji_pattern, name))
+    # Проверяем, есть ли уже эмодзи в начале названия (включая композитные с ZWJ)
+    has_emoji = bool(EMOJI_PREFIX_RE.match(name))
 
     # Удаляем сообщение пользователя
     try:
@@ -1071,21 +1056,12 @@ async def process_custom_income_icon(message: types.Message, state: FSMContext):
     if current_state != IncomeCategoryForm.waiting_for_custom_icon.state:
         return
     
-    import re
-    
     custom_icon = message.text.strip()
-    
-    # Разрешаем несколько и составные эмодзи (ZWJ/variation/skin tones)
-    emoji_pattern = (
-        r'^[\u200d\uFE0F'
-        r'\U0001F000-\U0001FAFF'
-        r'\U00002600-\U000027BF'
-        r'\U0001F300-\U0001F64F'
-        r'\U0001F680-\U0001F6FF'
-        r'\U0001F3FB-\U0001F3FF]+'
-        r'$'
-    )
-    if not re.match(emoji_pattern, custom_icon) or len(custom_icon) > 24:
+
+    # Проверяем что введены ТОЛЬКО эмодзи (используем централизованный паттерн с ZWJ/VS-16)
+    match = EMOJI_PREFIX_RE.match(custom_icon)
+    # Должен быть match И он должен покрывать всю строку (нет текста после эмодзи)
+    if not match or match.group().strip() != custom_icon or len(custom_icon) > 24:
         await send_message_with_cleanup(message, state, "❌ Пожалуйста, отправьте один или несколько эмодзи без текста")
         return
     
@@ -1283,9 +1259,8 @@ async def edit_income_category_icon_start(callback: types.CallbackQuery, state: 
     category = next((cat for cat in categories if cat.id == category_id), None)
     
     if category:
-        # Извлекаем чистое название без эмодзи
-        emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+\s*'
-        name_without_emoji = re.sub(emoji_pattern, '', category.name)
+        # Извлекаем чистое название без эмодзи (включая композитные с ZWJ)
+        name_without_emoji = strip_leading_emoji(category.name)
         
         await state.update_data(
             editing_income_category_id=category_id,
@@ -1333,14 +1308,12 @@ async def process_new_income_category_name(message: types.Message, state: FSMCon
         await state.clear()
         return
     
-    # Проверяем, есть ли эмодзи в текущем названии категории
-    import re
-    emoji_pattern = r'^([\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+)\s*'
-    current_emoji_match = re.match(emoji_pattern, current_category.name)
-    current_emoji = current_emoji_match.group(1) if current_emoji_match else None
-    
+    # Проверяем, есть ли эмодзи в текущем названии категории (включая композитные с ZWJ)
+    current_emoji_match = EMOJI_PREFIX_RE.match(current_category.name)
+    current_emoji = current_emoji_match.group(0).strip() if current_emoji_match else None
+
     # Проверяем, есть ли эмодзи в новом названии
-    new_emoji_match = re.match(emoji_pattern, new_name)
+    new_emoji_match = EMOJI_PREFIX_RE.match(new_name)
     has_new_emoji = bool(new_emoji_match)
     
     if has_new_emoji:

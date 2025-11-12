@@ -4,6 +4,7 @@
 from typing import Optional
 from asgiref.sync import sync_to_async
 from bot.texts import get_text as _get_text, TEXTS
+from bot.utils.emoji_utils import EMOJI_PREFIX_RE
 import logging
 
 logger = logging.getLogger(__name__)
@@ -358,33 +359,15 @@ def translate_category_name(category_name: str, to_lang: str = 'en') -> str:
         'Other': 'Прочее'
     }
     
-    # Извлекаем эмодзи и текст из названия
+    # Извлекаем эмодзи и текст из названия используя централизованный паттерн (включает ZWJ/VS-16)
     emoji = ''
     text = category_name
-    
-    # Находим эмодзи в начале строки (расширенный паттерн для всех эмодзи)
-    import re
-    # Более полный паттерн для эмодзи
-    emoji_pattern = re.compile(
-        r'^['
-        r'\U0001F000-\U0001F9FF'  # Основные эмодзи
-        r'\U00002600-\U000027BF'  # Разные символы
-        r'\U0001F300-\U0001F5FF'  # Символы и пиктограммы
-        r'\U0001F600-\U0001F64F'  # Эмоции
-        r'\U0001F680-\U0001F6FF'  # Транспорт и символы
-        r'\u2600-\u27BF'          # Разные символы (короткий диапазон)
-        r'\u2300-\u23FF'          # Технические символы
-        r'\u2B00-\u2BFF'          # Стрелки и символы
-        r'\u26A0-\u26FF'          # Предупреждающие знаки
-        r'\uFE00-\uFE0F'          # Вариационные селекторы
-        r'\U000E0100-\U000E01EF'  # Доп. вариационные селекторы
-        r']+'
-    )
-    match = emoji_pattern.match(category_name)
-    
+
+    match = EMOJI_PREFIX_RE.match(category_name)
+
     if match:
-        emoji = match.group()
-        text = category_name[len(emoji):].strip()
+        emoji = match.group().strip()
+        text = category_name[len(match.group()):].strip()
     
     # Для отладки
     import logging

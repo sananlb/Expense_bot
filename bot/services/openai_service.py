@@ -166,18 +166,19 @@ class OpenAIService(AIBaseService):
             # Парсим ответ
             try:
                 result = json.loads(content)
-                
-                # Валидация результата
-                if 'category' in result and result['category'] in categories:
-                    logger.info(f"OpenAI categorized '{text}' as '{result['category']}' with confidence {result.get('confidence', 0)}")
+
+                # Возвращаем сырой результат - валидация категории будет в parser
+                # (централизованный подход как у доходов через find_best_matching_expense_category)
+                if 'category' in result:
+                    logger.info(f"OpenAI categorized '{text}' as '{result.get('category')}' (raw) with confidence {result.get('confidence', 0)}")
                     return {
-                        'category': result['category'],
+                        'category': result.get('category'),  # Сырая категория от AI
                         'confidence': result.get('confidence', 0.8),
                         'reasoning': result.get('reasoning', ''),
                         'provider': 'openai'
                     }
                 else:
-                    logger.warning(f"OpenAI returned invalid category: {result.get('category')}")
+                    logger.warning(f"OpenAI response missing category field")
                     return None
                     
             except json.JSONDecodeError:

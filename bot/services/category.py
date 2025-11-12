@@ -9,23 +9,11 @@ from bot.utils.db_utils import get_or_create_user_profile_sync
 from bot.utils.category_helpers import get_category_display_name, get_category_name_without_emoji
 from difflib import get_close_matches
 import logging
-import re
+
+# ВАЖНО: Импортируем из централизованного модуля (включает ZWJ для композитных эмодзи)
+from bot.utils.emoji_utils import EMOJI_PREFIX_RE, normalize_category_for_matching, strip_leading_emoji
 
 logger = logging.getLogger(__name__)
-
-EMOJI_PREFIX_RE = re.compile(
-    r"[\U0001F000-\U0001F9FF"
-    r"\U00002600-\U000027BF"
-    r"\U0001F300-\U0001F64F"
-    r"\U0001F680-\U0001F6FF"
-    r"\u2600-\u27BF"
-    r"\u2300-\u23FF"
-    r"\u2B00-\u2BFF"
-    r"\u26A0-\u26FF"
-    r"\uFE00-\uFE0F"
-    r"\U000E0100-\U000E01EF"
-    r"]+\s*"
-)
 
 def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCategory:
     """Получить категорию по имени или вернуть категорию 'Прочие расходы'"""
@@ -80,16 +68,15 @@ def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCate
     all_categories = ExpenseCategory.objects.filter(profile=profile)
     
     # Проверяем точное совпадение без учета эмодзи
-    import re
     for cat in all_categories:
         # Проверяем оба языковых поля
         for field_name in ['name_ru', 'name_en']:
             field_value = getattr(cat, field_name, None)
             if not field_value:
                 continue
-            
-            # Убираем эмодзи из начала названия для сравнения
-            name_without_emoji = re.sub(r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+\s*', '', field_value)
+
+            # Убираем эмодзи из начала названия для сравнения (включая композитные с ZWJ)
+            name_without_emoji = strip_leading_emoji(field_value)
             if name_without_emoji.lower() == category_name.lower():
                 # Безопасное логирование для Windows
                 safe_name = field_value.encode('ascii', 'ignore').decode('ascii').strip()
@@ -382,13 +369,13 @@ async def update_category_name(user_id: int, category_id: int, new_name: str) ->
     """Обновить название категории"""
     import re
     from bot.utils.language import get_user_language
-    
-    # Извлекаем иконку и текст
-    emoji_pattern = r'^([\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]+)\s*'
-    match = re.match(emoji_pattern, new_name)
-    
+
+    # Извлекаем иконку и текст (поддерживает композитные эмодзи с ZWJ)
+    match = EMOJI_PREFIX_RE.match(new_name)
+
     if match:
-        icon = match.group(1)
+        # EMOJI_PREFIX_RE захватывает эмодзи + trailing пробелы
+        icon = match.group(0).strip()  # Только эмодзи без пробелов
         name_without_icon = new_name[len(match.group(0)):].strip()
     else:
         icon = ''
@@ -491,37 +478,8 @@ def update_default_categories_language(user_id: int, new_lang: str) -> bool:
         
         expense_categories = ExpenseCategory.objects.filter(profile=profile)
         income_categories = IncomeCategory.objects.filter(profile=profile)
-        
-        emoji_pattern = re.compile(
-            r'^['
-            r'\U0001F000-\U0001F9FF'
-            r'\U00002600-\U000027BF'
-            r'\U0001F300-\U0001F5FF'
-            r'\U0001F600-\U0001F64F'
-            r'\U0001F680-\U0001F6FF'
-            r'\u2600-\u27BF'
-            r'\u2300-\u23FF'
-            r'\u2B00-\u2BFF'
-            r'\u26A0-\u26FF'
-            r'\uFE00-\uFE0F'
-            r'\U000E0100-\U000E01EF'
-            r']+'
-        )
-        emoji_strip_pattern = re.compile(
-            r'^['
-            r'\U0001F000-\U0001F9FF'
-            r'\U00002600-\U000027BF'
-            r'\U0001F300-\U0001F5FF'
-            r'\U0001F600-\U0001F64F'
-            r'\U0001F680-\U0001F6FF'
-            r'\u2600-\u27BF'
-            r'\u2300-\u23FF'
-            r'\u2B00-\u2BFF'
-            r'\u26A0-\u26FF'
-            r'\uFE00-\uFE0F'
-            r'\U000E0100-\U000E01EF'
-            r']+\s*'
-        )
+
+        # Используем централизованный EMOJI_PREFIX_RE (включает ZWJ для композитных эмодзи)
         
         default_names_ru = {name for name, _ in DEFAULT_CATEGORIES}
         default_names_en = {
@@ -539,11 +497,12 @@ def update_default_categories_language(user_id: int, new_lang: str) -> bool:
         }
         
         def split_name(raw_name: str) -> tuple[str, str]:
+            """Разделяет название на эмодзи и текст (поддерживает композитные эмодзи с ZWJ)"""
             raw_name = raw_name or ''
-            match = emoji_pattern.match(raw_name)
+            match = EMOJI_PREFIX_RE.match(raw_name)
             if match:
-                emoji = match.group()
-                text = raw_name[len(emoji):].strip()
+                emoji = match.group().strip()  # Эмодзи без trailing пробелов
+                text = raw_name[len(match.group()):].strip()
             else:
                 emoji = ''
                 text = raw_name.strip()
@@ -563,14 +522,14 @@ def update_default_categories_language(user_id: int, new_lang: str) -> bool:
                         # Переводим с английского если есть, иначе с текущего text
                         source_text = category.name_en or text
                         translated_text = translate_category_name(source_text, 'ru')
-                        translated_text = emoji_strip_pattern.sub('', translated_text).strip()
+                        translated_text = strip_leading_emoji(translated_text)
                         category.name_ru = translated_text
 
                     # Если нет английского - создаём перевод
                     if not category.name_en:
                         source_text = category.name_ru or text
                         translated_text = translate_category_name(source_text, 'en')
-                        translated_text = emoji_strip_pattern.sub('', translated_text).strip()
+                        translated_text = strip_leading_emoji(translated_text)
                         category.name_en = translated_text
 
                     category.original_language = 'ru'
@@ -582,14 +541,14 @@ def update_default_categories_language(user_id: int, new_lang: str) -> bool:
                         # Переводим с русского если есть, иначе с текущего text
                         source_text = category.name_ru or text
                         translated_text = translate_category_name(source_text, 'en')
-                        translated_text = emoji_strip_pattern.sub('', translated_text).strip()
+                        translated_text = strip_leading_emoji(translated_text)
                         category.name_en = translated_text
 
                     # Если нет русского - создаём перевод
                     if not category.name_ru:
                         source_text = category.name_en or text
                         translated_text = translate_category_name(source_text, 'ru')
-                        translated_text = emoji_strip_pattern.sub('', translated_text).strip()
+                        translated_text = strip_leading_emoji(translated_text)
                         category.name_ru = translated_text
 
                     category.original_language = 'en'
@@ -864,11 +823,8 @@ def migrate_categories_with_emojis():
     categories = ExpenseCategory.objects.all()
     
     for category in categories:
-        # Проверяем, есть ли уже эмодзи в начале
-        import re
-        emoji_pattern = r'^[\U0001F000-\U0001F9FF\U00002600-\U000027BF\U0001F300-\U0001F64F\U0001F680-\U0001F6FF]'
-        
-        if not re.match(emoji_pattern, category.name):
+        # Проверяем, есть ли уже эмодзи в начале (поддерживает композитные эмодзи с ZWJ)
+        if not EMOJI_PREFIX_RE.match(category.name):
             # Если эмодзи нет, добавляем
             if category.icon and category.icon.strip():
                 # Если есть иконка в поле icon, используем её
@@ -877,7 +833,7 @@ def migrate_categories_with_emojis():
                 # Иначе подбираем по названию
                 icon = get_icon_for_category(category.name)
                 category.name = f"{icon} {category.name}"
-            
+
             # Очищаем поле icon
             category.icon = ''
             category.save()

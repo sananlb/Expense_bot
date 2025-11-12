@@ -3,27 +3,9 @@ Shared definitions and helpers for expense categories.
 Объединенные ключевые слова для категорий расходов (русские + английские).
 """
 from typing import Optional, Dict
-import re
 
-EMOJI_PREFIX_RE = re.compile(
-    r'^[\U0001F000-\U0001F9FF'
-    r'\U00002600-\U000027BF'
-    r'\U0001F300-\U0001F64F'
-    r'\U0001F680-\U0001F6FF'
-    r'\u2600-\u27BF'
-    r'\u2300-\u23FF'
-    r'\u2B00-\u2BFF'
-    r'\u26A0-\u26FF'
-    r']+\s*',
-    re.UNICODE
-)
-
-
-def strip_leading_emoji(value: Optional[str]) -> str:
-    """Remove leading emoji characters from a category label."""
-    if not value:
-        return ''
-    return EMOJI_PREFIX_RE.sub('', value).strip()
+# ВАЖНО: Импортируем из централизованного модуля (включает ZWJ для композитных эмодзи)
+from bot.utils.emoji_utils import strip_leading_emoji
 
 
 EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
@@ -299,8 +281,8 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
         'aliases': ['накопления', 'savings', 'инвестиции', 'investments'],
     },
     'other': {
-        'name_ru': '💸 Прочие расходы',
-        'name_en': '💸 Other Expenses',
+        'name_ru': '💰 Прочие расходы',
+        'name_en': '💰 Other Expenses',
         'keywords': [
             # Русские
             'прочее', 'разное', 'другое', 'иное', 'прочие',
