@@ -4,7 +4,9 @@ Django settings for expense_bot project.
 
 from pathlib import Path
 import os
+import sys
 import logging
+import platform
 # import dj_database_url  # TODO: Install dj-database-url
 from dotenv import load_dotenv
 
@@ -194,6 +196,15 @@ CACHES = {
 }
 
 # Logging Configuration
+# Консольный хендлер использует sys.stdout который на Windows переопределен
+# на UTF-8 в run_bot.py для поддержки Unicode (эмодзи, русский текст)
+_console_handler_config = {
+    'level': 'INFO',
+    'class': 'logging.StreamHandler',
+    'formatter': 'verbose',
+    'stream': 'ext://sys.stdout',  # Используем переопределенный stdout из run_bot.py
+}
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -211,13 +222,9 @@ LOGGING = {
             'maxBytes': 1024 * 1024 * 15,  # 15MB
             'backupCount': 10,
             'formatter': 'verbose',
+            'encoding': 'utf-8',  # Поддержка Unicode (эмодзи, русский текст)
         },
-        'console': {
-            'level': 'INFO',
-            'class': 'logging.StreamHandler',
-            'formatter': 'verbose',
-            'stream': 'ext://sys.stdout',
-        },
+        'console': _console_handler_config,
         'callback_file': {
             'level': 'INFO',
             'class': 'logging.handlers.RotatingFileHandler',
@@ -225,6 +232,7 @@ LOGGING = {
             'maxBytes': 1024 * 1024 * 10,  # 10MB
             'backupCount': 5,
             'formatter': 'verbose',
+            'encoding': 'utf-8',  # Поддержка Unicode (эмодзи, русский текст)
         },
     },
     'root': {

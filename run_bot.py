@@ -13,8 +13,9 @@ import multiprocessing as mp
 
 # Настройка кодировки для Windows
 if platform.system() == 'Windows':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+    # Используем UTF-8 с обработкой ошибок для корректного отображения эмодзи и Unicode
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace', line_buffering=True)
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace', line_buffering=True)
     # Для Windows используем spawn для multiprocessing (для Google AI)
     mp.set_start_method('spawn', force=True)
 
@@ -25,14 +26,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'expense_bot.settings')
 django.setup()
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+# Логирование настраивается в expense_bot/settings.py через Django LOGGING
+# Не используем basicConfig - Django уже настроил логирование
 logger = logging.getLogger(__name__)
 
 

@@ -52,14 +52,8 @@ from .utils.commands import set_bot_commands
 # Загрузка переменных окружения
 load_dotenv()
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
+# Логирование настраивается в expense_bot/settings.py через Django LOGGING
+# Не используем basicConfig чтобы избежать конфликтов с Django настройками
 logger = logging.getLogger(__name__)
 
 
