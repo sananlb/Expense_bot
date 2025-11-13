@@ -275,7 +275,7 @@ async def show_telegram_stars_info(callback: CallbackQuery, state: FSMContext):
             "1. Click on the bot name at the top of this chat\n"
             "2. In the bot info, find and tap <b>\"Affiliate Program\"</b>\n"
             "3. Telegram will generate your unique affiliate link\n"
-            "4. Share it with friends and earn up to 20% Stars from their purchases!"
+            "4. Share it with friends and earn 20% Stars from their purchases!"
         )
     else:
         text = (
@@ -286,7 +286,7 @@ async def show_telegram_stars_info(callback: CallbackQuery, state: FSMContext):
             "1. Нажмите на название бота вверху этого чата\n"
             "2. В информации о боте найдите и нажмите <b>«Партнёрская программа»</b>\n"
             "3. Telegram автоматически создаст вашу уникальную партнёрскую ссылку\n"
-            "4. Делитесь ей с друзьями и получайте до 20% звёзд от их покупок!"
+            "4. Делитесь ей с друзьями и получайте 20% звёзд от их покупок!"
         )
 
     builder = InlineKeyboardBuilder()
