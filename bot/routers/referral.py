@@ -101,16 +101,6 @@ async def get_referral_info_text(profile: Profile, bot_username: str, lang: str 
 @router.callback_query(F.data == "menu_referral")
 async def show_referral_menu(callback: CallbackQuery, state: FSMContext):
     """Показать меню для шаринга бота"""
-    # Проверяем подписку
-    has_subscription = await check_subscription(callback.from_user.id)
-    if not has_subscription:
-        lang = await get_user_language(callback.from_user.id)
-        await callback.answer(
-            get_text('referral_subscription_required', lang),
-            show_alert=True
-        )
-        return
-
     profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
 
     # Получаем username бота
@@ -272,30 +262,36 @@ async def show_telegram_stars_info(callback: CallbackQuery, state: FSMContext):
     """Показать информацию о программе Telegram Stars (только информация, без функционала)"""
     lang = await get_user_language(callback.from_user.id)
 
+    # Получаем bot_username для ссылки
+    bot_info = await callback.bot.get_me()
+    bot_username = bot_info.username
+
     if lang == 'en':
         text = (
             "⭐ <b>Telegram Stars Affiliate Program</b>\n\n"
             "Telegram has an official affiliate program where you can earn Stars "
             "by inviting users to bots.\n\n"
-            "💰 <b>How it works:</b>\n"
-            "1. Open Telegram: Settings → My Stars → Earn Stars\n"
-            "2. Find our bot in the list\n"
-            "3. Get your unique affiliate link from Telegram\n"
-            "4. Share it with friends\n"
-            "5. Earn up to 20% Stars from their purchases"
-        )
+            "💰 <b>How to get your affiliate link:</b>\n\n"
+            "1. Open this bot profile: @{bot_username}\n"
+            "2. Click on the bot name at the top\n"
+            "3. In the bot info, find and tap <b>\"Affiliate Program\"</b>\n"
+            "4. Telegram will generate your unique affiliate link\n"
+            "5. Share it with friends and earn up to 20% Stars from their purchases!\n\n"
+            "💡 <i>This is an official Telegram feature, available in: Settings → My Stars → Earn Stars</i>"
+        ).format(bot_username=bot_username)
     else:
         text = (
             "⭐ <b>Партнёрская программа Telegram Stars</b>\n\n"
             "Telegram запустил официальную партнёрскую программу, где можно зарабатывать звёзды, "
             "приглашая пользователей в ботов.\n\n"
-            "💰 <b>Как это работает:</b>\n"
-            "1. Откройте Telegram: Настройки → Мои звёзды → Заработать звёзды\n"
-            "2. Найдите нашего бота в списке\n"
-            "3. Получите свою уникальную партнёрскую ссылку от Telegram\n"
-            "4. Поделитесь ей с друзьями\n"
-            "5. Получайте до 20% звёзд от их покупок"
-        )
+            "💰 <b>Как получить партнёрскую ссылку:</b>\n\n"
+            "1. Откройте профиль этого бота: @{bot_username}\n"
+            "2. Нажмите на название бота вверху экрана\n"
+            "3. В информации о боте найдите и нажмите <b>«Партнёрская программа»</b>\n"
+            "4. Telegram автоматически создаст вашу уникальную партнёрскую ссылку\n"
+            "5. Делитесь ей с друзьями и получайте до 20% звёзд от их покупок!\n\n"
+            "💡 <i>Это официальная функция Telegram, доступна в: Настройки → Мои звёзды → Заработать звёзды</i>"
+        ).format(bot_username=bot_username)
 
     builder = InlineKeyboardBuilder()
     builder.button(text=get_text('back', lang), callback_data="menu_subscription")
