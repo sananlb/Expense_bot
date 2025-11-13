@@ -271,24 +271,22 @@ async def show_telegram_stars_info(callback: CallbackQuery, state: FSMContext):
             "⭐ <b>Telegram Stars Affiliate Program</b>\n\n"
             "Telegram has an official affiliate program where you can earn Stars "
             "by inviting users to bots.\n\n"
-            "💰 <b>How to get your affiliate link:</b>\n\n"
+            "💡 <b>How to get your affiliate link:</b>\n\n"
             "1. Click on the bot name at the top of this chat\n"
             "2. In the bot info, find and tap <b>\"Affiliate Program\"</b>\n"
             "3. Telegram will generate your unique affiliate link\n"
-            "4. Share it with friends and earn up to 20% Stars from their purchases!\n\n"
-            "💡 <i>This is an official Telegram feature, available in: Settings → My Stars → Earn Stars</i>"
+            "4. Share it with friends and earn up to 20% Stars from their purchases!"
         )
     else:
         text = (
             "⭐ <b>Партнёрская программа Telegram Stars</b>\n\n"
             "Telegram запустил официальную партнёрскую программу, где можно зарабатывать звёзды, "
             "приглашая пользователей в ботов.\n\n"
-            "💰 <b>Как получить партнёрскую ссылку:</b>\n\n"
+            "💡 <b>Как получить партнёрскую ссылку:</b>\n\n"
             "1. Нажмите на название бота вверху этого чата\n"
             "2. В информации о боте найдите и нажмите <b>«Партнёрская программа»</b>\n"
             "3. Telegram автоматически создаст вашу уникальную партнёрскую ссылку\n"
-            "4. Делитесь ей с друзьями и получайте до 20% звёзд от их покупок!\n\n"
-            "💡 <i>Это официальная функция Telegram, доступна в: Настройки → Мои звёзды → Заработать звёзды</i>"
+            "4. Делитесь ей с друзьями и получайте до 20% звёзд от их покупок!"
         )
 
     builder = InlineKeyboardBuilder()
