@@ -1,5 +1,77 @@
 # Важные инструкции для Claude
 
+## 🚨 КРИТИЧЕСКИ ВАЖНО: ОБЯЗАТЕЛЬНЫЙ ПРОТОКОЛ ПЕРЕД КОМАНДАМИ СЕРВЕРА 🚨
+
+### ⚠️ НИКОГДА НЕ ДАВАЙ КОМАНДЫ ДЛЯ СЕРВЕРА БЕЗ ПРОВЕРКИ!
+
+**ПЕРЕД ТЕМ КАК ДАТЬ ЛЮБУЮ КОМАНДУ ДЛЯ СЕРВЕРА, ТЫ ОБЯЗАН:**
+
+1. **ОПРЕДЕЛИТЬ НА КАКОМ СЕРВЕРЕ НАХОДИТСЯ ПОЛЬЗОВАТЕЛЬ**
+   ```bash
+   # Попроси пользователя выполнить:
+   hostname -I && pwd
+   ```
+
+2. **СВЕРИТЬ С ДОКУМЕНТАЦИЕЙ В ЭТОМ ФАЙЛЕ:**
+   - PRIMARY SERVER (APP): 94.198.220.155 → путь `/home/batman/expense_bot`
+   - BACKUP SERVER: 72.56.67.202 → путь `/home/batman/expense_bot_deploy/expense_bot/`
+   - DB SERVER: 5.129.251.120 → НЕ используется для docker-compose команд
+
+3. **ТОЛЬКО ПОСЛЕ ЭТОГО ДАВАЙ КОМАНДЫ С ПРАВИЛЬНЫМ ПУТЕМ!**
+
+### 📋 Шаблон работы:
+
+**ШАГ 1 - ОПРЕДЕЛЕНИЕ СЕРВЕРА:**
+```
+Пользователь: "посмотри логи"
+Claude: "Сначала определим на каком сервере вы находитесь. Выполните: hostname -I && pwd"
+```
+
+**ШАГ 2 - АНАЛИЗ РЕЗУЛЬТАТА:**
+```
+Пользователь: "94.198.220.155 /home/batman"
+Claude: "Вы на PRIMARY сервере. Путь к проекту: /home/batman/expense_bot"
+```
+
+**ШАГ 3 - ПРАВИЛЬНАЯ КОМАНДА:**
+```
+Claude: "cd /home/batman/expense_bot && docker-compose logs --tail=200 bot"
+```
+
+### ⚠️ ТИПИЧНЫЕ ОШИБКИ (НЕ ДЕЛАЙ ТАК):
+
+❌ **НЕПРАВИЛЬНО** - давать команды не зная на каком сервере пользователь:
+```bash
+docker-compose logs --tail=200 bot  # Где cd? Какой сервер?
+```
+
+❌ **НЕПРАВИЛЬНО** - предполагать что пользователь на PRIMARY сервере:
+```bash
+cd /home/batman/expense_bot && ...  # А если он на BACKUP?
+```
+
+❌ **НЕПРАВИЛЬНО** - использовать несуществующее имя сервиса:
+```bash
+cd /home/batman/expense_bot && docker-compose logs --tail=200 app  # ❌ ERROR: No such service: app
+```
+
+✅ **ПРАВИЛЬНО** - сначала определить сервер, потом дать команду с правильным именем сервиса:
+```bash
+# Шаг 1: hostname -I && pwd
+# Шаг 2: Анализ → PRIMARY сервер
+# Шаг 3: cd /home/batman/expense_bot && docker-compose logs --tail=200 bot  # ✅ bot - это правильное имя!
+```
+
+### 📍 Быстрая справка по серверам:
+
+| Сервер | IP | Путь к проекту | Docker Compose |
+|--------|-----|----------------|----------------|
+| PRIMARY | 94.198.220.155 | `/home/batman/expense_bot` | `docker-compose` (старый) |
+| BACKUP | 72.56.67.202 | `/home/batman/expense_bot_deploy/expense_bot/` | `docker compose` (новый) |
+| DB | 5.129.251.120 | N/A | Нет docker-compose |
+
+---
+
 ## 🔴 КРИТИЧЕСКИ ВАЖНО: Git коммиты ⚠️
 
 ### **ВСЕГДА ВКЛЮЧАЙ ВСЕ ИЗМЕНЁННЫЕ ФАЙЛЫ В КОММИТ!**
@@ -493,9 +565,26 @@ git stash pop  # восстанавливаем локальные измене�
 - expense_bot_db - PostgreSQL 15
 - expense_bot_redis - Redis cache
 
-### 🔴 ВАЖНО: Правильный синтаксис docker-compose команд
+### 🔴 КРИТИЧЕСКИ ВАЖНО: Команды для работы с docker-compose на сервере
 
-**На PRIMARY SERVER (80.66.87.178) - СТАРАЯ версия docker-compose:**
+## ⚠️ ОБЯЗАТЕЛЬНОЕ ПРАВИЛО #1: ВСЕГДА УКАЗЫВАЙ `cd` ПЕРЕД КОМАНДАМИ!
+**Docker-compose команды работают ТОЛЬКО из директории проекта где находится docker-compose.yml!**
+
+**НЕПРАВИЛЬНО:**
+```bash
+docker-compose logs --tail=200 app  # ❌ ERROR: no configuration file provided: not found
+```
+
+**ПРАВИЛЬНО:**
+```bash
+cd /home/batman/expense_bot && docker-compose logs --tail=200 app  # ✅
+```
+
+---
+
+## ⚠️ ОБЯЗАТЕЛЬНОЕ ПРАВИЛО #2: Правильный синтаксис для PRIMARY SERVER
+
+**На PRIMARY SERVER (94.198.220.155) - СТАРАЯ версия docker-compose:**
 ```bash
 # ИМЕНА СЕРВИСОВ В docker-compose.yml:
 # - bot (контейнер: expense_bot_app)
@@ -505,21 +594,23 @@ git stash pop  # восстанавливаем локальные измене�
 # - db (контейнер: expense_bot_db)
 # - redis (контейнер: expense_bot_redis)
 
-# ✅ ПРАВИЛЬНЫЕ КОМАНДЫ (флаги ПОСЛЕ команды):
-docker-compose logs --tail=50 bot          # Посмотреть логи бота
-docker-compose logs --tail=100 web         # Посмотреть логи веб
-docker-compose logs --follow bot           # Следить за логами в реальном времени
-docker-compose ps                          # Статус всех контейнеров
-docker-compose restart bot                 # Перезапустить бот
-docker-compose stop bot                    # Остановить бот
-docker-compose up -d bot                   # Запустить бот
+# ✅ ПРАВИЛЬНЫЕ КОМАНДЫ (ВСЕГДА с cd И флаги ПОСЛЕ команды):
+cd /home/batman/expense_bot && docker-compose logs --tail=200 app
+cd /home/batman/expense_bot && docker-compose logs --tail=50 bot
+cd /home/batman/expense_bot && docker-compose logs --tail=100 web
+cd /home/batman/expense_bot && docker-compose logs --follow app
+cd /home/batman/expense_bot && docker-compose ps
+cd /home/batman/expense_bot && docker-compose restart bot
+cd /home/batman/expense_bot && docker-compose stop bot
+cd /home/batman/expense_bot && docker-compose up -d bot
 
 # ❌ НЕПРАВИЛЬНЫЕ КОМАНДЫ (НЕ РАБОТАЮТ на старой версии):
 docker-compose logs bot --tail=50          # ❌ ERROR: No such service: --tail
 docker-compose logs bot --follow           # ❌ ERROR: No such service: --follow
+docker-compose logs --tail=200 app         # ❌ ERROR: no configuration file (если не в директории проекта)
 
-# 🔄 АЛЬТЕРНАТИВА - напрямую через docker (работает везде):
-docker logs --tail 50 expense_bot_app      # Логи бота
+# 🔄 АЛЬТЕРНАТИВА - напрямую через docker (работает ВЕЗДЕ без cd):
+docker logs --tail 200 expense_bot_app     # Логи бота (app контейнер)
 docker logs --tail 50 expense_bot_web      # Логи веб
 docker logs -f expense_bot_app             # Следить за логами (-f = follow)
 docker ps                                  # Статус всех контейнеров
@@ -528,14 +619,40 @@ docker restart expense_bot_app             # Перезапустить бот
 
 **На BACKUP SERVER (72.56.67.202) - НОВАЯ версия docker compose:**
 ```bash
-# ✅ Новый синтаксис (docker compose БЕЗ дефиса):
-docker compose logs bot --tail 50          # Логи бота
-docker compose logs --follow bot           # Следить за логами
-docker compose ps                          # Статус
-docker compose restart bot                 # Перезапустить
+# ✅ Новый синтаксис (docker compose БЕЗ дефиса, но cd все равно нужен):
+cd /home/batman/expense_bot_deploy/expense_bot && docker compose logs bot --tail 50
+cd /home/batman/expense_bot_deploy/expense_bot && docker compose logs --follow bot
+cd /home/batman/expense_bot_deploy/expense_bot && docker compose ps
+cd /home/batman/expense_bot_deploy/expense_bot && docker compose restart bot
 ```
 
-**ВСЕГДА используй правильный синтаксис для PRIMARY SERVER!**
+---
+
+## 📋 ШАБЛОНЫ КОМАНД ДЛЯ КОПИРОВАНИЯ
+
+**Просмотр логов на PRIMARY сервере:**
+```bash
+ssh batman@94.198.220.155
+cd /home/batman/expense_bot && docker-compose logs --tail=200 bot
+```
+
+**Поиск по логам на PRIMARY сервере:**
+```bash
+ssh batman@94.198.220.155
+cd /home/batman/expense_bot && docker-compose logs --tail=500 bot | grep "текст_для_поиска"
+```
+
+**Перезапуск контейнера на PRIMARY сервере:**
+```bash
+ssh batman@94.198.220.155
+cd /home/batman/expense_bot && docker-compose restart bot
+```
+
+**ВАЖНО: Имя сервиса в docker-compose.yml:**
+- `bot` - Telegram bot (контейнер: expense_bot_app)
+- `web` - Django admin (контейнер: expense_bot_web)
+- `celery` - Celery worker (контейнер: expense_bot_celery)
+- `celery-beat` - Celery beat (контейнер: expense_bot_celery_beat)
 
 ## Database
 

@@ -1278,7 +1278,6 @@ Thank you for participating in testing! Your feedback helps improve the bot.''',
         # Expense menu
         'spent_per_month': '💸 <b>Spent per month:</b>',
         'other_expenses': '📊 Other expenses',
-        'show_other_period': '<i>Show report for another period?</i>',
         'no_data_for_report': '❌ <b>No data for report</b>\n\nNo expenses found for selected month.',
         'report_for_month': '📊 <b>Report for {month} {year}</b>',
         'report_contains': 'Report contains:\n• General expense statistics\n• Category distribution\n• Daily expense dynamics\n• Cashback information\n\n💡 <i>Tip: save the report to track expense dynamics</i>',
