@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 
 class RateLimitMiddleware(BaseMiddleware):
     """Middleware для ограничения частоты запросов"""
-    
-    def __init__(self, rate_limit: int = 30, time_window: int = 60):
+
+    def __init__(self, rate_limit: int = 120, time_window: int = 60):
         """
         Args:
             rate_limit: Максимальное количество запросов
@@ -73,17 +73,17 @@ class CommandRateLimitMiddleware(BaseMiddleware):
     def __init__(self):
         """Настройки лимитов для разных команд"""
         self.command_limits = {
-            '/start': {'limit': 3, 'window': 60},
-            '/help': {'limit': 5, 'window': 60},
-            '/add': {'limit': 100, 'window': 86400},  # 100 в день
-            '/categories': {'limit': 10, 'window': 60},
-            '/recurring': {'limit': 10, 'window': 60},
-            '/settings': {'limit': 10, 'window': 60},
-            '/today': {'limit': 20, 'window': 60},
-            '/month': {'limit': 20, 'window': 60},
-            '/chat': {'limit': 30, 'window': 60},  # 30 в минуту для AI чата
+            '/start': {'limit': 10, 'window': 60},  # Увеличено с 3 до 10
+            '/help': {'limit': 15, 'window': 60},  # Увеличено с 5 до 15
+            '/add': {'limit': 200, 'window': 86400},  # Увеличено с 100 до 200 в день
+            '/categories': {'limit': 30, 'window': 60},  # Увеличено с 10 до 30
+            '/recurring': {'limit': 30, 'window': 60},  # Увеличено с 10 до 30
+            '/settings': {'limit': 30, 'window': 60},  # Увеличено с 10 до 30
+            '/today': {'limit': 50, 'window': 60},  # Увеличено с 20 до 50
+            '/month': {'limit': 50, 'window': 60},  # Увеличено с 20 до 50
+            '/chat': {'limit': 60, 'window': 60},  # Увеличено с 30 до 60 для AI чата
         }
-        self.default_limit = {'limit': 15, 'window': 60}
+        self.default_limit = {'limit': 40, 'window': 60}  # Увеличено с 15 до 40
         self.user_commands = {}  # {user_id: {command: [timestamps]}}
     
     async def __call__(

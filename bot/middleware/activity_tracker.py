@@ -166,8 +166,8 @@ class ActivityTrackerMiddleware(BaseMiddleware):
 
 class RateLimitMiddleware(BaseMiddleware):
     """Middleware для ограничения частоты запросов"""
-    
-    def __init__(self, messages_per_minute: int = 30, messages_per_hour: int = 500):
+
+    def __init__(self, messages_per_minute: int = 120, messages_per_hour: int = 3000):
         self.messages_per_minute = messages_per_minute
         self.messages_per_hour = messages_per_hour
         
