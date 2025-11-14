@@ -508,8 +508,8 @@ class PDFReportService:
                 '#DDA0DD',  # сливовый
                 '#B0C4DE'   # светло-стальной синий
             ]
-            
-            # Получаем все кешбеки пользователя для этого месяца
+
+            # Получаем весь кешбэк пользователя для этого месяца
             user_cashbacks = await Cashback.objects.filter(
                 profile=profile,
                 month=month

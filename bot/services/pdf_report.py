@@ -158,7 +158,7 @@ class PDFReportService:
 
             # Обрабатываем расходы только если они есть
             if total_count > 0:
-                # Получаем все кешбеки пользователя для этого месяца
+                # Получаем весь кешбэк пользователя для этого месяца
                 user_cashbacks = []
                 async for cb in Cashback.objects.filter(
                     **build_cashback_filters()

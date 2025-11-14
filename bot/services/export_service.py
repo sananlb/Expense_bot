@@ -78,13 +78,13 @@ class ExportService:
     @staticmethod
     def calculate_category_cashbacks(expenses: List[Expense], user_id: int, month: int, household_mode: bool = False) -> Dict:
         """
-        Рассчитать кешбеки по категориям.
+        Рассчитать кешбэк по категориям.
 
         Args:
             expenses: Список трат
             user_id: ID пользователя
-            month: Месяц для которого считаем кешбеки
-            household_mode: Если True, учитываем кешбеки всех членов семьи
+            month: Месяц для которого считаем кешбэк
+            household_mode: Если True, учитываем кешбэк всех членов семьи
 
         Returns:
             Словарь {category_id: cashback_amount}
@@ -93,15 +93,15 @@ class ExportService:
             # Получаем профиль пользователя
             profile = Profile.objects.get(telegram_id=user_id)
 
-            # Получаем все кешбеки (пользователя или всей семьи)
+            # Получаем весь кешбэк (пользователя или всей семьи)
             if household_mode and profile.household:
-                # В household mode берем кешбеки всех членов семьи
+                # В household mode берем кешбэк всех членов семьи
                 user_cashbacks = list(Cashback.objects.filter(
                     profile__household=profile.household,
                     month=month
                 ).select_related('category', 'profile'))
             else:
-                # В личном режиме только кешбеки текущего пользователя
+                # В личном режиме только кешбэк текущего пользователя
                 user_cashbacks = list(Cashback.objects.filter(
                     profile=profile,
                     month=month

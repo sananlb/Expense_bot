@@ -89,7 +89,7 @@ async def send_cashback_menu_direct(bot, chat_id: int, state: FSMContext, month:
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close_cashback_menu")]
         ])
     else:
-        # Если кешбеки есть, показываем все кнопки управления
+        # Если кешбэк есть, показываем все кнопки управления
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(text=get_text('add_cashback', lang), callback_data="cashback_add"),
@@ -210,7 +210,7 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
     else:
         text = format_cashback_note(cashbacks, target_month, lang)
         
-        # Если кешбеки есть, показываем все кнопки управления
+        # Если кешбэк есть, показываем все кнопки управления
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(text=get_text('add_cashback', lang), callback_data="cashback_add"),
