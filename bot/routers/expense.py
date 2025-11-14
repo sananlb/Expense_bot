@@ -204,9 +204,6 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
         if cashback > 0:
             text += f"\n\n💳 <b>Потенциальный кешбэк:</b>\n• {format_currency(cashback, 'RUB')}"
     
-    # Добавляем подсказку внизу курсивом
-    text += "\n\n<i>Показать отчет за другой период?</i>"
-    
     # Обновляем текущий период в состоянии
     await state.update_data(current_month=prev_month, current_year=prev_year)
     
@@ -362,9 +359,6 @@ async def show_next_month_expenses(callback: types.CallbackQuery, state: FSMCont
         cashback = await calculate_potential_cashback(user_id, start_date, end_date)
         if cashback > 0:
             text += f"\n\n💳 <b>Потенциальный кешбэк:</b>\n• {format_currency(cashback, 'RUB')}"
-    
-    # Добавляем подсказку внизу курсивом
-    text += "\n\n<i>Показать отчет за другой период?</i>"
     
     # Обновляем текущий период в состоянии
     await state.update_data(current_month=next_month, current_year=next_year)
