@@ -290,14 +290,14 @@ class ExpenseCategory(models.Model):
         ('en', 'English'),
         ('mixed', 'Mixed'),
     ]
-    
+
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='categories')
     name = models.CharField(max_length=100)  # Оставляем для обратной совместимости
-    
+
     # Мультиязычные названия
     name_ru = models.CharField(max_length=100, blank=True, null=True, verbose_name='Название на русском')
     name_en = models.CharField(max_length=100, blank=True, null=True, verbose_name='Название на английском')
-    
+
     # Язык оригинала (для определения нужно ли переводить)
     original_language = models.CharField(
         max_length=10,
@@ -305,17 +305,17 @@ class ExpenseCategory(models.Model):
         default='ru',
         verbose_name='Язык оригинала'
     )
-    
+
     # Флаг: категория требует перевода
     is_translatable = models.BooleanField(default=True, verbose_name='Требует перевода')
-    
+
     icon = models.CharField(max_length=10, default='💰')
-    
+
     # Все категории привязаны к пользователю и могут быть удалены
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'expenses_category'
         verbose_name = 'Категория'
@@ -326,34 +326,34 @@ class ExpenseCategory(models.Model):
             models.Index(fields=['profile', 'name_ru']),
             models.Index(fields=['profile', 'name_en']),
         ]
-        
+
     def save(self, *args, **kwargs):
         """Переопределяем save для синхронизации старого поля name"""
-        # Синхронизируем старое поле name для обратной совместимости
-        if self.name_ru:
+        # Синхронизируем старое поле name на основе original_language
+        if self.original_language == 'ru' and self.name_ru:
             self.name = f"{self.icon} {self.name_ru}" if self.icon else self.name_ru
-        elif self.name_en:
+        elif self.original_language == 'en' and self.name_en:
             self.name = f"{self.icon} {self.name_en}" if self.icon else self.name_en
-        # Если name не задан, используем что есть
+        elif self.name_en:
+            # Fallback на английский
+            self.name = f"{self.icon} {self.name_en}" if self.icon else self.name_en
+        elif self.name_ru:
+            # Fallback на русский
+            self.name = f"{self.icon} {self.name_ru}" if self.icon else self.name_ru
         elif not self.name:
             self.name = "Без категории"
-            
+
         super().save(*args, **kwargs)
-    
+
     def __str__(self):
-        # Для админки показываем оба языка для удобства
-        # Это позволяет видеть полную картину независимо от языка администратора
-        if self.name_en and self.name_ru and self.name_en != self.name_ru:
-            # Оба языка заполнены и различаются - показываем оба
-            return f"{self.icon} {self.name_en} / {self.name_ru}"
-        elif self.name_en:
-            # Только английский
-            return f"{self.icon} {self.name_en}"
-        elif self.name_ru:
-            # Только русский
-            return f"{self.icon} {self.name_ru}"
-        else:
-            # Fallback на старое поле
+        # Для админки показываем категорию так, как её видит пользователь (владелец)
+        # Это помогает в отладке - видим что именно показывается пользователю
+        try:
+            # Получаем язык пользователя-владельца категории
+            user_lang = self.profile.language_code if self.profile else 'ru'
+            return self.get_display_name(user_lang)
+        except Exception:
+            # Fallback на старое поле если что-то пошло не так
             return self.name
     
     def get_display_name(self, language_code='ru'):
@@ -915,26 +915,26 @@ class IncomeCategory(models.Model):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='income_categories')
     name = models.CharField(max_length=100)
     icon = models.CharField(max_length=10, default='💵')
-    
+
     # Мультиязычные поля
     name_ru = models.CharField(max_length=100, blank=True, null=True, verbose_name='Название (RU)')
     name_en = models.CharField(max_length=100, blank=True, null=True, verbose_name='Название (EN)')
     original_language = models.CharField(
-        max_length=10, 
+        max_length=10,
         choices=[('ru', 'Русский'), ('en', 'English'), ('other', 'Other')],
         default='ru',
         verbose_name='Оригинальный язык'
     )
     is_translatable = models.BooleanField(default=True, verbose_name='Переводить автоматически')
-    
+
     # Активность категории
     is_active = models.BooleanField(default=True)
     is_default = models.BooleanField(default=False)  # Является ли категорией по умолчанию
-    
+
     # Временные метки
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'incomes_category'
         verbose_name = 'Категория доходов'
@@ -945,34 +945,34 @@ class IncomeCategory(models.Model):
             models.Index(fields=['profile', 'name_ru']),
             models.Index(fields=['profile', 'name_en']),
         ]
-    
+
     def save(self, *args, **kwargs):
         """Переопределяем save для синхронизации старого поля name"""
-        # Синхронизируем старое поле name для обратной совместимости
-        if self.name_ru:
+        # Синхронизируем старое поле name на основе original_language
+        if self.original_language == 'ru' and self.name_ru:
             self.name = f"{self.icon} {self.name_ru}" if self.icon else self.name_ru
-        elif self.name_en:
+        elif self.original_language == 'en' and self.name_en:
             self.name = f"{self.icon} {self.name_en}" if self.icon else self.name_en
-        # Если name не задан, используем что есть
+        elif self.name_en:
+            # Fallback на английский
+            self.name = f"{self.icon} {self.name_en}" if self.icon else self.name_en
+        elif self.name_ru:
+            # Fallback на русский
+            self.name = f"{self.icon} {self.name_ru}" if self.icon else self.name_ru
         elif not self.name:
             self.name = "Прочие доходы"
-            
+
         super().save(*args, **kwargs)
-        
+
     def __str__(self):
-        # Для админки показываем оба языка для удобства
-        # Это позволяет видеть полную картину независимо от языка администратора
-        if self.name_en and self.name_ru and self.name_en != self.name_ru:
-            # Оба языка заполнены и различаются - показываем оба
-            return f"{self.icon} {self.name_en} / {self.name_ru}"
-        elif self.name_en:
-            # Только английский
-            return f"{self.icon} {self.name_en}"
-        elif self.name_ru:
-            # Только русский
-            return f"{self.icon} {self.name_ru}"
-        else:
-            # Fallback на старое поле
+        # Для админки показываем категорию так, как её видит пользователь (владелец)
+        # Это помогает в отладке - видим что именно показывается пользователю
+        try:
+            # Получаем язык пользователя-владельца категории
+            user_lang = self.profile.language_code if self.profile else 'ru'
+            return self.get_display_name(user_lang)
+        except Exception:
+            # Fallback на старое поле если что-то пошло не так
             return self.name
     
     def get_display_name(self, language_code='ru'):
