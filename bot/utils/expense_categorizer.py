@@ -623,14 +623,11 @@ def categorize_expense_with_weights(text: str, user_profile) -> Tuple[str, float
                 # Ищем совпадения в ключевых словах
                 for keyword in keywords:
                     if keyword.keyword.lower() == clean_word:
-                        # Точное совпадение - используем нормализованный вес
-                        score += keyword.normalized_weight * 3
+                        score += 3  # Точное совпадение (приоритет)
                     elif clean_word.startswith(keyword.keyword.lower()):
-                        # Слово начинается с ключевого
-                        score += keyword.normalized_weight * 2
+                        score += 2  # Префикс (средний приоритет)
                     elif keyword.keyword.lower() in clean_word:
-                        # Ключевое слово входит в слово
-                        score += keyword.normalized_weight * 1
+                        score += 1  # Вхождение (низкий приоритет)
         
         if score > 0:
             # Используем язык пользователя для отображения категории

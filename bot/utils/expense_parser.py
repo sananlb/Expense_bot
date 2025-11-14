@@ -703,7 +703,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         logger.info(f"Getting AI service for categorization...")
                         ai_service = get_service('categorization')
                         logger.info(f"AI service obtained: {type(ai_service).__name__}")
-                        logger.info(f"Calling categorize_expense with timeout=15s...")
+                        logger.info(f"Calling categorize_expense with timeout=10s...")
                         ai_result = await asyncio.wait_for(
                             ai_service.categorize_expense(
                                 text=ai_text,  # Отправляем очищенный текст без даты
@@ -712,7 +712,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                                 categories=user_categories,
                                 user_context=user_context
                             ),
-                            timeout=15.0  # 15 секунд общий таймаут для изолированного процесса
+                            timeout=10.0  # 10 секунд общий таймаут для изолированного процесса
                         )
                         logger.info(f"AI categorization completed")
                     except asyncio.TimeoutError:
@@ -951,12 +951,11 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
             keywords = await get_income_keywords()
 
             best_match = None
-            best_weight = 0
 
             for keyword_obj in keywords:
-                if keyword_obj.keyword.lower() in text_lower and keyword_obj.normalized_weight > best_weight:
+                if keyword_obj.keyword.lower() in text_lower:
                     best_match = keyword_obj.category
-                    best_weight = keyword_obj.normalized_weight
+                    break  # При строгой уникальности достаточно первого совпадения
 
             if best_match:
                 category = get_category_display_name(best_match, lang_code)

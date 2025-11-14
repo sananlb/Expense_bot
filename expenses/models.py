@@ -401,12 +401,9 @@ class CategoryKeyword(models.Model):
         default='ru',
         verbose_name='Язык ключевого слова'
     )
-    
+
     # Счетчик использования (для статистики)
     usage_count = models.IntegerField(default=0, verbose_name='Количество использований')
-
-    # Нормализованный вес для конфликтующих слов
-    normalized_weight = models.FloatField(default=1.0, verbose_name='Нормализованный вес')
 
     # Временные метки
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
@@ -419,13 +416,12 @@ class CategoryKeyword(models.Model):
         unique_together = ['category', 'keyword', 'language']
         indexes = [
             models.Index(fields=['category', 'keyword']),
-            models.Index(fields=['normalized_weight']),
             models.Index(fields=['language']),
             models.Index(fields=['last_used']),  # Индекс для быстрой сортировки при очистке
         ]
-    
+
     def __str__(self):
-        return f"{self.keyword} ({self.language}) -> {self.category.name} (вес: {self.normalized_weight:.2f})"
+        return f"{self.keyword} ({self.language}) -> {self.category.name}"
 
 
 class Expense(models.Model):
@@ -1085,12 +1081,9 @@ class IncomeCategoryKeyword(models.Model):
     """Ключевые слова для автоматического определения категорий доходов"""
     category = models.ForeignKey(IncomeCategory, on_delete=models.CASCADE, related_name='keywords')
     keyword = models.CharField(max_length=100, db_index=True)
-    
+
     # Счетчик использования (для статистики)
     usage_count = models.IntegerField(default=0, verbose_name='Количество использований')
-
-    # Нормализованный вес для конфликтующих слов
-    normalized_weight = models.FloatField(default=1.0, verbose_name='Нормализованный вес')
 
     # Временные метки
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')

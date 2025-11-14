@@ -1149,7 +1149,7 @@ def update_keywords_weights(expense_id: int, old_category_id: int, new_category_
             keyword, created = CategoryKeyword.objects.get_or_create(
                 category=new_category,
                 keyword=word,
-                defaults={'normalized_weight': 1.0, 'usage_count': 0}
+                defaults={'usage_count': 0}
             )
 
             # Увеличиваем счетчик использований
@@ -1160,9 +1160,6 @@ def update_keywords_weights(expense_id: int, old_category_id: int, new_category_
 
         if removed_count > 0:
             logger.info(f"Removed {removed_count} duplicate keywords to maintain uniqueness")
-
-        # Пересчитываем нормализованные веса для конфликтующих слов
-        recalculate_normalized_weights(expense.profile.id, words)
 
         # Проверяем лимит 50 слов на категорию
         check_category_keywords_limit(new_category)
@@ -1272,7 +1269,7 @@ def learn_keywords_on_create(expense_id: int, category_id: int):
             keyword, created = CategoryKeyword.objects.get_or_create(
                 category=category,
                 keyword=word,
-                defaults={'normalized_weight': 1.0, 'usage_count': 1}
+                defaults={'usage_count': 1}
             )
 
             if created:
@@ -1291,9 +1288,6 @@ def learn_keywords_on_create(expense_id: int, category_id: int):
         # Очистка старых ключевых слов только если добавили новые
         if any_created:
             cleanup_old_keywords(profile_id=expense.profile.id, is_income=False)
-
-        # Пересчитываем нормализованные веса для конфликтующих слов
-        recalculate_normalized_weights(expense.profile.id, words)
 
         # Проверяем лимит 50 слов на категорию
         check_category_keywords_limit(category)
@@ -1332,36 +1326,6 @@ def extract_words_from_description(description: str) -> List[str]:
             filtered_words.append(word)
     
     return filtered_words
-
-
-def recalculate_normalized_weights(profile_id: int, words: List[str]):
-    """Пересчитывает нормализованные веса для слов, встречающихся в нескольких категориях"""
-    from expenses.models import CategoryKeyword, Profile
-    
-    try:
-        profile = Profile.objects.get(id=profile_id)
-        
-        for word in words:
-            # Находим все вхождения слова у данного пользователя
-            keywords = CategoryKeyword.objects.filter(
-                category__profile=profile,
-                keyword=word
-            )
-            
-            if keywords.count() > 1:
-                # Слово встречается в нескольких категориях
-                total_usage = sum(kw.usage_count for kw in keywords)
-                
-                if total_usage > 0:
-                    for kw in keywords:
-                        # Нормализуем вес от 0 до 1 на основе частоты использования
-                        kw.normalized_weight = kw.usage_count / total_usage
-                        kw.save()
-                        
-                    logger.info(f"Recalculated weights for word '{word}' across {keywords.count()} categories")
-    
-    except Exception as e:
-        logger.error(f"Error recalculating weights: {e}")
 
 
 def check_category_keywords_limit(category):

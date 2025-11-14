@@ -1181,7 +1181,7 @@ async def learn_from_category_change(user_id: int, expense_id: int, new_category
     """
     try:
         from expenses.models import Expense, Profile
-        from expense_bot.celery_tasks import extract_words_from_description, recalculate_normalized_weights, cleanup_old_keywords
+        from expense_bot.celery_tasks import extract_words_from_description, cleanup_old_keywords
 
         @sync_to_async
         def update_keywords_for_category_change():
@@ -1213,7 +1213,7 @@ async def learn_from_category_change(user_id: int, expense_id: int, new_category
                     keyword, created = CategoryKeyword.objects.get_or_create(
                         category=new_category,
                         keyword=word.lower(),
-                        defaults={'normalized_weight': 1.0, 'usage_count': 1}
+                        defaults={'usage_count': 1}
                     )
 
                     if created:
@@ -1228,10 +1228,6 @@ async def learn_from_category_change(user_id: int, expense_id: int, new_category
             # Очистка старых ключевых слов только если добавили новые
             if any_created:
                 cleanup_old_keywords(profile_id=profile.id, is_income=False)
-
-            # Пересчитываем нормализованные веса
-            if words:
-                recalculate_normalized_weights(profile.id, words)
 
             return added_keywords, removed_count
 
