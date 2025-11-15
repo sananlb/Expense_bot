@@ -92,7 +92,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
             
             # Таймаут для ускорения категоризации: при превышении – fallback на OpenAI категоризацию
             import asyncio as _asyncio
-            timeout_seconds = int(os.getenv('GOOGLE_CATEGORIZATION_TIMEOUT', os.getenv('GOOGLE_CHAT_TIMEOUT', '15')))
+            timeout_seconds = int(os.getenv('GOOGLE_CATEGORIZATION_TIMEOUT', os.getenv('GOOGLE_CHAT_TIMEOUT', '10')))
             try:
                 response = await _asyncio.wait_for(
                     model.generate_content_async(

@@ -392,8 +392,11 @@ async def show_expenses_summary(
                         text += f"  💰 <i>Остальные доходы ({remaining_count} {'категория' if remaining_count == 1 else 'категории' if remaining_count < 5 else 'категорий'}): {format_amount(remaining_sum, summary['currency'], lang)}</i>\n"
                     else:
                         text += f"  💰 <i>Other income ({remaining_count} {'category' if remaining_count == 1 else 'categories'}): {format_amount(remaining_sum, summary['currency'], lang)}</i>\n"
-                
+
                 text += "\n"
+
+        # Добавляем подсказку о показе отчета за другой период
+        text += get_text('show_report_another_period', lang)
 
         # Определяем показывать ли кнопку PDF
         if period == 'today':

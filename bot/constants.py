@@ -2,6 +2,7 @@
 Глобальные константы и ссылки (с возможностью переопределения через окружение)
 """
 import os
+from typing import Optional
 
 # Приоритет источников ссылок:
 # 1) TELEGRAPH_*_URL (если опубликовано в Telegraph)
@@ -31,12 +32,12 @@ OFFER_URL_EN = (
     or 'https://www.coins-bot.ru/offer_en.html'
 )
 
-def get_privacy_url_for(lang: str | None) -> str:
+def get_privacy_url_for(lang: Optional[str]) -> str:
     """Вернёт ссылку на политику с учётом языка пользователя."""
     l = (lang or 'en').lower()
     return PRIVACY_URL_RU if l.startswith('ru') else PRIVACY_URL_EN
 
-def get_offer_url_for(lang: str | None) -> str:
+def get_offer_url_for(lang: Optional[str]) -> str:
     """Вернёт ссылку на оферту с учётом языка пользователя."""
     l = (lang or 'en').lower()
     return OFFER_URL_RU if l.startswith('ru') else OFFER_URL_EN
