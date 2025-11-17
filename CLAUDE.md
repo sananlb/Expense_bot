@@ -639,6 +639,13 @@ cd /home/batman/expense_bot && docker-compose up -d bot
 docker-compose logs bot --tail=50          # ❌ ERROR: No such service: --tail
 docker-compose logs bot --follow           # ❌ ERROR: No such service: --follow
 docker-compose logs --tail=200 app         # ❌ ERROR: no configuration file (если не в директории проекта)
+docker-compose logs bot --since "2025-11-17T07:30:00"  # ❌ ERROR: No such service: --since
+docker-compose logs bot --until "2025-11-17T07:40:00"  # ❌ ERROR: No such service: --until
+
+# ⚠️ ВАЖНО: Старая версия docker-compose НЕ поддерживает:
+# - Флаги --since и --until (фильтрация по времени)
+# - Флаги ПОСЛЕ имени сервиса (только ПЕРЕД именем!)
+# Используйте docker logs напрямую или grep для фильтрации
 
 # 🔄 АЛЬТЕРНАТИВА - напрямую через docker (работает ВЕЗДЕ без cd):
 docker logs --tail 200 expense_bot_app     # Логи бота (app контейнер)
@@ -646,6 +653,15 @@ docker logs --tail 50 expense_bot_web      # Логи веб
 docker logs -f expense_bot_app             # Следить за логами (-f = follow)
 docker ps                                  # Статус всех контейнеров
 docker restart expense_bot_app             # Перезапустить бот
+
+# ✅ Фильтрация по времени (работает с docker logs напрямую):
+docker logs --since "2025-11-17T07:30:00" --until "2025-11-17T07:40:00" expense_bot_app
+docker logs --since "1h" expense_bot_app   # Логи за последний час
+docker logs --since "30m" expense_bot_app  # Логи за последние 30 минут
+
+# ✅ Поиск в логах с фильтрацией:
+docker-compose logs --tail=5000 bot | grep -i "текст" -B 5 -A 10
+docker logs --tail 5000 expense_bot_app | grep -E "pattern1|pattern2" -B 5 -A 10
 ```
 
 **На BACKUP SERVER (72.56.67.202) - НОВАЯ версия docker compose:**
