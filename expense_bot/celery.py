@@ -4,7 +4,7 @@ Celery configuration for expense_bot
 import os
 import platform
 from celery import Celery
-from kombu import Queue
+from kombu import Queue, Exchange
 
 # Set the default Django settings module
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'expense_bot.settings')
@@ -108,15 +108,18 @@ app.conf.task_routes = {
     },
 }
 
-# Queue configuration
+# Define topic exchange for wildcard routing
+default_exchange = Exchange('default', type='topic', durable=True)
+
+# Queue configuration with topic exchange
 app.conf.task_queues = (
-    Queue('default', routing_key='task.#'),  # Using task.# to match worker configuration
-    Queue('reports', routing_key='report.#'),
-    Queue('recurring', routing_key='recurring.#'),
-    Queue('maintenance', routing_key='maintenance.#'),
-    Queue('notifications', routing_key='notification.#'),
-    Queue('monitoring', routing_key='monitoring.#'),
-    Queue('analytics', routing_key='analytics.#'),
+    Queue('default', exchange=default_exchange, routing_key='task.#'),
+    Queue('reports', exchange=default_exchange, routing_key='report.#'),
+    Queue('recurring', exchange=default_exchange, routing_key='recurring.#'),
+    Queue('maintenance', exchange=default_exchange, routing_key='maintenance.#'),
+    Queue('notifications', exchange=default_exchange, routing_key='notification.#'),
+    Queue('monitoring', exchange=default_exchange, routing_key='monitoring.#'),
+    Queue('analytics', exchange=default_exchange, routing_key='analytics.#'),
 )
 
 # Task execution configuration
@@ -127,7 +130,9 @@ app.conf.update(
     worker_hijack_root_logger=False,
     result_expires=3600,      # 1 hour
     task_default_queue='default',  # Default queue for tasks without explicit routing
-    task_default_routing_key='task.default',  # Default routing key
+    task_default_exchange='default',  # Default exchange (topic type)
+    task_default_exchange_type='topic',  # Exchange type for wildcard routing
+    task_default_routing_key='task.default',  # Default routing key (matches task.# pattern)
 )
 
 # Auto-discover tasks from Django apps
