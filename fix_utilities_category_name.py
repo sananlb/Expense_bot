@@ -20,7 +20,7 @@ from datetime import datetime
 
 # Настройка Django
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'expense_bot.settings')
 django.setup()
 
 from expenses.models import ExpenseCategory
@@ -48,7 +48,7 @@ def fix_utilities_category_name(dry_run=True):
     print()
 
     if count == 0:
-        print("✅ Нет категорий для обновления.")
+        print("[OK] Нет категорий для обновления.")
         return
 
     # Показываем затронутых пользователей
@@ -64,7 +64,7 @@ def fix_utilities_category_name(dry_run=True):
     print("-" * 80)
     for i, cat in enumerate(categories_to_fix[:5], 1):
         print(f"{i}. ID={cat.id}, Profile={cat.profile_id}, "
-              f"name_ru='{cat.name_ru}' → '{new_name}'")
+              f"name_ru='{cat.name_ru}' -> '{new_name}'")
     if count > 5:
         print(f"... и ещё {count - 5} категорий")
     print("-" * 80)
