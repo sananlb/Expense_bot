@@ -350,12 +350,13 @@ def send_expense_reminders():
 
     Логика работы:
     1. Новый пользователь зарегистрировался и не внес ни одной операции
-       → На следующий день в 20:00 отправляется напоминание
+       → Если прошло 24-48 часов с регистрации, в 20:00 отправляется напоминание
        → Флаг "напоминание отправлено" ставится БЕЗ срока действия
 
-    2. Пользователь не вносил операции (траты или доходы) больше 24 часов
+    2. Пользователь не вносил операции (траты или доходы) от 24 до 48 часов
        → В 20:00 отправляется напоминание
        → Флаг "напоминание отправлено" ставится БЕЗ срока действия
+       → Если пользователь неактивен более 48 часов - напоминание НЕ отправляется
 
     3. После отправки напоминания:
        → Если пользователь НЕ внес операцию - больше НЕ напоминаем (флаг остается навсегда)
@@ -363,15 +364,18 @@ def send_expense_reminders():
 
     Ключевые моменты:
     - Напоминание отправляется ОДИН РАЗ до внесения операции
+    - Окно для отправки: 24-48 часов после последней активности
+    - Пользователи неактивные более 48 часов не получают напоминания (не спамим)
     - Флаг в Redis хранится бессрочно (timeout=None)
     - Единственный способ сбросить флаг - внести любую операцию (трату или доход)
-    - После внесения операции через 24ч бездействия придет новое напоминание
+    - После внесения операции через 24-48ч бездействия придет новое напоминание
     """
     from django.core.cache import cache
     from expenses.models import Profile, Expense, Income
 
     now = timezone.now()
     yesterday = now - timedelta(hours=24)
+    two_days_ago = now - timedelta(hours=48)
 
     sent_count = 0
     skipped_count = 0
@@ -423,17 +427,17 @@ def send_expense_reminders():
 
             if not last_operation:
                 # Новый пользователь без операций
-                # Проверяем, прошел ли хотя бы день с регистрации
-                if profile.created_at and profile.created_at < yesterday:
+                # Проверяем, что прошло от 24 до 48 часов с регистрации
+                if profile.created_at and two_days_ago < profile.created_at < yesterday:
                     should_remind = True
-                    logger.info(f"[REMINDER] New user {profile.telegram_id} needs reminder (no operations)")
+                    logger.info(f"[REMINDER] New user {profile.telegram_id} needs reminder (no operations, registered 24-48h ago)")
             else:
-                # Пользователь с операциями - проверяем давность последней операции
-                if last_operation.created_at < yesterday:
+                # Пользователь с операциями - проверяем что последняя операция была 24-48 часов назад
+                if two_days_ago < last_operation.created_at < yesterday:
                     should_remind = True
                     logger.info(
                         f"[REMINDER] User {profile.telegram_id} needs reminder "
-                        f"(last {last_operation_type}: {last_operation.created_at})"
+                        f"(last {last_operation_type} 24-48h ago: {last_operation.created_at})"
                     )
 
             if should_remind:
