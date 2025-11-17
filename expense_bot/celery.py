@@ -110,7 +110,7 @@ app.conf.task_routes = {
 
 # Queue configuration
 app.conf.task_queues = (
-    Queue('default', routing_key='task.#'),
+    Queue('default', routing_key='task.#'),  # Using task.# to match worker configuration
     Queue('reports', routing_key='report.#'),
     Queue('recurring', routing_key='recurring.#'),
     Queue('maintenance', routing_key='maintenance.#'),
