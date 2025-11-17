@@ -126,6 +126,8 @@ app.conf.update(
     task_acks_late=True,
     worker_hijack_root_logger=False,
     result_expires=3600,      # 1 hour
+    task_default_queue='default',  # Default queue for tasks without explicit routing
+    task_default_routing_key='task.default',  # Default routing key
 )
 
 # Auto-discover tasks from Django apps
