@@ -259,7 +259,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
             # Международные бренды
             'netflix', 'spotify', 'youtube', 'apple', 'google', 'xbox', 'playstation', 'steam',
         ],
-        'aliases': ['коммуналка', 'utilities', 'подписки', 'subscriptions'],
+        'aliases': ['коммуналка', 'utilities', 'подписки', 'subscriptions', 'коммунальные услуги и подписки'],
     },
     'savings': {
         'name_ru': '💰 Накопления',
