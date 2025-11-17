@@ -341,12 +341,6 @@ try:
         'schedule': crontab(day_of_month=1, hour=10, minute=0),  # First day of month at 10:00
         'options': {'queue': 'reports'}
     },
-    # Отключено 30.10.2025 - функционал бюджетов удален
-    # 'check-budget-limits': {
-    #     'task': 'expense_bot.celery_tasks.check_budget_limits',
-    #     'schedule': crontab(minute='*/30'),  # Every 30 minutes
-    #     'options': {'queue': 'notifications'}
-    # },
     'cleanup-old-expenses': {
         'task': 'expense_bot.celery_tasks.cleanup_old_expenses',
         'schedule': crontab(day_of_week=0, hour=3, minute=0),  # Sunday 3 AM
