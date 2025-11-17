@@ -96,8 +96,8 @@ def get_expense_category_display_name(category_key: str, language_code: str = 'r
 
 ### Алгоритм:
 1. Определили `category_key = "utilities_subscriptions"` (по ключевым словам)
-2. Получаем все категории пользователя из БД
-3. Для каждой категории:
+2. Используем УЖЕ загруженные категории пользователя (они загружены ранее на строках 520-555)
+3. Для каждой категории из загруженного списка:
    - Проверяем `normalize_expense_category_key(category.name_ru)`
    - Если совпадает с найденным ключом → берем ЕЁ название
 4. Используем **реальное название из БД**: "Коммунальные услуги и подписки"
@@ -109,6 +109,7 @@ def get_expense_category_display_name(category_key: str, language_code: str = 'r
 - ✅ Сохраняет быстрое определение по ключевым словам (без AI)
 - ✅ Уменьшает нагрузку на AI
 - ✅ Не ломает существующий функционал
+- ✅ НЕТ дополнительных запросов к БД (использует уже загруженные данные)
 
 ---
 
@@ -119,47 +120,47 @@ def get_expense_category_display_name(category_key: str, language_code: str = 'r
 **Файл:** `bot/utils/expense_parser.py`
 **Место:** После строки 444 (перед `parse_expense_message`)
 
+**ВАЖНО:** Используем УЖЕ ЗАГРУЖЕННЫЕ категории (они загружены на строках 520-555), чтобы избежать дублирующих запросов к БД.
+
 ```python
-async def find_user_category_by_key(profile, category_key: str, lang_code: str = 'ru') -> Optional[str]:
+def find_user_category_by_key(user_categories_objects: list, category_key: str, lang_code: str = 'ru') -> Optional[str]:
     """
-    Находит категорию пользователя по category_key.
+    Находит категорию пользователя по category_key из уже загруженного списка.
 
     Args:
-        profile: Профиль пользователя
+        user_categories_objects: Список объектов ExpenseCategory (УЖЕ загружены из БД)
         category_key: Ключ категории (например, "utilities_subscriptions")
         lang_code: Код языка для отображения
 
     Returns:
         Название категории пользователя или None
     """
-    from expenses.models import ExpenseCategory
-    from asgiref.sync import sync_to_async
     from bot.utils.category_helpers import get_category_display_name
 
-    @sync_to_async
-    def get_matching_category():
-        categories = ExpenseCategory.objects.filter(profile=profile, is_active=True)
+    for cat in user_categories_objects:
+        # Проверяем name_ru
+        cat_key_ru = normalize_expense_category_key(cat.name_ru) if cat.name_ru else None
+        if cat_key_ru == category_key:
+            return get_category_display_name(cat, lang_code)
 
-        for cat in categories:
-            # Проверяем name_ru
-            cat_key_ru = normalize_expense_category_key(cat.name_ru) if cat.name_ru else None
-            if cat_key_ru == category_key:
-                return get_category_display_name(cat, lang_code)
+        # Проверяем name_en
+        cat_key_en = normalize_expense_category_key(cat.name_en) if cat.name_en else None
+        if cat_key_en == category_key:
+            return get_category_display_name(cat, lang_code)
 
-            # Проверяем name_en
-            cat_key_en = normalize_expense_category_key(cat.name_en) if cat.name_en else None
-            if cat_key_en == category_key:
-                return get_category_display_name(cat, lang_code)
+        # Проверяем старое поле name (для обратной совместимости)
+        cat_key_name = normalize_expense_category_key(cat.name) if cat.name else None
+        if cat_key_name == category_key:
+            return get_category_display_name(cat, lang_code)
 
-            # Проверяем старое поле name (для обратной совместимости)
-            cat_key_name = normalize_expense_category_key(cat.name) if cat.name else None
-            if cat_key_name == category_key:
-                return get_category_display_name(cat, lang_code)
-
-        return None
-
-    return await get_matching_category()
+    return None
 ```
+
+**Преимущества:**
+- ✅ НЕ делает дублирующий запрос к БД
+- ✅ Использует уже загруженные данные
+- ✅ Синхронная функция (проще и быстрее)
+- ✅ Нет накладных расходов на sync_to_async
 
 ### Этап 2: Изменить логику в parse_expense_message
 
@@ -184,9 +185,9 @@ if not category:
     if detected_key:
         category_key = detected_key
 
-        # Если есть профиль - ищем категорию пользователя по ключу
-        if profile:
-            category = await find_user_category_by_key(profile, category_key, lang_code)  # ✅ ИЗ БД
+        # Если есть профиль - ищем категорию пользователя по ключу (используя уже загруженные данные)
+        if profile and user_categories:
+            category = find_user_category_by_key(user_categories, category_key, lang_code)  # ✅ ИЗ ЗАГРУЖЕННЫХ ДАННЫХ
 
         # Fallback: если нет профиля или не нашли у пользователя - берем из definitions
         if not category:
@@ -230,57 +231,6 @@ else:
 
 ---
 
-## 🔧 Дополнительные изменения
-
-### Улучшение функции normalize_expense_category_key
-
-**Файл:** `bot/utils/expense_category_definitions.py:307-334`
-
-**Проблема:** Сейчас функция проверяет через `aliases` и `keywords`, но может не работать корректно для переименованных категорий.
-
-**Предложение:** Добавить обработку частичных совпадений:
-
-```python
-def normalize_expense_category_key(label: Optional[str]) -> Optional[str]:
-    """Map a raw category label to a canonical category key."""
-    if not label:
-        return None
-    cleaned = strip_leading_emoji(label).lower()
-    if not cleaned:
-        return None
-
-    for key, data in EXPENSE_CATEGORY_DEFINITIONS.items():
-        # 1. Проверяем точное совпадение с name_ru/name_en
-        potential_matches = {
-            strip_leading_emoji(data['name_ru']).lower(),
-            strip_leading_emoji(data['name_en']).lower(),
-        }
-        if cleaned in potential_matches:
-            return key
-
-        # 2. Проверяем aliases
-        for alias in data.get('aliases', []):
-            alias_lower = alias.lower()
-            if alias_lower and (alias_lower == cleaned or alias_lower in cleaned or cleaned in alias_lower):
-                return key
-
-        # 3. Проверяем keywords (НЕ проверяем вхождение для коротких слов!)
-        for keyword in data.get('keywords', []):
-            keyword_lower = keyword.lower()
-            # Только точное совпадение для коротких слов (< 4 символа)
-            if len(keyword_lower) < 4:
-                if keyword_lower == cleaned:
-                    return key
-            else:
-                # Для длинных слов - вхождение
-                if keyword_lower and (keyword_lower == cleaned or keyword_lower in cleaned or cleaned in keyword_lower):
-                    return key
-
-    return None
-```
-
----
-
 ## 📊 Ожидаемый результат
 
 ### До исправления:
@@ -309,11 +259,11 @@ AI: "Прочие расходы" (fallback)
 ## ⚠️ Риски и меры предосторожности
 
 ### Риск 1: Производительность
-**Проблема:** Дополнительный запрос к БД для поиска категории
+**Проблема:** Может замедлить обработку из-за дополнительного поиска
 **Решение:**
-- Функция вызывается только если найден `category_key`
-- Категории уже загружены в память на предыдущих этапах
-- Можно добавить кеширование на уровне запроса
+- ✅ Функция использует УЖЕ загруженные категории (нет дополнительных запросов к БД)
+- ✅ Простой цикл по списку объектов в памяти (быстро)
+- ✅ Функция вызывается только если найден `category_key` (не на каждый запрос)
 
 ### Риск 2: Обратная совместимость
 **Проблема:** Может сломать существующее поведение
