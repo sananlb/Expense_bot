@@ -117,8 +117,20 @@ TEXTS = {
         'no_categories_to_delete': 'У вас нет категорий для удаления',
         'no_income_categories_to_delete': 'У вас нет категорий доходов для удаления',
         'no_income_categories_yet': 'У вас пока нет категорий доходов.',
-        'editing_category_header': '✏️ Редактирование категории «{name}»\n\nЧто вы хотите изменить?',
-        'editing_income_category_header': '✏️ Редактирование категории доходов «{name}»\n\nЧто вы хотите изменить?',
+        'editing_category_header': (
+            '✏️ Редактирование категории «{name}»\n\n'
+            'Что вы хотите изменить?\n\n'
+            'ℹ️ <i>Важно: меняйте название и эмодзи только на похожие по смыслу. '
+            'Система продолжит определять траты по исходным ключевым словам.\n\n'
+            'Если нужна категория с другим смыслом — удалите текущую и создайте новую.</i>'
+        ),
+        'editing_income_category_header': (
+            '✏️ Редактирование категории доходов «{name}»\n\n'
+            'Что вы хотите изменить?\n\n'
+            'ℹ️ <i>Важно: меняйте название и эмодзи только на похожие по смыслу. '
+            'Система продолжит определять доходы по исходным ключевым словам.\n\n'
+            'Если нужна категория с другим смыслом — удалите текущую и создайте новую.</i>'
+        ),
         'edit_name_button': '📝 Название',
         'edit_icon_button': '🎨 Иконку',
         'could_not_delete_category': '❌ Не удалось удалить категорию',
@@ -968,8 +980,20 @@ PDF отчеты с графиками, экспорт в CSV и Excel дост�
         'no_categories_to_delete': 'You have no categories to delete',
         'no_income_categories_to_delete': 'You have no income categories to delete',
         'no_income_categories_yet': 'You have no income categories yet.',
-        'editing_category_header': '✏️ Editing category «{name}»\n\nWhat would you like to change?',
-        'editing_income_category_header': '✏️ Editing income category «{name}»\n\nWhat would you like to change?',
+        'editing_category_header': (
+            '✏️ Editing category «{name}»\n\n'
+            'What would you like to change?\n\n'
+            'ℹ️ <i>Important: Change name and emoji only to similar meaning. '
+            'The system will continue to categorize expenses using the original keywords.\n\n'
+            'If you need a different category type — delete this one and create new.</i>'
+        ),
+        'editing_income_category_header': (
+            '✏️ Editing income category «{name}»\n\n'
+            'What would you like to change?\n\n'
+            'ℹ️ <i>Important: Change name and emoji only to similar meaning. '
+            'The system will continue to categorize income using the original keywords.\n\n'
+            'If you need a different category type — delete this one and create new.</i>'
+        ),
         'edit_name_button': '📝 Name',
         'edit_icon_button': '🎨 Icon',
         'could_not_delete_category': '❌ Could not delete category',

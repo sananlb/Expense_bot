@@ -609,7 +609,7 @@ def create_default_categories_sync(user_id: int) -> bool:
             ('Образование', 'Education', '📚', 'ru'),
             ('Подарки', 'Gifts', '🎁', 'ru'),
             ('Путешествия', 'Travel', '✈️', 'ru'),
-            ('Коммунальные услуги и подписки', 'Utilities and Subscriptions', '📱', 'ru'),
+            ('Коммуналка и подписки', 'Utilities and Subscriptions', '📱', 'ru'),
             ('АЗС', 'Gas Station', '⛽', 'ru'),
             ('Прочие расходы', 'Other Expenses', '💰', 'ru')
         ]

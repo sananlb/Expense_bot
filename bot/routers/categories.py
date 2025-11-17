@@ -747,7 +747,8 @@ async def edit_category(callback: types.CallbackQuery, state: FSMContext):
                     [InlineKeyboardButton(text=get_text('edit_name_button', lang), callback_data=f"edit_cat_name_{cat_id}")],
                     [InlineKeyboardButton(text=get_text('edit_icon_button', lang), callback_data=f"edit_cat_icon_{cat_id}")],
                     [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="edit_categories")]
-                ])
+                ]),
+                parse_mode='HTML'
             )
         except TelegramBadRequest:
             # Если сообщение уже такое же, просто подтверждаем callback
@@ -1211,7 +1212,8 @@ async def edit_income_category(callback: types.CallbackQuery, state: FSMContext)
                 [InlineKeyboardButton(text=get_text('edit_name_button', lang), callback_data=f"edit_income_name_{category_id}")],
                 [InlineKeyboardButton(text=get_text('edit_icon_button', lang), callback_data=f"edit_income_icon_{category_id}")],
                 [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="edit_income_categories")]
-            ])
+            ]),
+            parse_mode='HTML'
         )
     else:
         await callback.answer(get_text('error_category_not_found', lang), show_alert=True)

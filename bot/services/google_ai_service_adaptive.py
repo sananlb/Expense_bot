@@ -242,7 +242,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
     ) -> Optional[Dict[str, Any]]:
         """Категоризация расхода"""
         try:
-            logger.info(f"[GoogleAI-Adaptive] Categorizing: {text[:30]} ({'isolated' if IS_WINDOWS else 'async'} mode)")
+            logger.info(f"[GoogleAI-Adaptive] Categorizing: {text[:100]} ({'isolated' if IS_WINDOWS else 'async'} mode)")
             
             if IS_WINDOWS:
                 # Windows: используем изолированный процесс
