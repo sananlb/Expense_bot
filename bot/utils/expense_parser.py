@@ -442,6 +442,37 @@ def detect_currency(text: str, user_currency: str = 'RUB') -> str:
     return (user_currency or 'RUB').upper()  # Default to user's currency in uppercase
 
 
+def find_user_category_by_key(user_categories_objects: list, category_key: str, lang_code: str = 'ru') -> Optional[str]:
+    """
+    Находит категорию пользователя по category_key из уже загруженного списка.
+
+    Args:
+        user_categories_objects: Список объектов ExpenseCategory (УЖЕ загружены из БД)
+        category_key: Ключ категории (например, "utilities_subscriptions")
+        lang_code: Код языка для отображения
+
+    Returns:
+        Название категории пользователя или None
+    """
+    for cat in user_categories_objects:
+        # Проверяем name_ru
+        cat_key_ru = normalize_expense_category_key(cat.name_ru) if cat.name_ru else None
+        if cat_key_ru == category_key:
+            return get_category_display_name(cat, lang_code)
+
+        # Проверяем name_en
+        cat_key_en = normalize_expense_category_key(cat.name_en) if cat.name_en else None
+        if cat_key_en == category_key:
+            return get_category_display_name(cat, lang_code)
+
+        # Проверяем старое поле name (для обратной совместимости)
+        cat_key_name = normalize_expense_category_key(cat.name) if cat.name else None
+        if cat_key_name == category_key:
+            return get_category_display_name(cat, lang_code)
+
+    return None
+
+
 async def parse_expense_message(text: str, user_id: Optional[int] = None, profile=None, use_ai: bool = True) -> Optional[Dict[str, Any]]:
     """
     Парсит текстовое сообщение и извлекает информацию о расходе
@@ -511,6 +542,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     category = None
     max_score = 0
     text_lower = text_to_parse.lower()  # Создаем text_lower для поиска категорий
+    user_categories = []  # Инициализируем список категорий пользователя
 
     # Сначала проверяем пользовательские категории, если есть профиль
     if profile:
@@ -576,7 +608,18 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         detected_key = detect_expense_category_key(text_lower)
         if detected_key:
             category_key = detected_key
-            category = get_expense_category_display_for_key(category_key, lang_code)
+
+            # Если есть профиль - ищем категорию пользователя по ключу (используя уже загруженные данные)
+            if profile and user_categories:
+                category = find_user_category_by_key(user_categories, category_key, lang_code)
+                if category:
+                    logger.info(f"Found user category '{category}' by key '{category_key}'")
+                else:
+                    logger.info(f"User category not found for key '{category_key}', using default")
+
+            # Fallback: если нет профиля или не нашли у пользователя - берем из definitions
+            if not category:
+                category = get_expense_category_display_for_key(category_key, lang_code)
 
     # Формируем описание (текст без суммы и без даты)
     description = text_without_amount if text_without_amount is not None else text_without_date
