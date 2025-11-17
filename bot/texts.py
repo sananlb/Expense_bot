@@ -121,14 +121,16 @@ TEXTS = {
             '✏️ Редактирование категории «{name}»\n\n'
             'Что вы хотите изменить?\n\n'
             'ℹ️ <i>Важно: меняйте название и эмодзи только на похожие по смыслу. '
-            'Система продолжит определять траты по исходным ключевым словам.\n\n'
+            'Система продолжит определять траты по исходным ключевым словам, '
+            'независимо от названия категории.\n\n'
             'Если нужна категория с другим смыслом — удалите текущую и создайте новую.</i>'
         ),
         'editing_income_category_header': (
             '✏️ Редактирование категории доходов «{name}»\n\n'
             'Что вы хотите изменить?\n\n'
             'ℹ️ <i>Важно: меняйте название и эмодзи только на похожие по смыслу. '
-            'Система продолжит определять доходы по исходным ключевым словам.\n\n'
+            'Система продолжит определять доходы по исходным ключевым словам, '
+            'независимо от названия категории.\n\n'
             'Если нужна категория с другим смыслом — удалите текущую и создайте новую.</i>'
         ),
         'edit_name_button': '📝 Название',
@@ -984,14 +986,16 @@ PDF отчеты с графиками, экспорт в CSV и Excel дост�
             '✏️ Editing category «{name}»\n\n'
             'What would you like to change?\n\n'
             'ℹ️ <i>Important: Change name and emoji only to similar meaning. '
-            'The system will continue to categorize expenses using the original keywords.\n\n'
+            'The system will continue to categorize expenses using the original keywords, '
+            'regardless of the category name.\n\n'
             'If you need a different category type — delete this one and create new.</i>'
         ),
         'editing_income_category_header': (
             '✏️ Editing income category «{name}»\n\n'
             'What would you like to change?\n\n'
             'ℹ️ <i>Important: Change name and emoji only to similar meaning. '
-            'The system will continue to categorize income using the original keywords.\n\n'
+            'The system will continue to categorize income using the original keywords, '
+            'regardless of the category name.\n\n'
             'If you need a different category type — delete this one and create new.</i>'
         ),
         'edit_name_button': '📝 Name',
