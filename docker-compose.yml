@@ -56,6 +56,11 @@ services:
     command: python run_bot.py
     ports:
       - "8001:8000"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
 
   celery:
     build:
@@ -80,6 +85,11 @@ services:
         condition: service_healthy
     restart: unless-stopped
     command: celery -A expense_bot worker --loglevel=info -Q default,reports,recurring,maintenance,notifications,monitoring,analytics
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
 
   celery-beat:
     build:
@@ -103,6 +113,11 @@ services:
         condition: service_healthy
     restart: unless-stopped
     command: celery -A expense_bot beat --loglevel=info
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   # Optional: Django admin panel
   web:
@@ -131,6 +146,11 @@ services:
     command: gunicorn expense_bot.wsgi:application --bind 0.0.0.0:8000 --workers 2
     ports:
       - "8000:8000"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "30m"
+        max-file: "3"
 
 volumes:
   postgres_data:
