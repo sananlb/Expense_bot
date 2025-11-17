@@ -1132,6 +1132,14 @@ def update_keywords_weights(expense_id: int, old_category_id: int, new_category_
 
         words = corrected_words
 
+        # Применяем фильтрацию по правилам сохранения (максимум 3 слова, исключаем глаголы при необходимости)
+        words = filter_keywords_for_saving(words)
+
+        # Если после фильтрации не осталось слов - выходим
+        if not words:
+            logger.info(f"No keywords to update after filtering for expense {expense_id}")
+            return
+
         # Обновляем ключевые слова для НОВОЙ категории с гарантией уникальности
         removed_count = 0
         for word in words:
@@ -1250,6 +1258,14 @@ def learn_keywords_on_create(expense_id: int, category_id: int):
 
         words = corrected_words
 
+        # Применяем фильтрацию по правилам сохранения (максимум 3 слова, исключаем глаголы при необходимости)
+        words = filter_keywords_for_saving(words)
+
+        # Если после фильтрации не осталось слов - выходим
+        if not words:
+            logger.info(f"No keywords to save after filtering for expense {expense_id}")
+            return
+
         # ВАЖНО: Ключевые слова должны быть уникальными!
         # Удаляем эти слова из ВСЕХ категорий пользователя перед добавлением
         removed_count = 0
@@ -1305,10 +1321,10 @@ def extract_words_from_description(description: str) -> List[str]:
     # ВАЖНО: не удаляем букву "р" - она часть многих слов (гренки, горох и т.д.)
     # Валюту "р" фильтруем через стоп-слова
     text = re.sub(r'[₽$€£¥\.,"\'!?;:\-\(\)]', ' ', text)
-    
+
     # Разбиваем на слова
     words = text.lower().split()
-    
+
     # Фильтруем стоп-слова
     stop_words = {
         'и', 'в', 'на', 'с', 'за', 'по', 'для', 'от', 'до', 'из',
@@ -1317,15 +1333,63 @@ def extract_words_from_description(description: str) -> List[str]:
         'потратил', 'потратила', 'потратили', 'оплатил', 'оплатила',
         'рубль', 'рубля', 'рублей', 'руб', 'р', 'тыс', 'тысяч'
     }
-    
+
     # Фильтруем слова
     filtered_words = []
     for word in words:
         word = word.strip()
         if word and len(word) >= 3 and word not in stop_words:
             filtered_words.append(word)
-    
+
     return filtered_words
+
+
+def filter_keywords_for_saving(words: List[str]) -> List[str]:
+    """
+    Фильтрует ключевые слова перед сохранением в БД по правилам:
+    1. Если слов > 4 → не сохраняем ничего (список покупок)
+    2. Если слов > 2 И есть глагол → удаляем глаголы и берем максимум 2 слова
+    3. В остальных случаях → берем максимум 3 слова
+
+    Args:
+        words: Список отфильтрованных слов из описания
+
+    Returns:
+        Список слов для сохранения в БД (0-3 слова)
+    """
+    # Правило 1: Более 4 слов → список покупок, не сохраняем
+    if len(words) > 4:
+        logger.debug(f"Too many words ({len(words)} > 4), skipping keyword saving")
+        return []
+
+    # Список распространенных глаголов (расширенный список)
+    verbs = {
+        # Уже в стоп-словах, но на всякий случай дублируем
+        'купил', 'купила', 'купили', 'взял', 'взяла', 'взяли',
+        'потратил', 'потратила', 'потратили', 'оплатил', 'оплатила', 'оплатили',
+        # Дополнительные глаголы
+        'заказал', 'заказала', 'заказали', 'приобрел', 'приобрела', 'приобрели',
+        'купила', 'съел', 'съела', 'съели', 'выпил', 'выпила', 'выпили',
+        'сходил', 'сходила', 'сходили', 'отдал', 'отдала', 'отдали',
+        'заплатил', 'заплатила', 'заплатили', 'внес', 'внесла', 'внесли',
+        'перевел', 'перевела', 'перевели', 'отправил', 'отправила', 'отправили',
+        'положил', 'положила', 'положили', 'снял', 'сняла', 'сняли'
+    }
+
+    # Ищем глаголы в списке слов
+    words_without_verbs = [word for word in words if word not in verbs]
+    has_verbs = len(words_without_verbs) < len(words)
+
+    # Правило 2: Более 2 слов И есть глагол → берем 2 слова без глагола
+    if len(words) > 2 and has_verbs:
+        result = words_without_verbs[:2]
+        logger.debug(f"Found verbs in {len(words)} words, saving first 2 non-verb words: {result}")
+        return result
+
+    # Правило 3: В остальных случаях → максимум 3 слова
+    result = words[:3]
+    logger.debug(f"Saving up to 3 words from {len(words)} total: {result}")
+    return result
 
 
 def check_category_keywords_limit(category):
@@ -1455,6 +1519,14 @@ def update_income_keywords(income_id: int, old_category_id: int, new_category_id
         # Извлекаем и очищаем слова из описания
         words = extract_words_from_description(income.description)
 
+        # Применяем фильтрацию по правилам сохранения (максимум 3 слова, исключаем глаголы при необходимости)
+        words = filter_keywords_for_saving(words)
+
+        # Если после фильтрации не осталось слов - выходим
+        if not words:
+            logger.info(f"No keywords to update after filtering for income {income_id}")
+            return
+
         # Обновляем ключевые слова для НОВОЙ категории с гарантией строгой уникальности
         total_removed = 0
         for word in words:
@@ -1515,6 +1587,14 @@ def learn_income_keywords_on_create(income_id: int):
 
         # Извлекаем и очищаем слова из описания
         words = extract_words_from_description(income.description)
+
+        # Применяем фильтрацию по правилам сохранения (максимум 3 слова, исключаем глаголы при необходимости)
+        words = filter_keywords_for_saving(words)
+
+        # Если после фильтрации не осталось слов - выходим
+        if not words:
+            logger.info(f"No keywords to save after filtering for income {income_id}")
+            return
 
         # Добавляем ключевые слова с гарантией строгой уникальности
         any_created = False  # Флаг что хотя бы одно новое слово создано
