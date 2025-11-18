@@ -63,8 +63,49 @@ async def show_top5(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'
             text += f"\n\n{get_text('top5_empty', lang)}"
         kb = build_top5_keyboard(items, lang)
 
-        # Отправляем как и другие меню: удаляем предыдущее и сохраняем новое
-        await send_message_with_cleanup(callback, state, text, reply_markup=kb, parse_mode='HTML')
+        # НЕ удаляем старое меню ТОП 5 - оно должно оставаться на экране
+        # Пользователь может иметь несколько меню ТОП 5 одновременно
+
+        # Если это CallbackQuery, редактируем существующее сообщение
+        sent_message = None
+        try:
+            await callback.message.edit_text(
+                text=text,
+                reply_markup=kb,
+                parse_mode="HTML"
+            )
+            sent_message = callback.message
+        except Exception as e:
+            # Если не удалось отредактировать, отправляем новое
+            logger.warning(f"Failed to edit message: {e}")
+            sent_message = await callback.bot.send_message(
+                chat_id=callback.message.chat.id,
+                text=text,
+                reply_markup=kb,
+                parse_mode="HTML"
+            )
+
+        # Получаем текущие данные состояния
+        data = await state.get_data()
+        top5_menu_ids = data.get('top5_menu_ids', [])
+        current_last_menu = data.get('last_menu_message_id')
+
+        # Добавляем новый ID в список меню ТОП 5
+        if sent_message.message_id not in top5_menu_ids:
+            top5_menu_ids.append(sent_message.message_id)
+
+        # Сохраняем обновленный список ID и флаги
+        update_data = {
+            'top5_menu_ids': top5_menu_ids,  # Список всех ID меню ТОП 5
+            'persistent_top5_menu': True,
+        }
+
+        # НЕ перезаписываем last_menu_message_id если там уже есть ID другого (не ТОП 5) меню
+        # Это позволит правильно удалять обычные меню при навигации
+        if not current_last_menu or current_last_menu in top5_menu_ids:
+            update_data['last_menu_message_id'] = sent_message.message_id
+
+        await state.update_data(**update_data)
         await callback.answer()
     except Exception as e:
         logger.error(f"Error showing Top-5: {e}")
@@ -165,3 +206,30 @@ async def on_pinned_message(msg: Message):
         )
     except Exception as e:
         logger.error(f"Error handling pinned message: {e}")
+
+
+@router.callback_query(lambda c: c.data == "close_top5_menu")
+async def close_top5_menu(callback: CallbackQuery, state: FSMContext):
+    """Закрыть меню ТОП 5"""
+    message_id = callback.message.message_id
+
+    # Получаем список ID меню ТОП 5
+    data = await state.get_data()
+    top5_menu_ids = data.get('top5_menu_ids', [])
+
+    # Удаляем текущий ID из списка
+    if message_id in top5_menu_ids:
+        top5_menu_ids.remove(message_id)
+        await state.update_data(top5_menu_ids=top5_menu_ids)
+
+    # Удаляем само сообщение
+    try:
+        await callback.message.delete()
+    except Exception as e:
+        logger.error(f"Error deleting Top-5 menu: {e}")
+
+    # Если это было последнее меню ТОП 5, очищаем флаг
+    if not top5_menu_ids:
+        await state.update_data(persistent_top5_menu=False)
+
+    await callback.answer()

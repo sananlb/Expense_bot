@@ -130,10 +130,11 @@ async def send_message_with_cleanup(
     data = await state.get_data()
     old_menu_id = data.get('last_menu_message_id')
     cashback_menu_ids = data.get('cashback_menu_ids', [])
+    top5_menu_ids = data.get('top5_menu_ids', [])
     
     # ЛОГИРОВАНИЕ для отладки
-    logger.debug(f"send_message_with_cleanup: old_menu={old_menu_id}, cashback_ids={cashback_menu_ids}, update_cashback={update_cashback_menu}")
-    
+    logger.debug(f"send_message_with_cleanup: old_menu={old_menu_id}, cashback_ids={cashback_menu_ids}, top5_ids={top5_menu_ids}, update_cashback={update_cashback_menu}")
+
     # Если старое меню - это меню кешбека из списка, не удаляем его
     if old_menu_id in cashback_menu_ids and not update_cashback_menu:
         # Просто отправляем новое сообщение без удаления меню кешбека
@@ -144,6 +145,20 @@ async def send_message_with_cleanup(
             **kwargs
         )
         # Обновляем last_menu_message_id на новое меню (НЕ кешбек)
+        if reply_markup is not None and not keep_message:
+            await state.update_data(last_menu_message_id=sent_message.message_id)
+        return sent_message
+
+    # Если старое меню - это меню ТОП 5 из списка, не удаляем его
+    if old_menu_id in top5_menu_ids:
+        # Просто отправляем новое сообщение без удаления меню ТОП 5
+        sent_message = await bot.send_message(
+            chat_id=chat_id,
+            text=text,
+            reply_markup=reply_markup,
+            **kwargs
+        )
+        # Обновляем last_menu_message_id на новое меню (НЕ ТОП 5)
         if reply_markup is not None and not keep_message:
             await state.update_data(last_menu_message_id=sent_message.message_id)
         return sent_message
