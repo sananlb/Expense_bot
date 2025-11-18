@@ -255,10 +255,7 @@ class FamilyInvite(models.Model):
 class UserSettings(models.Model):
     """Настройки пользователя согласно ТЗ"""
     profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name='settings')
-    
-    # Уведомления
-    budget_alerts_enabled = models.BooleanField(default=True)
-    
+
     # Кешбэк
     cashback_enabled = models.BooleanField(default=True, verbose_name='Кешбэк включен')
 
@@ -273,14 +270,14 @@ class UserSettings(models.Model):
         default='personal',
         verbose_name='Режим отображения'
     )
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'users_settings'
-        verbose_name = 'Настройки'
-        verbose_name_plural = 'Настройки'
+        verbose_name = 'Настройки пользователя'
+        verbose_name_plural = 'Настройки пользователей'
 
 
 class ExpenseCategory(models.Model):

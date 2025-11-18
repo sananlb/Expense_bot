@@ -25,7 +25,7 @@ class SubscriptionInline(admin.TabularInline):
     readonly_fields = ['days_left', 'type', 'payment_method', 'start_date']  # Делаем большинство полей readonly
     ordering = ['-end_date']
     can_delete = False  # Запрещаем удаление подписок через inline
-    
+
     def days_left(self, obj):
         """Осталось дней"""
         from django.utils import timezone
@@ -35,12 +35,12 @@ class SubscriptionInline(admin.TabularInline):
                 return f"{days} дней"
             return "Истекла"
         return "-"
-    
+
     days_left.short_description = 'Осталось'
-    
+
     def has_delete_permission(self, request, obj=None):
         return True
-    
+
     def get_formset(self, request, obj=None, **kwargs):
         formset = super().get_formset(request, obj, **kwargs)
         # Устанавливаем значения по умолчанию для новых подписок
@@ -49,6 +49,16 @@ class SubscriptionInline(admin.TabularInline):
             formset.form.base_fields['end_date'].initial = timezone.now() + relativedelta(months=1)
             formset.form.base_fields['is_active'].initial = True
         return formset
+
+
+class UserSettingsInline(admin.StackedInline):
+    """Inline редактор настроек пользователя"""
+    model = UserSettings
+    extra = 0
+    can_delete = False
+    fields = ['cashback_enabled', 'view_scope']
+    verbose_name = 'Настройки бота'
+    verbose_name_plural = 'Настройки бота'
 
 
 @admin.register(Profile)
@@ -62,7 +72,7 @@ class ProfileAdmin(admin.ModelAdmin):
                        'referrals_count', 'active_referrals_count',
                        'total_payments_count', 'total_stars_paid',
                        'acquisition_date']
-    inlines = [SubscriptionInline]
+    inlines = [SubscriptionInline, UserSettingsInline]
     
     fieldsets = (
         ('Основная информация', {
@@ -308,27 +318,6 @@ class ProfileAdmin(admin.ModelAdmin):
         self.message_user(request, f'Продлено {count} полугодовых подписок.')
     
     add_six_months_subscription.short_description = 'Добавить полугодовую подписку'
-
-
-@admin.register(UserSettings)
-class UserSettingsAdmin(admin.ModelAdmin):
-    list_display = ['profile', 'budget_alerts_enabled']
-    list_filter = ['budget_alerts_enabled']
-    search_fields = ['profile__telegram_id']
-    
-    fieldsets = (
-        ('Профиль', {
-            'fields': ('profile',)
-        }),
-        ('Уведомления', {
-            'fields': ('budget_alerts_enabled',)
-        }),
-        ('Системные', {
-            'fields': ('created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
-    readonly_fields = ['created_at', 'updated_at']
 
 
 @admin.register(ExpenseCategory)
