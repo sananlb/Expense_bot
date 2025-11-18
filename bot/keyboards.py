@@ -173,9 +173,6 @@ def expenses_summary_keyboard(
 
         current_month_name = get_month_name(today.month, lang).capitalize()
         keyboard.button(text=current_month_name, callback_data="show_month_start")
-
-        # Кнопка Топ-5
-        keyboard.button(text=get_text('top5_button', lang), callback_data="top5_menu")
     elif period == 'month' and show_pdf:
         # Для месячных отчетов показываем кнопки экспорта (CSV, Excel, PDF) в один ряд
         keyboard.button(text=get_text('export_csv_button', lang), callback_data="export_month_csv")

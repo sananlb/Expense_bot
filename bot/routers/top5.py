@@ -64,30 +64,42 @@ async def show_top5(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'
         kb = build_top5_keyboard(items, lang)
 
         # НЕ удаляем старое меню ТОП 5 - оно должно оставаться на экране
-        # Пользователь может иметь несколько меню ТОП 5 одновременно
+        # Но если уже есть открытое меню ТОП 5, обновляем его вместо создания нового
 
-        # Если это CallbackQuery, редактируем существующее сообщение
+        # Получаем текущие данные состояния
+        data = await state.get_data()
+        top5_menu_ids = data.get('top5_menu_ids', [])
+
         sent_message = None
-        try:
-            await callback.message.edit_text(
-                text=text,
-                reply_markup=kb,
-                parse_mode="HTML"
-            )
-            sent_message = callback.message
-        except Exception as e:
-            # Если не удалось отредактировать, отправляем новое
-            logger.warning(f"Failed to edit message: {e}")
+
+        # Проверяем, является ли текущее сообщение уже меню ТОП 5
+        if callback.message.message_id in top5_menu_ids:
+            # Редактируем текущее меню ТОП 5
+            try:
+                await callback.message.edit_text(
+                    text=text,
+                    reply_markup=kb,
+                    parse_mode="HTML"
+                )
+                sent_message = callback.message
+            except Exception as e:
+                logger.warning(f"Failed to edit Top-5 menu: {e}")
+                # Если не удалось отредактировать, создаем новое
+                sent_message = await callback.bot.send_message(
+                    chat_id=callback.message.chat.id,
+                    text=text,
+                    reply_markup=kb,
+                    parse_mode="HTML"
+                )
+        else:
+            # Это не меню ТОП 5 - просто создаем новое меню
+            # (старое меню ТОП 5 останется на экране благодаря защите в message_utils)
             sent_message = await callback.bot.send_message(
                 chat_id=callback.message.chat.id,
                 text=text,
                 reply_markup=kb,
                 parse_mode="HTML"
             )
-
-        # Получаем текущие данные состояния
-        data = await state.get_data()
-        top5_menu_ids = data.get('top5_menu_ids', [])
         current_last_menu = data.get('last_menu_message_id')
 
         # Добавляем новый ID в список меню ТОП 5

@@ -800,6 +800,9 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
             )
             keyboard_buttons.append([InlineKeyboardButton(text=scope_btn_text, callback_data="toggle_view_scope_diary")])
 
+        # Кнопка ТОП 5
+        keyboard_buttons.append([InlineKeyboardButton(text=get_text('top5_button', lang), callback_data="top5_menu")])
+
         # Кнопки Назад и Закрыть
         keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_button', lang), callback_data="expenses_today")])
         keyboard_buttons.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
