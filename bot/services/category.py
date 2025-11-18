@@ -593,25 +593,25 @@ def create_default_categories_sync(user_id: int) -> bool:
         lang = profile.language_code or 'ru'
 
         # Категории с ОБОИМИ языками сразу
-        # Формат: (name_ru, name_en, icon, original_language)
+        # Формат: (name_ru, name_en, icon)
         default_categories = [
-            ('Продукты', 'Groceries', '🛒', 'ru'),
-            ('Кафе и рестораны', 'Cafes and Restaurants', '🍽️', 'ru'),
-            ('Транспорт', 'Transport', '🚕', 'ru'),
-            ('Автомобиль', 'Car', '🚗', 'ru'),
-            ('Жилье', 'Housing', '🏠', 'ru'),
-            ('Аптеки', 'Pharmacies', '💊', 'ru'),
-            ('Медицина', 'Medicine', '🏥', 'ru'),
-            ('Красота', 'Beauty', '💄', 'ru'),
-            ('Спорт и фитнес', 'Sports and Fitness', '🏃', 'ru'),
-            ('Одежда и обувь', 'Clothes and Shoes', '👔', 'ru'),
-            ('Развлечения', 'Entertainment', '🎭', 'ru'),
-            ('Образование', 'Education', '📚', 'ru'),
-            ('Подарки', 'Gifts', '🎁', 'ru'),
-            ('Путешествия', 'Travel', '✈️', 'ru'),
-            ('Коммуналка и подписки', 'Utilities and Subscriptions', '📱', 'ru'),
-            ('АЗС', 'Gas Station', '⛽', 'ru'),
-            ('Прочие расходы', 'Other Expenses', '💰', 'ru')
+            ('Продукты', 'Groceries', '🛒'),
+            ('Кафе и рестораны', 'Cafes and Restaurants', '🍽️'),
+            ('Транспорт', 'Transport', '🚕'),
+            ('Автомобиль', 'Car', '🚗'),
+            ('Жилье', 'Housing', '🏠'),
+            ('Аптеки', 'Pharmacies', '💊'),
+            ('Медицина', 'Medicine', '🏥'),
+            ('Красота', 'Beauty', '💄'),
+            ('Спорт и фитнес', 'Sports and Fitness', '🏃'),
+            ('Одежда и обувь', 'Clothes and Shoes', '👔'),
+            ('Развлечения', 'Entertainment', '🎭'),
+            ('Образование', 'Education', '📚'),
+            ('Подарки', 'Gifts', '🎁'),
+            ('Путешествия', 'Travel', '✈️'),
+            ('Коммуналка и подписки', 'Utilities and Subscriptions', '📱'),
+            ('АЗС', 'Gas Station', '⛽'),
+            ('Прочие расходы', 'Other Expenses', '💰')
         ]
 
         required_count = len(default_categories)
@@ -641,7 +641,7 @@ def create_default_categories_sync(user_id: int) -> bool:
 
             # Создаем только те категории, которых еще нет
             categories_to_create = []
-            for name_ru, name_en, icon, orig_lang in default_categories:
+            for name_ru, name_en, icon in default_categories:
                 # Проверяем оба языка для избежания дубликатов
                 if name_ru not in existing_names and name_en not in existing_names:
                     # name для обратной совместимости зависит от языка пользователя
@@ -656,7 +656,7 @@ def create_default_categories_sync(user_id: int) -> bool:
                             name=full_name,
                             name_ru=name_ru,
                             name_en=name_en,
-                            original_language=orig_lang,
+                            original_language=lang,
                             is_translatable=True,
                             icon=icon,
                             is_active=True
@@ -668,7 +668,7 @@ def create_default_categories_sync(user_id: int) -> bool:
         else:
             # Создаем все категории с нуля
             categories = []
-            for name_ru, name_en, icon, orig_lang in default_categories:
+            for name_ru, name_en, icon in default_categories:
                 # name для обратной совместимости зависит от языка пользователя
                 if lang == 'en':
                     full_name = f"{icon} {name_en}"
@@ -681,7 +681,7 @@ def create_default_categories_sync(user_id: int) -> bool:
                         name=full_name,
                         name_ru=name_ru,
                         name_en=name_en,
-                        original_language=orig_lang,
+                        original_language=lang,
                         is_translatable=True,
                         icon=icon,
                         is_active=True
