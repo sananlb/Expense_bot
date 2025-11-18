@@ -51,16 +51,6 @@ class SubscriptionInline(admin.TabularInline):
         return formset
 
 
-class UserSettingsInline(admin.StackedInline):
-    """Inline редактор настроек пользователя"""
-    model = UserSettings
-    extra = 0
-    can_delete = False
-    fields = ['cashback_enabled', 'view_scope']
-    verbose_name = 'Настройки бота'
-    verbose_name_plural = 'Настройки бота'
-
-
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
     list_display = ['telegram_id', 'subscription_status', 'bot_blocked_display',
@@ -72,7 +62,7 @@ class ProfileAdmin(admin.ModelAdmin):
                        'referrals_count', 'active_referrals_count',
                        'total_payments_count', 'total_stars_paid',
                        'acquisition_date']
-    inlines = [SubscriptionInline, UserSettingsInline]
+    inlines = [SubscriptionInline]
     
     fieldsets = (
         ('Основная информация', {
@@ -318,6 +308,61 @@ class ProfileAdmin(admin.ModelAdmin):
         self.message_user(request, f'Продлено {count} полугодовых подписок.')
     
     add_six_months_subscription.short_description = 'Добавить полугодовую подписку'
+
+
+@admin.register(UserSettings)
+class UserSettingsAdmin(admin.ModelAdmin):
+    """Настройки пользователя (отдельный раздел)"""
+    list_display = ['profile_link', 'cashback_enabled', 'view_scope']
+    list_filter = ['cashback_enabled', 'view_scope']
+    search_fields = ['profile__telegram_id']
+    readonly_fields = ['profile_info', 'created_at', 'updated_at']
+
+    fieldsets = (
+        ('Пользователь', {
+            'fields': ('profile_info',)
+        }),
+        ('Настройки бота', {
+            'fields': ('cashback_enabled', 'view_scope')
+        }),
+        ('Системные', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def profile_link(self, obj):
+        """Ссылка на профиль в списке"""
+        return format_html(
+            '<a href="{}">{}</a>',
+            reverse('admin:expenses_profile_change', args=[obj.profile.id]),
+            obj.profile.telegram_id
+        )
+    profile_link.short_description = 'Пользователь'
+
+    def profile_info(self, obj):
+        """Информация о профиле с ссылкой для просмотра языка, валюты и часового пояса"""
+        profile = obj.profile
+        return format_html(
+            '<div style="padding: 10px; background: #f9f9f9; border-left: 3px solid #2196F3; border-radius: 3px;">'
+            '<div style="margin-bottom: 8px;"><a href="{}" style="font-size: 14px; font-weight: bold;">👤 {}</a></div>'
+            '<div style="color: #666; font-size: 13px;">'
+            '<div style="margin: 3px 0;">🌍 Язык: <b>{}</b></div>'
+            '<div style="margin: 3px 0;">💰 Валюта: <b>{}</b></div>'
+            '<div style="margin: 3px 0;">🕐 Часовой пояс: <b>{}</b></div>'
+            '</div>'
+            '<div style="margin-top: 8px; font-size: 12px; color: #999;">Для изменения языка, валюты или часового пояса перейдите в профиль пользователя</div>'
+            '</div>',
+            reverse('admin:expenses_profile_change', args=[profile.id]),
+            profile.telegram_id,
+            profile.get_language_code_display() or profile.language_code,
+            profile.currency,
+            profile.timezone or 'UTC'
+        )
+    profile_info.short_description = 'Профиль пользователя'
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('profile')
 
 
 @admin.register(ExpenseCategory)
