@@ -102,7 +102,7 @@ AMOUNT_PATTERNS = [
     r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:бразильских?|reais?|реалов?|brl)\b',  # 10 000 BRL
     r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*$',  # 10 000 в конце
     r'^(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s',  # 10 000 в начале
-    r'\s(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s',  # 10 000 в середине
+    # Паттерн для числа с разделителями в середине УДАЛЕН - используется fallback
     # Обычные числа БЕЗ пробелов (fallback)
     # ВАЖНО: Длинные варианты валют ПЕРВЫМИ (английские полные формы включены)
     r'(\d+(?:[.,]\d+)?)\s*(?:рублей|rubles?|руб|₽|р)\b',  # 100 руб, 100.50 р, 100 rubles
@@ -119,7 +119,7 @@ AMOUNT_PATTERNS = [
     r'(\d+(?:[.,]\d+)?)\s*(?:бразильских?|reais?|реалов?|brl)\b',  # 100 BRL, 100 reais
     r'(\d+(?:[.,]\d+)?)\s*$',  # просто число в конце
     r'^(\d+(?:[.,]\d+)?)\s',  # число в начале
-    r'\s(\d+(?:[.,]\d+)?)\s',  # число в середине
+    # Паттерн для числа в середине УДАЛЕН - используется fallback с проверкой amount > 2
 ]
 
 # Паттерны для определения валюты
@@ -271,6 +271,36 @@ def extract_amount_from_patterns(text: str) -> Tuple[Optional[Decimal], Optional
         match_end = match.end()
         text_without_amount = (text[:match_start] + ' ' + text[match_end:]).strip()
         return amount, text_without_amount
+
+    # Fallback: Если не нашли по паттернам, ищем единственное число В СЕРЕДИНЕ текста С ПРОБЕЛАМИ
+    # Примеры: "купил кофе 300 на работе", "coffee 10 000 at work"
+    # НЕ срабатывает для чисел без пробелов: "купилкофе300наработе"
+    # ВАЖНО: Число должно быть окружено пробелами с обеих сторон
+    # Поддерживает числа с разделителями тысяч: 10 000, 1 000 000
+    number_match = re.search(r'\s(\d{1,3}(?:[\s,]\d{3})*(?:[.,]\d+)?)\s', text)
+    if number_match:
+        # Извлекаем найденное число
+        amount_str = number_match.group(1).replace(' ', '').replace(',', '.')
+
+        # Проверяем что это единственное число в тексте
+        # Удаляем найденное число и проверяем что в остатке нет других цифр
+        text_without_this_number = text[:number_match.start()] + ' ' + text[number_match.end():]
+        other_numbers = re.findall(r'\d', text_without_this_number)
+
+        # Если в тексте нет других цифр - число единственное
+        if len(other_numbers) == 0:
+            try:
+                amount = Decimal(amount_str)
+                # Проверяем что число положительное и разумное (не ноль, меньше 10 млн)
+                if amount > 0 and amount < 10_000_000:
+                    # Удаляем это число из текста (с окружающими пробелами)
+                    text_without_amount = text_without_this_number.strip()
+                    # Убираем лишние пробелы
+                    text_without_amount = ' '.join(text_without_amount.split())
+                    logger.info(f"Fallback: найдено единственное число {amount} в середине текста '{text}'")
+                    return amount, text_without_amount
+            except (ValueError, InvalidOperation):
+                pass
 
     return None, None
 
