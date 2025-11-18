@@ -104,7 +104,13 @@ def create_income(
         # Проверяем длину описания
         if description and len(description) > 500:
             description = description[:500]
-        
+
+        # Проверка максимальной суммы (лимит БД: NUMERIC(12,2))
+        MAX_AMOUNT = Decimal('9999999999.99')
+        if amount > MAX_AMOUNT:
+            logger.warning(f"User {user_id} tried to add income with amount too large: {amount}")
+            raise ValueError("⚠️ Сумма слишком велика")
+
         # Определяем время для дохода
         if income_date == date.today():
             income_time = datetime.now().time()

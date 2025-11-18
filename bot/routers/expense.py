@@ -1273,10 +1273,11 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 logger.info(f"Income created: {income.id} for user {user_id}")
                 return
             else:
-                # Если не удалось создать доход (например, лимит)
+                # Если не удалось создать доход (ошибка в БД или другие проблемы)
                 await cancel_typing()
+                logger.error(f"Failed to create income for user {user_id}: create_income returned None")
                 await message.answer(
-                    "❌ Не удалось добавить доход. Возможно, достигнут дневной лимит операций (100).",
+                    "❌ Не удалось добавить доход. Попробуйте позже.",
                     parse_mode="HTML"
                 )
                 return
@@ -1390,7 +1391,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     
                     if income:
                         await cancel_typing()
-                        
+
                         # Используем единую функцию форматирования для дохода
                         from ..utils.expense_messages import format_income_added_message
                         text_msg = await format_income_added_message(
@@ -1399,7 +1400,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                             similar_income=True,
                             lang=lang
                         )
-                        
+
                         # Добавляем кнопки редактирования
                         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
                         keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -1417,6 +1418,14 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                             reply_markup=keyboard,
                             parse_mode="HTML",
                             keep_message=True
+                        )
+                    else:
+                        # Если не удалось создать доход (ошибка в БД или другие проблемы)
+                        await cancel_typing()
+                        logger.error(f"Failed to create income for user {user_id}: create_income returned None")
+                        await message.answer(
+                            "❌ Не удалось добавить доход. Попробуйте позже.",
+                            parse_mode="HTML"
                         )
                     return
                 else:
@@ -1460,7 +1469,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                         
                         if income:
                             await cancel_typing()
-                            
+
                             # Используем единую функцию форматирования для дохода
                             from ..utils.expense_messages import format_income_added_message
                             text_msg = await format_income_added_message(
@@ -1469,7 +1478,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                                 similar_income=True,
                                 lang=lang
                             )
-                            
+
                             # Добавляем кнопки редактирования
                             from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
                             keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -1487,6 +1496,14 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                                 reply_markup=keyboard,
                                 parse_mode="HTML",
                                 keep_message=True
+                            )
+                        else:
+                            # Если не удалось создать доход (ошибка в БД или другие проблемы)
+                            await cancel_typing()
+                            logger.error(f"Failed to create income for user {user_id}: create_income returned None")
+                            await message.answer(
+                                "❌ Не удалось добавить доход. Попробуйте позже.",
+                                parse_mode="HTML"
                             )
                         return
                     else:
@@ -1628,12 +1645,18 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         # Обработка ошибок валидации даты
         await message.answer(f"❌ {str(e)}", parse_mode="HTML")
         return
-    
+
+    # Проверяем что трата успешно создана
+    if expense is None:
+        logger.error(f"Failed to create expense for user {user_id}: add_expense returned None")
+        await message.answer("❌ Не удалось сохранить трату. Попробуйте позже.", parse_mode="HTML")
+        return
+
     # Формируем ответ (убираем вывод AI уверенности)
     confidence_text = ""
     # if parsed.get('ai_enhanced') and parsed.get('confidence'):
     #     confidence_text = f"\n🤖 AI уверенность: {parsed['confidence']*100:.0f}%"
-    
+
     # Форматируем сообщение с учетом валюты
     amount_text = format_currency(expense.amount, currency)
     

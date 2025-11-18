@@ -91,6 +91,12 @@ def create_expense(
             logger.warning(f"User {user_id} provided too long description: {len(description)} chars")
             raise ValueError("Описание слишком длинное (максимум 500 символов)")
 
+        # Проверка максимальной суммы (лимит БД: NUMERIC(12,2))
+        MAX_AMOUNT = Decimal('9999999999.99')
+        if amount > MAX_AMOUNT:
+            logger.warning(f"User {user_id} tried to add expense with amount too large: {amount}")
+            raise ValueError("⚠️ Сумма слишком велика")
+
         # Проверка 4: Валидация category_id (защита от использования чужих категорий)
         if category_id is not None:
             try:
