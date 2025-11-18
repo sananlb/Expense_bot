@@ -727,17 +727,18 @@ def create_default_income_categories(user_id: int) -> bool:
         lang = profile.language_code or 'ru'
 
         # Базовые категории доходов с ОБОИМИ языками
-        # Формат: (name_ru, name_en, icon, original_language)
+        # Формат: (name_ru, name_en, icon)
+        # original_language будет установлен в зависимости от языка пользователя
         default_income_categories = [
-            ('Зарплата', 'Salary', '💼', 'ru'),
-            ('Премии и бонусы', 'Bonuses', '🎁', 'ru'),
-            ('Фриланс', 'Freelance', '💻', 'ru'),
-            ('Инвестиции', 'Investments', '📈', 'ru'),
-            ('Проценты по вкладам', 'Bank Interest', '🏦', 'ru'),
-            ('Аренда недвижимости', 'Rent Income', '🏠', 'ru'),
-            ('Возвраты и компенсации', 'Refunds', '💸', 'ru'),
-            ('Подарки', 'Gifts', '🎉', 'ru'),
-            ('Прочие доходы', 'Other Income', '💰', 'ru'),
+            ('Зарплата', 'Salary', '💼'),
+            ('Премии и бонусы', 'Bonuses', '🎁'),
+            ('Фриланс', 'Freelance', '💻'),
+            ('Инвестиции', 'Investments', '📈'),
+            ('Проценты по вкладам', 'Bank Interest', '🏦'),
+            ('Аренда недвижимости', 'Rent Income', '🏠'),
+            ('Возвраты и компенсации', 'Refunds', '💸'),
+            ('Подарки', 'Gifts', '🎉'),
+            ('Прочие доходы', 'Other Income', '💰'),
         ]
 
         required_count = len(default_income_categories)
@@ -756,7 +757,7 @@ def create_default_income_categories(user_id: int) -> bool:
             )
             # Создаем только те категории, которых еще нет
             categories_to_create = []
-            for name_ru, name_en, icon, orig_lang in default_income_categories:
+            for name_ru, name_en, icon in default_income_categories:
                 # name для обратной совместимости зависит от языка пользователя
                 if lang == 'en':
                     category_name = f"{icon} {name_en}"
@@ -770,7 +771,7 @@ def create_default_income_categories(user_id: int) -> bool:
                             name=category_name,
                             name_ru=name_ru,
                             name_en=name_en,
-                            original_language=orig_lang,
+                            original_language=lang,  # Используем язык пользователя
                             is_translatable=True,
                             icon=icon,
                             is_active=True,
@@ -784,7 +785,7 @@ def create_default_income_categories(user_id: int) -> bool:
         else:
             # Создаем все категории доходов с нуля
             categories = []
-            for name_ru, name_en, icon, orig_lang in default_income_categories:
+            for name_ru, name_en, icon in default_income_categories:
                 # name для обратной совместимости зависит от языка пользователя
                 if lang == 'en':
                     category_name = f"{icon} {name_en}"
@@ -796,7 +797,7 @@ def create_default_income_categories(user_id: int) -> bool:
                     name=category_name,
                     name_ru=name_ru,
                     name_en=name_en,
-                    original_language=orig_lang,
+                    original_language=lang,  # Используем язык пользователя
                     is_translatable=True,
                     icon=icon,
                     is_active=True,

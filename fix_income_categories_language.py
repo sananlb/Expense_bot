@@ -55,7 +55,7 @@ def fix_income_categories_language(apply_changes=False):
     fixed_categories = []
 
     for profile in profiles_with_income_cats:
-        user_lang = profile.language  # Язык пользователя (ru или en)
+        user_lang = profile.language_code  # Язык пользователя (ru или en)
         telegram_id = profile.telegram_id
 
         # Получаем все категории доходов пользователя
