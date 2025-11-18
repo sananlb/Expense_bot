@@ -854,7 +854,7 @@ PDF отчеты с графиками, экспорт в CSV и Excel дост�
 
         # Экспорт отчетов (Premium функция)
         'export_csv_button': '📄 CSV',
-        'export_excel_button': '📈 XLS',
+        'export_excel_button': '📈 XLSX',
         'export_premium_required': (
             '⭐ <b>Экспорт отчетов</b> доступен только в Premium подписке\n\n'
             'С Premium вы получаете:\n'
@@ -1745,7 +1745,7 @@ The bot understands natural language and will help analyze your finances.''',
 
         # Export translations (Premium feature)
         'export_csv_button': '📄 CSV',
-        'export_excel_button': '📈 XLS',
+        'export_excel_button': '📈 XLSX',
         'export_premium_required': (
             '⭐ <b>Report export</b> is only available with Premium subscription\n\n'
             'With Premium you get:\n'
