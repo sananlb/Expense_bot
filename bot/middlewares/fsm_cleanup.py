@@ -50,6 +50,10 @@ class FSMCleanupMiddleware(BaseMiddleware):
             if 'pending_profile_data' in data:
                 pending = data['pending_profile_data']
 
+                # Проверить что pending не None и это словарь
+                if pending is None or not isinstance(pending, dict):
+                    return
+
                 # Проверить наличие PII
                 has_pii = any(key in pending for key in ['username', 'first_name', 'last_name'])
 
