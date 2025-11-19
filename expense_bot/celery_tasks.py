@@ -135,6 +135,13 @@ def generate_monthly_insights():
         success_count = 0
         fail_count = 0
 
+        insights_provider = os.getenv('AI_PROVIDER_INSIGHTS') or os.getenv('AI_PROVIDER_DEFAULT') or 'google'
+        insights_provider = insights_provider.lower()
+        valid_providers = {'google', 'openai', 'deepseek', 'qwen'}
+        if insights_provider not in valid_providers:
+            logger.warning(f"Unknown AI provider for insights: {insights_provider}, falling back to google")
+            insights_provider = 'google'
+
         for profile in profiles:
             try:
                 insight = loop.run_until_complete(
@@ -142,7 +149,7 @@ def generate_monthly_insights():
                         profile=profile,
                         year=prev_year,
                         month=prev_month,
-                        provider='google',
+                        provider=insights_provider,
                         force_regenerate=False
                     )
                 )
@@ -359,6 +366,34 @@ def send_daily_admin_report():
             ))
         )
 
+        deepseek_stats = AIServiceMetrics.objects.filter(
+            timestamp__gte=yesterday_start,
+            timestamp__lte=yesterday_end,
+            service='deepseek'
+        ).aggregate(
+            requests=Count('id'),
+            avg_time=Avg('response_time'),
+            success_rate=Avg(Case(
+                When(success=True, then=1.0),
+                When(success=False, then=0.0),
+                output_field=FloatField()
+            ))
+        )
+
+        qwen_stats = AIServiceMetrics.objects.filter(
+            timestamp__gte=yesterday_start,
+            timestamp__lte=yesterday_end,
+            service='qwen'
+        ).aggregate(
+            requests=Count('id'),
+            avg_time=Avg('response_time'),
+            success_rate=Avg(Case(
+                When(success=True, then=1.0),
+                When(success=False, then=0.0),
+                output_field=FloatField()
+            ))
+        )
+
         # ===============================
         # СИСТЕМА И ПРОИЗВОДИТЕЛЬНОСТЬ
         # ===============================
@@ -456,15 +491,32 @@ def send_daily_admin_report():
                 total_cost = ai_metrics.get('total_cost', 0) or 0
                 report += f"  • Приблизительная стоимость: ${esc(f'{total_cost:.3f}')}\n"
                 
-            if openai_stats['requests'] and google_stats['requests']:
-                openai_success = openai_stats.get('success_rate', 0) * 100
-                google_success = google_stats.get('success_rate', 0) * 100
-                report += (
-                    f"  • OpenAI: {esc(openai_stats['requests'])} зап\\., "
-                    f"{esc(f'{openai_success:.0f}')}% успех\n"
-                    f"  • Google: {esc(google_stats['requests'])} зап\\., "
-                    f"{esc(f'{google_success:.0f}')}% успех\n"
-                )
+            if openai_stats['requests'] or google_stats['requests'] or deepseek_stats['requests'] or qwen_stats['requests']:
+                openai_success = (openai_stats.get('success_rate') or 0) * 100
+                google_success = (google_stats.get('success_rate') or 0) * 100
+                deepseek_success = (deepseek_stats.get('success_rate') or 0) * 100
+                qwen_success = (qwen_stats.get('success_rate') or 0) * 100
+                
+                if openai_stats['requests']:
+                    report += (
+                        f"  • OpenAI: {esc(openai_stats['requests'])} зап\\., "
+                        f"{esc(f'{openai_success:.0f}')}% успех\n"
+                    )
+                if google_stats['requests']:
+                    report += (
+                        f"  • Google: {esc(google_stats['requests'])} зап\\., "
+                        f"{esc(f'{google_success:.0f}')}% успех\n"
+                    )
+                if deepseek_stats['requests']:
+                    report += (
+                        f"  • DeepSeek: {esc(deepseek_stats['requests'])} зап\\., "
+                        f"{esc(f'{deepseek_success:.0f}')}% успех\n"
+                    )
+                if qwen_stats['requests']:
+                    report += (
+                        f"  • Qwen: {esc(qwen_stats['requests'])} зап\\., "
+                        f"{esc(f'{qwen_success:.0f}')}% успех\n"
+                    )
 
         # Аналитика активности
         if user_analytics['active_users_analytics']:
@@ -651,6 +703,60 @@ def system_health_check():
         except Exception as e:
             logger.error(f"Google AI API check failed: {e}")
             issues.append(f"Google AI API check failed: {str(e)[:100]}")
+
+        # =====================================
+        # 5a. DEEPSEEK API
+        # =====================================
+        deepseek_api_status = False
+        deepseek_api_response_time = None
+        try:
+            ds_start = timezone.now()
+            ds_key = os.getenv('DEEPSEEK_API_KEY')
+            if ds_key:
+                response = requests.get(
+                    "https://api.deepseek.com/v1/models",
+                    headers={"Authorization": f"Bearer {ds_key}"},
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    deepseek_api_response_time = (timezone.now() - ds_start).total_seconds()
+                    deepseek_api_status = True
+                    logger.info(f"DeepSeek API check: OK ({deepseek_api_response_time:.3f}s)")
+                else:
+                    issues.append(f"DeepSeek API returned status {response.status_code}")
+            else:
+                logger.info("DeepSeek API key not configured - skipping check")
+        except Exception as e:
+            logger.error(f"DeepSeek API check failed: {e}")
+            issues.append(f"DeepSeek API check failed: {str(e)[:100]}")
+
+        # =====================================
+        # 5b. QWEN (DASHSCOPE) API
+        # =====================================
+        qwen_api_status = False
+        qwen_api_response_time = None
+        try:
+            qwen_start = timezone.now()
+            qwen_key = os.getenv('DASHSCOPE_API_KEY')
+            if qwen_key:
+                # DashScope requires explicit model access usually, but we can try a simple list or specific model info
+                # Correct endpoint for DashScope is strict. Trying compatible-mode endpoint.
+                response = requests.get(
+                    "https://dashscope-intl.aliyuncs.com/compatible-mode/v1/models",
+                    headers={"Authorization": f"Bearer {qwen_key}"},
+                    timeout=10
+                )
+                if response.status_code == 200:
+                    qwen_api_response_time = (timezone.now() - qwen_start).total_seconds()
+                    qwen_api_status = True
+                    logger.info(f"Qwen API check: OK ({qwen_api_response_time:.3f}s)")
+                else:
+                    issues.append(f"Qwen API returned status {response.status_code}")
+            else:
+                logger.info("Qwen API key not configured - skipping check")
+        except Exception as e:
+            logger.error(f"Qwen API check failed: {e}")
+            issues.append(f"Qwen API check failed: {str(e)[:100]}")
         
         # =====================================
         # 6. CELERY
@@ -752,6 +858,10 @@ def system_health_check():
             openai_api_response_time=openai_api_response_time,
             google_ai_api_status=google_ai_api_status,
             google_ai_api_response_time=google_ai_api_response_time,
+            deepseek_api_status=deepseek_api_status,
+            deepseek_api_response_time=deepseek_api_response_time,
+            qwen_api_status=qwen_api_status,
+            qwen_api_response_time=qwen_api_response_time,
             celery_status=celery_status,
             celery_workers_count=celery_workers_count,
             celery_queue_size=celery_queue_size,

@@ -749,7 +749,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         
         if should_use_ai:
             try:
-                from bot.services.ai_selector import get_service
+                from bot.services.ai_selector import get_service, get_fallback_chain, AISelector
                 
                 # Получаем категории пользователя на нужном языке
                 @sync_to_async
@@ -816,28 +816,32 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         logger.error(f"AI categorization error: {e}")
                         ai_result = None
                     
-                    # Если Google AI не сработал, пробуем OpenAI
+                    # Если основной провайдер не сработал, пробуем fallback цепочку из .env
                     if not ai_result:
-                        logger.warning(f"Primary AI failed, trying fallback to OpenAI")
-                        from bot.services.ai_selector import AISelector
-                        try:
-                            openai_service = AISelector('openai')
-                            ai_result = await asyncio.wait_for(
-                                openai_service.categorize_expense(
-                                    text=ai_text,  # Отправляем очищенный текст без даты
-                                    amount=amount,
-                                    currency=currency,
-                                    categories=user_categories,
-                                    user_context=user_context
-                                ),
-                                timeout=5.0  # 5 секунд таймаут для fallback
-                            )
-                            if ai_result:
-                                logger.info(f"OpenAI fallback successful")
-                        except asyncio.TimeoutError:
-                            logger.error(f"OpenAI fallback timeout")
-                        except Exception as e:
-                            logger.error(f"OpenAI fallback failed: {e}")
+                        logger.warning(f"Primary AI failed, trying fallback chain from .env")
+                        fallback_chain = get_fallback_chain('categorization')
+
+                        for fallback_provider in fallback_chain:
+                            try:
+                                logger.info(f"Trying fallback to {fallback_provider}...")
+                                fallback_service = AISelector(fallback_provider)
+                                ai_result = await asyncio.wait_for(
+                                    fallback_service.categorize_expense(
+                                        text=ai_text,  # Отправляем очищенный текст без даты
+                                        amount=amount,
+                                        currency=currency,
+                                        categories=user_categories,
+                                        user_context=user_context
+                                    ),
+                                    timeout=5.0  # 5 секунд таймаут для fallback
+                                )
+                                if ai_result:
+                                    logger.info(f"{fallback_provider} fallback successful")
+                                    break
+                            except asyncio.TimeoutError:
+                                logger.error(f"{fallback_provider} fallback timeout")
+                            except Exception as e:
+                                logger.error(f"{fallback_provider} fallback failed: {e}")
                     
                     if ai_result:
                         # Централизованная валидация категории (как у доходов)

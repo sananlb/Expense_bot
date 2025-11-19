@@ -13,7 +13,7 @@ from expenses.models import (
     Profile, Expense, Income, MonthlyInsight,
     ExpenseCategory, IncomeCategory
 )
-from .ai_selector import get_service, get_model
+from .ai_selector import get_service, get_model, get_provider_settings, get_fallback_chain
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +44,19 @@ class MonthlyInsightsService:
             self.ai_provider = provider
             self.ai_model = get_model('insights', provider)
             logger.info(f"Initialized AI service: {provider} with model {self.ai_model}")
+
+    def _is_provider_available(self, provider: str) -> bool:
+        """Check provider availability based on configured API keys"""
+        try:
+            settings = get_provider_settings(provider)
+        except Exception as e:
+            logger.warning(f"Failed to load provider settings for {provider}: {e}")
+            return False
+        return settings.get('api_keys_available', False)
+
+    def _get_fallback_providers(self, primary_provider: str) -> List[str]:
+        """Return an ordered list of fallback providers excluding the primary one from .env settings"""
+        return get_fallback_chain('insights', primary_provider)
 
     async def _collect_month_data(
         self,
@@ -472,34 +485,35 @@ class MonthlyInsightsService:
 
             # Generate AI insights with comparison and fallback
             ai_insights = None
-            fallback_used = False
 
+            primary_provider = provider
             try:
                 ai_insights = await self._generate_ai_insights(
                     profile, month_data, prev_month_data, year, month, provider
                 )
             except Exception as e:
                 logger.error(f"Primary AI provider ({provider}) failed: {e}")
+                fallback_chain = self._get_fallback_providers(provider)
 
-                # Try fallback to OpenAI if primary was Google
-                if provider == 'google':
+                for fallback_provider in fallback_chain:
                     try:
-                        logger.warning(f"Attempting fallback to OpenAI for user {profile.telegram_id}")
-                        ai_insights = await self._generate_ai_insights(
-                            profile, month_data, prev_month_data, year, month, 'openai'
+                        logger.warning(
+                            f"Attempting fallback to {fallback_provider} for user {profile.telegram_id}"
                         )
-                        fallback_used = True
-                        provider = 'openai'  # Update provider for storage
-
-                        # Notify admin about fallback
-                        await self._notify_admin_fallback(profile.telegram_id, year, month, 'google', 'openai')
+                        ai_insights = await self._generate_ai_insights(
+                            profile, month_data, prev_month_data, year, month, fallback_provider
+                        )
+                        provider = fallback_provider
+                        await self._notify_admin_fallback(
+                            profile.telegram_id, year, month, primary_provider, fallback_provider
+                        )
+                        break
                     except Exception as fallback_error:
-                        logger.error(f"OpenAI fallback also failed: {fallback_error}")
-                        # Notify admin about complete failure
-                        await self._notify_admin_failure(profile.telegram_id, year, month)
-                        raise
-                else:
-                    # Primary was OpenAI, no fallback available
+                        logger.error(
+                            f"{fallback_provider} fallback also failed for user {profile.telegram_id}: {fallback_error}"
+                        )
+
+                if not ai_insights:
                     await self._notify_admin_failure(profile.telegram_id, year, month)
                     raise
 

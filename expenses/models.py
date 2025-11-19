@@ -1211,11 +1211,12 @@ class UserAnalytics(models.Model):
 class AIServiceMetrics(models.Model):
     """Метрики работы AI сервисов"""
     
-    SERVICE_CHOICES = [
+    SERVICE_CHOICES = (
         ('openai', 'OpenAI'),
-        ('google', 'Google AI'),
-        ('yandex', 'Yandex SpeechKit'),
-    ]
+        ('google', 'Google Gemini'),
+        ('deepseek', 'DeepSeek'),
+        ('qwen', 'Qwen'),
+    )
     
     service = models.CharField(max_length=50, choices=SERVICE_CHOICES)
     timestamp = models.DateTimeField(auto_now_add=True)
@@ -1274,6 +1275,12 @@ class SystemHealthCheck(models.Model):
     
     google_ai_api_status = models.BooleanField(default=True)
     google_ai_api_response_time = models.FloatField(null=True)
+
+    deepseek_api_status = models.BooleanField(default=True)
+    deepseek_api_response_time = models.FloatField(null=True)
+
+    qwen_api_status = models.BooleanField(default=True)
+    qwen_api_response_time = models.FloatField(null=True)
     
     celery_status = models.BooleanField(default=True)
     celery_workers_count = models.IntegerField(null=True)
@@ -1701,8 +1708,10 @@ class MonthlyInsight(models.Model):
         choices=[
             ('openai', 'OpenAI'),
             ('google', 'Google AI'),
+            ('deepseek', 'DeepSeek'),
+            ('qwen', 'Qwen'),
         ],
-        verbose_name='AI провайдер'
+        verbose_name='AI �஢�����'
     )
 
     # Generation metadata

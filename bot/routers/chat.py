@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any
 
 from ..services.expense import get_today_summary
 from ..utils.message_utils import send_message_with_cleanup
-from ..services.ai_selector import get_service
+from ..services.ai_selector import get_service, get_fallback_chain, AISelector
 from ..services.subscription import check_subscription, subscription_required_message, get_subscription_button
 from ..decorators import require_subscription, rate_limit
 from ..routers.reports import show_expenses_summary
@@ -224,16 +224,23 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
                 
             except Exception as e:
                 logger.error(f"AI chat error with primary service: {e}")
-                # Fallback на OpenAI
-                try:
-                    logger.info("Trying fallback to OpenAI service...")
-                    from ..services.openai_service import OpenAIService
-                    openai_service = OpenAIService()
-                    response = await openai_service.chat(text, context, user_context)
-                    logger.info("OpenAI fallback successful")
-                except Exception as fallback_error:
-                    logger.error(f"OpenAI fallback also failed: {fallback_error}")
-                    # Крайний случай - простые ответы
+                # Fallback chain из .env настроек
+                fallback_chain = get_fallback_chain('chat')
+                response = None
+
+                for fallback_provider in fallback_chain:
+                    try:
+                        logger.info(f"Trying fallback to {fallback_provider} service...")
+                        fallback_service = AISelector(fallback_provider)  # Returns actual service instance
+                        response = await fallback_service.chat(text, context, user_context)
+                        logger.info(f"{fallback_provider} fallback successful")
+                        break
+                    except Exception as fallback_error:
+                        logger.error(f"{fallback_provider} fallback failed: {fallback_error}")
+                        continue
+
+                if not response:
+                    # Крайний случай - все провайдеры недоступны
                     response = "AI сервис временно недоступен. Попробуйте позже."
         else:
             # Простые ответы без AI для пользователей без подписки

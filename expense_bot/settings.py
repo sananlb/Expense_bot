@@ -300,8 +300,48 @@ for i in range(1, 10):
 if not GOOGLE_API_KEYS and GOOGLE_API_KEY:
     GOOGLE_API_KEYS = [GOOGLE_API_KEY]
 
+# DeepSeek API Keys
+DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
+DEEPSEEK_API_KEYS = []
+for i in range(1, 10):
+    key = os.getenv(f'DEEPSEEK_API_KEY_{i}')
+    if key:
+        DEEPSEEK_API_KEYS.append(key)
+if not DEEPSEEK_API_KEYS and DEEPSEEK_API_KEY:
+    DEEPSEEK_API_KEYS = [DEEPSEEK_API_KEY]
+
+# Qwen (DashScope) API Keys
+DASHSCOPE_API_KEY = os.getenv('DASHSCOPE_API_KEY')
+DASHSCOPE_API_KEYS = []
+for i in range(1, 10):
+    key = os.getenv(f'DASHSCOPE_API_KEY_{i}')
+    if key:
+        DASHSCOPE_API_KEYS.append(key)
+if not DASHSCOPE_API_KEYS and DASHSCOPE_API_KEY:
+    DASHSCOPE_API_KEYS = [DASHSCOPE_API_KEY]
+
 print(f"[SETTINGS] Загружено OpenAI ключей: {len(OPENAI_API_KEYS)}")
 print(f"[SETTINGS] Загружено Google API ключей: {len(GOOGLE_API_KEYS)}")
+print(f"[SETTINGS] Загружено DeepSeek API ключей: {len(DEEPSEEK_API_KEYS)}")
+print(f"[SETTINGS] Загружено Qwen API ключей: {len(DASHSCOPE_API_KEYS)}")
+
+# AI Fallback providers (comma-separated lists)
+def parse_fallback_providers(env_key: str, default: str = 'deepseek,qwen,openai') -> list:
+    """Parse comma-separated fallback providers from env"""
+    value = os.getenv(env_key, default)
+    if not value:
+        return []
+    return [p.strip().lower() for p in value.split(',') if p.strip()]
+
+AI_FALLBACK_CATEGORIZATION = parse_fallback_providers('AI_FALLBACK_CATEGORIZATION')
+AI_FALLBACK_CHAT = parse_fallback_providers('AI_FALLBACK_CHAT')
+AI_FALLBACK_INSIGHTS = parse_fallback_providers('AI_FALLBACK_INSIGHTS')
+AI_FALLBACK_DEFAULT = parse_fallback_providers('AI_FALLBACK_DEFAULT')
+
+print(f"[SETTINGS] AI Fallback categorization: {AI_FALLBACK_CATEGORIZATION}")
+print(f"[SETTINGS] AI Fallback chat: {AI_FALLBACK_CHAT}")
+print(f"[SETTINGS] AI Fallback insights: {AI_FALLBACK_INSIGHTS}")
+print(f"[SETTINGS] AI Fallback default: {AI_FALLBACK_DEFAULT}")
 
 # Currency and locale
 DEFAULT_CURRENCY = os.getenv('DEFAULT_CURRENCY', 'RUB')
