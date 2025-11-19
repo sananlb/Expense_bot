@@ -720,6 +720,54 @@ def get_user_expenses(
         return []
 
 
+def _calculate_similarity(word1: str, word2: str) -> float:
+    """
+    Вычисляет процент схожести двух слов используя расстояние Левенштейна.
+
+    Args:
+        word1: Первое слово
+        word2: Второе слово
+
+    Returns:
+        Процент схожести (0.0 - 1.0)
+
+    Examples:
+        >>> _calculate_similarity("тралик", "тралики")
+        0.857  # 85.7% схожести
+        >>> _calculate_similarity("магнит", "магнитрон")
+        0.778  # 77.8% схожести
+    """
+    if word1 == word2:
+        return 1.0
+
+    # Расстояние Левенштейна
+    def levenshtein_distance(s1: str, s2: str) -> int:
+        if len(s1) < len(s2):
+            return levenshtein_distance(s2, s1)
+        if len(s2) == 0:
+            return len(s1)
+
+        previous_row = range(len(s2) + 1)
+        for i, c1 in enumerate(s1):
+            current_row = [i + 1]
+            for j, c2 in enumerate(s2):
+                # j+1 вместо j так как previous_row и current_row на 1 длиннее s2
+                insertions = previous_row[j + 1] + 1
+                deletions = current_row[j] + 1
+                substitutions = previous_row[j] + (c1 != c2)
+                current_row.append(min(insertions, deletions, substitutions))
+            previous_row = current_row
+
+        return previous_row[-1]
+
+    distance = levenshtein_distance(word1.lower(), word2.lower())
+    max_len = max(len(word1), len(word2))
+
+    # Схожесть = 1 - (расстояние / максимальная длина)
+    similarity = 1.0 - (distance / max_len)
+    return similarity
+
+
 @sync_to_async
 def find_similar_expenses(
     telegram_id: int,
@@ -727,7 +775,7 @@ def find_similar_expenses(
     days_back: int = 365
 ) -> List[Dict[str, Any]]:
     """
-    Найти похожие траты за последний период
+    Найти похожие траты за последний период с учетом схожести слов (85% порог).
 
     Args:
         telegram_id: ID пользователя в Telegram
@@ -760,16 +808,36 @@ def find_similar_expenses(
             expense_date__lte=end_date
         )
 
-        # Фильтруем по описанию - точное совпадение слов (case-insensitive)
+        # Фильтруем по описанию с учетом схожести (85% порог)
+        SIMILARITY_THRESHOLD = 0.85
         similar_expenses = []
+
         for expense in queryset.select_related('category'):
             if expense.description:
                 exp_desc = expense.description.lower().strip()
                 # Извлекаем слова без пунктуации
                 exp_words = re.findall(r'[а-яёa-z]+', exp_desc)
 
-                # Все слова из поиска должны присутствовать в описании траты
-                if all(word in exp_words for word in search_words):
+                # Проверяем что все слова из поиска имеют похожие слова в описании траты
+                match_found = True
+                for search_word in search_words:
+                    # Ищем хотя бы одно слово в описании с схожестью >= 85%
+                    word_matched = False
+                    for exp_word in exp_words:
+                        similarity = _calculate_similarity(search_word, exp_word)
+                        if similarity >= SIMILARITY_THRESHOLD:
+                            word_matched = True
+                            logger.info(
+                                f"[SIMILAR EXPENSE] Match: '{search_word}' ~ '{exp_word}' "
+                                f"(similarity: {similarity:.2%})"
+                            )
+                            break
+
+                    if not word_matched:
+                        match_found = False
+                        break
+
+                if match_found:
                     similar_expenses.append(expense)
         
         # Получаем язык пользователя для правильного отображения

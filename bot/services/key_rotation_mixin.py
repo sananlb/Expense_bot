@@ -179,3 +179,64 @@ class OpenAIKeyRotationMixin(KeyRotationMixin):
         if hasattr(settings, 'OPENAI_API_KEY') and not hasattr(settings, 'OPENAI_API_KEYS'):
             return "OPENAI_API_KEY"
         return f"OPENAI_API_KEY_{key_index + 1}"
+
+
+class DeepSeekKeyRotationMixin(KeyRotationMixin):
+    """
+    Mixin для ротации DeepSeek API ключей.
+    Имеет независимое состояние от других миксинов.
+    """
+    # Redeclare state to ensure independence
+    _key_index: ClassVar[int] = 0
+    _key_lock: ClassVar[threading.Lock] = threading.Lock()
+    _key_status: ClassVar[Dict[int, Tuple[bool, Optional[datetime]]]] = {}
+
+    @classmethod
+    def get_api_keys(cls) -> List[str]:
+        """
+        Возвращает список DeepSeek API ключей из настроек.
+        """
+        if hasattr(settings, 'DEEPSEEK_API_KEYS') and settings.DEEPSEEK_API_KEYS:
+            return settings.DEEPSEEK_API_KEYS
+        # Fallback на единичный ключ
+        if hasattr(settings, 'DEEPSEEK_API_KEY') and settings.DEEPSEEK_API_KEY:
+            return [settings.DEEPSEEK_API_KEY]
+        # Try getting from env directly if not in settings
+        import os
+        key = os.getenv('DEEPSEEK_API_KEY')
+        return [key] if key else []
+
+    @classmethod
+    def get_key_name(cls, key_index: int) -> str:
+        return f"DEEPSEEK_API_KEY_{key_index + 1}"
+
+
+class QwenKeyRotationMixin(KeyRotationMixin):
+    """
+    Mixin для ротации Qwen (DashScope) API ключей.
+    Имеет независимое состояние от других миксинов.
+    """
+    # Redeclare state to ensure independence
+    _key_index: ClassVar[int] = 0
+    _key_lock: ClassVar[threading.Lock] = threading.Lock()
+    _key_status: ClassVar[Dict[int, Tuple[bool, Optional[datetime]]]] = {}
+
+    @classmethod
+    def get_api_keys(cls) -> List[str]:
+        """
+        Возвращает список DashScope API ключей из настроек.
+        """
+        if hasattr(settings, 'DASHSCOPE_API_KEYS') and settings.DASHSCOPE_API_KEYS:
+            return settings.DASHSCOPE_API_KEYS
+        # Fallback на единичный ключ
+        if hasattr(settings, 'DASHSCOPE_API_KEY') and settings.DASHSCOPE_API_KEY:
+            return [settings.DASHSCOPE_API_KEY]
+        # Try getting from env directly if not in settings
+        import os
+        key = os.getenv('DASHSCOPE_API_KEY')
+        return [key] if key else []
+
+    @classmethod
+    def get_key_name(cls, key_index: int) -> str:
+        return f"DASHSCOPE_API_KEY_{key_index + 1}"
+

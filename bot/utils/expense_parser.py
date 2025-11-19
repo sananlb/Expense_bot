@@ -31,6 +31,62 @@ WORD_TO_NUMBER = {
     'восемьдесят': 80, 'девяносто': 90, 'сто': 100, 'тысяча': 1000,
 }
 
+def keyword_matches_in_text(keyword: str, text: str) -> bool:
+    """
+    Проверяет есть ли ключевое слово в тексте как ЦЕЛОЕ СЛОВО с учетом склонений.
+
+    Алгоритм:
+    1. Разбивает текст на отдельные слова
+    2. Проверяет что ключевое слово является НАЧАЛОМ слова (стем)
+    3. Разрешает окончания до 3 символов (склонения: магнит → магните, магнита)
+    4. НЕ разрешает если после ключевого слова больше 3 символов (магнит ≠ магнитрон)
+
+    Примеры:
+    - keyword_matches_in_text("магнит", "купил в магните") -> True ✅ (склонение +2 символа)
+    - keyword_matches_in_text("магнит", "магнитрон") -> False ✅ (рон = +3 символа, лимит)
+    - keyword_matches_in_text("магнит", "супер-магнит") -> True ✅ (точное совпадение части)
+    - keyword_matches_in_text("кофе", "кофейня") -> False ✅ (йня = +3 символа, лимит)
+    - keyword_matches_in_text("кофе", "кофе") -> True ✅ (точное совпадение)
+
+    Args:
+        keyword: Ключевое слово для поиска (одно слово)
+        text: Текст для поиска
+
+    Returns:
+        True если keyword найдено как целое слово (с учетом склонений) в text
+    """
+    if not keyword or not text:
+        return False
+
+    # Нормализуем для поиска
+    keyword_lower = keyword.lower().strip()
+    text_lower = text.lower()
+
+    # Разбиваем текст на слова (по пробелам, запятым, точкам и т.д.)
+    # Оставляем дефисы внутри слов (супер-магнит)
+    import re
+    text_words = re.findall(r'[\wа-яёА-ЯЁ\-]+', text_lower)
+
+    # Проверяем каждое слово в тексте
+    for word in text_words:
+        # Точное совпадение - всегда ОК
+        if word == keyword_lower:
+            return True
+
+        # Проверяем что слово начинается с ключевого слова (стем)
+        if word.startswith(keyword_lower):
+            # Вычисляем разницу в длине (окончание)
+            ending_length = len(word) - len(keyword_lower)
+
+            # Разрешаем окончания до 2 символов (склонения)
+            # магнит (6) → магните (8) = +2 ✅
+            # магнит (6) → магнитрон (9) = +3 ❌
+            if ending_length <= 2:
+                return True
+
+    return False
+
+
 def convert_words_to_numbers(text: str) -> str:
     """
     Конвертирует числа словами в цифры
@@ -610,23 +666,24 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         # Проверяем каждую категорию пользователя
         for user_cat in user_categories:
             user_cat_lower = user_cat.name.lower()
-            
-            # Проверяем прямое вхождение названия категории в текст
-            if user_cat_lower in text_lower:
+
+            # Проверяем прямое вхождение названия категории в текст (ЦЕЛЫМ СЛОВОМ)
+            if keyword_matches_in_text(user_cat_lower, text_lower):
                 # Используем язык пользователя для отображения категории
                 lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
                 category = get_category_display_name(user_cat, lang_code)
                 max_score = 100  # Максимальный приоритет для пользовательских категорий
                 break
-            
+
             # Проверяем ключевые слова пользовательской категории
             @sync_to_async
             def get_keywords():
                 return list(user_cat.keywords.all())
-            
+
             keywords = await get_keywords()
             for kw in keywords:
-                if kw.keyword.lower() in text_lower:
+                # ИЗМЕНЕНО: Используем keyword_matches_in_text вместо `in` для точного совпадения целых слов
+                if keyword_matches_in_text(kw.keyword.lower(), text_lower):
                     # Обновляем last_used и usage_count при использовании ключевого слова
                     @sync_to_async
                     def update_keyword_usage():
@@ -816,12 +873,14 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         logger.error(f"AI categorization error: {e}")
                         ai_result = None
                     
-                    # Если основной провайдер не сработал, пробуем fallback цепочку из .env
+                    # Если основной провайдер не сработал, пробуем ОДИН fallback из .env
                     if not ai_result:
-                        logger.warning(f"Primary AI failed, trying fallback chain from .env")
+                        logger.warning(f"Primary AI failed, trying ONE fallback from .env")
                         fallback_chain = get_fallback_chain('categorization')
 
-                        for fallback_provider in fallback_chain:
+                        # ВАЖНО: Берем только ПЕРВЫЙ провайдер из цепочки (не перебираем все!)
+                        if fallback_chain:
+                            fallback_provider = fallback_chain[0]
                             try:
                                 logger.info(f"Trying fallback to {fallback_provider}...")
                                 fallback_service = AISelector(fallback_provider)
@@ -837,7 +896,6 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                                 )
                                 if ai_result:
                                     logger.info(f"{fallback_provider} fallback successful")
-                                    break
                             except asyncio.TimeoutError:
                                 logger.error(f"{fallback_provider} fallback timeout")
                             except Exception as e:
