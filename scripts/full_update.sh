@@ -48,9 +48,10 @@ if [ -n "$OLD_IMAGES" ]; then
 else
     echo -e "${YELLOW}  ℹ Старых образов не найдено${NC}"
 fi
-# Очищаем неиспользуемые данные
-docker system prune -af --volumes=false
-echo -e "${GREEN}✓ Docker очищен${NC}"
+# Очищаем ТОЛЬКО контейнеры и сети, НЕ удаляем базовые образы (postgres, redis)
+docker container prune -f 2>/dev/null || true
+docker network prune -f 2>/dev/null || true
+echo -e "${GREEN}✓ Docker очищен (базовые образы сохранены)${NC}"
 echo ""
 
 # Шаг 3: Получение изменений из Git
