@@ -5,19 +5,39 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 from bot.utils.language import get_text
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def _get_user_language(result: Dict) -> str:
-    """Extract user language from result or default to 'ru'"""
+    """Extract user language from result or default to 'ru'
+
+    IMPORTANT: This function uses Django ORM synchronously.
+    It's safe to call from sync context (like format_function_result called via asyncio.to_thread).
+    """
     user_id = result.get('user_id')
-    if user_id:
-        try:
-            from expenses.models import Profile
-            profile = Profile.objects.get(telegram_id=user_id)
-            return getattr(profile, 'language_code', 'ru')
-        except Exception:
-            pass
-    return 'ru'
+    logger.info(f"[_get_user_language] Received result with user_id: {user_id}")
+
+    if not user_id:
+        logger.warning(f"[_get_user_language] No user_id in result, defaulting to 'ru'. Result keys: {list(result.keys())}")
+        return 'ru'
+
+    try:
+        import os
+        os.environ.setdefault('DJANGO_ALLOW_ASYNC_UNSAFE', 'true')
+
+        from expenses.models import Profile
+        profile = Profile.objects.get(telegram_id=user_id)
+        language = getattr(profile, 'language_code', 'ru')
+        logger.info(f"[_get_user_language] Found profile for user_id={user_id}, language_code='{language}'")
+        return language
+    except Profile.DoesNotExist:
+        logger.error(f"[_get_user_language] Profile not found for user_id={user_id}, defaulting to 'ru'")
+        return 'ru'
+    except Exception as e:
+        logger.error(f"[_get_user_language] Error getting language for user_id={user_id}: {type(e).__name__}: {e}")
+        return 'ru'
 
 
 def _format_expenses_list(result: Dict, title: str, subtitle: str) -> str:
@@ -173,6 +193,8 @@ def format_function_result(func_name: str, result: Dict) -> str:
     """
     Convert ExpenseFunctions/OpenAI/Gemini function-call results to user-facing text.
     """
+    logger.info(f"[format_function_result] Called with func_name='{func_name}', user_id={result.get('user_id')}, result_keys={list(result.keys())}")
+
     if not result.get('success'):
         return f"Ошибка: {result.get('message','Не удалось получить данные')}"
 
@@ -316,12 +338,12 @@ def format_function_result(func_name: str, result: Dict) -> str:
         amount = result.get('amount', 0)
         category = result.get('category', get_text('no_category', lang))
         description = result.get('description', '')
-        lines = ["💸 Самая большая трата"]
-        lines.append(f"Дата: {date_str}{(' ' + time_str) if time_str else ''}")
-        lines.append(f"Сумма: {amount:,.0f} ₽")
-        lines.append(f"Категория: {category}")
+        lines = [f"💸 {get_text('biggest_expense', lang)}"]
+        lines.append(f"{get_text('date', lang)}: {date_str}{(' ' + time_str) if time_str else ''}")
+        lines.append(f"{get_text('amount', lang)}: {amount:,.0f} ₽")
+        lines.append(f"{get_text('category', lang)}: {category}")
         if description:
-            lines.append(f"Описание: {description}")
+            lines.append(f"{get_text('description', lang)}: {description}")
         return "\n".join(lines)
 
     if func_name == 'get_max_single_income':
@@ -331,48 +353,69 @@ def format_function_result(func_name: str, result: Dict) -> str:
         amount = inc.get('amount', 0)
         category = inc.get('category', get_text('no_category', lang))
         description = inc.get('description', '')
-        lines = ["💰 Самый большой доход"]
-        lines.append(f"Дата: {date_str}")
-        lines.append(f"Сумма: {amount:,.0f} ₽")
-        lines.append(f"Категория: {category}")
+        lines = [f"💰 {get_text('biggest_income', lang)}"]
+        lines.append(f"{get_text('date', lang)}: {date_str}")
+        lines.append(f"{get_text('amount', lang)}: {amount:,.0f} ₽")
+        lines.append(f"{get_text('category', lang)}: {category}")
         if description:
-            lines.append(f"Описание: {description}")
+            lines.append(f"{get_text('description', lang)}: {description}")
         return "\n".join(lines)
 
     if func_name == 'get_recent_expenses':
+        lang = _get_user_language(result)
         count = result.get('count', len(result.get('expenses', [])))
-        return _format_expenses_list(result, "🧾 Последние траты", f"Показано: {count}")
+        return _format_expenses_list(result, f"🧾 {get_text('recent_expenses', lang)}", f"{get_text('shown', lang)}: {count}")
 
     if func_name == 'get_recent_incomes':
+        lang = _get_user_language(result)
         count = result.get('count', len(result.get('incomes', [])))
-        return _format_incomes_list(result, "💰 Последние доходы", f"Показано: {count}")
+        return _format_incomes_list(result, f"💰 {get_text('recent_incomes', lang)}", f"{get_text('shown', lang)}: {count}")
 
     if func_name == 'get_period_total':
+        lang = _get_user_language(result)
+        logger.info(f"[get_period_total] Formatting with lang='{lang}', user_id={result.get('user_id')}")
+
         total = result.get('total', 0)
         period = result.get('period', '')
         start = result.get('start_date', '')
         end = result.get('end_date', '')
         cats = result.get('categories', []) or []
-        lines = [f"Итоги расходов {start}{(' — ' + end) if end and end != start else ''} ({period})"]
-        lines.append(f"Всего: {total:,.0f} ₽")
+
+        # Логируем перед получением текстов
+        logger.info(f"[get_period_total] Getting text 'expense_summary' for lang='{lang}'")
+        expense_summary_text = get_text('expense_summary', lang)
+        logger.info(f"[get_period_total] Got expense_summary='{expense_summary_text}'")
+
+        logger.info(f"[get_period_total] Getting text 'total' for lang='{lang}'")
+        total_text = get_text('total', lang)
+        logger.info(f"[get_period_total] Got total='{total_text}'")
+
+        lines = [f"{expense_summary_text} {start}{(' — ' + end) if end and end != start else ''} ({period})"]
+        lines.append(f"{total_text}: {total:,.0f} ₽")
         if cats:
             lines.append("")
-            lines.append("Топ категорий:")
+            top_categories_text = get_text('top_categories', lang)
+            logger.info(f"[get_period_total] Got top_categories='{top_categories_text}'")
+            lines.append(f"{top_categories_text}:")
             for c in cats:
                 lines.append(f"• {c.get('name','')}: {c.get('amount',0):,.0f} ₽")
-        return "\n".join(lines)
+
+        result_text = "\n".join(lines)
+        logger.info(f"[get_period_total] Final formatted text (first 200 chars): {result_text[:200]}")
+        return result_text
 
     if func_name == 'get_income_period_total':
+        lang = _get_user_language(result)
         total = result.get('total', 0)
         period = result.get('period', '')
         start = result.get('start_date', '')
         end = result.get('end_date', '')
         cats = result.get('categories', []) or []
-        lines = [f"Итоги доходов {start}{(' — ' + end) if end and end != start else ''} ({period})"]
-        lines.append(f"Всего: {total:,.0f} ₽")
+        lines = [f"{get_text('income_summary', lang)} {start}{(' — ' + end) if end and end != start else ''} ({period})"]
+        lines.append(f"{get_text('total', lang)}: {total:,.0f} ₽")
         if cats:
             lines.append("")
-            lines.append("Топ источников:")
+            lines.append(f"{get_text('top_sources', lang)}:")
             for c in cats:
                 lines.append(f"• {c.get('name','')}: {c.get('amount',0):,.0f} ₽")
         return "\n".join(lines)
@@ -396,32 +439,36 @@ def format_function_result(func_name: str, result: Dict) -> str:
         return "\n".join(lines)
 
     if func_name == 'get_average_expenses':
+        lang = _get_user_language(result)
         avg = result.get('average', 0)
         days = result.get('period_days') or result.get('days', 30)
         count = result.get('count', 0)
-        return f"Средние расходы: {avg:,.0f} ₽/день за {days} дн. (учтено {count} трат)"
+        return f"{get_text('average_expenses', lang)}: {avg:,.0f} ₽/{get_text('day', lang)} {get_text('for', lang)} {days} {get_text('days_short', lang)} ({get_text('counted', lang)} {count} {get_text('expenses_counted', lang)})"
 
     if func_name == 'get_average_incomes':
+        lang = _get_user_language(result)
         daily = result.get('daily_average', 0)
         weekly = result.get('weekly_average', 0)
         monthly = result.get('monthly_average', 0)
         return (
-            "Средние доходы:\n"
-            f"• День: {daily:,.0f} ₽\n"
-            f"• Неделя: {weekly:,.0f} ₽\n"
-            f"• Месяц: {monthly:,.0f} ₽"
+            f"{get_text('average_incomes', lang)}:\n"
+            f"• {get_text('day_capital', lang)}: {daily:,.0f} ₽\n"
+            f"• {get_text('week_capital', lang)}: {weekly:,.0f} ₽\n"
+            f"• {get_text('month_capital', lang)}: {monthly:,.0f} ₽"
         )
 
     if func_name == 'get_expense_trend':
+        lang = _get_user_language(result)
         trend = result.get('trends') or result.get('trend') or []
-        lines = ["📈 Тренд расходов"]
+        lines = [f"📈 {get_text('expense_trend', lang)}"]
         for item in trend[:12]:
             lines.append(f"• {item.get('period','')}: {item.get('total',0):,.0f} ₽")
         return "\n".join(lines)
 
     if func_name == 'get_income_trend':
+        lang = _get_user_language(result)
         trend = result.get('trend') or []
-        lines = ["📈 Тренд доходов"]
+        lines = [f"📈 {get_text('income_trend', lang)}"]
         for item in trend[:12]:
             lines.append(f"• {item.get('period','')}: {item.get('total',0):,.0f} ₽")
         return "\n".join(lines)

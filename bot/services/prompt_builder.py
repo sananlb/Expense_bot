@@ -24,12 +24,14 @@ def build_function_call_prompt(message: str, context: List[Dict[str,str]]|None=N
         'ru': 'Russian',
         'en': 'English'
     }
-    lang_instruction = f"**IMPORTANT: You MUST respond in {lang_names.get(user_language, 'Russian')} language.**"
+    lang_instruction = f"**CRITICAL: You MUST respond ONLY in {lang_names.get(user_language, 'Russian')} language, regardless of the question language!**"
 
     prompt = f"""You are a finance tracking assistant for both expenses and income. You have access to functions for financial analysis.
 Today: {today.strftime('%Y-%m-%d')} ({today.strftime('%B %Y')})
 
 {lang_instruction}
+
+IMPORTANT: The user's interface language is {lang_names.get(user_language, 'Russian')}. ALL your responses must be in {lang_names.get(user_language, 'Russian')}, even if the user asks questions in a different language.
 
 
 AVAILABLE EXPENSE FUNCTIONS:
@@ -47,8 +49,7 @@ AVAILABLE EXPENSE FUNCTIONS:
 12. get_expense_trend() - for "Show expense trend"
 13. get_expenses_by_amount_range(min_amount=1000) - for "Show expenses over 1000"
 14. get_category_total(category='groceries', period='month'|'week'|'январь'|...|'декабрь'|'january'|...|'december'|'зима'|'лето'|'winter'|'summer') - for CATEGORIES: "How much did I spend on groceries this month/in August/in summer?"
-15. get_expenses_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - for "Show expenses for period/from date to date"
-16. get_daily_totals(days=30) - for "Show daily expenses/totals for last month"
+15. get_expenses_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - for "Show expenses for period/from date to date", "Expense diary/journal", "Show expenses on specific day", "List all expenses"
 
 AVAILABLE INCOME FUNCTIONS:
 18. get_max_income_day() - for "What day did I earn the most?"
@@ -65,12 +66,11 @@ AVAILABLE INCOME FUNCTIONS:
 29. get_income_trend() - for "Show income trend"
 30. get_incomes_by_amount_range(min_amount=10000) - for "Show income over 10000"
 31. get_income_category_total(category='salary', period='month') - for "How much salary do I get?"
-32. get_incomes_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - for "Show income for period"
-33. get_daily_income_totals(days=30) - for "Show daily income"
+32. get_incomes_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - for "Show income for period", "Income diary/journal", "List all income"
 
 COMPLEX ANALYSIS FUNCTIONS:
-34. get_all_operations(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD', limit=200) - for "All operations", "Show all transactions"
-35. get_financial_summary(period='month') - for "Financial summary", "Balance", "Month results"
+33. get_all_operations(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD', limit=200) - for "All operations", "Show all transactions", "Complete financial diary"
+34. get_financial_summary(period='month') - for "Financial summary", "Balance", "Month results"
 
 UNIVERSAL FUNCTION (USE IF NO SUITABLE FUNCTION ABOVE):
 36. analytics_query(spec_json='<JSON query specification>') - for non-standard analytical queries
@@ -91,11 +91,15 @@ FUNCTION_CALL: function_name(parameter1=value1, parameter2=value2)
 If the question doesn't require data analysis (greeting, general question), respond in plain text.
 
 ADDITIONAL FUNCTION SELECTION RULES:
-- If user asks about SPECIFIC DATE (single day), e.g. "How much did I spend on August 25?",
+- If user asks about SPECIFIC DATE (single day), e.g. "How much did I spend on August 25?", "Show expenses on November 5",
   THEN use get_expenses_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') with same start_date and end_date = this date (in ISO format, take year from context/current year).
-- If asking about DATE RANGE, use get_expenses_list with specified dates.
+- If user asks for "expense diary", "expense journal", "list", or "show all" for a period (дневник трат, журнал трат, список, показать все),
+  THEN use get_expenses_list (for expenses), get_incomes_list (for incomes), or get_all_operations (for everything) with date range for that period. Examples:
+  - "Show expense diary in November" → get_expenses_list(start_date='2025-11-01', end_date='2025-11-30')
+  - "Income journal last week" → get_incomes_list with last week dates
+  - "All operations in October" → get_all_operations(start_date='2025-10-01', end_date='2025-10-31')
+- If asking about DATE RANGE, use get_expenses_list/get_incomes_list/get_all_operations with specified dates.
 - If asking about CATEGORIES for a month ("what categories did I spend most in August"), use get_category_statistics and set period_days for the month.
-- Don't use get_daily_totals for single date - it's for summary across multiple days.
 
 SPECIAL CASES:
 - For searches with period "last week", "last month", "day before yesterday" use search_expenses with period:
@@ -114,6 +118,8 @@ SPECIAL CASES:
   get_max_single_income(period='last_month')
 - Use get_category_statistics when statistics for ALL categories needed (not specific one)
 - Use get_category_total only for current periods (this month, this week) without specifying dates
+
+REMINDER: Respond in {lang_names.get(user_language, 'Russian')} language!
 
 {ctx_text}User question: {message}"""
     return prompt

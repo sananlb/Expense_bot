@@ -160,11 +160,12 @@ class UnifiedAIService(AIBaseService):
         Чат с поддержкой вызова функций (через эмуляцию FUNCTION_CALL)
         """
         user_id = user_context.get('user_id') if user_context else None
-        
+        user_language = user_context.get('language', 'ru') if user_context else 'ru'
+
         try:
             # 1. Попытка определить функцию (Intent Recognition)
             from bot.services.prompt_builder import build_function_call_prompt
-            fc_prompt = build_function_call_prompt(message, context)
+            fc_prompt = build_function_call_prompt(message, context, user_language)
             
             model_name = get_model('chat', self.provider_name)
             client, key_index = self._get_client()
@@ -324,8 +325,14 @@ class UnifiedAIService(AIBaseService):
             # Форматирование результата
             if isinstance(result, dict) and user_id:
                 result['user_id'] = user_id
-                
-            return format_function_result(func_name, result)
+                logger.info(f"[_execute_function_call] Added user_id={user_id} to result for function='{func_name}'")
+            else:
+                logger.warning(f"[_execute_function_call] Could NOT add user_id! isinstance(result, dict)={isinstance(result, dict)}, user_id={user_id}")
+
+            logger.info(f"[_execute_function_call] Calling format_function_result with func_name='{func_name}', result keys={list(result.keys()) if isinstance(result, dict) else 'N/A'}")
+            formatted = format_function_result(func_name, result)
+            logger.info(f"[_execute_function_call] format_function_result returned: {formatted[:100]}...")
+            return formatted
             
         except Exception as e:
             logger.error(f"Function execution error: {e}")

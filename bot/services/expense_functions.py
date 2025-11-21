@@ -140,16 +140,21 @@ class ExpenseFunctions:
     def get_period_total(user_id: int, period: str = 'today') -> Dict[str, Any]:
         """
         Получить сумму трат за период
-        
+
         Args:
             user_id: ID пользователя
             period: Период (today, yesterday, week, month, year)
         """
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"[get_period_total] Called with user_id={user_id}, period='{period}'")
+
         try:
             profile, _ = Profile.objects.get_or_create(
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
+            logger.info(f"[get_period_total] Profile found/created: telegram_id={profile.telegram_id}, language_code='{profile.language_code}'")
             # Используем единую функцию для определения дат периода
             from bot.utils.date_utils import get_period_dates
             try:
@@ -197,9 +202,10 @@ class ExpenseFunctions:
                     'name': category_name,
                     'amount': float(cat['total'])
                 })
-            
-            return {
+
+            result = {
                 'success': True,
+                'user_id': user_id,  # Добавляем user_id для определения языка
                 'period': period,
                 'start_date': start_date.isoformat(),
                 'end_date': end_date.isoformat(),
@@ -208,7 +214,9 @@ class ExpenseFunctions:
                 'count': count,
                 'categories': categories[:5]  # Топ-5 категорий
             }
-            
+            logger.info(f"[get_period_total] Returning result with user_id={result['user_id']}, period='{result['period']}', total={result['total']}")
+            return result
+
         except Profile.DoesNotExist:
             from bot.utils import get_text
             return {
@@ -548,6 +556,7 @@ class ExpenseFunctions:
             
             return {
                 'success': True,
+                'user_id': user_id,
                 'period_days': period_days,
                 'total': float(total),
                 'count': count,
@@ -696,6 +705,7 @@ class ExpenseFunctions:
 
             return {
                 'success': True,
+                'user_id': user_id,
                 'date': max_expense.expense_date.isoformat(),
                 'weekday': weekday,
                 'time': max_expense.expense_time.strftime('%H:%M') if max_expense.expense_time else None,
@@ -1054,6 +1064,7 @@ class ExpenseFunctions:
             
             return {
                 'success': True,
+                'user_id': user_id,
                 'group_by': group_by,
                 'trends': trends
             }
@@ -1310,6 +1321,7 @@ class ExpenseFunctions:
             
             return {
                 'success': True,
+                'user_id': user_id,
                 'count': len(results),
                 'expenses': results
             }
@@ -1388,6 +1400,7 @@ class ExpenseFunctions:
             
             return {
                 'success': True,
+                'user_id': user_id,  # Добавляем user_id для определения языка
                 'period': period,
                 'start_date': start_date.isoformat(),
                 'end_date': end_date.isoformat(),
@@ -1517,6 +1530,7 @@ class ExpenseFunctions:
             
             return {
                 'success': True,
+                'user_id': user_id,
                 'count': len(results),
                 'incomes': results
             }
@@ -1613,6 +1627,7 @@ class ExpenseFunctions:
             total = incomes.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
             return {
                 'success': True,
+                'user_id': user_id,
                 'period': period,
                 'start_date': start_date.isoformat(),
                 'end_date': end_date.isoformat(),
@@ -1668,6 +1683,7 @@ class ExpenseFunctions:
 
             return {
                 'success': True,
+                'user_id': user_id,
                 'income': {
                     'amount': float(max_income.amount),
                     'description': max_income.description or get_text('income', profile.language_code or 'ru'),
@@ -1821,6 +1837,7 @@ class ExpenseFunctions:
             
             return {
                 'success': True,
+                'user_id': user_id,
                 'daily_average': float(month_total / 30) if month_total else 0,
                 'weekly_average': float(week_total) if week_total else 0,
                 'monthly_average': float(month_total) if month_total else 0,
@@ -2084,6 +2101,7 @@ class ExpenseFunctions:
             
             return {
                 'success': True,
+                'user_id': user_id,
                 'period_days': days,
                 'trend': trend_data,
                 'total': total,

@@ -204,6 +204,7 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
                 
                 # Получаем язык пользователя
                 lang = await get_user_language(user_id)
+                logger.info(f"[Chat] User language detected: {lang}")
 
                 user_context = {
                     'total_today': today_summary.get('total', 0) if today_summary else 0,
@@ -211,11 +212,11 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
                     'user_id': user_id,  # Добавляем user_id для function calling
                     'language': lang  # Добавляем язык пользователя для AI
                 }
-                
+
                 # Получаем AI сервис и генерируем ответ
                 ai_service = get_service('chat')
                 logger.info(f"[Chat] Got AI service: {type(ai_service).__name__}")
-                logger.info(f"[Chat] Calling AI with user_id={user_id}, message={text[:50]}...")
+                logger.info(f"[Chat] Calling AI with user_id={user_id}, language={lang}, message={text[:50]}...")
                 
                 response = await ai_service.chat(text, context, user_context)
                 # Безопасное логирование в Windows-консолях (ASCII-only превью)

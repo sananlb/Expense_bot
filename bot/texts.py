@@ -154,6 +154,10 @@ TEXTS = {
         'today_spent': 'Сегодня потрачено',
         'summary': 'Итоги дня',
         'summary_monthly': 'Итоги за',
+        'expense_summary': 'Итоги расходов',
+        'income_summary': 'Итоги доходов',
+        'top_categories': 'Топ категорий',
+        'top_sources': 'Топ источников',
         'total': 'Всего',
         'total_spent': 'Всего потрачено',
         'by_categories': 'По категориям',
@@ -162,7 +166,28 @@ TEXTS = {
         'show_month_start': '📅 Показать с начала месяца',
         'pdf_report_generated': '📄 PDF отчет сформирован',
         'report_generation_error': '❌ Ошибка генерации отчета',
-        
+        'biggest_expense': 'Самая большая трата',
+        'biggest_income': 'Самый большой доход',
+        'date': 'Дата',
+        'amount': 'Сумма',
+        'category': 'Категория',
+        'description': 'Описание',
+        'average_expenses': 'Средние расходы',
+        'average_incomes': 'Средние доходы',
+        'day': 'день',
+        'day_capital': 'День',
+        'week_capital': 'Неделя',
+        'month_capital': 'Месяц',
+        'for': 'за',
+        'days_short': 'дн.',
+        'counted': 'учтено',
+        'expenses_counted': 'трат',
+        'recent_expenses': 'Последние траты',
+        'recent_incomes': 'Последние доходы',
+        'shown': 'Показано',
+        'expense_trend': 'Тренд расходов',
+        'income_trend': 'Тренд доходов',
+
         # Кешбэки
         'cashbacks': 'Кешбэк на',
         'cashbacks_for': 'Кешбэк на',
@@ -1014,20 +1039,45 @@ PDF отчеты с графиками, экспорт в CSV и Excel дост�
         'choose_new_icon': '🎨 Choose new icon for category «{name}»:',
         'without_icon': '➡️ Without icon',
         'enter_custom_emoji': '✏️ Enter custom emoji',
-        
+
         # Reports
         'today_spent': 'Spent today',
         'summary': 'Daily results',
         'summary_monthly': 'Results for',
+        'expense_summary': 'Expense summary',
+        'income_summary': 'Income summary',
+        'top_categories': 'Top categories',
+        'top_sources': 'Top sources',
         'total': 'Total',
         'total_spent': 'Total spent',
         'by_categories': 'By categories',
         'potential_cashback': 'Cashback',
         'generate_pdf': '📊 PDF',
-        'show_month_start': '📅 Show from month start',
+        'show_month_start': '📅 Show from beginning of month',
         'pdf_report_generated': '📄 PDF report generated',
         'report_generation_error': '❌ Report generation error',
-        
+        'biggest_expense': 'Biggest expense',
+        'biggest_income': 'Biggest income',
+        'date': 'Date',
+        'amount': 'Amount',
+        'category': 'Category',
+        'description': 'Description',
+        'average_expenses': 'Average expenses',
+        'average_incomes': 'Average incomes',
+        'day': 'day',
+        'day_capital': 'Day',
+        'week_capital': 'Week',
+        'month_capital': 'Month',
+        'for': 'for',
+        'days_short': 'd.',
+        'counted': 'counted',
+        'expenses_counted': 'expenses',
+        'recent_expenses': 'Recent expenses',
+        'recent_incomes': 'Recent incomes',
+        'shown': 'Shown',
+        'expense_trend': 'Expense trend',
+        'income_trend': 'Income trend',
+
         # Cashbacks
         'cashbacks': 'Cashbacks for',
         'cashback_menu': 'Cashback',
@@ -1773,4 +1823,15 @@ The bot understands natural language and will help analyze your finances.''',
 
 def get_text(key: str, lang: str = 'ru') -> str:
     """Получить текст по ключу и языку"""
-    return TEXTS.get(lang, TEXTS['ru']).get(key, key)
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Получаем текст
+    texts_for_lang = TEXTS.get(lang, TEXTS['ru'])
+    result = texts_for_lang.get(key, key)
+
+    # Логируем только для критичных ключей AI-чата
+    if key in ['expense_summary', 'total', 'top_categories', 'income_summary', 'top_sources']:
+        logger.info(f"[get_text] key='{key}', lang='{lang}' -> result='{result}'")
+
+    return result
