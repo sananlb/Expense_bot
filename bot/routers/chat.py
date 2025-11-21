@@ -202,10 +202,14 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
                 except Exception as e:
                     logger.error(f"Error getting recent expenses: {e}")
                 
+                # Получаем язык пользователя
+                lang = await get_user_language(user_id)
+
                 user_context = {
                     'total_today': today_summary.get('total', 0) if today_summary else 0,
                     'expenses_data': recent_expenses,
-                    'user_id': user_id  # Добавляем user_id для function calling
+                    'user_id': user_id,  # Добавляем user_id для function calling
+                    'language': lang  # Добавляем язык пользователя для AI
                 }
                 
                 # Получаем AI сервис и генерируем ответ

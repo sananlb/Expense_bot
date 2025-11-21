@@ -22,6 +22,37 @@ else:
     logger.warning("[GoogleAI] No GOOGLE_API_KEYS found in settings")
 
 
+def _get_error_message(error_key: str, user_context: Optional[Dict[str, Any]] = None) -> str:
+    """Get error message in user's language"""
+    user_lang = user_context.get('language', 'ru') if user_context else 'ru'
+
+    ERROR_MESSAGES = {
+        'service_unavailable': {
+            'ru': 'Извините, сервис временно недоступен.',
+            'en': 'Sorry, the service is temporarily unavailable.'
+        },
+        'no_response': {
+            'ru': 'Извините, не удалось получить ответ от AI.',
+            'en': 'Sorry, failed to get response from AI.'
+        },
+        'processing_error': {
+            'ru': 'Извините, произошла ошибка при обработке вашего сообщения.',
+            'en': 'Sorry, an error occurred while processing your message.'
+        },
+        'general_error': {
+            'ru': 'Извините, произошла ошибка.',
+            'en': 'Sorry, an error occurred.'
+        },
+        'timeout': {
+            'ru': 'Извините, сервис временно недоступен. Попробуйте еще раз.',
+            'en': 'Sorry, service temporarily unavailable. Please try again.'
+        }
+    }
+
+    messages = ERROR_MESSAGES.get(error_key, ERROR_MESSAGES['general_error'])
+    return messages.get(user_lang, messages['ru'])
+
+
 class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
     """Сервис для работы с Google AI (Gemini) - упрощенная стабильная версия"""
     
@@ -272,7 +303,9 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                                     except Exception:
                                         return str(result)[:1000]
                             else:
-                                return f"Ошибка: {result.get('message','Не удалось получить данные')}"
+                                error_msg = result.get('message', 'Failed to get data' if user_context and user_context.get('language') == 'en' else 'Не удалось получить данные')
+                                error_prefix = "Error:" if user_context and user_context.get('language') == 'en' else "Ошибка:"
+                                return f"{error_prefix} {error_msg}"
 
                     from .function_call_utils import normalize_function_call
                     func_name, params = normalize_function_call(message, func_name, params, user_id)
@@ -313,9 +346,10 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
 
                         except Exception as e:
                             logger.error(f"[GoogleAI] Error calling function {func_name}: {e}", exc_info=True)
+                            error_prefix = "Function execution error:" if user_context and user_context.get('language') == 'en' else "Ошибка при выполнении функции:"
                             result = {
                                 'success': False,
-                                'message': f'Ошибка при выполнении функции: {str(e)}'
+                                'message': f'{error_prefix} {str(e)}'
                             }
                         
                         if result.get('success'):
@@ -390,7 +424,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                     logger.error(f"[GoogleAI Chat] Error with key {key_index}: {type(e).__name__}: {str(e)[:200]}")
             else:
                 logger.error(f"[GoogleAI Chat] Error: {type(e).__name__}: {str(e)[:200]}")
-            return "Извините, произошла ошибка при обработке вашего сообщения."
+            return _get_error_message('processing_error', user_context)
     
     async def _call_ai_with_functions(
         self,
@@ -415,13 +449,15 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
             
             from bot.services.prompt_builder import build_function_call_prompt
             # Here we receive already-enhanced message; use the parameter
-            prompt = build_function_call_prompt(message, context)
+            # Extract user language from user_context if available
+            user_language = user_context.get('language', 'ru') if user_context else 'ru'
+            prompt = build_function_call_prompt(message, context, user_language)
 
             # Получаем следующий ключ для ротации
             key_result = self.get_next_key()
             if not key_result:
                 logger.error("[GoogleAI] No API keys available")
-                return "Извините, сервис временно недоступен."
+                return _get_error_message('service_unavailable', user_context)
             
             api_key, key_index = key_result
             key_name = self.get_key_name(key_index)
@@ -431,9 +467,14 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
             logger.debug(f"[GoogleAI] Using {key_name} for chat with functions")
             
             model_name = get_model('chat', 'google')
+            # Get user language for system instruction
+            user_lang = user_context.get('language', 'ru') if user_context else 'ru'
+            lang_names = {'ru': 'Russian', 'en': 'English', 'es': 'Spanish', 'de': 'German', 'fr': 'French'}
+            lang_name = lang_names.get(user_lang, 'Russian')
+
             model = genai.GenerativeModel(
                 model_name=model_name,
-                system_instruction="You are a finance tracking assistant for both expenses and income. Analyze the user's question and determine if a function call is needed."
+                system_instruction=f"You are a finance tracking assistant for both expenses and income. Analyze the user's question and determine if a function call is needed. **IMPORTANT: You MUST respond in {lang_name} language.**"
             )
             
             generation_config = genai.GenerationConfig(
@@ -473,7 +514,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                     return await openai_service.chat(prompt, [], None)
                 except Exception as e:
                     logger.error(f"[GoogleAI] OpenAI formatter fallback failed after timeout: {e}")
-                    return "Извините, сервис временно недоступен. Попробуйте еще раз."
+                    return _get_error_message('timeout', user_context)
             
             logger.info(f"[GoogleAI] generate_content_async completed")
             
@@ -509,7 +550,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                 return response.text.strip()
             else:
                 logger.warning(f"[GoogleAI] Empty response from API - response={response}, parts={response.parts if response else None}")
-                return "Извините, не удалось получить ответ от AI."
+                return _get_error_message('no_response', user_context)
                 
         except Exception as e:
             # Помечаем ключ как нерабочий и логируем с его именем
@@ -521,7 +562,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                     logger.error(f"[GoogleAI] Error in _call_ai_with_functions with key {key_index}: {e}")
             else:
                 logger.error(f"[GoogleAI] Error in _call_ai_with_functions: {e}")
-            return "Извините, произошла ошибка."
+            return _get_error_message('general_error', user_context)
     
     async def _call_ai_simple(self, prompt: str, user_context: Optional[Dict[str, Any]] = None) -> str:
         """
@@ -532,7 +573,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
             key_result = self.get_next_key()
             if not key_result:
                 logger.error("[GoogleAI] No API keys available")
-                return "Извините, сервис временно недоступен."
+                return _get_error_message('service_unavailable', user_context)
             
             api_key, key_index = key_result
             key_name = self.get_key_name(key_index)
@@ -622,7 +663,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                     openai_service = OpenAIService()
                     return await openai_service.chat(prompt, [], user_context)
                 except Exception:
-                    return "Извините, не удалось получить ответ от AI."
+                    return _get_error_message('no_response', user_context)
                 
         except Exception as e:
             # Помечаем ключ как нерабочий и логируем с его именем
@@ -640,7 +681,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                 openai_service = OpenAIService()
                 return await openai_service.chat(prompt, [], user_context)
             except Exception:
-                return "Извините, произошла ошибка."
+                return _get_error_message('general_error', user_context)
     
     async def chat(
         self,
@@ -668,18 +709,23 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
             key_result = self.get_next_key()
             if not key_result:
                 logger.error("[GoogleAI] No API keys available")
-                return "Извините, сервис временно недоступен."
+                return _get_error_message('service_unavailable', user_context)
             
             api_key, key_index = key_result
             key_name = self.get_key_name(key_index)
             
             # Конфигурируем с новым ключом
             genai.configure(api_key=api_key)
-            logger.debug(f"[GoogleAI] Using {key_name} for chat with functions")
-            
+            logger.debug(f"[GoogleAI] Using {key_name} for chat")
+
+            # Get user language for system instruction
+            user_lang = user_context.get('language', 'ru') if user_context else 'ru'
+            lang_names = {'ru': 'Russian', 'en': 'English', 'es': 'Spanish', 'de': 'German', 'fr': 'French'}
+            lang_name = lang_names.get(user_lang, 'Russian')
+
             model = genai.GenerativeModel(
                 model_name='gemini-2.5-flash',
-                system_instruction="You are an expense tracking bot. Answer naturally and concisely in the user's language."
+                system_instruction=f"You are an expense tracking bot. Answer naturally and concisely. **IMPORTANT: You MUST respond in {lang_name} language.**"
             )
             
             generation_config = genai.GenerationConfig(
@@ -717,7 +763,7 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                 return response.text.strip()
             else:
                 logger.warning(f"[GoogleAI] Empty response from API - response={response}, parts={response.parts if response else None}")
-                return "Извините, не удалось получить ответ от AI."
+                return _get_error_message('no_response', user_context)
                 
         except Exception as e:
             # Помечаем ключ как нерабочий и логируем с его именем
@@ -729,4 +775,4 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                     logger.error(f"[GoogleAI Chat] Error with key {key_index}: {type(e).__name__}: {str(e)[:200]}")
             else:
                 logger.error(f"[GoogleAI Chat] Error: {type(e).__name__}: {str(e)[:200]}")
-            return "Извините, произошла ошибка при обработке вашего сообщения."
+            return _get_error_message('processing_error', user_context)

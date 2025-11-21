@@ -523,7 +523,8 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                 key_result = self.get_next_key()
                 if not key_result:
                     logger.error("[GoogleAI-Adaptive] No API keys available")
-                    return "Извините, сервис временно недоступен."
+                    user_lang = user_context.get('language', 'ru') if user_context else 'ru'
+                    return "Sorry, the service is temporarily unavailable." if user_lang == 'en' else "Извините, сервис временно недоступен."
                 api_key, key_index = key_result
                 key_name = self.get_key_name(key_index)
                 
@@ -650,7 +651,8 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
                 key_result = self.get_next_key()
                 if not key_result:
                     logger.error("[GoogleAI-Adaptive] No API keys available")
-                    return "Извините, сервис временно недоступен."
+                    user_lang = user_context.get('language', 'ru') if user_context else 'ru'
+                    return "Sorry, the service is temporarily unavailable." if user_lang == 'en' else "Извините, сервис временно недоступен."
                 api_key, key_index = key_result
                 key_name = self.get_key_name(key_index)
                 
