@@ -1977,6 +1977,16 @@ async def edit_field_amount(callback: types.CallbackQuery, state: FSMContext, la
     data = await state.get_data()
     expense_id = data.get('editing_expense_id')
 
+    # Проверка что expense_id существует в FSM state
+    if expense_id is None:
+        logger.warning(f"[edit_field_amount] FSM state lost for user {callback.from_user.id}: editing_expense_id is None")
+        await callback.answer(
+            "❌ Сессия редактирования истекла. Попробуйте начать заново.",
+            show_alert=True
+        )
+        await state.clear()
+        return
+
     await callback.message.edit_text(
         f"💰 <b>{get_text('editing_amount', lang)}</b>\n\n"
         f"{get_text('enter_new_amount', lang)}",
@@ -1996,6 +2006,16 @@ async def edit_field_description(callback: types.CallbackQuery, state: FSMContex
     """Редактирование описания"""
     data = await state.get_data()
     expense_id = data.get('editing_expense_id')
+
+    # Проверка что expense_id существует в FSM state
+    if expense_id is None:
+        logger.warning(f"[edit_field_description] FSM state lost for user {callback.from_user.id}: editing_expense_id is None")
+        await callback.answer(
+            "❌ Сессия редактирования истекла. Попробуйте начать заново.",
+            show_alert=True
+        )
+        await state.clear()
+        return
 
     await callback.message.edit_text(
         f"📝 <b>{get_text('editing_description', lang)}</b>\n\n"
