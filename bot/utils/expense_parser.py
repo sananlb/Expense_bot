@@ -31,6 +31,28 @@ WORD_TO_NUMBER = {
     'восемьдесят': 80, 'девяносто': 90, 'сто': 100, 'тысяча': 1000,
 }
 
+# Словарь множителей для сумм
+AMOUNT_MULTIPLIERS = {
+    # Русский
+    'тысяч': 1000,
+    'тысячи': 1000,
+    'тысяча': 1000,
+    'тыс': 1000,
+    'к': 1000,  # 10к
+    'миллион': 1000000,
+    'миллиона': 1000000,
+    'миллионов': 1000000,
+    'млн': 1000000,
+    'м': 1000000,  # 2м
+    # English
+    'thousand': 1000,
+    'thousands': 1000,
+    'k': 1000,  # 10k
+    'million': 1000000,
+    'millions': 1000000,
+    'm': 1000000,  # 2m
+}
+
 def keyword_matches_in_text(keyword: str, text: str) -> bool:
     """
     Проверяет есть ли ключевое слово в тексте как ЦЕЛОЕ СЛОВО с учетом склонений.
@@ -325,7 +347,33 @@ def extract_amount_from_patterns(text: str) -> Tuple[Optional[Decimal], Optional
 
         match_start = match.start()
         match_end = match.end()
-        text_without_amount = (text[:match_start] + ' ' + text[match_end:]).strip()
+
+        # Проверяем есть ли множитель сразу после суммы (тысяч, млн и т.д.)
+        text_after_amount = text[match_end:].strip()
+        multiplier = None
+        multiplier_match = None
+
+        # Ищем множитель сразу после суммы
+        for mult_word, mult_value in AMOUNT_MULTIPLIERS.items():
+            # Ищем множитель как отдельное слово (с границами слова)
+            mult_pattern = rf'^\s*{re.escape(mult_word)}\b'
+            mult_match = re.search(mult_pattern, text_after_amount, re.IGNORECASE)
+            if mult_match:
+                multiplier = mult_value
+                multiplier_match = mult_match
+                logger.info(f"Найден множитель '{mult_word}' ({mult_value}x) для суммы {amount}")
+                break
+
+        # Если нашли множитель - применяем его и удаляем из текста
+        if multiplier and multiplier_match:
+            amount = amount * multiplier
+            # Удаляем и сумму и множитель из текста
+            mult_end = match_end + multiplier_match.end()
+            text_without_amount = (text[:match_start] + ' ' + text[mult_end:]).strip()
+            logger.info(f"Сумма после применения множителя: {amount}")
+        else:
+            text_without_amount = (text[:match_start] + ' ' + text[match_end:]).strip()
+
         return amount, text_without_amount
 
     # Fallback: Если не нашли по паттернам, ищем единственное число В СЕРЕДИНЕ текста С ПРОБЕЛАМИ
