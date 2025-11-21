@@ -1776,13 +1776,17 @@ async def handle_photo_expense(message: types.Message, state: FSMContext):
 
 # Обработчик редактирования траты или дохода
 @router.callback_query(lambda c: c.data.startswith(("edit_expense_", "edit_income_")))
-async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+async def edit_expense(callback: types.CallbackQuery, state: FSMContext):
     """Редактирование траты или дохода"""
     # Определяем тип операции
     is_income = callback.data.startswith("edit_income_")
     item_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
-    
+
+    # Получаем язык пользователя
+    from bot.utils.language import get_user_language
+    lang = await get_user_language(user_id)
+
     # Получаем информацию о трате или доходе
     if is_income:
         from expenses.models import Income
@@ -1792,7 +1796,7 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext, lang: s
                 profile__telegram_id=user_id
             )
         except Income.DoesNotExist:
-            await callback.answer("Доход не найден", show_alert=True)
+            await callback.answer(get_text('income_not_found', lang), show_alert=True)
             from bot.utils.state_utils import clear_state_keep_cashback
             await clear_state_keep_cashback(state)
             return
@@ -1948,7 +1952,11 @@ async def delete_expense(callback: types.CallbackQuery, state: FSMContext):
     is_income = callback.data.startswith("delete_income_")
     item_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
-    
+
+    # Получаем язык пользователя
+    from bot.utils.language import get_user_language, get_text
+    lang = await get_user_language(user_id)
+
     # Удаляем трату или доход
     if is_income:
         from ..services.income import delete_income
@@ -1956,17 +1964,35 @@ async def delete_expense(callback: types.CallbackQuery, state: FSMContext):
     else:
         from ..services.expense import delete_expense as delete_expense_service
         success = await delete_expense_service(user_id, item_id)
-    
+
     if success:
-        await callback.message.delete()
+        # Пытаемся удалить сообщение, если не получается (старое сообщение) - делаем "невидимым"
+        try:
+            await callback.message.delete()
+        except Exception:
+            # Если не можем удалить (сообщение старше 48 часов), делаем его минимальным
+            # Используем невидимый символ Braille (U+2800) чтобы минимизировать сообщение
+            try:
+                await callback.message.edit_text("⠀", reply_markup=None)
+            except Exception:
+                # Если и редактировать не можем, просто отправляем уведомление
+                pass
+
         # Очищаем состояние после удаления
         from bot.utils.state_utils import clear_state_keep_cashback
         await clear_state_keep_cashback(state)
+
+        # Отправляем уведомление пользователю
+        success_key = 'income_deleted_success' if is_income else 'expense_deleted_success'
+        success_msg = get_text(success_key, lang)
+        await callback.answer(success_msg)
+
         # # Восстанавливаем меню кешбека если оно было активно
         # from ..routers.cashback import restore_cashback_menu_if_needed
         # await restore_cashback_menu_if_needed(state, callback.bot, callback.message.chat.id)
     else:
-        error_msg = "❌ Не удалось удалить доход" if is_income else "❌ Не удалось удалить трату"
+        error_key = 'failed_delete_income' if is_income else 'failed_delete_expense'
+        error_msg = get_text(error_key, lang)
         await callback.answer(error_msg, show_alert=True)
 
 

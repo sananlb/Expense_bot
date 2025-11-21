@@ -765,7 +765,11 @@ TEXTS = {
         'category_deleted_success': '✅ Категория «{name}» {icon} удалена',
         'failed_delete_category': '❌ Не удалось удалить категорию',
         'category_not_found': '❌ Категория не найдена',
-        
+        'expense_deleted_success': '✅ Трата успешно удалена',
+        'income_deleted_success': '✅ Доход успешно удалён',
+        'failed_delete_expense': '❌ Не удалось удалить трату',
+        'failed_delete_income': '❌ Не удалось удалить доход',
+
         # Чат и AI
         'yesterday_expenses_future': 'Функция просмотра трат за вчера будет добавлена в следующей версии.',
         'can_show_today_or_month': 'Я могу показать траты за сегодня или за текущий месяц. Просто спросите!',
@@ -1631,7 +1635,11 @@ Thank you for participating in testing! Your feedback helps improve the bot.''',
         'category_deleted_success': '✅ Category «{name}» {icon} deleted',
         'failed_delete_category': '❌ Failed to delete category',
         'category_not_found': '❌ Category not found',
-        
+        'expense_deleted_success': '✅ Expense deleted successfully',
+        'income_deleted_success': '✅ Income deleted successfully',
+        'failed_delete_expense': '❌ Failed to delete expense',
+        'failed_delete_income': '❌ Failed to delete income',
+
         # Chat and AI
         'yesterday_expenses_future': 'Yesterday expenses view will be added in the next version.',
         'can_show_today_or_month': 'I can show expenses for today or current month. Just ask!',
