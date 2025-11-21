@@ -2082,7 +2082,19 @@ async def edit_cancel(callback: types.CallbackQuery, state: FSMContext):
 @router.callback_query(lambda c: c.data.startswith("edit_back_"))
 async def edit_back_to_menu(callback: types.CallbackQuery, state: FSMContext):
     """Возврат к меню редактирования траты"""
-    expense_id = int(callback.data.split("_")[-1])
+    expense_id_str = callback.data.split("_")[-1]
+
+    # Проверка на None/пустое значение
+    if expense_id_str == 'None' or not expense_id_str:
+        await callback.answer("❌ Ошибка: ID траты не найден")
+        return
+
+    try:
+        expense_id = int(expense_id_str)
+    except ValueError:
+        await callback.answer(f"❌ Ошибка: некорректный ID траты ({expense_id_str})")
+        return
+
     data = await state.get_data()
     lang = data.get('lang', 'ru')
     await show_edit_menu_callback(callback, state, expense_id, lang)
