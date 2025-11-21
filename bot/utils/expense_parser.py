@@ -197,7 +197,9 @@ AMOUNT_PATTERNS = [
     r'(\d+(?:[.,]\d+)?)\s*(?:бразильских?|reais?|реалов?|brl)\b',  # 100 BRL, 100 reais
     r'(\d+(?:[.,]\d+)?)\s*$',  # просто число в конце
     r'^(\d+(?:[.,]\d+)?)\s',  # число в начале
-    # Паттерн для числа в середине УДАЛЕН - используется fallback с проверкой amount > 2
+    # Паттерн для числа в середине с пробелами (для поддержки множителей)
+    # Примеры: "долг 5 тыс рублей", "купил 10 тысяч продуктов"
+    r'\s(\d+(?:[.,]\d+)?)\s',  # число в середине (окружено пробелами)
 ]
 
 # Паттерны для определения валюты
@@ -1032,6 +1034,10 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     # Удаляем "plus/плюс" + пробелы, ТОЛЬКО если после них идёт цифра или слово-число
     operation_pattern = r'\b(plus|плюс)\s+(?=\d|(?:' + number_words_pattern + r')\b)'
     text_for_parsing = re.sub(operation_pattern, '', text_for_parsing, flags=re.IGNORECASE)
+
+    # Удаляем символ "+" перед числами (для поддержки "+10 тыс", "+5000" и т.д.)
+    text_for_parsing = re.sub(r'\+\s*(\d)', r'\1', text_for_parsing)
+
     text_for_parsing = ' '.join(text_for_parsing.split())  # Убираем двойные пробелы
     
     # Сначала извлекаем дату, если она есть
