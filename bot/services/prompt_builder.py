@@ -19,13 +19,10 @@ def build_function_call_prompt(message: str, context: List[Dict[str,str]]|None=N
         if recent:
             ctx_text = f"Dialog context: {' | '.join(recent)}\n"
 
-    # Language mapping
+    # Language mapping (только русский и английский)
     lang_names = {
         'ru': 'Russian',
-        'en': 'English',
-        'es': 'Spanish',
-        'de': 'German',
-        'fr': 'French'
+        'en': 'English'
     }
     lang_instruction = f"**IMPORTANT: You MUST respond in {lang_names.get(user_language, 'Russian')} language.**"
 

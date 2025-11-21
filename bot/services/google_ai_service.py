@@ -467,9 +467,9 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
             logger.debug(f"[GoogleAI] Using {key_name} for chat with functions")
             
             model_name = get_model('chat', 'google')
-            # Get user language for system instruction
+            # Get user language for system instruction (только русский и английский)
             user_lang = user_context.get('language', 'ru') if user_context else 'ru'
-            lang_names = {'ru': 'Russian', 'en': 'English', 'es': 'Spanish', 'de': 'German', 'fr': 'French'}
+            lang_names = {'ru': 'Russian', 'en': 'English'}
             lang_name = lang_names.get(user_lang, 'Russian')
 
             model = genai.GenerativeModel(
@@ -718,9 +718,9 @@ class GoogleAIService(AIBaseService, GoogleKeyRotationMixin):
             genai.configure(api_key=api_key)
             logger.debug(f"[GoogleAI] Using {key_name} for chat")
 
-            # Get user language for system instruction
+            # Get user language for system instruction (только русский и английский)
             user_lang = user_context.get('language', 'ru') if user_context else 'ru'
-            lang_names = {'ru': 'Russian', 'en': 'English', 'es': 'Spanish', 'de': 'German', 'fr': 'French'}
+            lang_names = {'ru': 'Russian', 'en': 'English'}
             lang_name = lang_names.get(user_lang, 'Russian')
 
             model = genai.GenerativeModel(
