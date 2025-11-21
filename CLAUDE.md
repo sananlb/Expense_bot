@@ -5,8 +5,8 @@
 ### 📍 ДЕФОЛТНЫЙ СЕРВЕР ДЛЯ РАБОТЫ
 
 **ВАЖНО:** Если не оговорено отдельно, мы работаем на **PRIMARY SERVER**:
-- **IP:** 94.198.220.155
-- **SSH:** `ssh batman@94.198.220.155`
+- **IP:** 176.124.218.53
+- **SSH:** `ssh batman@176.124.218.53`
 - **Путь к проекту:** `/home/batman/expense_bot`
 
 ### ⚠️ НИКОГДА НЕ ДАВАЙ КОМАНДЫ ДЛЯ СЕРВЕРА БЕЗ ПРОВЕРКИ!
@@ -20,9 +20,9 @@
    ```
 
 2. **СВЕРИТЬ С ДОКУМЕНТАЦИЕЙ В ЭТОМ ФАЙЛЕ:**
-   - PRIMARY SERVER (APP): 94.198.220.155 → путь `/home/batman/expense_bot` **(ДЕФОЛТНЫЙ)**
+   - PRIMARY SERVER (APP): 176.124.218.53 → путь `/home/batman/expense_bot` **(ДЕФОЛТНЫЙ)**
    - BACKUP SERVER: 72.56.67.202 → путь `/home/batman/expense_bot_deploy/expense_bot/`
-   - DB SERVER: 5.129.251.120 → НЕ используется для docker-compose команд
+   - OLD PRIMARY (NOT IN USE): 94.198.220.155 → больше не используется
 
 3. **ТОЛЬКО ПОСЛЕ ЭТОГО ДАВАЙ КОМАНДЫ С ПРАВИЛЬНЫМ ПУТЕМ!**
 
@@ -73,9 +73,9 @@ cd /home/batman/expense_bot && docker-compose logs --tail=200 app  # ❌ ERROR: 
 
 | Сервер | IP | Путь к проекту | Docker Compose |
 |--------|-----|----------------|----------------|
-| PRIMARY | 94.198.220.155 | `/home/batman/expense_bot` | `docker-compose` (старый) |
+| PRIMARY | 176.124.218.53 | `/home/batman/expense_bot` | `docker-compose` (старый) |
 | BACKUP | 72.56.67.202 | `/home/batman/expense_bot_deploy/expense_bot/` | `docker compose` (новый) |
-| DB | 5.129.251.120 | N/A | Нет docker-compose |
+| OLD PRIMARY | 94.198.220.155 | Не используется | N/A |
 
 ---
 
@@ -538,14 +538,18 @@ git stash pop  # восстанавливаем локальные измене�
 ## Server Configuration
 
 ### Primary Server (APP + Web)
-- Server IP: 94.198.220.155
-- Bot Domain: expensebot.duckdns.org
-- Landing Domain: www.coins-bot.ru
-- Server path: /home/batman/expense_bot
+- **Server IP:** 176.124.218.53
+- **SSH:** `ssh batman@176.124.218.53`
+- **Bot Domain:** expensebot.duckdns.org
+- **Landing Domain:** www.coins-bot.ru
+- **Server path:** /home/batman/expense_bot
+- **User:** batman
+
+#### Old Primary Server (NOT IN USE):
+- Old IP: 94.198.220.155 (больше не используется)
 - Server OS: Ubuntu 22.04.5 LTS
 - SSL: Let's Encrypt certificate (expires 2025-11-07)
 - Web server: Nginx 1.18.0 with reverse proxy to Django on port 8000
-- User: batman
 
 ### Backup Server (ПОЛНОСТЬЮ НАСТРОЕН)
 - **Server IP:** 72.56.67.202
@@ -570,7 +574,7 @@ git stash pop  # восстанавливаем локальные измене�
 - `expense_bot_celery_beat` - Celery планировщик
 
 #### Процедура экстренной активации (1-2 минуты):
-1. **Изменить DNS:** На DuckDNS изменить IP expensebot с 94.198.220.155 на 72.56.67.202
+1. **Изменить DNS:** На DuckDNS изменить IP expensebot с 176.124.218.53 на 72.56.67.202
 2. **Запустить резервный сервер:**
    ```bash
    ssh batman@72.56.67.202
@@ -615,7 +619,7 @@ cd /home/batman/expense_bot && docker-compose logs --tail=200 app  # ✅
 
 ## ⚠️ ОБЯЗАТЕЛЬНОЕ ПРАВИЛО #2: Правильный синтаксис для PRIMARY SERVER
 
-**На PRIMARY SERVER (94.198.220.155) - СТАРАЯ версия docker-compose:**
+**На PRIMARY SERVER (176.124.218.53) - СТАРАЯ версия docker-compose:**
 ```bash
 # ИМЕНА СЕРВИСОВ В docker-compose.yml:
 # - bot (контейнер: expense_bot_app)
@@ -679,19 +683,19 @@ cd /home/batman/expense_bot_deploy/expense_bot && docker compose restart bot
 
 **Просмотр логов на PRIMARY сервере:**
 ```bash
-ssh batman@94.198.220.155
+ssh batman@176.124.218.53
 cd /home/batman/expense_bot && docker-compose logs --tail=200 bot
 ```
 
 **Поиск по логам на PRIMARY сервере:**
 ```bash
-ssh batman@94.198.220.155
+ssh batman@176.124.218.53
 cd /home/batman/expense_bot && docker-compose logs --tail=500 bot | grep "текст_для_поиска"
 ```
 
 **Перезапуск контейнера на PRIMARY сервере:**
 ```bash
-ssh batman@94.198.220.155
+ssh batman@176.124.218.53
 cd /home/batman/expense_bot && docker-compose restart bot
 ```
 
