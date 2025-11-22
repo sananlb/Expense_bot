@@ -178,6 +178,21 @@ AMOUNT_PATTERNS = [
     r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:чилийских?|clp)\b',  # 10 000 CLP
     r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:мексиканских?|mxn)\b',  # 10 000 MXN
     r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:бразильских?|reais?|реалов?|brl)\b',  # 10 000 BRL
+    # CIS currencies (числа с пробелами) - русские и английские названия
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:лари|lari|gel|georgian\s+lari)\b',  # 10 000 GEL
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:тенге|теньге|тнг|kzt|tenge|kazakh\S*\s+tenge)\b',  # 10 000 KZT
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:гривен|гривн[а-я]*|грн|uah|hryvnia|hryvnya|ukrainian\s+hryvnia)\b',  # 10 000 UAH
+    r"(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:сум(?:ов)?|so['\']?m|uzs|uzbek\S*\s+som)\b",  # 10 000 UZS
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:драм(?:ов)?|dram|amd|armenian\s+dram)\b',  # 10 000 AMD
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:манат(?:ов)?|manat|azn|azerbaijani\s+manat)\b',  # 10 000 AZN
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:сом(?:ов)?|kgs|kyrgyz\S*\s+som)\b',  # 10 000 KGS
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:сомони|somoni|tjs|tajik\S*\s+somoni)\b',  # 10 000 TJS
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:лей|леев|лея|mdl|lei|moldovan\s+lei?)\b',  # 10 000 MDL
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:бел[ао]рус\S*\s+руб\S*|byn|byr|belarusian\s+ruble?)\b',  # 10 000 BYN
+    # Other world currencies (числа с пробелами)
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:франк(?:ов|а)?|francs?|chf|swiss\s+francs?)\b',  # 10 000 CHF
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:рупи[йяею]|rupees?|inr|indian\s+rupees?)\b',  # 10 000 INR
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:лир[аы]?|liras?|try|turkish\s+liras?)\b',  # 10 000 TRY
     r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*$',  # 10 000 в конце
     r'^(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s',  # 10 000 в начале
     # Паттерн для числа с разделителями в середине УДАЛЕН - используется fallback
@@ -195,6 +210,21 @@ AMOUNT_PATTERNS = [
     r'(\d+(?:[.,]\d+)?)\s*(?:чилийских?|clp)\b',  # 100 CLP
     r'(\d+(?:[.,]\d+)?)\s*(?:мексиканских?|mxn)\b',  # 100 MXN
     r'(\d+(?:[.,]\d+)?)\s*(?:бразильских?|reais?|реалов?|brl)\b',  # 100 BRL, 100 reais
+    # CIS currencies (обычные числа) - русские и английские названия с сокращениями
+    r'(\d+(?:[.,]\d+)?)\s*(?:лари|lari|gel)\b',  # 100 GEL, 100 лари
+    r'(\d+(?:[.,]\d+)?)\s*(?:тенге|теньге|тнг|kzt|tenge)\b',  # 100 KZT, 100 тенге, 100 tenge
+    r'(\d+(?:[.,]\d+)?)\s*(?:гривен|гривн[а-я]*|грн|uah|hryvnia|hryvnya|uah)\b',  # 100 UAH, 100 hryvnia
+    r"(\d+(?:[.,]\d+)?)\s*(?:сум(?:ов)?|so['\']?m|uzs|som)\b",  # 100 UZS, 100 сум, 100 som
+    r'(\d+(?:[.,]\d+)?)\s*(?:драм(?:ов)?|dram|amd)\b',  # 100 AMD, 100 драм, 100 dram
+    r'(\d+(?:[.,]\d+)?)\s*(?:манат(?:ов)?|manat|azn)\b',  # 100 AZN, 100 манат, 100 manat
+    r'(\d+(?:[.,]\d+)?)\s*(?:сом(?:ов)?|kgs)\b',  # 100 KGS, 100 сом (киргизский)
+    r'(\d+(?:[.,]\d+)?)\s*(?:сомони|somoni|tjs)\b',  # 100 TJS, 100 сомони, 100 somoni
+    r'(\d+(?:[.,]\d+)?)\s*(?:лей|леев|лея|mdl|lei)\b',  # 100 MDL, 100 лей, 100 lei
+    r'(\d+(?:[.,]\d+)?)\s*(?:бел[ао]рус\S*\s+руб\S*|byn|byr|belarusian\s+ruble?)\b',  # 100 BYN
+    # Other world currencies (обычные числа)
+    r'(\d+(?:[.,]\d+)?)\s*(?:франк(?:ов|а)?|francs?|chf)\b',  # 100 CHF, 100 франков, 100 francs
+    r'(\d+(?:[.,]\d+)?)\s*(?:рупи[йяею]|rupees?|inr)\b',  # 100 INR, 100 рупий, 100 rupees
+    r'(\d+(?:[.,]\d+)?)\s*(?:лир[аы]?|liras?|try)\b',  # 100 TRY, 100 лир, 100 liras
     r'(\d+(?:[.,]\d+)?)\s*$',  # просто число в конце
     r'^(\d+(?:[.,]\d+)?)\s',  # число в начале
     # Паттерн для числа в середине с пробелами (для поддержки множителей)
@@ -210,22 +240,22 @@ CURRENCY_PATTERNS = {
     'GBP': [r'£', r'\bgbp\b', r'\bфунт', r'\bsterling', r'\bpounds?\b'],
     'CNY': [r'¥', r'\bcny\b', r'\bюан', r'\byuan', r'\brenminbi', r'\brmb\b'],
     'CHF': [r'\bchf\b', r'₣', r'\bфранк(?:ов|а)?\b', r'\bswiss\s+franc', r'\bfrancs?\b'],
-    'INR': [r'\binr\b', r'₹', r'\bрупи[йяею]', r'\bиндийск.*руп'],
-    'TRY': [r'\btry\b', r'₺', r'\bлир[аиы]?\b', r'\bтурец.*лир'],
+    'INR': [r'\binr\b', r'₹', r'\bрупи[йяею]', r'\bиндийск.*руп', r'\brupees?\b'],
+    'TRY': [r'\btry\b', r'₺', r'\bлир[аиы]?\b', r'\bтурец.*лир', r'\bliras?\b'],
 
-    # Local currencies (CIS and nearby)
-    'KZT': [r'\bkzt\b', r'₸', r'\bтенге', r'\bтеньге', r'\bтенг[еиия]', r'\bтнг', r'\btenge'],
-    'UAH': [r'\buah\b', r'\bгрн', r'\bгривн[а-я]*', r'\bгривен', r'\bhryvni?a', r'\bhryvnya'],
-    'BYN': [r'\bbyn\b', r'\bbyr\b', r'\bбел[ао]рус.*руб', r'\bbelarus.*rubl', r'\bbelarusian\s+ruble'],
+    # Local currencies (CIS and nearby) - только рядом с числами
+    'KZT': [r'\bkzt\b', r'₸', r'\bтенге\b', r'\bтеньге\b', r'\bтнг\b', r'\btenge\b'],
+    'UAH': [r'\buah\b', r'\bгрн\b', r'\bгривн[а-я]*\b', r'\bгривен\b', r'\bhryvni?a\b'],
+    'BYN': [r'\bbyn\b', r'\bbyr\b', r'\bбел[ао]рус\S*\s+руб', r'\bbelarusian\s+ruble'],
     'RUB': [r'₽', r'\brub\b', r'\bруб', r'\bрубл'],
-    'UZS': [r'\buzs\b', r"\bso['']m", r'\bсум(?:ов|ы|у)?\b', r'\bузбек.*сум', r'\buzbek.*som'],
-    'AMD': [r'\bamd\b', r'\bдрам', r'\bdram'],
-    'TMT': [r'\btmt\b', r'\bтуркмен.*манат', r'\bturkmen.*manat'],
-    'AZN': [r'\bazn\b', r'\bазер.*манат', r'\bazer.*manat', r'\bманат(?:ов|ы)?\b'],
-    'KGS': [r'\bkgs\b', r'\bkgz\b', r'\bсом(?:ов|ы|у)?\b', r'\bкиргиз.*сом', r'\bкырг.*сом'],
-    'TJS': [r'\btjs\b', r'\bсомон[ия]?\b', r'\bтаджик.*сом', r'\btajik.*somoni'],
-    'MDL': [r'\bmdl\b', r'\bлей(?:ев|я|и|ем|ями)?\b', r'\bмолдав.*лей', r'\bmoldov.*le[ui]'],
-    'GEL': [r'\bgel\b', r'\bлари\b', r'\blari\b', r'\bgruzi.*lari'],
+    'UZS': [r'\buzs\b', r"\bso['\']?m\b", r'\bсум(?:ов|ы|у)?\b', r'\bsom\b'],
+    'AMD': [r'\bamd\b', r'\bдрам(?:ов)?\b', r'\bdram\b'],
+    'TMT': [r'\btmt\b', r'\bтуркмен\S*\s+манат', r'\bturkmen\S*\s+manat'],
+    'AZN': [r'\bazn\b', r'\bманат(?:ов|ы)?\b', r'\bmanat\b'],
+    'KGS': [r'\bkgs\b', r'\bсом(?:ов|ы|у)?\b'],
+    'TJS': [r'\btjs\b', r'\bсомон[ия]?\b', r'\bsomoni\b'],
+    'MDL': [r'\bmdl\b', r'\bлей(?:ев|я|и)?\b', r'\blei\b'],
+    'GEL': [r'\bgel\b', r'\bлари\b', r'\blari\b'],
 
     # Latin American currencies
     'ARS': [r'\bars\b', r'\bаргентинских?', r'\bаргентинское', r'\bаргентинский', r'\bargentin[ea].*peso', r'\bпесо'],
@@ -588,14 +618,36 @@ def detect_income_intent(text: str) -> bool:
 
 
 def detect_currency(text: str, user_currency: str = 'RUB') -> str:
-    """Detect currency from text"""
+    """
+    Detect currency from text.
+    Currency word must be adjacent to a number (before or after).
+    """
     text_lower = text.lower()
-    
+
+    # Паттерн для проверки что валюта рядом с числом: "число валюта" или "валюта число"
+    # Примеры: "100 лари", "100лари", "$100", "100$"
     for currency, patterns in CURRENCY_PATTERNS.items():
         for pattern in patterns:
-            if re.search(pattern, text_lower):
-                return currency
-    
+            match = re.search(pattern, text_lower)
+            if match:
+                start, end = match.start(), match.end()
+                # Проверяем есть ли число рядом (до или после совпадения)
+                # Число перед: смотрим на текст до совпадения
+                text_before = text_lower[:start].rstrip()
+                text_after = text_lower[end:].lstrip()
+
+                # Символы валют ($, €, ₽ и т.д.) не требуют проверки близости к числу
+                if pattern in [r'\$', r'€', r'£', r'¥', r'₽', r'₸', r'₣', r'₹', r'₺']:
+                    return currency
+
+                # Проверяем число непосредственно перед валютой
+                if re.search(r'\d\s*$', text_before):
+                    return currency
+
+                # Проверяем число непосредственно после валюты
+                if re.search(r'^\s*\d', text_after):
+                    return currency
+
     return (user_currency or 'RUB').upper()  # Default to user's currency in uppercase
 
 
@@ -781,11 +833,6 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
 
     # Формируем описание (текст без суммы и без даты)
     description = text_without_amount if text_without_amount is not None else text_without_date
-    
-    # Убираем слова-маркеры времени из описания, даже если они не были обработаны как даты
-    time_words = ['вчера', 'позавчера', 'сегодня', 'завтра']
-    for word in time_words:
-        description = re.sub(r'\b' + word + r'\b', '', description, flags=re.IGNORECASE)
 
     # Убираем одиночный знак "-" из описания (может остаться после извлечения суммы)
     # Важно: удаляем только одиночный дефис с пробелами, не внутри слов (WiFi-роутер)

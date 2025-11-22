@@ -426,6 +426,27 @@ class ExpenseFunctions:
 
             logger.info(f"search_expenses: profile_id={profile.id}, query='{query}', limit={limit}, period={start_date} to {end_date}")
 
+            # Парсим множественный запрос: "кофе и круассаны", "кофе, булочки"
+            # НО: "кофе с молоком" - это одно словосочетание, не разделяем
+            import re
+            query_parts = []
+
+            # Разделители: " и ", " or ", ", " (но не "с", "в", "на" - это предлоги)
+            # Паттерн: разделяем по " и " или ", " но только если это не "с чем-то"
+            split_pattern = r'\s+и\s+|\s+or\s+|,\s*'
+            potential_parts = re.split(split_pattern, query, flags=re.IGNORECASE)
+
+            for part in potential_parts:
+                part = part.strip()
+                if part and len(part) >= 2:
+                    query_parts.append(part)
+
+            # Если не удалось разбить или только одна часть - используем оригинальный запрос
+            if len(query_parts) <= 1:
+                query_parts = [query]
+
+            logger.info(f"search_expenses: parsed query parts: {query_parts}")
+
             # Поиск по описанию и категориям
             # Сначала пробуем стандартный поиск
             queryset = Expense.objects.filter(profile=profile)
@@ -447,41 +468,92 @@ class ExpenseFunctions:
                 except ValueError:
                     logger.warning(f"Invalid end_date format: {end_date}")
 
-            expenses = queryset.filter(
-                Q(description__icontains=query) |
-                Q(category__name__icontains=query) |
-                Q(category__name_ru__icontains=query) |
-                Q(category__name_en__icontains=query)
-            ).select_related('category').order_by('-expense_date', '-expense_time')[:limit]
+            # Строим SQL запрос для всех частей (OR между частями)
+            from functools import reduce
+            from operator import or_
 
-            # Если ничего не найдено и запрос содержит кириллицу - используем альтернативный метод
-            # (SQLite плохо работает с icontains для кириллицы)
-            if len(expenses) == 0 and any(ord(c) > 127 for c in query):
-                # Получаем все траты пользователя с учетом дат и фильтруем в Python
+            q_filters = []
+            for qpart in query_parts:
+                q_filters.append(
+                    Q(description__icontains=qpart) |
+                    Q(category__name__icontains=qpart) |
+                    Q(category__name_ru__icontains=qpart) |
+                    Q(category__name_en__icontains=qpart)
+                )
+
+            if q_filters:
+                combined_filter = reduce(or_, q_filters)
+                expenses = queryset.filter(combined_filter).select_related('category').order_by('-expense_date', '-expense_time')[:limit]
+            else:
+                expenses = []
+
+            # Если ничего не найдено - используем расширенный поиск с нормализацией и fuzzy matching
+            if len(expenses) == 0:
+                from bot.services.expense import normalize_russian_word, _calculate_similarity
+
+                # Получаем все траты пользователя с учетом дат
                 all_expenses = queryset.select_related('category').order_by('-expense_date', '-expense_time')
 
-                query_lower = query.lower()
+                # Подготовим нормализованные версии всех частей запроса
+                query_parts_lower = [qp.lower() for qp in query_parts]
+                query_parts_normalized = [normalize_russian_word(qp.lower()) for qp in query_parts]
+
                 filtered_expenses = []
+                SIMILARITY_THRESHOLD = 0.75  # 75% схожести для fuzzy поиска
 
                 for exp in all_expenses:
-                    # Проверяем описание
-                    if exp.description and query_lower in exp.description.lower():
+                    matched = False
+
+                    # Проверяем каждую часть запроса (достаточно совпадения хотя бы одной)
+                    for query_lower, query_normalized in zip(query_parts_lower, query_parts_normalized):
+
+                        # 1. Проверяем описание
+                        if exp.description:
+                            desc_lower = exp.description.lower()
+                            # Точное вхождение
+                            if query_lower in desc_lower:
+                                matched = True
+                                break
+                            # Нормализованное вхождение
+                            elif query_normalized in desc_lower:
+                                matched = True
+                                break
+                            else:
+                                # Fuzzy поиск по словам описания
+                                desc_words = re.findall(r'[а-яёa-z]+', desc_lower)
+                                for word in desc_words:
+                                    word_normalized = normalize_russian_word(word)
+                                    # Проверяем нормализованные основы
+                                    if query_normalized == word_normalized:
+                                        matched = True
+                                        break
+                                    # Fuzzy matching
+                                    if len(query_normalized) >= 3 and len(word_normalized) >= 3:
+                                        similarity = _calculate_similarity(query_normalized, word_normalized)
+                                        if similarity >= SIMILARITY_THRESHOLD:
+                                            logger.debug(f"Fuzzy match: '{query_lower}' ~ '{word}' ({similarity:.0%})")
+                                            matched = True
+                                            break
+                                if matched:
+                                    break
+
+                        # 2. Проверяем категорию (если ещё не нашли)
+                        if not matched and exp.category:
+                            cat_names = [exp.category.name, exp.category.name_ru, exp.category.name_en]
+                            for cat_name in cat_names:
+                                if cat_name:
+                                    cat_lower = cat_name.lower()
+                                    if query_lower in cat_lower or query_normalized in cat_lower:
+                                        matched = True
+                                        break
+                            if matched:
+                                break
+
+                    if matched:
                         filtered_expenses.append(exp)
-                        continue
-                    # Проверяем категорию в разных полях
-                    if exp.category:
-                        if exp.category.name and query_lower in exp.category.name.lower():
-                            filtered_expenses.append(exp)
-                            continue
-                        if exp.category.name_ru and query_lower in exp.category.name_ru.lower():
-                            filtered_expenses.append(exp)
-                            continue
-                        if exp.category.name_en and query_lower in exp.category.name_en.lower():
-                            filtered_expenses.append(exp)
-                            continue
 
                 expenses = filtered_expenses[:limit]
-                logger.info(f"search_expenses: fallback search found {len(expenses)} expenses")
+                logger.info(f"search_expenses: extended search found {len(expenses)} expenses")
 
             logger.info(f"search_expenses: found {len(expenses)} expenses for query '{query}'")
 
