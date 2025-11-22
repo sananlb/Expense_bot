@@ -426,13 +426,12 @@ class ExpenseFunctions:
 
             logger.info(f"search_expenses: profile_id={profile.id}, query='{query}', limit={limit}, period={start_date} to {end_date}")
 
-            # Парсим множественный запрос: "кофе и круассаны", "кофе, булочки"
+            # Парсим множественный запрос: "кофе и круассаны", "кофе, булочки", "капельницы новомед"
             # НО: "кофе с молоком" - это одно словосочетание, не разделяем
             import re
             query_parts = []
 
-            # Разделители: " и ", " or ", ", " (но не "с", "в", "на" - это предлоги)
-            # Паттерн: разделяем по " и " или ", " но только если это не "с чем-то"
+            # Сначала пробуем разделить по явным разделителям: " и ", " or ", ", "
             split_pattern = r'\s+и\s+|\s+or\s+|,\s*'
             potential_parts = re.split(split_pattern, query, flags=re.IGNORECASE)
 
@@ -441,9 +440,18 @@ class ExpenseFunctions:
                 if part and len(part) >= 2:
                     query_parts.append(part)
 
-            # Если не удалось разбить или только одна часть - используем оригинальный запрос
-            if len(query_parts) <= 1:
-                query_parts = [query]
+            # Если не удалось разбить по разделителям (одна часть) - пробуем разбить по пробелам
+            # Но только если нет предлогов типа "с", "в", "на" (которые указывают на фразу)
+            if len(query_parts) == 1:
+                single_query = query_parts[0]
+                # Проверяем нет ли предлогов, указывающих на связную фразу
+                has_prepositions = re.search(r'\s+(с|в|на|для|из|от|до|по|при|за|над|под|между)\s+', single_query, re.IGNORECASE)
+                if not has_prepositions:
+                    # Разбиваем по пробелам, оставляем слова >= 3 символов
+                    words = single_query.split()
+                    meaningful_words = [w for w in words if len(w) >= 3]
+                    if len(meaningful_words) > 1:
+                        query_parts = meaningful_words
 
             logger.info(f"search_expenses: parsed query parts: {query_parts}")
 
