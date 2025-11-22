@@ -488,11 +488,13 @@ class ExpenseFunctions:
                 expenses = []
 
             # Если ничего не найдено - используем расширенный поиск с нормализацией и fuzzy matching
+            # Ограничиваем выборку для предотвращения тяжелых запросов
+            FUZZY_SEARCH_LIMIT = 500  # Максимум трат для fuzzy поиска
             if len(expenses) == 0:
                 from bot.services.expense import normalize_russian_word, _calculate_similarity
 
-                # Получаем все траты пользователя с учетом дат
-                all_expenses = queryset.select_related('category').order_by('-expense_date', '-expense_time')
+                # Получаем последние N трат пользователя с учетом дат (не все!)
+                all_expenses = queryset.select_related('category').order_by('-expense_date', '-expense_time')[:FUZZY_SEARCH_LIMIT]
 
                 # Подготовим нормализованные версии всех частей запроса
                 query_parts_lower = [qp.lower() for qp in query_parts]

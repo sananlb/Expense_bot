@@ -182,7 +182,7 @@ AMOUNT_PATTERNS = [
     r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:лари|lari|gel|georgian\s+lari)\b',  # 10 000 GEL
     r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:тенге|теньге|тнг|kzt|tenge|kazakh\S*\s+tenge)\b',  # 10 000 KZT
     r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:гривен|гривн[а-я]*|грн|uah|hryvnia|hryvnya|ukrainian\s+hryvnia)\b',  # 10 000 UAH
-    r"(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:сум(?:ов)?|so['\']?m|uzs|uzbek\S*\s+som)\b",  # 10 000 UZS
+    r"(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:сум(?:ов)?|so['\']m|uzs|uzbek\S*\s+so['\']m)\b",  # 10 000 UZS (апостроф обязателен)
     r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:драм(?:ов)?|dram|amd|armenian\s+dram)\b',  # 10 000 AMD
     r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:манат(?:ов)?|manat|azn|azerbaijani\s+manat)\b',  # 10 000 AZN
     r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:сом(?:ов)?|kgs|kyrgyz\S*\s+som)\b',  # 10 000 KGS
@@ -214,10 +214,10 @@ AMOUNT_PATTERNS = [
     r'(\d+(?:[.,]\d+)?)\s*(?:лари|lari|gel)\b',  # 100 GEL, 100 лари
     r'(\d+(?:[.,]\d+)?)\s*(?:тенге|теньге|тнг|kzt|tenge)\b',  # 100 KZT, 100 тенге, 100 tenge
     r'(\d+(?:[.,]\d+)?)\s*(?:гривен|гривн[а-я]*|грн|uah|hryvnia|hryvnya|uah)\b',  # 100 UAH, 100 hryvnia
-    r"(\d+(?:[.,]\d+)?)\s*(?:сум(?:ов)?|so['\']?m|uzs|som)\b",  # 100 UZS, 100 сум, 100 som
+    r"(\d+(?:[.,]\d+)?)\s*(?:сум(?:ов)?|so['\']m|uzs)\b",  # 100 UZS, 100 сум, 100 so'm (апостроф обязателен)
     r'(\d+(?:[.,]\d+)?)\s*(?:драм(?:ов)?|dram|amd)\b',  # 100 AMD, 100 драм, 100 dram
     r'(\d+(?:[.,]\d+)?)\s*(?:манат(?:ов)?|manat|azn)\b',  # 100 AZN, 100 манат, 100 manat
-    r'(\d+(?:[.,]\d+)?)\s*(?:сом(?:ов)?|kgs)\b',  # 100 KGS, 100 сом (киргизский)
+    r'(\d+(?:[.,]\d+)?)\s*(?:сом(?:ов)?|som|kgs)\b',  # 100 KGS, 100 сом, 100 som (киргизский)
     r'(\d+(?:[.,]\d+)?)\s*(?:сомони|somoni|tjs)\b',  # 100 TJS, 100 сомони, 100 somoni
     r'(\d+(?:[.,]\d+)?)\s*(?:лей|леев|лея|mdl|lei)\b',  # 100 MDL, 100 лей, 100 lei
     r'(\d+(?:[.,]\d+)?)\s*(?:бел[ао]рус\S*\s+руб\S*|byn|byr|belarusian\s+ruble?)\b',  # 100 BYN
@@ -248,11 +248,11 @@ CURRENCY_PATTERNS = {
     'UAH': [r'\buah\b', r'\bгрн\b', r'\bгривн[а-я]*\b', r'\bгривен\b', r'\bhryvni?a\b'],
     'BYN': [r'\bbyn\b', r'\bbyr\b', r'\bбел[ао]рус\S*\s+руб', r'\bbelarusian\s+ruble'],
     'RUB': [r'₽', r'\brub\b', r'\bруб', r'\bрубл'],
-    'UZS': [r'\buzs\b', r"\bso['\']?m\b", r'\bсум(?:ов|ы|у)?\b', r'\bsom\b'],
+    'UZS': [r'\buzs\b', r"\bso['\']m\b", r'\bсум(?:ов|ы|у)?\b'],  # so'm с апострофом обязателен - узбекский
     'AMD': [r'\bamd\b', r'\bдрам(?:ов)?\b', r'\bdram\b'],
     'TMT': [r'\btmt\b', r'\bтуркмен\S*\s+манат', r'\bturkmen\S*\s+manat'],
     'AZN': [r'\bazn\b', r'\bманат(?:ов|ы)?\b', r'\bmanat\b'],
-    'KGS': [r'\bkgs\b', r'\bсом(?:ов|ы|у)?\b'],
+    'KGS': [r'\bkgs\b', r'\bсом(?:ов|ы|у)?\b', r'\bsom\b'],  # som без апострофа - киргизский
     'TJS': [r'\btjs\b', r'\bсомон[ия]?\b', r'\bsomoni\b'],
     'MDL': [r'\bmdl\b', r'\bлей(?:ев|я|и)?\b', r'\blei\b'],
     'GEL': [r'\bgel\b', r'\bлари\b', r'\blari\b'],
