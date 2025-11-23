@@ -1,13 +1,12 @@
 """
-AI категоризация доходов - использует общую логику из ai_categorization.py
+AI категоризация доходов - использует ai_selector для выбора провайдера
 """
 import logging
 from typing import Optional, Dict, Any, List
-from decimal import Decimal
 from asgiref.sync import sync_to_async
 
 from expenses.models import IncomeCategory, Income, IncomeCategoryKeyword, Profile
-from .ai_categorization import categorizer as base_categorizer
+from .ai_selector import get_service, get_fallback_chain, AISelector
 from bot.utils.category_helpers import get_category_display_name
 from bot.utils.income_category_definitions import (
     get_income_category_display_name as get_income_category_display_for_key,
@@ -104,8 +103,8 @@ def ensure_unique_income_keyword(
 
 async def categorize_income(text: str, user_id: int, profile: Optional[Profile] = None) -> Optional[Dict[str, Any]]:
     """
-    Категоризация дохода через AI
-    
+    Категоризация дохода через AI (использует ai_selector для выбора провайдера)
+
     Returns:
         {
             'amount': Decimal,
@@ -120,42 +119,110 @@ async def categorize_income(text: str, user_id: int, profile: Optional[Profile] 
         return None
 
     lang_code = getattr(profile, 'language_code', None) or 'ru'
-    
+
     # Сначала проверяем ключевые слова
     category_from_keywords = await find_category_by_keywords(text, profile)
     if category_from_keywords:
         # Если нашли по ключевым словам, парсим только сумму через AI
-        categories = await get_user_income_categories(profile)
-        result = await base_categorizer.categorize(text, user_id, profile)
+        result = await _categorize_income_with_ai(text, user_id, profile)
         if result:
             result['category'] = get_category_display_name(category_from_keywords, lang_code)
             result['confidence'] = 1.0  # Максимальная уверенность для ключевых слов
             return result
-    
+
     # Получаем категории пользователя
     categories = await get_user_income_categories(profile)
-    
+
     # Подготовка контекста для AI
     user_context = await build_user_context(profile)
-    
-    # Используем базовый категоризатор с типом income
-    # Модифицируем промпт для доходов
-    base_categorizer.operation_type = 'income'
-    
+
+    # Вызываем AI категоризацию через ai_selector
+    result = await _categorize_income_with_ai(text, user_id, profile, categories, user_context)
+
+    if result:
+        result['category'] = await find_best_matching_category(
+            result.get('category', ''), categories
+        )
+        return result
+
+    return None
+
+
+async def _categorize_income_with_ai(
+    text: str,
+    user_id: int,
+    profile: Profile,
+    categories: Optional[List[str]] = None,
+    user_context: Optional[Dict[str, Any]] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Внутренняя функция категоризации дохода через AI (использует ai_selector)
+    """
+    import asyncio
+
+    if categories is None:
+        categories = await get_user_income_categories(profile)
+
+    if user_context is None:
+        user_context = await build_user_context(profile)
+
+    # Получаем AI сервис через ai_selector (использует настройки из .env)
     try:
-        # Вызываем базовую функцию категоризации
-        result = await base_categorizer.categorize(text, user_id, profile)
-        
+        ai_service = get_service('categorization')
+        logger.info(f"Using AI service for income categorization: {type(ai_service).__name__}")
+    except Exception as e:
+        logger.error(f"Failed to get AI service: {e}")
+        return None
+
+    # Вызываем categorize_expense (универсальный метод для категоризации)
+    try:
+        result = await asyncio.wait_for(
+            ai_service.categorize_expense(
+                text=text,
+                amount=None,
+                currency=user_context.get('currency', 'RUB') if user_context else 'RUB',
+                categories=categories,
+                user_context=user_context
+            ),
+            timeout=15.0
+        )
+
         if result:
-            result['category'] = await find_best_matching_category(
-                result.get('category', ''), categories
-            )
+            logger.info(f"AI categorization result for income: {result}")
             return result
-            
-    finally:
-        # Возвращаем тип обратно
-        base_categorizer.operation_type = 'expense'
-    
+
+    except asyncio.TimeoutError:
+        logger.warning(f"AI categorization timeout for user {user_id}")
+    except Exception as e:
+        logger.error(f"AI categorization error for income: {e}")
+
+    # Пробуем fallback провайдеров
+    fallback_providers = get_fallback_chain('categorization')
+    for fallback_provider in fallback_providers:
+        try:
+            logger.info(f"Trying fallback provider: {fallback_provider}")
+            fallback_service = AISelector(fallback_provider)
+
+            result = await asyncio.wait_for(
+                fallback_service.categorize_expense(
+                    text=text,
+                    amount=None,
+                    currency=user_context.get('currency', 'RUB') if user_context else 'RUB',
+                    categories=categories,
+                    user_context=user_context
+                ),
+                timeout=15.0
+            )
+
+            if result:
+                logger.info(f"Fallback {fallback_provider} succeeded for income categorization")
+                return result
+
+        except Exception as e:
+            logger.warning(f"Fallback {fallback_provider} failed: {e}")
+            continue
+
+    logger.warning(f"All AI providers failed for income categorization, user {user_id}")
     return None
 
 
@@ -443,41 +510,12 @@ async def generate_keywords_for_income_category(
     ai_provider: str = 'auto'
 ) -> List[str]:
     """
-    Генерация ключевых слов для новой категории доходов через AI
+    Генерация ключевых слов для новой категории доходов.
+
+    NOTE: AI-генерация отключена, используем только базовые ключевые слова.
+    Это более надёжно и не требует вызова AI для простой задачи.
     """
-    from .ai_service import ai_service
-    
-    prompt = f"""Сгенерируй список из 10-15 ключевых слов на русском языке для категории доходов "{category_name}".
-Это слова, которые люди часто используют при описании таких доходов.
-Верни только список слов через запятую, без нумерации и пояснений.
-
-Пример для категории "Зарплата": зарплата, зп, оклад, получка, аванс, расчет, выплата, перевод от работодателя
-Пример для категории "Фриланс": фриланс, заказ, проект, гонорар, оплата работы, клиент заплатил
-
-Категория: {category_name}"""
-    
-    try:
-        response = await ai_service.process_request(
-            prompt=prompt,
-            user_id=category.profile.telegram_id,
-            request_type='keyword_generation',
-            provider=ai_provider
-        )
-        
-        if response and response.get('success'):
-            keywords_text = response.get('result', '')
-            keywords = [kw.strip() for kw in keywords_text.split(',') if kw.strip()]
-            
-            # Сохраняем ключевые слова через синхронную функцию
-            await save_income_category_keywords(category, keywords[:15])
-            
-            logger.info(f"Generated {len(keywords)} keywords for income category '{category_name}'")
-            return keywords
-            
-    except Exception as e:
-        logger.error(f"Error generating keywords for income category: {e}")
-    
-    # Используем базовые ключевые слова
+    # Используем базовые ключевые слова (более надёжно, чем AI)
     return await generate_keywords_for_income_category_sync(category, category_name)
 
 
