@@ -321,10 +321,30 @@ for i in range(1, 10):
 if not DASHSCOPE_API_KEYS and DASHSCOPE_API_KEY:
     DASHSCOPE_API_KEYS = [DASHSCOPE_API_KEY]
 
+# OpenRouter API Keys (для голосового распознавания)
+OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
+OPENROUTER_API_KEYS = []
+for i in range(1, 10):
+    key = os.getenv(f'OPENROUTER_API_KEY_{i}')
+    if key:
+        OPENROUTER_API_KEYS.append(key)
+if not OPENROUTER_API_KEYS and OPENROUTER_API_KEY:
+    OPENROUTER_API_KEYS = [OPENROUTER_API_KEY]
+
+# Yandex SpeechKit (для русского голосового распознавания)
+YANDEX_API_KEY = os.getenv('YANDEX_API_KEY', '')
+YANDEX_FOLDER_ID = os.getenv('YANDEX_FOLDER_ID', '')
+YANDEX_SPEECH_TOPIC = os.getenv('YANDEX_SPEECH_TOPIC', 'general:rc')
+
+# OpenRouter модели управляются централизованно в ai_selector.py
+# Для изменения модели используйте OPENROUTER_MODEL_DEFAULT или OPENROUTER_MODEL_VOICE в .env
+
 print(f"[SETTINGS] Загружено OpenAI ключей: {len(OPENAI_API_KEYS)}")
 print(f"[SETTINGS] Загружено Google API ключей: {len(GOOGLE_API_KEYS)}")
 print(f"[SETTINGS] Загружено DeepSeek API ключей: {len(DEEPSEEK_API_KEYS)}")
 print(f"[SETTINGS] Загружено Qwen API ключей: {len(DASHSCOPE_API_KEYS)}")
+print(f"[SETTINGS] Загружено OpenRouter API ключей: {len(OPENROUTER_API_KEYS)}")
+print(f"[SETTINGS] Yandex SpeechKit настроен: {bool(YANDEX_API_KEY and YANDEX_FOLDER_ID)}")
 
 # AI Fallback providers (comma-separated lists)
 def parse_fallback_providers(env_key: str, default: str = 'deepseek,qwen,openai') -> list:
