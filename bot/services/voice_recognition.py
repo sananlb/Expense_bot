@@ -1,299 +1,211 @@
 """
-Сервис распознавания голоса с поддержкой Yandex Speech, Google Speech и OpenAI Whisper
+Сервис распознавания голоса с симметричным fallback:
+- RU: Yandex SpeechKit → OpenRouter (Gemini)
+- EN: OpenRouter (Gemini) → Yandex SpeechKit
+
+Централизованное управление моделями через ai_selector.
 """
 import logging
-import tempfile
-import os
-import json
+import time
 from typing import Optional
-import speech_recognition as sr
-from pydub import AudioSegment
-import aiofiles
-import asyncio
-import aiohttp
 from io import BytesIO
-from .key_rotation_mixin import OpenAIKeyRotationMixin
+
+from .yandex_speech import YandexSpeechKit
+from .ai_selector import get_service, get_model
 
 logger = logging.getLogger(__name__)
 
 
-class YandexSpeechKit:
-    """Интеграция с Yandex SpeechKit для русского языка"""
-    
-    RECOGNITION_URL = "https://stt.api.cloud.yandex.net/speech/v1/stt:recognize"
-    
+class VoiceRecognitionService:
+    """
+    Централизованный сервис распознавания голоса с симметричным fallback.
+
+    Архитектура:
+    - RU: Yandex (primary) → OpenRouter/Gemini (fallback)
+    - EN/другие: OpenRouter/Gemini (primary) → Yandex (fallback)
+    """
+
     @classmethod
-    async def transcribe(cls, audio_bytes: bytes) -> Optional[str]:
-        """Распознать речь через Yandex SpeechKit"""
-        try:
-            # Проверяем наличие необходимых настроек
-            api_key = os.getenv('YANDEX_API_KEY')
-            folder_id = os.getenv('YANDEX_FOLDER_ID')
-            
-            if not api_key or not folder_id:
-                logger.warning("Yandex SpeechKit не настроен")
-                return None
-            
-            # Заголовки запроса
-            headers = {
-                'Authorization': f'Api-Key {api_key}',
-            }
-            
-            # Параметры запроса
-            params = {
-                'topic': os.getenv('YANDEX_SPEECH_TOPIC', 'general:rc'),
-                'lang': 'ru-RU',
-                'folderId': folder_id,
-                'format': 'oggopus',  # Формат Telegram голосовых
-            }
-            
-            # Отправляем запрос
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    cls.RECOGNITION_URL,
-                    headers=headers,
-                    params=params,
-                    data=audio_bytes,
-                    timeout=aiohttp.ClientTimeout(total=30)
-                ) as response:
-                    if response.status == 200:
-                        result = await response.json()
-                        text = result.get('result', '').strip()
-                        
-                        # Постобработка
-                        if text:
-                            text = cls._postprocess_russian(text)
-                            logger.info(f"Yandex SpeechKit распознал: {text}")
-                            return text
-                    else:
-                        error_text = await response.text()
-                        logger.error(f"Ошибка Yandex SpeechKit: {response.status} - {error_text}")
-                        return None
-                        
-        except Exception as e:
-            logger.error(f"Ошибка при распознавании через Yandex: {e}")
-            return None
-    
-    @staticmethod
-    def _postprocess_russian(text: str) -> str:
-        """Постобработка русского текста"""
-        if not text:
-            return text
-            
-        # Убираем лишние знаки препинания в конце
-        text = text.rstrip('.,!?')
-        
-        # Исправления для русской речи о расходах
-        corrections = {
-            'рублей': 'руб',
-            'рубля': 'руб',
-            'рубль': 'руб',
-            'тысяч': 'тыс',
-            'тысячи': 'тыс',
-            'тысяча': 'тыс',
-            'миллион': 'млн',
-            'миллионов': 'млн',
-            
-            # Для множественных расходов
-            ' и ': ', ',  # заменяем "и" на запятую
-            ' плюс ': ', ',
-            ' еще ': ', ',
-        }
-        
-        text_lower = text.lower()
-        for wrong, correct in corrections.items():
-            if wrong in text_lower:
-                text = text.replace(wrong, correct)
-                text = text.replace(wrong.capitalize(), correct.capitalize())
-        
+    async def transcribe(
+        cls,
+        audio_bytes: bytes,
+        user_language: str = 'ru',
+        user_id: Optional[int] = None
+    ) -> Optional[str]:
+        """
+        Распознать голосовое сообщение с симметричным fallback.
+
+        Args:
+            audio_bytes: Аудио в формате OGG Opus (Telegram voice)
+            user_language: Язык пользователя ('ru', 'en', etc.)
+            user_id: ID пользователя для логирования
+
+        Returns:
+            Распознанный текст или None
+        """
+        start_time = time.time()
+
+        if user_language == 'ru':
+            # RU: Yandex → OpenRouter
+            text = await cls._transcribe_with_fallback(
+                audio_bytes,
+                primary='yandex',
+                fallback='openrouter',
+                user_id=user_id
+            )
+        else:
+            # EN/другие: OpenRouter → Yandex
+            text = await cls._transcribe_with_fallback(
+                audio_bytes,
+                primary='openrouter',
+                fallback='yandex',
+                user_id=user_id
+            )
+
+        elapsed = time.time() - start_time
+        if text:
+            logger.info(f"[VoiceRecognition] User {user_id} | Lang: {user_language} | Time: {elapsed:.2f}s | Text: {text[:50]}...")
+        else:
+            logger.warning(f"[VoiceRecognition] User {user_id} | Lang: {user_language} | Time: {elapsed:.2f}s | FAILED")
+
         return text
 
-
-class OpenAIWhisper(OpenAIKeyRotationMixin):
-    """Интеграция с OpenAI Whisper для транскрипции"""
-    
     @classmethod
-    async def transcribe(cls, audio_bytes: bytes, lang: str = 'ru') -> Optional[str]:
-        """Распознать речь через OpenAI Whisper"""
-        try:
-            import openai
-            
-            # Получаем следующий ключ для ротации
-            key_result = cls.get_next_key()
-            if not key_result:
-                logger.warning("No OpenAI API keys available for rotation")
-                return None
-            api_key, key_index = key_result
+    async def _transcribe_with_fallback(
+        cls,
+        audio_bytes: bytes,
+        primary: str,
+        fallback: str,
+        user_id: Optional[int] = None
+    ) -> Optional[str]:
+        """
+        Распознавание с fallback.
 
-            # Настраиваем клиента с ключом из ротации
-            client = openai.OpenAI(api_key=api_key)
-            logger.debug(f"[OpenAIWhisper] Using OpenAI key for transcription")
-            
-            # Создаем временный файл для аудио
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.ogg') as tmp_file:
-                tmp_file.write(audio_bytes)
-                tmp_file_path = tmp_file.name
-            
-            try:
-                # Открываем файл и отправляем на транскрипцию
-                with open(tmp_file_path, 'rb') as audio_file:
-                    transcript = await asyncio.to_thread(
-                        client.audio.transcriptions.create,
-                        model="whisper-1",
-                        file=audio_file,
-                        language=lang.split('-')[0] if lang else "ru"
-                    )
-                
-                text = transcript.text
-                if text:
-                    logger.info(f"OpenAI Whisper распознал: {text}")
-                    # Помечаем ключ как успешный
-                    try:
-                        cls.mark_key_success(key_index)
-                    except Exception:
-                        pass
-                    return text
-                    
-            finally:
-                # Удаляем временный файл
-                os.unlink(tmp_file_path)
-                
+        Args:
+            audio_bytes: Аудио данные
+            primary: Основной провайдер ('yandex' или 'openrouter')
+            fallback: Резервный провайдер
+            user_id: ID пользователя
+
+        Returns:
+            Распознанный текст или None
+        """
+        # 1. Пробуем primary
+        text = await cls._transcribe_single(audio_bytes, primary, user_id)
+        if text:
+            return text
+
+        logger.info(f"[VoiceRecognition] Primary ({primary}) failed, trying fallback ({fallback})")
+
+        # 2. Пробуем fallback
+        text = await cls._transcribe_single(audio_bytes, fallback, user_id)
+        if text:
+            return text
+
+        return None
+
+    @classmethod
+    async def _transcribe_single(
+        cls,
+        audio_bytes: bytes,
+        provider: str,
+        user_id: Optional[int] = None
+    ) -> Optional[str]:
+        """
+        Распознавание через конкретный провайдер.
+
+        Args:
+            audio_bytes: Аудио данные
+            provider: 'yandex' или 'openrouter'
+            user_id: ID пользователя
+
+        Returns:
+            Распознанный текст или None
+        """
+        try:
+            if provider == 'yandex':
+                return await YandexSpeechKit.transcribe_primary(audio_bytes)
+
+            elif provider == 'openrouter':
+                # Получаем сервис через ai_selector
+                service = get_service('voice')
+                model = get_model('voice', 'openrouter')
+
+                user_context = {'user_id': user_id} if user_id else None
+                return await service.transcribe_voice(
+                    audio_bytes,
+                    model=model,
+                    user_context=user_context
+                )
+
+            else:
+                logger.error(f"[VoiceRecognition] Unknown provider: {provider}")
+                return None
+
         except Exception as e:
-            logger.error(f"Ошибка при распознавании через OpenAI Whisper: {e}")
-            # Помечаем ключ как упавший, если удалось получить индекс
-            try:
-                if 'key_index' in locals():
-                    cls.mark_key_failure(key_index, e)
-            except Exception:
-                pass
+            logger.error(f"[VoiceRecognition] Error with {provider}: {e}")
             return None
 
 
 async def recognize_voice(message, bot, user_language: str = 'ru') -> Optional[str]:
     """
-    Распознавание голосового сообщения с fallback цепочкой:
-    Для русского: Yandex -> Google -> OpenAI Whisper
-    Для английского: OpenAI Whisper -> Google
+    Распознавание голосового сообщения.
+    Legacy API для совместимости с существующим кодом.
+
+    Args:
+        message: Telegram message object
+        bot: Telegram bot instance
+        user_language: Язык пользователя
+
+    Returns:
+        Распознанный текст или None
     """
     try:
         # Показываем индикатор "печатает..."
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
-        
+
         # Получаем файл
         file_info = await bot.get_file(message.voice.file_id)
         file_path = file_info.file_path
-        
+
         # Скачиваем файл в память
         file_bytes = BytesIO()
         await bot.download_file(file_path, file_bytes)
         file_bytes.seek(0)
         audio_bytes = file_bytes.read()
-        
+
         # Получаем user_id для логирования
         user_id = message.from_user.id
         duration = message.voice.duration
 
-        # Определяем язык для распознавания
-        if user_language == 'ru':
-            lang = 'ru-RU'
-            # Цепочка для русского: Yandex -> Google -> Whisper
+        logger.info(f"[VOICE_INPUT] User {user_id} | Duration: {duration}s | Lang: {user_language}")
 
-            # 1. Пробуем Yandex SpeechKit (лучший для русского)
-            text = await YandexSpeechKit.transcribe(audio_bytes)
-            if text:
-                logger.info(f"[VOICE_INPUT] User {user_id} | Service: Yandex SpeechKit | Duration: {duration}s | Recognized: {text}")
-                return text
-            logger.info("Yandex SpeechKit не смог распознать, пробуем Google")
+        # Используем новый централизованный сервис
+        text = await VoiceRecognitionService.transcribe(
+            audio_bytes,
+            user_language=user_language,
+            user_id=user_id
+        )
 
-            # 2. Пробуем Google Speech Recognition (бесплатный fallback)
-            text = await recognize_with_google(audio_bytes, lang)
-            if text:
-                logger.info(f"[VOICE_INPUT] User {user_id} | Service: Google Speech | Duration: {duration}s | Recognized: {text}")
-                return text
-            logger.info("Google Speech не смог распознать, пробуем OpenAI Whisper")
+        return text
 
-            # 3. Пробуем OpenAI Whisper (универсальный fallback)
-            text = await OpenAIWhisper.transcribe(audio_bytes, lang)
-            if text:
-                logger.info(f"[VOICE_INPUT] User {user_id} | Service: OpenAI Whisper | Duration: {duration}s | Recognized: {text}")
-                return text
-                
-        else:
-            # Для английского и других языков
-            lang = 'en-US' if user_language == 'en' else f'{user_language}-{user_language.upper()}'
-            # Оптимальная цепочка для английского: Whisper -> Google
-
-            # 1. Пробуем OpenAI Whisper (лучший для английского в нашем кейсе)
-            text = await OpenAIWhisper.transcribe(audio_bytes, lang)
-            if text:
-                logger.info(f"[VOICE_INPUT] User {user_id} | Service: OpenAI Whisper | Duration: {duration}s | Recognized: {text}")
-                return text
-            logger.info("OpenAI Whisper не смог распознать, пробуем Google")
-
-            # 2. Пробуем Google Speech Recognition
-            text = await recognize_with_google(audio_bytes, lang)
-            if text:
-                logger.info(f"[VOICE_INPUT] User {user_id} | Service: Google Speech | Duration: {duration}s | Recognized: {text}")
-                return text
-        
-        logger.warning("Ни один сервис не смог распознать речь")
-        return None
-        
     except Exception as e:
         logger.error(f"Ошибка при распознавании голоса: {e}")
         return None
 
 
-async def recognize_with_google(audio_bytes: bytes, lang: str) -> Optional[str]:
-    """Распознавание через Google Speech Recognition"""
-    try:
-        # Создаем временные файлы
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.ogg') as tmp_ogg:
-            ogg_path = tmp_ogg.name
-            tmp_ogg.write(audio_bytes)
-        
-        # Конвертируем в WAV для speech_recognition
-        wav_path = ogg_path.replace('.ogg', '.wav')
-        
-        # Используем pydub для конвертации
-        audio = AudioSegment.from_ogg(ogg_path)
-        audio.export(wav_path, format="wav")
-        
-        # Распознаем речь
-        recognizer = sr.Recognizer()
-        
-        with sr.AudioFile(wav_path) as source:
-            audio_data = recognizer.record(source)
-        
-        # Пробуем Google
-        try:
-            text = recognizer.recognize_google(audio_data, language=lang)
-            logger.info(f"Google Speech Recognition распознал: {text}")
-            return text
-        except sr.UnknownValueError:
-            logger.info("Google Speech Recognition не смог распознать речь")
-            return None
-        except sr.RequestError as e:
-            logger.error(f"Ошибка Google Speech Recognition: {e}")
-            return None
-        
-    except Exception as e:
-        logger.error(f"Ошибка при распознавании через Google: {e}")
-        return None
-    finally:
-        # Очищаем временные файлы
-        try:
-            if 'ogg_path' in locals():
-                os.unlink(ogg_path)
-            if 'wav_path' in locals():
-                os.unlink(wav_path)
-        except:
-            pass
-
-
 async def process_voice_for_expense(message, bot, user_language: str = 'ru') -> Optional[str]:
     """
-    Обработка голосового сообщения для расхода
+    Обработка голосового сообщения для расхода.
+    Legacy API для совместимости.
+
+    Args:
+        message: Telegram message object
+        bot: Telegram bot instance
+        user_language: Язык пользователя
+
+    Returns:
+        Распознанный текст или None
     """
     # Проверяем длительность
     try:
@@ -308,10 +220,10 @@ async def process_voice_for_expense(message, bot, user_language: str = 'ru') -> 
         else:
             await message.answer(f"⚠️ Voice message is too long. Maximum {max_seconds} seconds.")
         return None
-    
-    # Распознаем с использованием оптимальной цепочки для языка
+
+    # Распознаем через централизованный сервис
     text = await recognize_voice(message, bot, user_language)
-    
+
     if not text:
         if user_language == 'ru':
             await message.answer(
@@ -330,5 +242,5 @@ async def process_voice_for_expense(message, bot, user_language: str = 'ru') -> 
                 "• Send a text message"
             )
         return None
-    
+
     return text

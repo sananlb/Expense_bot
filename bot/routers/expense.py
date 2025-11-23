@@ -1966,23 +1966,20 @@ async def delete_expense(callback: types.CallbackQuery, state: FSMContext):
         success = await delete_expense_service(user_id, item_id)
 
     if success:
-        # Пытаемся удалить сообщение, если не получается (старое сообщение) - делаем "невидимым"
+        # Заменяем сообщение на уведомление об удалении (единообразное поведение для всех сообщений)
+        deleted_msg_key = 'income_deleted_message' if is_income else 'expense_deleted_message'
+        deleted_msg = get_text(deleted_msg_key, lang)
         try:
-            await callback.message.delete()
-        except Exception:
-            # Если не можем удалить (сообщение старше 48 часов), делаем его минимальным
-            # Используем невидимый символ Braille (U+2800) чтобы минимизировать сообщение
-            try:
-                await callback.message.edit_text("⠀", reply_markup=None)
-            except Exception:
-                # Если и редактировать не можем, просто отправляем уведомление
-                pass
+            await callback.message.edit_text(deleted_msg, reply_markup=None)
+        except Exception as e:
+            # Если не можем отредактировать, логируем для диагностики
+            logger.warning(f"Could not edit message after delete: {e}")
 
         # Очищаем состояние после удаления
         from bot.utils.state_utils import clear_state_keep_cashback
         await clear_state_keep_cashback(state)
 
-        # Отправляем уведомление пользователю
+        # Отправляем уведомление пользователю (popup сверху экрана)
         success_key = 'income_deleted_success' if is_income else 'expense_deleted_success'
         success_msg = get_text(success_key, lang)
         await callback.answer(success_msg)

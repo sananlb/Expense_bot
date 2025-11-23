@@ -76,7 +76,7 @@ TEXTS = {
         'expense_not_found': '❌ Трата не найдена',
 
         # Напоминания
-        'expense_reminder': '''💡 <i>Не забудьте записать расходы за сегодня, чтобы вести точный учёт бюджета 💰</i>''',
+        'expense_reminder': '''💡 <i>Не забудьте записать расходы за сегодня, чтобы вести точный учёт бюджета</i>''',
         
         # Категории
         'category': 'Категория',
@@ -769,6 +769,9 @@ TEXTS = {
         'income_deleted_success': '✅ Доход успешно удалён',
         'failed_delete_expense': '❌ Не удалось удалить трату',
         'failed_delete_income': '❌ Не удалось удалить доход',
+        # Сообщения при удалении старых записей (когда нельзя удалить сообщение)
+        'expense_deleted_message': '☑️ Трата удалена 🗑️',
+        'income_deleted_message': '☑️ Доход удалён 🗑️',
 
         # Чат и AI
         'yesterday_expenses_future': 'Функция просмотра трат за вчера будет добавлена в следующей версии.',
@@ -1639,6 +1642,9 @@ Thank you for participating in testing! Your feedback helps improve the bot.''',
         'income_deleted_success': '✅ Income deleted successfully',
         'failed_delete_expense': '❌ Failed to delete expense',
         'failed_delete_income': '❌ Failed to delete income',
+        # Messages when deleting old entries (when message cannot be deleted)
+        'expense_deleted_message': '☑️ Expense deleted 🗑️',
+        'income_deleted_message': '☑️ Income deleted 🗑️',
 
         # Chat and AI
         'yesterday_expenses_future': 'Yesterday expenses view will be added in the next version.',

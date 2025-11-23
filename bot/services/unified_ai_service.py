@@ -1,18 +1,21 @@
 """
 Unified AI Service - универсальный сервис для OpenAI-совместимых API
-Поддерживает DeepSeek, Qwen (DashScope) и другие модели.
+Поддерживает DeepSeek, Qwen (DashScope), OpenRouter и другие модели.
 """
 import logging
 import json
 import asyncio
 import time
 import re
+import base64
+import tempfile
+import os
 from typing import Dict, List, Optional, Any, Type
 from openai import OpenAI
 from django.conf import settings
 from .ai_base_service import AIBaseService
 from .ai_selector import get_model
-from .key_rotation_mixin import KeyRotationMixin, DeepSeekKeyRotationMixin, QwenKeyRotationMixin
+from .key_rotation_mixin import KeyRotationMixin, DeepSeekKeyRotationMixin, QwenKeyRotationMixin, OpenRouterKeyRotationMixin
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,9 @@ class UnifiedAIService(AIBaseService):
         elif provider_name == 'qwen':
             self.base_url = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
             self.api_key_mixin = QwenKeyRotationMixin
+        elif provider_name == 'openrouter':
+            self.base_url = "https://openrouter.ai/api/v1"
+            self.api_key_mixin = OpenRouterKeyRotationMixin
         else:
             raise ValueError(f"Unsupported provider for UnifiedAIService: {provider_name}")
 
@@ -337,6 +343,173 @@ class UnifiedAIService(AIBaseService):
         except Exception as e:
             logger.error(f"Function execution error: {e}")
             return f"Ошибка при выполнении операции: {str(e)}"
+
+    async def transcribe_voice(
+        self,
+        audio_bytes: bytes,
+        model: Optional[str] = None,
+        user_context: Optional[Dict[str, Any]] = None
+    ) -> Optional[str]:
+        """
+        Транскрипция голосового сообщения через OpenRouter (Gemini multimodal).
+
+        Args:
+            audio_bytes: Аудио в формате OGG Opus (Telegram voice)
+            model: Модель для транскрипции (по умолчанию из get_model('voice'))
+            user_context: Контекст пользователя для метрик
+
+        Returns:
+            Распознанный текст или None при ошибке
+        """
+        if self.provider_name != 'openrouter':
+            logger.error(f"[{self.provider_name}] transcribe_voice поддерживается только для OpenRouter")
+            return None
+
+        user_id = user_context.get('user_id') if user_context else None
+        start_time = time.time()
+
+        try:
+            # Конвертируем OGG в MP3 (Gemini лучше работает с MP3)
+            mp3_bytes = await self._convert_ogg_to_mp3(audio_bytes)
+            if not mp3_bytes:
+                logger.error("[OpenRouter] Не удалось конвертировать OGG в MP3")
+                return None
+
+            # Кодируем в base64
+            audio_base64 = base64.b64encode(mp3_bytes).decode('utf-8')
+
+            # Получаем модель
+            model_name = model or get_model('voice', self.provider_name)
+            client, key_index = self._get_client()
+
+            # Промпт для мультимодальной модели (как в nutrition_bot)
+            system_prompt = (
+                "You are a speech-to-text transcription system. "
+                "Your ONLY task is to transcribe audio to text verbatim. "
+                "NEVER explain, interpret, translate, or comment on the content. "
+                "NEVER add any text that was not spoken in the audio. "
+                "Output ONLY the exact words spoken, nothing more."
+            )
+
+            transcription_prompt = "Transcribe this audio. Output only the spoken words."
+
+            # Формируем запрос с правильным форматом input_audio для OpenRouter
+            messages: List[Dict[str, Any]] = [
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": transcription_prompt},
+                        {
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": audio_base64,
+                                "format": "mp3"
+                            }
+                        },
+                    ],
+                },
+            ]
+
+            try:
+                response = await asyncio.to_thread(
+                    client.chat.completions.create,
+                    model=model_name,
+                    messages=messages,  # type: ignore
+                    max_tokens=500,
+                    temperature=0.0  # Минимальная температура для точной транскрипции
+                )
+
+                # Успех - помечаем ключ как рабочий
+                if self.api_key_mixin:
+                    self.api_key_mixin.mark_key_success(key_index)
+
+            except Exception as api_error:
+                # Помечаем ключ как проблемный
+                if self.api_key_mixin:
+                    self.api_key_mixin.mark_key_failure(key_index, api_error)
+                raise api_error
+
+            response_time = time.time() - start_time
+            content = response.choices[0].message.content
+            transcribed_text = content.strip() if content else ""
+
+            # Логируем метрики
+            self._log_metrics(
+                operation='transcribe_voice',
+                response_time=response_time,
+                success=True,
+                model=model_name,
+                input_len=len(audio_bytes),
+                tokens=response.usage.total_tokens if hasattr(response, 'usage') and response.usage else None,
+                user_id=user_id
+            )
+
+            logger.info(f"[OpenRouter] Транскрибировано за {response_time:.2f}s: {transcribed_text[:50]}...")
+            return transcribed_text if transcribed_text else None
+
+        except Exception as e:
+            response_time = time.time() - start_time
+            logger.error(f"[OpenRouter] Ошибка транскрипции за {response_time:.2f}s: {e}")
+            self._log_metrics(
+                operation='transcribe_voice',
+                response_time=response_time,
+                success=False,
+                error=e,
+                user_id=user_id
+            )
+            return None
+
+    async def _convert_ogg_to_mp3(self, ogg_bytes: bytes) -> Optional[bytes]:
+        """
+        Конвертирует OGG Opus в MP3 через pydub/ffmpeg.
+
+        Args:
+            ogg_bytes: Аудио в формате OGG Opus
+
+        Returns:
+            Аудио в формате MP3 или None при ошибке
+        """
+        try:
+            from pydub import AudioSegment
+            from io import BytesIO
+
+            # Создаем временный файл для OGG (pydub требует файл для OGG)
+            with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as tmp_ogg:
+                tmp_ogg.write(ogg_bytes)
+                tmp_ogg_path = tmp_ogg.name
+
+            try:
+                # Загружаем OGG и конвертируем в MP3
+                audio = await asyncio.to_thread(
+                    AudioSegment.from_ogg, tmp_ogg_path
+                )
+
+                # Экспортируем в MP3 в память
+                mp3_buffer = BytesIO()
+                await asyncio.to_thread(
+                    audio.export, mp3_buffer, format='mp3', bitrate='64k'
+                )
+                mp3_buffer.seek(0)
+
+                return mp3_buffer.read()
+
+            finally:
+                # Удаляем временный файл
+                try:
+                    os.unlink(tmp_ogg_path)
+                except Exception:
+                    pass
+
+        except ImportError:
+            logger.error("[OpenRouter] pydub не установлен для конвертации аудио")
+            return None
+        except Exception as e:
+            logger.error(f"[OpenRouter] Ошибка конвертации OGG→MP3: {e}")
+            return None
 
     def _log_metrics(self, operation, response_time, success, model=None, input_len=0, tokens=None, error=None, user_id=None):
         """Запись метрик в БД (поддерживает и async, и sync контексты)"""

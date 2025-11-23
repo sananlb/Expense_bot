@@ -8,6 +8,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Дефолтная модель OpenRouter (централизованно, меняется ТОЛЬКО здесь или в .env)
+OPENROUTER_DEFAULT_MODEL = os.getenv('OPENROUTER_MODEL_DEFAULT', 'google/gemini-2.5-flash')
+
 # Конфигурация AI провайдеров
 AI_PROVIDERS = {
     'categorization': {
@@ -16,7 +19,8 @@ AI_PROVIDERS = {
             'google': os.getenv('GOOGLE_MODEL_CATEGORIZATION', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_CATEGORIZATION', 'gpt-4o-mini'),
             'deepseek': os.getenv('DEEPSEEK_MODEL_CATEGORIZATION', 'deepseek-chat'),
-            'qwen': os.getenv('QWEN_MODEL_CATEGORIZATION', 'qwen-plus')
+            'qwen': os.getenv('QWEN_MODEL_CATEGORIZATION', 'qwen-plus'),
+            'openrouter': os.getenv('OPENROUTER_MODEL_CATEGORIZATION', OPENROUTER_DEFAULT_MODEL)
         }
     },
     'chat': {
@@ -25,7 +29,8 @@ AI_PROVIDERS = {
             'google': os.getenv('GOOGLE_MODEL_CHAT', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_CHAT', 'gpt-4o-mini'),
             'deepseek': os.getenv('DEEPSEEK_MODEL_CHAT', 'deepseek-chat'),
-            'qwen': os.getenv('QWEN_MODEL_CHAT', 'qwen-plus')
+            'qwen': os.getenv('QWEN_MODEL_CHAT', 'qwen-plus'),
+            'openrouter': os.getenv('OPENROUTER_MODEL_CHAT', OPENROUTER_DEFAULT_MODEL)
         }
     },
     'insights': {
@@ -34,7 +39,14 @@ AI_PROVIDERS = {
             'google': os.getenv('GOOGLE_MODEL_INSIGHTS', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_INSIGHTS', 'gpt-4o-mini'),
             'deepseek': os.getenv('DEEPSEEK_MODEL_INSIGHTS', 'deepseek-chat'),
-            'qwen': os.getenv('QWEN_MODEL_INSIGHTS', 'qwen-plus')
+            'qwen': os.getenv('QWEN_MODEL_INSIGHTS', 'qwen-plus'),
+            'openrouter': os.getenv('OPENROUTER_MODEL_INSIGHTS', OPENROUTER_DEFAULT_MODEL)
+        }
+    },
+    'voice': {
+        'provider': os.getenv('AI_PROVIDER_VOICE', 'openrouter'),  # OpenRouter для voice по умолчанию
+        'model': {
+            'openrouter': os.getenv('OPENROUTER_MODEL_VOICE', OPENROUTER_DEFAULT_MODEL)
         }
     },
     'default': {
@@ -43,7 +55,8 @@ AI_PROVIDERS = {
             'google': os.getenv('GOOGLE_MODEL_DEFAULT', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_DEFAULT', 'gpt-4o-mini'),
             'deepseek': os.getenv('DEEPSEEK_MODEL_DEFAULT', 'deepseek-chat'),
-            'qwen': os.getenv('QWEN_MODEL_DEFAULT', 'qwen-plus')
+            'qwen': os.getenv('QWEN_MODEL_DEFAULT', 'qwen-plus'),
+            'openrouter': OPENROUTER_DEFAULT_MODEL
         }
     }
 }
@@ -67,7 +80,7 @@ class AISelector:
                 logger.info(f"[AISelector] Creating GoogleAIService instance...")
                 cls._instances[provider_type] = GoogleAIService()
                 logger.info(f"[AISelector] GoogleAIService created successfully")
-            elif provider_type in ('deepseek', 'qwen'):
+            elif provider_type in ('deepseek', 'qwen', 'openrouter'):
                 logger.info(f"[AISelector] Creating UnifiedAIService for {provider_type}...")
                 from .unified_ai_service import UnifiedAIService
                 cls._instances[provider_type] = UnifiedAIService(provider_name=provider_type)
@@ -129,6 +142,8 @@ def get_model(service_type: str = 'default', provider: Optional[str] = None) -> 
             return models.get(provider, 'deepseek-chat')
         elif provider == 'qwen':
             return models.get(provider, 'qwen-plus')
+        elif provider == 'openrouter':
+            return models.get(provider, OPENROUTER_DEFAULT_MODEL)
         return models.get(provider, 'gpt-4o-mini')
     else:
         return models
@@ -202,11 +217,25 @@ def get_provider_settings(provider: str) -> Dict[str, Any]:
             api_keys_available = True
         elif hasattr(settings, 'DASHSCOPE_API_KEY') or os.getenv('DASHSCOPE_API_KEY'):
             api_keys_available = True
-            
+
         return {
             'api_keys_available': api_keys_available,
             'default_model': 'qwen-plus',
             'max_tokens': 1500,
+            'temperature': 0.1
+        }
+    elif provider == 'openrouter':
+        from expense_bot import settings
+        api_keys_available = False
+        if hasattr(settings, 'OPENROUTER_API_KEYS') and settings.OPENROUTER_API_KEYS:
+            api_keys_available = True
+        elif hasattr(settings, 'OPENROUTER_API_KEY') or os.getenv('OPENROUTER_API_KEY'):
+            api_keys_available = True
+
+        return {
+            'api_keys_available': api_keys_available,
+            'default_model': OPENROUTER_DEFAULT_MODEL,
+            'max_tokens': 500,
             'temperature': 0.1
         }
     else:
