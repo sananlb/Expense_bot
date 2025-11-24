@@ -15,20 +15,37 @@ logger = logging.getLogger(__name__)
 
 # Словарь для конвертации чисел словами в цифры
 WORD_TO_NUMBER = {
-    # Английский
+    # Английский - units, teens, tens
     'zero': 0, 'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
     'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
     'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14, 'fifteen': 15,
     'sixteen': 16, 'seventeen': 17, 'eighteen': 18, 'nineteen': 19, 'twenty': 20,
     'thirty': 30, 'forty': 40, 'fifty': 50, 'sixty': 60, 'seventy': 70,
-    'eighty': 80, 'ninety': 90, 'hundred': 100, 'thousand': 1000,
-    # Русский
-    'ноль': 0, 'один': 1, 'одна': 1, 'два': 2, 'две': 2, 'три': 3, 'четыре': 4, 'пять': 5,
-    'шесть': 6, 'семь': 7, 'восемь': 8, 'девять': 9, 'десять': 10,
-    'одиннадцать': 11, 'двенадцать': 12, 'тринадцать': 13, 'четырнадцать': 14, 'пятнадцать': 15,
-    'шестнадцать': 16, 'семнадцать': 17, 'восемнадцать': 18, 'девятнадцать': 19, 'двадцать': 20,
-    'тридцать': 30, 'сорок': 40, 'пятьдесят': 50, 'шестьдесят': 60, 'семьдесят': 70,
-    'восемьдесят': 80, 'девяносто': 90, 'сто': 100, 'тысяча': 1000,
+    'eighty': 80, 'ninety': 90, 'hundred': 100,
+    # Русский - units, teens, tens
+    'ноль': 0, 'нуль': 0,
+    'один': 1, 'одна': 1, 'одно': 1, 'одну': 1,
+    'два': 2, 'две': 2, 'двух': 2,
+    'три': 3, 'трех': 3, 'трёх': 3,
+    'четыре': 4, 'четырех': 4, 'четырёх': 4,
+    'пять': 5, 'пяти': 5,
+    'шесть': 6, 'шести': 6,
+    'семь': 7, 'семи': 7,
+    'восемь': 8, 'восьми': 8,
+    'девять': 9, 'девяти': 9,
+    'десять': 10, 'десяти': 10,
+    # Русский - teens
+    'одиннадцать': 11, 'двенадцать': 12, 'тринадцать': 13, 'четырнадцать': 14,
+    'пятнадцать': 15, 'шестнадцать': 16, 'семнадцать': 17, 'восемнадцать': 18,
+    'девятнадцать': 19,
+    # Русский - tens
+    'двадцать': 20, 'тридцать': 30, 'сорок': 40, 'пятьдесят': 50,
+    'шестьдесят': 60, 'семьдесят': 70, 'восемьдесят': 80, 'девяносто': 90,
+    # Русский - hundreds
+    'сто': 100, 'ста': 100,
+    'двести': 200, 'триста': 300, 'четыреста': 400,
+    'пятьсот': 500, 'шестьсот': 600, 'семьсот': 700,
+    'восемьсот': 800, 'девятьсот': 900,
 }
 
 # Словарь множителей для сумм
@@ -53,105 +70,146 @@ AMOUNT_MULTIPLIERS = {
     'm': 1000000,  # 2m
 }
 
+MULTIPLIERS = AMOUNT_MULTIPLIERS
+NEGATIVE_WORDS = {'минус', 'minus'}
+
 def keyword_matches_in_text(keyword: str, text: str) -> bool:
     """
     Проверяет есть ли ключевое слово в тексте как ЦЕЛОЕ СЛОВО с учетом склонений.
-
-    Алгоритм:
-    1. Разбивает текст на отдельные слова
-    2. Проверяет что ключевое слово является НАЧАЛОМ слова (стем)
-    3. Разрешает окончания до 3 символов (склонения: магнит → магните, магнита)
-    4. НЕ разрешает если после ключевого слова больше 3 символов (магнит ≠ магнитрон)
-
-    Примеры:
-    - keyword_matches_in_text("магнит", "купил в магните") -> True ✅ (склонение +2 символа)
-    - keyword_matches_in_text("магнит", "магнитрон") -> False ✅ (рон = +3 символа, лимит)
-    - keyword_matches_in_text("магнит", "супер-магнит") -> True ✅ (точное совпадение части)
-    - keyword_matches_in_text("кофе", "кофейня") -> False ✅ (йня = +3 символа, лимит)
-    - keyword_matches_in_text("кофе", "кофе") -> True ✅ (точное совпадение)
-
-    Args:
-        keyword: Ключевое слово для поиска (одно слово)
-        text: Текст для поиска
-
-    Returns:
-        True если keyword найдено как целое слово (с учетом склонений) в text
     """
     if not keyword or not text:
         return False
-
-    # Нормализуем для поиска
     keyword_lower = keyword.lower().strip()
     text_lower = text.lower()
-
-    # Разбиваем текст на слова (по пробелам, запятым, точкам и т.д.)
-    # Оставляем дефисы внутри слов (супер-магнит)
-    import re
     text_words = re.findall(r'[\wа-яёА-ЯЁ\-]+', text_lower)
-
-    # Проверяем каждое слово в тексте
     for word in text_words:
-        # Точное совпадение - всегда ОК
         if word == keyword_lower:
             return True
-
-        # Проверяем что слово начинается с ключевого слова (стем)
         if word.startswith(keyword_lower):
-            # Вычисляем разницу в длине (окончание)
             ending_length = len(word) - len(keyword_lower)
-
-            # Разрешаем окончания до 2 символов (склонения)
-            # магнит (6) → магните (8) = +2 ✅
-            # магнит (6) → магнитрон (9) = +3 ❌
             if ending_length <= 2:
                 return True
-
     return False
-
 
 def convert_words_to_numbers(text: str) -> str:
     """
-    Конвертирует числа словами в цифры
+    Конвертирует числа словами в цифры, поддерживая составные числа.
     Примеры:
-    - "Apple minus two" -> "Apple minus 2"
-    - "кофе три" -> "кофе 3"
-    - "twenty five" -> "25"
-    - "двадцать пять" -> "25"
+    - "two hundred" -> "200"
+    - "twenty five thousand" -> "25000"
+    - "Apple minus two" -> "Apple -2"
+    - "двести пятьдесят" -> "250"
     """
     if not text:
         return text
-
-    text_lower = text.lower()
-    words = text_lower.split()
+    
+    processed_text = text.replace('-', ' ')
+    words = processed_text.split()
     result_words = []
+    current_number_chunk = 0
+    current_total = 0
+    is_negative = False
+    number_sequence_started = False
+    last_was_hundred = False  # Track if last word was 'hundred' to prevent repeated multiplication
+    trailing_punctuation = ""  # Store punctuation from the last number word
+    
     i = 0
-
     while i < len(words):
-        word = words[i].strip('.,!?;:')
-
-        # Проверяем, является ли слово числом
-        if word in WORD_TO_NUMBER:
-            number = WORD_TO_NUMBER[word]
-
-            # Проверяем следующее слово для составных чисел (twenty one -> 21)
+        original_word = words[i]
+        # Extract trailing punctuation
+        clean_word = original_word.rstrip('.,!?;:()')
+        word_punctuation = original_word[len(clean_word):]
+        clean_word = clean_word.lower()
+        
+        # Skip 'and' within number sequences
+        if clean_word == 'and' and number_sequence_started:
             if i + 1 < len(words):
-                next_word = words[i + 1].strip('.,!?;:')
-                if next_word in WORD_TO_NUMBER:
-                    next_number = WORD_TO_NUMBER[next_word]
-                    # Если следующее число меньше 10 и текущее кратно 10
-                    if next_number < 10 and number >= 10 and number < 100:
-                        number += next_number
-                        i += 1  # Пропускаем следующее слово
-
-            result_words.append(str(number))
+                next_word = words[i+1].rstrip('.,!?;:()').lower()
+                if next_word in WORD_TO_NUMBER or next_word in MULTIPLIERS:
+                    i += 1
+                    continue
+        
+        # Handle negative words (minus/минус)
+        if clean_word in NEGATIVE_WORDS:
+            if i + 1 < len(words):
+                next_word = words[i+1].rstrip('.,!?;:()').lower()
+                if next_word in WORD_TO_NUMBER or next_word in MULTIPLIERS:
+                    is_negative = True
+                    i += 1
+                    continue
+        
+        # Process number words
+        if clean_word in WORD_TO_NUMBER:
+            number_sequence_started = True
+            val = WORD_TO_NUMBER[clean_word]
+            
+            if val == 100:
+                # Validate: prevent repeated 'hundred' (e.g., "hundred hundred")
+                if last_was_hundred:
+                    # Emit previous chunk and start fresh
+                    if current_number_chunk > 0:
+                        result_words.append(str(current_number_chunk) + trailing_punctuation)
+                        trailing_punctuation = ""
+                    current_number_chunk = 100
+                elif current_number_chunk > 0:
+                    current_number_chunk *= 100
+                else:
+                    current_number_chunk = 100
+                last_was_hundred = True
+            else:
+                current_number_chunk += val
+                last_was_hundred = False
+            
+            # Save punctuation from this word
+            trailing_punctuation = word_punctuation
+            
+        elif clean_word in MULTIPLIERS:
+            number_sequence_started = True
+            multiplier = MULTIPLIERS[clean_word]
+            
+            if current_number_chunk > 0:
+                current_total += current_number_chunk * multiplier
+            else:
+                # Handle standalone multiplier (e.g., "thousand" -> 1000)
+                current_total += multiplier
+            
+            current_number_chunk = 0
+            last_was_hundred = False
+            trailing_punctuation = word_punctuation
+            
         else:
-            result_words.append(words[i])
-
+            # Non-number word: emit accumulated number if any
+            if number_sequence_started:
+                final_number = current_total + current_number_chunk
+                if is_negative:
+                    final_number = -final_number
+                    is_negative = False
+                
+                result_words.append(str(final_number) + trailing_punctuation)
+                trailing_punctuation = ""
+                current_total = 0
+                current_number_chunk = 0
+                number_sequence_started = False
+                last_was_hundred = False
+            
+            # Handle hanging negative
+            if is_negative:
+                result_words.append("минус")
+                is_negative = False
+            
+            result_words.append(original_word)
+        
         i += 1
-
+    
+    # Emit final number if sequence ended with a number
+    if number_sequence_started:
+        final_number = current_total + current_number_chunk
+        if is_negative:
+            final_number = -final_number
+        result_words.append(str(final_number) + trailing_punctuation)
+    
     return ' '.join(result_words)
 
-# Вспомогательная функция для безопасного использования sync_to_async с Django ORM
 def make_sync_to_async(func):
     """Создает обертку для синхронной функции для использования в асинхронном контексте"""
     return sync_to_async(func)
@@ -165,71 +223,62 @@ DATE_PATTERNS = [
 # Паттерны для извлечения суммы
 AMOUNT_PATTERNS = [
     # Числа с пробелами-разделителями тысяч (ПРИОРИТЕТ!)
-    # Примеры: "10 000", "1 000 000", "10 000.50"
-    # ВАЖНО: Длинные варианты валют ПЕРВЫМИ (рублей перед руб, доллар перед долл, dollars перед usd)
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:рублей|rub+les?|руб|₽|р)\b',  # 10 000 руб, rubles, rubbles
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:доллар(?:ов)?|dollars?|долл|usd|\$)\b',  # 10 000 USD
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:euros?|евро|eur|€)\b',  # 10 000 EUR
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:pounds?|фунт(?:ов)?|gbp|£)\b',  # 10 000 GBP
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:юаней|yuan|юан|cny|¥)\b',  # 10 000 CNY
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:аргентинских?|pesos?|песо|ars)\b',  # 10 000 ARS
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:колумбийских?|cop)\b',  # 10 000 COP
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:перуанских?|soles?|солей?|pen)\b',  # 10 000 PEN
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:чилийских?|clp)\b',  # 10 000 CLP
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:мексиканских?|mxn)\b',  # 10 000 MXN
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:бразильских?|reais?|реалов?|brl)\b',  # 10 000 BRL
-    # CIS currencies (числа с пробелами) - русские и английские названия
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:лари|lari|gel|georgian\s+lari)\b',  # 10 000 GEL
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:тенге|теньге|тнг|kzt|tenge|kazakh\S*\s+tenge)\b',  # 10 000 KZT
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:гривен|гривн[а-я]*|грн|uah|hryvnia|hryvnya|ukrainian\s+hryvnia)\b',  # 10 000 UAH
-    r"(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:сум(?:ов)?|so['\']m|uzs|uzbek\S*\s+so['\']m)\b",  # 10 000 UZS (апостроф обязателен)
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:драм(?:ов)?|dram|amd|armenian\s+dram)\b',  # 10 000 AMD
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:манат(?:ов)?|manat|azn|azerbaijani\s+manat)\b',  # 10 000 AZN
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:сом(?:ов)?|kgs|kyrgyz\S*\s+som)\b',  # 10 000 KGS
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:сомони|somoni|tjs|tajik\S*\s+somoni)\b',  # 10 000 TJS
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:лей|леев|лея|mdl|lei|moldovan\s+lei?)\b',  # 10 000 MDL
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:бел[ао]рус\S*\s+руб\S*|byn|byr|belarusian\s+ruble?)\b',  # 10 000 BYN
-    # Other world currencies (числа с пробелами)
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:франк(?:ов|а)?|francs?|chf|swiss\s+francs?)\b',  # 10 000 CHF
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:рупи[йяею]|rupees?|inr|indian\s+rupees?)\b',  # 10 000 INR
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:лир[аы]?|liras?|try|turkish\s+liras?)\b',  # 10 000 TRY
-    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*$',  # 10 000 в конце
-    r'^(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s',  # 10 000 в начале
-    # Паттерн для числа с разделителями в середине УДАЛЕН - используется fallback
-    # Обычные числа БЕЗ пробелов (fallback)
-    # ВАЖНО: Длинные варианты валют ПЕРВЫМИ (английские полные формы включены)
-    r'(\d+(?:[.,]\d+)?)\s*(?:рублей|rub+les?|руб|₽|р)\b',  # 100 руб, 100.50 р, 100 rubles/rubbles
-    r'(\d+(?:[.,]\d+)?)\s*(?:доллар(?:ов)?|dollars?|долл|usd|\$)\b',  # 100 USD, $100, 100 dollars
-    r'(\d+(?:[.,]\d+)?)\s*(?:euros?|евро|eur|€)\b',  # 100 EUR, €100, 100 euros
-    r'(\d+(?:[.,]\d+)?)\s*(?:pounds?|фунт(?:ов)?|gbp|£)\b',  # 100 GBP, £100, 100 pounds
-    r'(\d+(?:[.,]\d+)?)\s*(?:юаней|yuan|юан|cny|¥)\b',  # 100 CNY, 100 yuan
-    # Latin American currencies
-    r'(\d+(?:[.,]\d+)?)\s*(?:аргентинских?|pesos?|песо|ars)\b',  # 100 ARS, 100 pesos
-    r'(\d+(?:[.,]\d+)?)\s*(?:колумбийских?|cop)\b',  # 100 COP
-    r'(\d+(?:[.,]\d+)?)\s*(?:перуанских?|soles?|солей?|pen)\b',  # 100 PEN, 100 soles
-    r'(\d+(?:[.,]\d+)?)\s*(?:чилийских?|clp)\b',  # 100 CLP
-    r'(\d+(?:[.,]\d+)?)\s*(?:мексиканских?|mxn)\b',  # 100 MXN
-    r'(\d+(?:[.,]\d+)?)\s*(?:бразильских?|reais?|реалов?|brl)\b',  # 100 BRL, 100 reais
-    # CIS currencies (обычные числа) - русские и английские названия с сокращениями
-    r'(\d+(?:[.,]\d+)?)\s*(?:лари|lari|gel)\b',  # 100 GEL, 100 лари
-    r'(\d+(?:[.,]\d+)?)\s*(?:тенге|теньге|тнг|kzt|tenge)\b',  # 100 KZT, 100 тенге, 100 tenge
-    r'(\d+(?:[.,]\d+)?)\s*(?:гривен|гривн[а-я]*|грн|uah|hryvnia|hryvnya|uah)\b',  # 100 UAH, 100 hryvnia
-    r"(\d+(?:[.,]\d+)?)\s*(?:сум(?:ов)?|so['\']m|uzs)\b",  # 100 UZS, 100 сум, 100 so'm (апостроф обязателен)
-    r'(\d+(?:[.,]\d+)?)\s*(?:драм(?:ов)?|dram|amd)\b',  # 100 AMD, 100 драм, 100 dram
-    r'(\d+(?:[.,]\d+)?)\s*(?:манат(?:ов)?|manat|azn)\b',  # 100 AZN, 100 манат, 100 manat
-    r'(\d+(?:[.,]\d+)?)\s*(?:сом(?:ов)?|som|kgs)\b',  # 100 KGS, 100 сом, 100 som (киргизский)
-    r'(\d+(?:[.,]\d+)?)\s*(?:сомони|somoni|tjs)\b',  # 100 TJS, 100 сомони, 100 somoni
-    r'(\d+(?:[.,]\d+)?)\s*(?:лей|леев|лея|mdl|lei)\b',  # 100 MDL, 100 лей, 100 lei
-    r'(\d+(?:[.,]\d+)?)\s*(?:бел[ао]рус\S*\s+руб\S*|byn|byr|belarusian\s+ruble?)\b',  # 100 BYN
-    # Other world currencies (обычные числа)
-    r'(\d+(?:[.,]\d+)?)\s*(?:франк(?:ов|а)?|francs?|chf)\b',  # 100 CHF, 100 франков, 100 francs
-    r'(\d+(?:[.,]\d+)?)\s*(?:рупи[йяею]|rupees?|inr)\b',  # 100 INR, 100 рупий, 100 rupees
-    r'(\d+(?:[.,]\d+)?)\s*(?:лир[аы]?|liras?|try)\b',  # 100 TRY, 100 лир, 100 liras
-    r'(\d+(?:[.,]\d+)?)\s*$',  # просто число в конце
-    r'^(\d+(?:[.,]\d+)?)\s',  # число в начале
-    # Паттерн для числа в середине с пробелами (для поддержки множителей)
-    # Примеры: "долг 5 тыс рублей", "купил 10 тысяч продуктов"
-    r'\s(\d+(?:[.,]\d+)?)\s',  # число в середине (окружено пробелами)
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:рублей|rub+les?|руб|₽|р)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:доллар(?:ов)?|dollars?|долл|usd|\$)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:euros?|евро|eur|€)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:pounds?|фунт(?:ов)?|gbp|£)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:юаней|yuan|юан|cny|¥)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:аргентинских?|pesos?|песо|ars)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:колумбийских?|cop)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:перуанских?|soles?|солей?|pen)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:чилийских?|clp)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:мексиканских?|mxn)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:бразильских?|reais?|реалов?|brl)\b',
+    # CIS currencies
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:лари|lari|gel|georgian\s+lari)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:тенге|теньге|тнг|kzt|tenge|kazakh\S*\s+tenge)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:гривен|гривн[а-я]*|грн|uah|hryvnia|hryvnya|ukrainian\s+hryvnia)\b',
+    r"(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:сум(?:ов)?|so['\']m|uzs|uzbek\S*\s+so['\']m)\b",
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:драм(?:ов)?|dram|amd|armenian\s+dram)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:манат(?:ов)?|manat|azn|azerbaijani\s+manat)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:сом(?:ов)?|kgs|kyrgyz\S*\s+som)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:сомони|somoni|tjs|tajik\S*\s+somoni)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:лей|леев|лея|mdl|lei|moldovan\s+lei?)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:бел[ао]рус\S*\s+руб\S*|byn|byr|belarusian\s+ruble?)\b',
+    # Other world currencies
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:франк(?:ов|а)?|francs?|chf|swiss\s+francs?)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:рупи[йяею]|rupees?|inr|indian\s+rupees?)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*(?:лир[аы]?|liras?|try|turkish\s+liras?)\b',
+    r'(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s*$',
+    r'^(\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?)\s',
+    # Fallback
+    r'(\d+(?:[.,]\d+)?)\s*(?:рублей|rub+les?|руб|₽|р)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:доллар(?:ов)?|dollars?|долл|usd|\$)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:euros?|евро|eur|€)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:pounds?|фунт(?:ов)?|gbp|£)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:юаней|yuan|юан|cny|¥)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:аргентинских?|pesos?|песо|ars)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:колумбийских?|cop)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:перуанских?|soles?|солей?|pen)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:чилийских?|clp)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:мексиканских?|mxn)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:бразильских?|reais?|реалов?|brl)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:лари|lari|gel)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:тенге|теньге|тнг|kzt|tenge)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:гривен|гривн[а-я]*|грн|uah|hryvnia|hryvnya|uah)\b',
+    r"(\d+(?:[.,]\d+)?)\s*(?:сум(?:ов)?|so['\']m|uzs)\b",
+    r'(\d+(?:[.,]\d+)?)\s*(?:драм(?:ов)?|dram|amd)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:манат(?:ов)?|manat|azn)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:сом(?:ов)?|som|kgs)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:сомони|somoni|tjs)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:лей|леев|лея|mdl|lei)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:бел[ао]рус\S*\s+руб\S*|byn|byr|belarusian\s+ruble?)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:франк(?:ов|а)?|francs?|chf)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:рупи[йяею]|rupees?|inr)\b',
+    r'(\d+(?:[.,]\d+)?)\s*(?:лир[аы]?|liras?|try)\b',
+    r'(\d+(?:[.,]\d+)?)\s*$',
+    r'^(\d+(?:[.,]\d+)?)\s',
+    r'\s(\d+(?:[.,]\d+)?)\s',
 ]
 
 # Паттерны для определения валюты
@@ -589,6 +638,8 @@ OLD_CATEGORY_KEYWORDS = {
     'прочее': ['прочее', 'другое', 'разное']
 }
 
+CATEGORY_KEYWORDS = OLD_CATEGORY_KEYWORDS
+
 
 def detect_income_intent(text: str) -> bool:
     """
@@ -608,14 +659,62 @@ def detect_income_intent(text: str) -> bool:
     """
     if not text:
         return False
-    
+
     text_lower = text.lower().strip()
-    
+
     # Проверяем наличие знака + перед числом
     for pattern in INCOME_PATTERNS:
         if re.search(pattern, text_lower):
             return True
-    
+
+    return False
+
+
+# Ключевые слова для определения намерения задать бюджет/лимит
+BUDGET_KEYWORDS = {
+    'ru': ['бюджет', 'лимит', 'баланс', 'осталось', 'всего', 'на месяц'],
+    'en': ['budget', 'limit', 'balance', 'monthly', 'for month', 'total']
+}
+
+
+def detect_budget_intent(text: str) -> bool:
+    """
+    Определяет, хочет ли пользователь задать бюджет/лимит на месяц
+
+    Примеры:
+    - "50000 бюджет" -> True
+    - "лимит 100000" -> True
+    - "бюджет на месяц 50000" -> True
+    - "баланс 80000" -> True
+    - "всего 120000" -> True
+    - "осталось 50000" -> True
+    - "budget 50000" -> True
+    - "limit 100000" -> True
+    - "monthly budget 50000" -> True
+    - "кофе 200" -> False
+    - "зарплата 50000" -> False (это доход, не бюджет)
+    - "потратил всего 5000" -> False (это трата, не бюджет)
+    """
+    if not text:
+        return False
+
+    text_lower = text.lower().strip()
+
+    # Исключающие слова - если они есть, то это не бюджет
+    excluding_words = ['потратил', 'купил', 'заплатил', 'spent', 'paid', 'bought', 'трата', 'расход']
+    for word in excluding_words:
+        if word in text_lower:
+            return False
+
+    # Проверяем наличие ключевых слов бюджета
+    for lang_keywords in BUDGET_KEYWORDS.values():
+        for keyword in lang_keywords:
+            if keyword in text_lower:
+                # Дополнительно проверяем что в тексте есть число
+                # (чтобы "расскажи про бюджет" не определялось как бюджет)
+                if re.search(r'\d', text_lower):
+                    return True
+
     return False
 
 

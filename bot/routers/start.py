@@ -53,7 +53,7 @@ def get_welcome_message(lang: str = 'ru', referral_message: str = '', currency: 
 <b>💡 How it works?</b>
 Send a text or voice message:
 {expense_examples}
-To add income, put a "+" sign before the amount.
+To add income, put a "+" sign before the amount. To set your budget or current balance, enter it as income with a "+" sign (e.g., <code>+50000 budget</code>).
 Specify the currency for each transaction or change the default currency in settings.
 All records are saved, you can view statistics and analytics of your transactions.
 
@@ -80,7 +80,7 @@ Track finances together with your family. Switch between personal and family vie
 <b>💡 Как это работает?</b>
 Отправьте текст или голосовое сообщение:
 {expense_examples}
-Для ввода доходов поставьте знак "+" перед суммой.
+Для ввода доходов поставьте знак "+" перед суммой. Чтобы задать бюджет или текущий баланс, введите его как доход со знаком "+" (например, <code>+50000 бюджет</code>).
 Указывайте валюту операции или меняйте валюту по умолчанию в настройках.
 Все записи сохраняться, вы сможете просматривать статистику и аналитику по операциям.
 
