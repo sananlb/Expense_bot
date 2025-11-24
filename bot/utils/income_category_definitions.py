@@ -67,7 +67,8 @@ INCOME_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'other': {
         'name_ru': '💰 Прочие доходы',
         'name_en': '💰 Other Income',
-        'keywords': ['доход', 'получил', 'поступление', 'income', 'other income', 'received', 'plus'],
+        'keywords': ['доход', 'получил', 'поступление', 'income', 'other income', 'received', 'plus',
+                     'баланс', 'бюджет', 'лимит', 'balance', 'budget', 'limit'],
         'aliases': ['other', 'прочие доходы', 'other income', 'income'],
         'income_type': 'other',
     },

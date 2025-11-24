@@ -579,20 +579,16 @@ async def callback_start(callback: types.CallbackQuery, state: FSMContext, lang:
 async def close_message(callback: types.CallbackQuery, state: FSMContext):
     """Закрытие сообщения"""
     await callback.message.delete()
-    # Очищаем последнее сохраненное сообщение меню
-    # НЕ трогаем флаг persistent_cashback_menu - он управляется только в cashback.py
-    await state.update_data(
-        last_menu_message_id=None
-    )
+    # Полностью очищаем состояние FSM при закрытии меню
+    await state.clear()
 
 
 @router.callback_query(F.data == "close_menu")
 async def close_menu_compat(callback: types.CallbackQuery, state: FSMContext):
     """Совместимость: обработка старого callback 'close_menu' как обычного закрытия"""
     await callback.message.delete()
-    await state.update_data(
-        last_menu_message_id=None
-    )
+    # Полностью очищаем состояние FSM при закрытии меню
+    await state.clear()
 
 
 @router.callback_query(F.data == "help_main")

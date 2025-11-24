@@ -73,7 +73,8 @@ async def format_expense_added_message(
         message += confidence_text
     
     if similar_expense or reused_from_last:
-        message += "\n\n<i>💡 Использованы данные из последней похожей траты</i>"
+        hint_text = "Used data from most frequent similar record" if lang == 'en' else "Использованы данные из самой частой похожей записи"
+        message += f"\n\n<i>💡 {hint_text}</i>"
     
     # Получаем сводку за дату операции
     try:

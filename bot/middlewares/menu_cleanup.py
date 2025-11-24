@@ -6,10 +6,17 @@ from aiogram import BaseMiddleware
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from ..utils.message_utils import delete_message_with_effect
+from ..routers.recurring import RecurringForm
 import asyncio
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Состояния FSM, в которых НЕ нужно удалять меню при вводе текста
+PROTECTED_STATES = {
+    RecurringForm.waiting_for_edit_data,
+    RecurringForm.waiting_for_day,
+}
 
 
 class MenuCleanupMiddleware(BaseMiddleware):
@@ -80,6 +87,14 @@ class MenuCleanupMiddleware(BaseMiddleware):
                 if old_menu_id in cashback_menu_ids:
                     logger.info(f"SKIPPING deletion - this is a cashback menu! old_menu={old_menu_id}")
                     return result
+
+                # НЕ удаляем меню если пользователь в защищённом состоянии FSM
+                current_state = await state.get_state()
+                if current_state:
+                    for protected_state in PROTECTED_STATES:
+                        if current_state == protected_state.state:
+                            logger.info(f"SKIPPING deletion - user in protected state: {current_state}")
+                            return result
 
                 # Проверяем, является ли сообщение потенциальной тратой
                 is_potential_expense = False

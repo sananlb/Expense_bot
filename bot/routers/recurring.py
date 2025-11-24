@@ -134,6 +134,17 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
 @router.callback_query(lambda c: c.data == "recurring_menu")
 async def callback_recurring_menu(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать меню регулярных платежей через callback"""
+    # Сохраняем last_menu_message_id перед очисткой состояния
+    state_data = await state.get_data()
+    old_menu_id = state_data.get('last_menu_message_id')
+
+    # Очищаем FSM состояние при возврате в главное меню recurring
+    await state.clear()
+
+    # Восстанавливаем last_menu_message_id чтобы send_message_with_cleanup удалил старое меню
+    if old_menu_id:
+        await state.update_data(last_menu_message_id=old_menu_id)
+
     await show_recurring_menu(callback, state, lang)
     await callback.answer()
 
@@ -144,7 +155,8 @@ async def add_recurring_start(callback: types.CallbackQuery, state: FSMContext, 
     await callback.message.edit_text(
         f"<b>{get_text('add_recurring_payment', lang)}</b>\n\n{get_text('recurring_payment_hint', lang)}",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")]
+            [InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
         ]),
         parse_mode="HTML"
     )
@@ -225,7 +237,8 @@ async def show_category_selection(message: types.Message, state: FSMContext, lan
         keyboard_buttons.append(row)
     
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")])
-    
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
+
     if isinstance(message, types.CallbackQuery):
         await message.message.edit_text(
             get_text('select_payment_category', lang),
@@ -261,9 +274,10 @@ async def process_category(callback: types.CallbackQuery, state: FSMContext, lan
                     callback_data=f"recurring_day_{day}"
                 ))
         keyboard_buttons.append(row)
-    
+
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="back_to_category_selection")])
-    
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
+
     await callback.message.edit_text(
         get_text('choose_payment_day', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
@@ -319,16 +333,18 @@ async def process_day_text(message: types.Message, state: FSMContext):
     """Обработка ввода дня текстом"""
     data = await state.get_data()
     user_id = message.from_user.id
-    
+
     try:
         day = int(message.text.strip())
-        
+
         if day < 1 or day > 30:
-            data = await state.get_data()
-            lang = data.get('lang', 'ru')
-            await send_message_with_cleanup(message, state, get_text('day_should_be_1_30', lang))
+            # Просто удаляем сообщение пользователя, меню с кнопками остается
+            try:
+                await message.delete()
+            except Exception:
+                pass
             return
-        
+
         # Создаем регулярный платеж
         payment = await create_recurring_payment(
             user_id=user_id,
@@ -337,15 +353,17 @@ async def process_day_text(message: types.Message, state: FSMContext):
             description=data['description'],
             day_of_month=day
         )
-        
+
         await state.clear()
         # Показываем меню регулярных платежей
         await show_recurring_menu(message, state)
-        
+
     except ValueError:
-        data = await state.get_data()
-        lang = data.get('lang', 'ru')
-        await send_message_with_cleanup(message, state, get_text('enter_day_1_30', lang))
+        # Просто удаляем сообщение пользователя, меню с кнопками остается
+        try:
+            await message.delete()
+        except Exception:
+            pass
 
 
 @router.callback_query(lambda c: c.data == "edit_recurring")
@@ -373,9 +391,10 @@ async def edit_recurring_list(callback: types.CallbackQuery, state: FSMContext, 
                 callback_data=f"edit_recurring_{payment.id}"
             )
         ])
-    
+
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")])
-    
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
+
     await callback.message.edit_text(
         get_text('select_payment_to_edit', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
@@ -425,9 +444,10 @@ async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext, 
             InlineKeyboardButton(text=get_text('edit_day', lang), callback_data=f"edit_day_{payment_id}")
         ],
         [InlineKeyboardButton(text=toggle_text, callback_data=f"toggle_recurring_{payment_id}")],
-        [InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")]
+        [InlineKeyboardButton(text=get_text('back', lang), callback_data="recurring_menu")],
+        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
     ])
-    
+
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     await callback.answer()
 
@@ -471,7 +491,8 @@ async def edit_amount_start(callback: types.CallbackQuery, state: FSMContext, la
         return
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=get_text('back', lang), callback_data=f"edit_recurring_{payment_id}")]
+        [InlineKeyboardButton(text=get_text('back', lang), callback_data=f"edit_recurring_{payment_id}")],
+        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
     ])
 
     current_amount = format_currency(payment.amount, payment.currency or 'RUB')
@@ -489,14 +510,15 @@ async def edit_description_start(callback: types.CallbackQuery, state: FSMContex
     """Начать редактирование названия"""
     payment_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
-    
+
     payment = await get_recurring_payment_by_id(user_id, payment_id)
     if not payment:
         await callback.answer(get_text('payment_not_found', lang), show_alert=True)
         return
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=get_text('back', lang), callback_data=f"edit_recurring_{payment_id}")]
+        [InlineKeyboardButton(text=get_text('back', lang), callback_data=f"edit_recurring_{payment_id}")],
+        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
     ])
 
     text = f"{get_text('enter_new_description', lang)}\n\nТекущее название: <i>{payment.description}</i>"
@@ -521,13 +543,14 @@ async def edit_day_start(callback: types.CallbackQuery, state: FSMContext, lang:
     
     await state.update_data(editing_payment_id=payment_id)
     await state.set_state(RecurringForm.editing_day)
-    
+
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=get_text('back', lang), callback_data=f"edit_recurring_{payment_id}")]
+        [InlineKeyboardButton(text=get_text('back', lang), callback_data=f"edit_recurring_{payment_id}")],
+        [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
     ])
-    
+
     text = f"{get_text('enter_new_day', lang)}\n\nТекущий день: <i>{payment.day_of_month} число месяца</i>"
-    
+
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     await callback.answer()
 
@@ -569,10 +592,9 @@ async def edit_category_start(callback: types.CallbackQuery, state: FSMContext, 
         )
     
     # Кнопка отмены
-    keyboard_buttons.append([
-        InlineKeyboardButton(text=get_text('back', lang), callback_data=f"edit_recurring_{payment_id}")
-    ])
-    
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('back', lang), callback_data=f"edit_recurring_{payment_id}")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
+
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
     await callback.answer()
@@ -707,19 +729,14 @@ async def process_edit_data(message: types.Message, state: FSMContext, lang: str
     Обработка свободного текстового ввода в меню редактирования.
 
     ВАЖНО: Этот handler ловит любой текст, когда пользователь находится в меню
-    редактирования платежа. Вместо удаления/пересоздания платежа (что теряет
-    last_processed и может вызвать дубликаты), мы подсказываем использовать кнопки.
+    редактирования платежа. Просто удаляем сообщение пользователя - меню
+    редактирования с кнопками остается на месте.
     """
-    await send_message_with_cleanup(
-        message, state,
-        get_text('use_buttons_to_edit', lang) if lang != 'ru' else
-        "ℹ️ Для редактирования используйте кнопки ниже.\n\n"
-        "Нажмите на поле, которое хотите изменить:\n"
-        "• Сумма\n"
-        "• Название\n"
-        "• Категория\n"
-        "• День месяца"
-    )
+    # Просто удаляем сообщение пользователя, меню редактирования остается
+    try:
+        await message.delete()
+    except Exception:
+        pass  # Игнорируем ошибки удаления
 
 
 @router.callback_query(lambda c: c.data == "delete_recurring")
@@ -749,7 +766,8 @@ async def delete_recurring_list(callback: types.CallbackQuery, state: FSMContext
         ])
     
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="recurring_menu")])
-    
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
+
     await callback.message.edit_text(
         get_text('select_payment_to_delete', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)

@@ -9,6 +9,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramNotFound, TelegramForbiddenError
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from typing import Optional
 import asyncio
 import logging
 
@@ -900,8 +901,13 @@ async def cancel_expense_input(callback: types.CallbackQuery, state: FSMContext)
 # Обработчик текстовых сообщений
 @router.message(F.text & ~F.text.startswith('/'))
 @rate_limit(max_calls=30, period=60)  # 30 сообщений в минуту
-async def handle_text_expense(message: types.Message, state: FSMContext, text: str = None, lang: str = 'ru'):
-    """Обработка текстовых сообщений с тратами"""
+async def handle_text_expense(message: types.Message, state: FSMContext, text: str = None, lang: str = 'ru', user_id: Optional[int] = None):
+    """Обработка текстовых сообщений с тратами
+
+    Args:
+        user_id: Опциональный user_id для случаев когда message.from_user не соответствует реальному пользователю
+                 (например, при вызове из callback где message.from_user - это бот)
+    """
     # Импортируем необходимые функции в начале
     from ..services.category import get_or_create_category
     from ..services.expense import add_expense
@@ -1027,7 +1033,14 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         await clear_state_keep_cashback(state)
         # Продолжаем обработку траты
 
-    user_id = message.from_user.id
+    # Используем переданный user_id или берём из message.from_user
+    # (важно для callback'ов где message.from_user - это бот)
+    if user_id is None and message.from_user:
+        user_id = message.from_user.id
+
+    if user_id is None:
+        logger.error("Cannot determine user_id for expense processing")
+        return
 
     # Проверяем принятие политики конфиденциальности
     from expenses.models import Profile
@@ -1149,7 +1162,10 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             await cancel_typing()
 
             display_amount = format_decimal_amount(amount)
-            amount_plain = format(amount, "f").rstrip("0").rstrip(".")
+            # Конвертируем в строку без лишних нулей после точки
+            amount_plain = str(amount)
+            if '.' in amount_plain:
+                amount_plain = amount_plain.rstrip('0').rstrip('.')
 
             # Формируем сообщение с предложением записать как доход
             if lang == 'en':
@@ -1183,7 +1199,8 @@ Record <b>+{display_amount}</b> as income?"""
             ])
 
             # Сохраняем оригинальный текст в состояние для обработки в callback
-            await state.update_data(budget_original_text=text, budget_amount=amount)
+            # Конвертируем Decimal в str для JSON-сериализации в Redis
+            await state.update_data(budget_original_text=text, budget_amount=str(amount))
 
             await message.answer(budget_text, reply_markup=keyboard, parse_mode="HTML")
             return
@@ -1371,6 +1388,15 @@ Record <b>+{display_amount}</b> as income?"""
         logger.info("Parsing completed, result: None")
     
     if not parsed:
+        # Проверяем, не указана ли явно нулевая сумма (например "кофе 0")
+        import re
+        zero_amount_pattern = re.compile(r'\b0+(?:[.,]0+)?\s*(?:руб|р|rub|₽)?$', re.IGNORECASE)
+        if zero_amount_pattern.search(text.strip()):
+            await cancel_typing()
+            error_msg = get_text('amount_must_be_positive', lang) if lang != 'ru' else "❌ Сумма должна быть больше нуля"
+            await message.answer(error_msg, parse_mode="HTML")
+            return
+
         # Повторная проверка с использованием единого модуля (на случай если AI парсер не сработал)
         # НО если мы нашли ключевое слово - не проверяем намерение снова
         if not has_keyword:
@@ -2726,8 +2752,8 @@ async def budget_confirm_callback(callback: types.CallbackQuery, state: FSMConte
     original_text = data.get('budget_original_text', '') or (callback.message.text or '')
 
     # Формируем текст для записи как доход: добавляем знак +
-    amount_display = format_decimal_amount(amount)
-    income_text = f"+{amount_display}"
+    # Используем amount_str без разделителей тысяч для парсера
+    income_text = f"+{amount_str}"
 
     # Добавляем описание если было в оригинальном тексте
     # (убираем ключевые слова бюджета)
@@ -2760,26 +2786,8 @@ async def budget_confirm_callback(callback: types.CallbackQuery, state: FSMConte
     await state.update_data(skip_budget_intent=True, budget_original_text=None, budget_amount=None)
 
     # Обрабатываем как доход через существующую логику
-    # Создаем фейковое сообщение для обработки
-    from aiogram.types import Message, User, Chat
-
-    # Создаем пользователя
-    user = callback.from_user
-
-    # Создаем чат
-    chat = callback.message.chat
-
-    # Создаем сообщение
-    fake_message = Message(
-        message_id=callback.message.message_id,
-        date=callback.message.date,
-        chat=chat,
-        from_user=user,
-        text=income_text
-    )
-
-    # Вызываем обработчик текстовых сообщений
-    await handle_text_expense(fake_message, state, text=income_text, lang=lang)
+    # Используем callback.message который имеет связь с bot, но передаём правильный user_id
+    await handle_text_expense(callback.message, state, text=income_text, lang=lang, user_id=user_id)
 
     await callback.answer()
 
@@ -2805,17 +2813,6 @@ async def budget_decline_callback(callback: types.CallbackQuery, state: FSMConte
     await state.update_data(skip_budget_intent=True, budget_original_text=None, budget_amount=None)
 
     # Обрабатываем как обычную трату через основной пайплайн
-    from aiogram.types import Message, User, Chat
-
-    user = callback.from_user
-    chat = callback.message.chat
-    fake_message = Message(
-        message_id=callback.message.message_id,
-        date=callback.message.date,
-        chat=chat,
-        from_user=user,
-        text=original_text
-    )
-
-    await handle_text_expense(fake_message, state, text=original_text, lang=lang)
+    # Используем callback.message который имеет связь с bot, но передаём правильный user_id
+    await handle_text_expense(callback.message, state, text=original_text, lang=lang, user_id=user_id)
     await callback.answer()
