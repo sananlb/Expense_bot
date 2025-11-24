@@ -702,43 +702,24 @@ async def process_edit_day(message: types.Message, state: FSMContext, lang: str 
 
 
 @router.message(RecurringForm.waiting_for_edit_data)
-async def process_edit_data(message: types.Message, state: FSMContext):
-    """Обработка данных для редактирования платежа"""
-    text = message.text.strip()
-    data = await state.get_data()
-    user_id = message.from_user.id
-    
-    # Используем утилиту для парсинга с разрешением ввода только суммы
-    try:
-        parsed = parse_description_amount(text, allow_only_amount=True)
-        description = parsed['description']
-        amount = parsed['amount']
-    except ValueError as e:
-        logger.warning(f"Invalid recurring payment input from user {message.from_user.id}: {e}")
-        await send_message_with_cleanup(message, state, "❌ Некорректный формат ввода. Укажите описание и сумму.")
-        return
-    
-    # Удаляем старый платеж
-    await delete_recurring_payment(user_id, data['editing_payment_id'])
-    
-    # Создаем новый платеж с обновленными данными
-    try:
-        payment = await create_recurring_payment(
-            user_id=user_id,
-            category_id=data['old_category_id'],
-            amount=amount,
-            description=description,
-            day_of_month=data['old_day']
-        )
-        
-        await state.clear()
-        
-        # Сразу показываем меню без сообщения
-        await show_recurring_menu(message, state)
-    except Exception as e:
-        logger.error(f"Error updating recurring payment for user {message.from_user.id}: {e}")
-        await send_message_with_cleanup(message, state, "❌ Ошибка при обновлении. Попробуйте позже.")
-        await state.clear()
+async def process_edit_data(message: types.Message, state: FSMContext, lang: str = 'ru'):
+    """
+    Обработка свободного текстового ввода в меню редактирования.
+
+    ВАЖНО: Этот handler ловит любой текст, когда пользователь находится в меню
+    редактирования платежа. Вместо удаления/пересоздания платежа (что теряет
+    last_processed и может вызвать дубликаты), мы подсказываем использовать кнопки.
+    """
+    await send_message_with_cleanup(
+        message, state,
+        get_text('use_buttons_to_edit', lang) if lang != 'ru' else
+        "ℹ️ Для редактирования используйте кнопки ниже.\n\n"
+        "Нажмите на поле, которое хотите изменить:\n"
+        "• Сумма\n"
+        "• Название\n"
+        "• Категория\n"
+        "• День месяца"
+    )
 
 
 @router.callback_query(lambda c: c.data == "delete_recurring")

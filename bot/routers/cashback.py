@@ -564,8 +564,8 @@ async def process_percent_text(message: types.Message, state: FSMContext):
         await message.answer(get_text('cashback_invalid_percent', lang))
         return
 
-    # Проверяем разумность процента
-    if percent > 100:
+    # Проверяем разумность процента (модель ограничивает <=99)
+    if percent > 99:
         await message.answer(get_text('cashback_percent_too_high', lang))
         return
 
@@ -813,8 +813,8 @@ async def process_edit_percent(message: types.Message, state: FSMContext):
         await message.answer(get_text('cashback_invalid_percent', lang))
         return
 
-    # Проверяем разумность процента
-    if percent > 100:
+    # Проверяем разумность процента (модель ограничивает <=99)
+    if percent > 99:
         await message.answer(get_text('cashback_percent_too_high', lang))
         return
 
