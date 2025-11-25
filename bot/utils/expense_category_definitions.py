@@ -295,9 +295,9 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
         'name_en': '💰 Other Expenses',
         'keywords': [
             # Русские
-            'прочее', 'разное', 'другое', 'иное', 'прочие',
+            'прочее', 'разное', 'другое', 'иное', 'прочие', 'расход',
             # Английские
-            'other', 'misc', 'miscellaneous', 'various', 'different',
+            'other', 'misc', 'miscellaneous', 'various', 'different', 'expense',
         ],
         'aliases': ['прочие', 'other', 'разное', 'misc'],
     },

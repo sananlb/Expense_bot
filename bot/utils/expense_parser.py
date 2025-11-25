@@ -10,6 +10,7 @@ from datetime import datetime, date, time
 from dateutil import parser as date_parser
 from asgiref.sync import sync_to_async
 from bot.utils.language import get_text
+from bot.utils.emoji_utils import strip_leading_emoji
 
 logger = logging.getLogger(__name__)
 
@@ -868,14 +869,39 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         
         # Проверяем каждую категорию пользователя
         for user_cat in user_categories:
-            user_cat_lower = user_cat.name.lower()
+            # Собираем все варианты названия категории (без эмодзи) для сравнения
+            category_names_to_check = []
+
+            # Основное название (очищенное от эмодзи)
+            if user_cat.name:
+                clean_name = strip_leading_emoji(user_cat.name).lower().strip()
+                if clean_name:
+                    category_names_to_check.append(clean_name)
+
+            # Мультиязычные названия (name_ru, name_en) - также очищаем от эмодзи
+            if hasattr(user_cat, 'name_ru') and user_cat.name_ru:
+                clean_name_ru = strip_leading_emoji(user_cat.name_ru).lower().strip()
+                if clean_name_ru and clean_name_ru not in category_names_to_check:
+                    category_names_to_check.append(clean_name_ru)
+
+            if hasattr(user_cat, 'name_en') and user_cat.name_en:
+                clean_name_en = strip_leading_emoji(user_cat.name_en).lower().strip()
+                if clean_name_en and clean_name_en not in category_names_to_check:
+                    category_names_to_check.append(clean_name_en)
 
             # Проверяем прямое вхождение названия категории в текст (ЦЕЛЫМ СЛОВОМ)
-            if keyword_matches_in_text(user_cat_lower, text_lower):
-                # Используем язык пользователя для отображения категории
-                lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
-                category = get_category_display_name(user_cat, lang_code)
-                max_score = 100  # Максимальный приоритет для пользовательских категорий
+            category_matched = False
+            for cat_name in category_names_to_check:
+                if keyword_matches_in_text(cat_name, text_lower):
+                    # Используем язык пользователя для отображения категории
+                    lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
+                    category = get_category_display_name(user_cat, lang_code)
+                    max_score = 100  # Максимальный приоритет для пользовательских категорий
+                    category_matched = True
+                    logger.info(f"Category matched by name: '{cat_name}' in text '{text_lower}' → {category}")
+                    break
+
+            if category_matched:
                 break
 
             # Проверяем ключевые слова пользовательской категории
