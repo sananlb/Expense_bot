@@ -177,7 +177,10 @@ async def send_message_with_cleanup(
         **kwargs
     )
 
-    # Удаляем старое меню ПОСЛЕ успешной отправки нового (без задержки)
+    # Небольшая задержка чтобы пользователь увидел новое сообщение ДО удаления старого
+    await asyncio.sleep(0.05)
+
+    # Удаляем старое меню ПОСЛЕ успешной отправки нового
     if old_menu_id and old_menu_id != sent_message.message_id and not keep_message:
         try:
             await bot.delete_message(chat_id=chat_id, message_id=old_menu_id)

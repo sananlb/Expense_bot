@@ -48,7 +48,7 @@ def create_recurring_payment(user_id: int, category_id: int, amount: float,
         # Получаем категорию дохода
         income_category = IncomeCategory.objects.get(id=category_id, profile=profile)
         expense_category = None
-        
+
         # Если описание не указано, используем название категории
         if not description:
             # Используем язык профиля для отображения категории
@@ -62,7 +62,7 @@ def create_recurring_payment(user_id: int, category_id: int, amount: float,
         # Получаем категорию расхода
         expense_category = ExpenseCategory.objects.get(id=category_id, profile=profile)
         income_category = None
-        
+
         # Если описание не указано, используем название категории
         if not description:
             # Используем язык профиля для отображения категории

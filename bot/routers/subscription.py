@@ -59,15 +59,13 @@ SUBSCRIPTION_PRICES = {
         'stars': 600,
         'months': 6,
         'title': '💎 Premium на 6 месяцев',
-        'description': '''✨ Все функции Premium + Экономия 300 звёзд!
-🎯 AI-аналитика
-🎤 Голосовой ввод
+        'description': '''🎯 Естественные вопросы к статистике
+🎤 Голосовой ввод трат
 💵 Учёт доходов
-📊 PDF отчёты
+📊 PDF отчёты и графики
 🏷️ Редактирование категорий
 💳 Отслеживание кэшбэка
-🏠 Семейный доступ
-🚀 Приоритетная поддержка''',
+🏠 Семейный доступ''',
         'emoji_title': '💎 Premium • 6 месяцев',
         'features': [
             '🎯 Все функции Premium',
@@ -174,11 +172,27 @@ async def get_subscription_info_text(profile: Profile, lang: str = 'ru') -> str:
 @router.callback_query(F.data == "menu_subscription")
 async def show_subscription_menu(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать меню подписки"""
-    # Получаем сохраненные ID сообщений
+    # Получаем сохраненные ID сообщений для удаления ПОСЛЕ показа нового
     data = await state.get_data()
     invoice_msg_id = data.get('invoice_msg_id')
 
-    # Удаляем сообщение с инвойсом, если оно есть
+    # Очищаем сохраненный ID
+    await state.update_data(invoice_msg_id=None)
+
+    profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
+
+    text = await get_subscription_info_text(profile, lang)
+
+    # Отправляем новое сообщение с меню подписки СНАЧАЛА
+    await send_message_with_cleanup(
+        callback.message,
+        state,
+        text,
+        reply_markup=get_subscription_keyboard(is_beta_tester=profile.is_beta_tester, lang=lang),
+        parse_mode="HTML"
+    )
+
+    # Удаляем сообщение с инвойсом ПОСЛЕ показа нового, если оно есть
     if invoice_msg_id:
         try:
             await callback.bot.delete_message(
@@ -188,22 +202,6 @@ async def show_subscription_menu(callback: CallbackQuery, state: FSMContext, lan
         except (TelegramBadRequest, TelegramNotFound):
             pass  # Сообщение уже удалено или не найдено
 
-    # Очищаем сохраненный ID
-    await state.update_data(invoice_msg_id=None)
-
-    profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
-
-    text = await get_subscription_info_text(profile, lang)
-
-    # Отправляем новое сообщение с меню подписки
-    await send_message_with_cleanup(
-        callback.message,
-        state,
-        text,
-        reply_markup=get_subscription_keyboard(is_beta_tester=profile.is_beta_tester, lang=lang),
-        parse_mode="HTML"
-    )
-
     await callback.answer()
 
 
@@ -211,18 +209,16 @@ async def send_stars_invoice(callback: CallbackQuery, state: FSMContext, sub_typ
     """Создать и отправить инвойс в Telegram Stars для указанного типа подписки"""
     sub_info = SUBSCRIPTION_PRICES[sub_type]
 
+    # Сохраняем ID старого сообщения для удаления ПОСЛЕ отправки инвойса
+    old_message_id = callback.message.message_id
+    chat_id = callback.message.chat.id
+
     # Определяем язык пользователя
     try:
         profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
         lang = profile.language_code or 'ru'
     except Exception:
         lang = 'ru'
-
-    # Удаляем старое сообщение
-    try:
-        await callback.message.delete()
-    except (TelegramBadRequest, TelegramNotFound):
-        pass
 
     # Отправляем инвойс с оригинальным описанием
     if lang.startswith('en'):
@@ -235,16 +231,6 @@ async def send_stars_invoice(callback: CallbackQuery, state: FSMContext, sub_typ
             "🏷️ Category customization\n"
             "💳 Cashback tracking\n"
             "🏠 Family access"
-            if sub_type == 'month' else
-            "✨ All Premium features + Save 300 stars!\n"
-            "🎯 AI analytics\n"
-            "🎤 Voice input\n"
-            "💵 Income tracking\n"
-            "📊 PDF reports\n"
-            "🏷️ Category customization\n"
-            "💳 Cashback tracking\n"
-            "🏠 Family access\n"
-            "🚀 Priority support"
         )
         price_label = "Pay"
     else:
@@ -252,6 +238,7 @@ async def send_stars_invoice(callback: CallbackQuery, state: FSMContext, sub_typ
         description = sub_info['description']
         price_label = "Оплата"
 
+    # Сначала отправляем инвойс
     invoice_msg = await callback.bot.send_invoice(
         chat_id=callback.from_user.id,
         title=title,
@@ -269,6 +256,13 @@ async def send_stars_invoice(callback: CallbackQuery, state: FSMContext, sub_typ
 
     # Сохраняем ID сообщения с инвойсом для удаления
     await state.update_data(invoice_msg_id=invoice_msg.message_id)
+
+    # Потом удаляем старое сообщение
+    try:
+        await callback.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
+    except (TelegramBadRequest, TelegramNotFound):
+        pass
+
     await callback.answer()
 
 
@@ -364,23 +358,33 @@ async def cmd_subscription(message: Message, state: FSMContext, lang: str = 'ru'
 @router.callback_query(F.data == "subscription_promo")
 async def ask_promocode(callback: CallbackQuery, state: FSMContext):
     """Запрос промокода"""
-    # Удаляем старое сообщение
-    try:
-        await callback.message.delete()
-    except (TelegramBadRequest, TelegramNotFound):
-        pass  # Сообщение уже удалено или не найдено
-    
-    # Кнопка отмены
+    # Сохраняем ID старого сообщения для удаления ПОСЛЕ показа нового
+    old_message_id = callback.message.message_id
+    chat_id = callback.message.chat.id
+
+    # Кнопки: Назад + Закрыть
     builder = InlineKeyboardBuilder()
-    builder.button(text="❌ Отмена", callback_data="menu_subscription")
-    
-    await callback.message.answer(
+    builder.button(text="⬅️ Назад", callback_data="menu_subscription")
+    builder.button(text="❌ Закрыть", callback_data="close")
+    builder.adjust(1)  # Каждая кнопка на отдельной строке
+
+    # Сначала отправляем НОВОЕ сообщение
+    promo_msg = await callback.message.answer(
         "🎟️ <b>Введите промокод</b>\n\n"
         "Отправьте промокод для активации специального предложения:",
         reply_markup=builder.as_markup(),
         parse_mode="HTML"
     )
-    
+
+    # Сохраняем ID нового сообщения для последующего удаления
+    await state.update_data(last_menu_message_id=promo_msg.message_id)
+
+    # Потом удаляем СТАРОЕ сообщение
+    try:
+        await callback.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
+    except (TelegramBadRequest, TelegramNotFound):
+        pass  # Сообщение уже удалено или не найдено
+
     await state.set_state(PromoCodeStates.waiting_for_promo)
     await callback.answer()
 
@@ -717,19 +721,17 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
         sub_type = "six_months"
     
     sub_info = SUBSCRIPTION_PRICES[sub_type]
-    
+
+    # Сохраняем ID старого сообщения для удаления ПОСЛЕ отправки нового
+    old_message_id = callback.message.message_id
+    chat_id = callback.message.chat.id
+
     # Применяем скидку
     original_price = sub_info['stars']
     discounted_price = int(promocode.apply_discount(original_price))
 
     # Отвечаем на callback чтобы убрать индикатор загрузки
     await callback.answer()
-
-    # Удаляем старое сообщение
-    try:
-        await callback.message.delete()
-    except (TelegramBadRequest, TelegramNotFound):
-        pass  # Сообщение уже удалено или не найдено
 
     # Проверяем случай с нулевой ценой (бесплатный промокод)
     if discounted_price == 0:
@@ -780,6 +782,7 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
         await state.clear()
 
         period_text = "месяц" if sub_type == "month" else "6 месяцев"
+        # Сначала отправляем новое сообщение
         await callback.bot.send_message(
             chat_id=callback.from_user.id,
             text=(
@@ -801,6 +804,11 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
             ),
             parse_mode="HTML"
         )
+        # Потом удаляем старое сообщение
+        try:
+            await callback.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
+        except (TelegramBadRequest, TelegramNotFound):
+            pass
         return
 
     # Обычный случай - создаем инвойс для оплаты со скидкой
@@ -810,6 +818,7 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
     # Описание для инвойса со скидкой
     invoice_description = f"🎁 Промокод {promocode.code} ({promocode.get_discount_display()}) • Цена: {discounted_price}⭐ вместо {original_price}⭐ • " + sub_info['description']
 
+    # Сначала отправляем инвойс
     invoice_msg = await callback.bot.send_invoice(
         chat_id=callback.from_user.id,
         title=f"{sub_info['title']} (со скидкой)",
@@ -833,7 +842,11 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
     # Сохраняем ID сообщения с инвойсом для удаления после оплаты или при новой команде
     await state.update_data(invoice_msg_id=invoice_msg.message_id)
 
-    await callback.answer()
+    # Потом удаляем старое сообщение
+    try:
+        await callback.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
+    except (TelegramBadRequest, TelegramNotFound):
+        pass
 
 
 # Обновляем обработчик pre_checkout для поддержки промокодов

@@ -643,20 +643,22 @@ async def process_edit_amount(message: types.Message, state: FSMContext, lang: s
         await send_message_with_cleanup(message, state, "❌ Некорректная сумма. Введите положительное число.")
         return
 
-    # Удаляем промежуточное сообщение с запросом ввода
+    # Сохраняем ID prompt сообщения для удаления ПОСЛЕ показа нового
     prompt_message_id = data.get('editing_prompt_message_id')
-    if prompt_message_id:
-        try:
-            await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_message_id)
-        except Exception:
-            pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
 
     # Обновляем сумму
     await update_recurring_payment(user_id, payment_id, amount=amount)
     await state.clear()
 
-    # Возвращаемся к основному меню
+    # Возвращаемся к основному меню СНАЧАЛА
     await show_recurring_menu(message, state, lang)
+
+    # Удаляем промежуточное сообщение ПОСЛЕ показа нового
+    if prompt_message_id:
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_message_id)
+        except Exception:
+            pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
 
 
 @router.message(RecurringForm.editing_description)
@@ -679,20 +681,22 @@ async def process_edit_description(message: types.Message, state: FSMContext, la
     if text:
         text = text[0].upper() + text[1:] if len(text) > 1 else text.upper()
 
-    # Удаляем промежуточное сообщение с запросом ввода
+    # Сохраняем ID prompt сообщения для удаления ПОСЛЕ показа нового
     prompt_message_id = data.get('editing_prompt_message_id')
-    if prompt_message_id:
-        try:
-            await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_message_id)
-        except Exception:
-            pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
 
     # Обновляем название
     await update_recurring_payment(user_id, payment_id, description=text)
     await state.clear()
 
-    # Возвращаемся к основному меню
+    # Возвращаемся к основному меню СНАЧАЛА
     await show_recurring_menu(message, state, lang)
+
+    # Удаляем промежуточное сообщение ПОСЛЕ показа нового
+    if prompt_message_id:
+        try:
+            await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_message_id)
+        except Exception:
+            pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
 
 
 @router.message(RecurringForm.editing_day)

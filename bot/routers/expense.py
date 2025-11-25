@@ -668,17 +668,19 @@ async def process_edit_amount(message: types.Message, state: FSMContext, lang: s
         success = await update_expense(message.from_user.id, item_id, **update_kwargs)
 
     if success:
-        # Удаляем промежуточное сообщение с запросом ввода
+        # Сохраняем ID prompt сообщения для удаления ПОСЛЕ показа нового
         data = await state.get_data()
         prompt_message_id = data.get('editing_prompt_message_id')
+
+        # Показываем обновленную операцию СНАЧАЛА
+        await show_updated_expense(message, state, item_id, lang)
+
+        # Удаляем промежуточное сообщение ПОСЛЕ показа нового
         if prompt_message_id:
             try:
                 await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_message_id)
             except Exception:
                 pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
-
-        # Показываем обновленную операцию
-        await show_updated_expense(message, state, item_id, lang)
     else:
         error_msg = "❌ Не удалось обновить сумму дохода" if is_income else "❌ Не удалось обновить сумму"
         await message.answer(error_msg)
@@ -709,21 +711,22 @@ async def process_edit_description(message: types.Message, state: FSMContext, la
         success = await update_expense(message.from_user.id, item_id, description=description)
     
     if success:
-        # Удаляем промежуточное сообщение с запросом ввода
+        # Сохраняем ID prompt сообщения для удаления ПОСЛЕ показа нового
         data = await state.get_data()
         prompt_message_id = data.get('editing_prompt_message_id')
+
+        # Показываем обновленную операцию СНАЧАЛА
+        await show_updated_expense(message, state, item_id, lang)
+
+        # Удаляем промежуточное сообщение ПОСЛЕ показа нового
         if prompt_message_id:
             try:
                 await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_message_id)
             except Exception:
                 pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
-
-        # Показываем обновленную операцию
-        await show_updated_expense(message, state, item_id, lang)
     else:
         error_msg = "❌ Не удалось обновить описание дохода" if is_income else "❌ Не удалось обновить описание"
         await message.answer(error_msg)
-
 
 
 # Обработчик ввода суммы после уточнения - ДОЛЖЕН БЫТЬ ПЕРЕД основным обработчиком
@@ -835,21 +838,13 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
             expense.cashback_amount = Decimal(str(cashback))
             await expense.asave()
     
-    # Удаляем сообщение с запросом суммы
+    # Сохраняем ID сообщения для удаления ПОСЛЕ показа нового
     clarification_message_id = data.get('clarification_message_id')
-    if clarification_message_id:
-        try:
-            await message.bot.delete_message(
-                chat_id=user_id,
-                message_id=clarification_message_id
-            )
-        except Exception as e:
-            logger.debug(f"Could not delete clarification message: {e}")
-    
+
     # Очищаем состояние
     from bot.utils.state_utils import clear_state_keep_cashback
     await clear_state_keep_cashback(state)
-    
+
     # Формируем сообщение с информацией о потраченном за день
     message_text = await format_expense_added_message(
         expense=expense,
@@ -858,7 +853,7 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
         lang=lang
     )
 
-    # Отправляем подтверждение (сообщение о трате не должно исчезать)
+    # Отправляем подтверждение СНАЧАЛА (сообщение о трате не должно исчезать)
     # send_message_with_cleanup сама удалит старое меню после отправки нового
     await send_message_with_cleanup(message, state,
         message_text,
@@ -870,6 +865,16 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
         parse_mode="HTML",
         keep_message=True  # Не удалять это сообщение при следующих действиях
     )
+
+    # Удаляем сообщение с запросом суммы ПОСЛЕ отправки нового
+    if clarification_message_id:
+        try:
+            await message.bot.delete_message(
+                chat_id=user_id,
+                message_id=clarification_message_id
+            )
+        except Exception as e:
+            logger.debug(f"Could not delete clarification message: {e}")
 
 
 # Обработчик кнопки отмены ввода траты

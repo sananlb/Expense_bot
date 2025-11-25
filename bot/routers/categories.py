@@ -90,6 +90,7 @@ async def _show_expense_edit_list(message_or_cb: types.Message | types.CallbackQ
             row.append(InlineKeyboardButton(text=name2, callback_data=f"edit_cat_{editable[i + 1].id}"))
         keyboard_buttons.append(row)
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="expense_categories_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
 
     text = get_text('choose_category_to_edit', lang)
     await send_message_with_cleanup(message_or_cb, state, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons))
@@ -110,6 +111,7 @@ async def _show_income_edit_list(message_or_cb: types.Message | types.CallbackQu
     for cat in categories:
         keyboard_buttons.append([InlineKeyboardButton(text=get_category_display_name(cat, lang), callback_data=f"edit_income_cat_{cat.id}")])
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="income_categories_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
 
     text = get_text('choose_income_category_to_edit', lang)
     await send_message_with_cleanup(message_or_cb, state, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard_buttons))
@@ -176,21 +178,20 @@ async def _apply_icon_and_finalize(event: types.CallbackQuery | types.Message, s
 @router.message(Command("categories"))
 async def cmd_categories(message: types.Message, state: FSMContext):
     """Команда /categories - управление категориями"""
-    # Удаляем предыдущее меню ТОЛЬКО если это НЕ меню кешбека
+    # Сохраняем ID старого меню для удаления ПОСЛЕ показа нового
     data = await state.get_data()
     old_menu_id = data.get('last_menu_message_id')
     cashback_menu_ids = data.get('cashback_menu_ids', [])
-    
-    # Проверяем, не является ли это меню кешбека
+
+    # По умолчанию показываем категории трат СНАЧАЛА, передаем state для сохранения ID меню
+    await show_expense_categories_menu(message, state)
+
+    # Удаляем предыдущее меню ПОСЛЕ показа нового (ТОЛЬКО если это НЕ меню кешбека)
     if old_menu_id and old_menu_id not in cashback_menu_ids:
         try:
             await message.bot.delete_message(chat_id=message.chat.id, message_id=old_menu_id)
-            await state.update_data(last_menu_message_id=None)
         except (TelegramBadRequest, TelegramNotFound):
             pass  # Сообщение уже удалено
-    
-    # По умолчанию показываем категории трат, передаем state для сохранения ID меню
-    await show_expense_categories_menu(message, state)
 
 
 async def show_categories_menu(message: types.Message | types.CallbackQuery, state: FSMContext = None):
@@ -441,7 +442,8 @@ async def add_category_start(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         get_text('adding_category', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="expense_categories_menu")]
+            [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="expense_categories_menu")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
         ])
     )
     # Обновляем контекст состояния (единый контракт)
@@ -526,10 +528,12 @@ async def custom_icon_start(callback: types.CallbackQuery, state: FSMContext):
     else:
         back_cb = "income_categories_menu" if cat_type == 'income' else "expense_categories_menu"
 
+    lang = await get_user_language(callback.from_user.id)
     await callback.message.edit_text(
         "✏️ Отправьте свой эмодзи для категории:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="⬅️ Назад", callback_data=back_cb)]
+            [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data=back_cb)],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
         ])
     )
     await state.set_state(CategoryForm.waiting_for_custom_icon)
@@ -625,6 +629,7 @@ async def edit_categories_list(callback: types.CallbackQuery, state: FSMContext)
             ))
         keyboard_buttons.append(row)
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="expense_categories_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
 
     await callback.message.edit_text(
         get_text('choose_category_to_edit', lang),
@@ -677,11 +682,12 @@ async def delete_categories_list(callback: types.CallbackQuery, state: FSMContex
         if i + 1 < len(deletable_categories):
             translated_name_2 = get_category_display_name(deletable_categories[i + 1], lang)
             row.append(InlineKeyboardButton(
-                text=translated_name_2, 
+                text=translated_name_2,
                 callback_data=f"del_cat_{deletable_categories[i + 1].id}"
             ))
         keyboard_buttons.append(row)
     keyboard_buttons.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="expense_categories_menu")])
+    keyboard_buttons.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
 
     await callback.message.edit_text(
         get_text('choose_category_to_delete', lang),
@@ -746,7 +752,8 @@ async def edit_category(callback: types.CallbackQuery, state: FSMContext):
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text=get_text('edit_name_button', lang), callback_data=f"edit_cat_name_{cat_id}")],
                     [InlineKeyboardButton(text=get_text('edit_icon_button', lang), callback_data=f"edit_cat_icon_{cat_id}")],
-                    [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="edit_categories")]
+                    [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="edit_categories")],
+                    [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
                 ]),
                 parse_mode='HTML'
             )
@@ -779,7 +786,8 @@ async def edit_category_name_start(callback: types.CallbackQuery, state: FSMCont
             await callback.message.edit_text(
                 get_text('enter_new_category_name', lang).format(name=category.name),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data=f"edit_cat_{cat_id}")]
+                    [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data=f"edit_cat_{cat_id}")],
+                    [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
                 ])
             )
         except TelegramBadRequest:
@@ -896,10 +904,12 @@ async def process_edit_category_name(message: types.Message, state: FSMContext):
         # Показываем меню категорий трат (не общее меню)
         await show_expense_categories_menu(message, state)
     else:
+        lang = await get_user_language(message.from_user.id)
         await message.answer(
             "❌ Не удалось обновить категорию.",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="⬅️ Назад", callback_data="expense_categories_menu")]
+                [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="expense_categories_menu")],
+                [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
             ])
         )
 
@@ -940,7 +950,8 @@ async def add_income_category_start(callback: types.CallbackQuery, state: FSMCon
     await callback.message.edit_text(
         get_text('adding_income_category', lang),
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="income_categories_menu")]
+            [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="income_categories_menu")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
         ])
     )
     await state.update_data(last_menu_message_id=callback.message.message_id, operation='create', cat_type='income')
@@ -1118,6 +1129,9 @@ async def delete_income_categories_start(callback: types.CallbackQuery, state: F
     keyboard_buttons.append([
         InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="income_categories_menu")
     ])
+    keyboard_buttons.append([
+        InlineKeyboardButton(text=get_text('close', lang), callback_data="close")
+    ])
 
     await callback.message.edit_text(
         get_text('choose_income_category_to_delete', lang),
@@ -1179,6 +1193,9 @@ async def edit_income_categories_start(callback: types.CallbackQuery, state: FSM
     keyboard_buttons.append([
         InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="income_categories_menu")
     ])
+    keyboard_buttons.append([
+        InlineKeyboardButton(text=get_text('close', lang), callback_data="close")
+    ])
 
     await callback.message.edit_text(
         get_text('choose_income_category_to_edit', lang),
@@ -1211,7 +1228,8 @@ async def edit_income_category(callback: types.CallbackQuery, state: FSMContext)
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text=get_text('edit_name_button', lang), callback_data=f"edit_income_name_{category_id}")],
                 [InlineKeyboardButton(text=get_text('edit_icon_button', lang), callback_data=f"edit_income_icon_{category_id}")],
-                [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="edit_income_categories")]
+                [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="edit_income_categories")],
+                [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
             ]),
             parse_mode='HTML'
         )
@@ -1236,11 +1254,12 @@ async def edit_income_category_name_start(callback: types.CallbackQuery, state: 
     if category:
         await state.update_data(editing_income_category_id=category_id, category_id=category_id)
         await state.set_state(IncomeCategoryForm.waiting_for_new_name)
-        
+
         await callback.message.edit_text(
             get_text('enter_new_income_category_name', lang).format(name=category.name),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data=f"edit_income_cat_{category_id}")]
+                [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data=f"edit_income_cat_{category_id}")],
+                [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
             ])
         )
     await callback.answer()
