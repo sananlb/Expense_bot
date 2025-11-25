@@ -10,6 +10,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.fsm.storage.memory import MemoryStorage
+from datetime import timedelta
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 import os
@@ -42,11 +43,13 @@ from .middlewares import (
     RateLimitMiddleware,
     SecurityCheckMiddleware,
     LoggingMiddleware,
-    PrivacyCheckMiddleware
+    PrivacyCheckMiddleware,
+    BotUnblockMiddleware,
 )
 from .middlewares.fsm_cleanup import FSMCleanupMiddleware
 from .middlewares.state_reset import StateResetMiddleware
 from .middleware import ActivityTrackerMiddleware, RateLimitMiddleware as AdminRateLimitMiddleware
+from .handlers import error_router
 from .utils.commands import set_bot_commands
 
 # Загрузка переменных окружения
@@ -120,9 +123,17 @@ def create_dispatcher() -> Dispatcher:
     redis_url = os.getenv("REDIS_URL")
     
     # Используем Redis если доступен, иначе MemoryStorage
+    # TTL для FSM состояний: 4 часа - защита от "зависших" диалогов
+    # Если пользователь начал операцию и ушёл, через 4 часа состояние сбросится
+    # Callback кнопки содержат ID в callback_data, поэтому работают независимо от FSM
     if redis_url:
         try:
-            storage = RedisStorage.from_url(redis_url)
+            storage = RedisStorage.from_url(
+                redis_url,
+                state_ttl=timedelta(hours=4),
+                data_ttl=timedelta(hours=4),
+            )
+            logger.info("FSM storage: Redis с TTL=4 часа")
         except Exception as e:
             logger.warning(f"Не удалось подключиться к Redis: {e}. Используется MemoryStorage")
             storage = MemoryStorage()
@@ -130,8 +141,15 @@ def create_dispatcher() -> Dispatcher:
         storage = MemoryStorage()
     
     dp = Dispatcher(storage=storage)
-    
+
+    # Подключение error handler - ПЕРВЫМ, чтобы ловить все ошибки
+    dp.include_router(error_router)
+
     # Подключение middlewares (порядок важен!)
+    # 0. Bot Unblock - сбрасывает bot_blocked при активности (самый ранний уровень)
+    dp.message.outer_middleware(BotUnblockMiddleware())
+    dp.callback_query.outer_middleware(BotUnblockMiddleware())
+
     # 1. Activity Tracker - отслеживает активность и отправляет уведомления админу
     activity_tracker = ActivityTrackerMiddleware()
     dp.message.middleware(activity_tracker)

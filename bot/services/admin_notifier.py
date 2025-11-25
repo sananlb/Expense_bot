@@ -267,32 +267,10 @@ async def notify_critical_error(error_type: str, details: str, user_id: Optional
         logger.error(f"Не удалось отправить критическое уведомление: {e}")
 
 
-async def notify_new_user(user_id: int):
-    """
-    Уведомление о новом пользователе
-
-    Args:
-        user_id: ID пользователя
-    """
-    message = (
-        f"🎉 *Новый пользователь\\!*\n\n"
-        f"ID: `{user_id}`\n"
-    )
-
-    # Блоки с first_name и username УДАЛЕНЫ для privacy (GDPR compliance)
-
-    message += f"Время: {escape_markdown_v2(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}"
-
-    try:
-        await send_admin_alert(message, disable_notification=True)
-    except Exception as e:
-        logger.error(f"Ошибка отправки уведомления о новом пользователе: {e}")
-
-
 async def notify_payment_received(user_id: int, amount: float, payment_type: str):
     """
     Уведомление о получении платежа
-    
+
     Args:
         user_id: ID пользователя
         amount: Сумма платежа
@@ -301,13 +279,13 @@ async def notify_payment_received(user_id: int, amount: float, payment_type: str
     # Форматируем сумму без лишних нулей
     amount_str = f"{int(amount)}" if amount == int(amount) else f"{amount:.2f}"
     message = (
-        f"💳 *Получен платеж!*\n\n"
+        f"💳 *Получен платеж\\!*\n\n"
         f"Пользователь: `{user_id}`\n"
-        f"Сумма: {amount_str} руб.\n"
-        f"Тип: {payment_type}\n"
-        f"Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        f"Сумма: {escape_markdown_v2(amount_str)} руб\\.\n"
+        f"Тип: {escape_markdown_v2(payment_type)}\n"
+        f"Время: {escape_markdown_v2(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}"
     )
-    
+
     try:
         await send_admin_alert(message)
     except Exception as e:

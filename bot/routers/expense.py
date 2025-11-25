@@ -1931,6 +1931,22 @@ async def handle_video_note_unsupported(message: types.Message, state: FSMContex
 
 
 # Обработчик редактирования траты или дохода
+def _parse_edit_target(callback_data: str) -> tuple[int | None, str | None]:
+    """
+    Извлекает ID и тип (income/expense) из callback_data вида
+    edit_field_amount_expense_123 или edit_done_income_123.
+    """
+    parts = callback_data.split("_")
+    if len(parts) < 3:
+        return None, None
+    try:
+        item_id = int(parts[-1])
+    except ValueError:
+        return None, None
+    item_type = parts[-2] if parts[-2] in {"income", "expense"} else None
+    return item_id, item_type
+
+
 @router.callback_query(lambda c: c.data.startswith(("edit_expense_", "edit_income_")))
 async def edit_expense(callback: types.CallbackQuery, state: FSMContext):
     """Редактирование траты или дохода"""
@@ -2009,10 +2025,26 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext):
     description = expense.description
     currency = expense.currency if hasattr(expense, 'currency') else '₽'
     
+    edit_prefix = "income" if is_income else "expense"
     buttons = [
-        [InlineKeyboardButton(text=f"💰 {get_text('sum', lang)}: {amount:.0f} {currency}", callback_data="edit_field_amount")],
-        [InlineKeyboardButton(text=f"📝 {get_text('description', lang)}: {description}", callback_data="edit_field_description")],
-        [InlineKeyboardButton(text=f"📁 {get_text('category', lang)}: {translated_category}", callback_data="edit_field_category")],
+        [
+            InlineKeyboardButton(
+                text=f"💰 {get_text('sum', lang)}: {amount:.0f} {currency}",
+                callback_data=f"edit_field_amount_{edit_prefix}_{item_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"📝 {get_text('description', lang)}: {description}",
+                callback_data=f"edit_field_description_{edit_prefix}_{item_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=f"📁 {get_text('category', lang)}: {translated_category}",
+                callback_data=f"edit_field_category_{edit_prefix}_{item_id}"
+            )
+        ],
     ]
     
     # Добавляем кнопку удаления кешбека только для расходов
@@ -2023,7 +2055,12 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext):
     delete_callback = f"delete_income_{item_id}" if is_income else f"delete_expense_{item_id}"
     buttons.extend([
         [InlineKeyboardButton(text=get_text('delete_button', lang), callback_data=delete_callback)],
-        [InlineKeyboardButton(text=f"✅ {get_text('edit_done', lang)}", callback_data="edit_done")]
+        [
+            InlineKeyboardButton(
+                text=f"✅ {get_text('edit_done', lang)}",
+                callback_data=f"edit_done_{edit_prefix}_{item_id}"
+            )
+        ]
     ])
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -2150,15 +2187,19 @@ async def delete_expense(callback: types.CallbackQuery, state: FSMContext):
 
 
 # Обработчики выбора поля для редактирования
-@router.callback_query(lambda c: c.data == "edit_field_amount", EditExpenseForm.choosing_field)
+@router.callback_query(lambda c: c.data.startswith("edit_field_amount"))
 async def edit_field_amount(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Редактирование суммы"""
+    expense_id, item_type = _parse_edit_target(callback.data)
     data = await state.get_data()
-    expense_id = data.get('editing_expense_id')
 
-    # Проверка что expense_id существует в FSM state
     if expense_id is None:
-        logger.warning(f"[edit_field_amount] FSM state lost for user {callback.from_user.id}: editing_expense_id is None")
+        expense_id = data.get('editing_expense_id')
+    if item_type is None:
+        item_type = data.get('editing_type')
+
+    if expense_id is None:
+        logger.warning(f"[edit_field_amount] Missing expense id for user {callback.from_user.id} (callback: {callback.data})")
         await callback.answer(
             "❌ Сессия редактирования истекла. Попробуйте начать заново.",
             show_alert=True
@@ -2166,12 +2207,20 @@ async def edit_field_amount(callback: types.CallbackQuery, state: FSMContext, la
         await state.clear()
         return
 
+    await state.update_data(
+        editing_expense_id=expense_id,
+        editing_type=item_type or data.get('editing_type'),
+        lang=lang,
+    )
+
+    edit_prefix = 'income' if (item_type or data.get('editing_type')) == 'income' else 'expense'
+
     await callback.message.edit_text(
         f"💰 <b>{get_text('editing_amount', lang)}</b>\n\n"
         f"{get_text('enter_new_amount', lang)}",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_back_{expense_id}")]
+            [InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_back_{edit_prefix}_{expense_id}")]
         ])
     )
     # Сохраняем ID сообщения для последующего удаления
@@ -2180,15 +2229,19 @@ async def edit_field_amount(callback: types.CallbackQuery, state: FSMContext, la
     await callback.answer()
 
 
-@router.callback_query(lambda c: c.data == "edit_field_description", EditExpenseForm.choosing_field)
+@router.callback_query(lambda c: c.data.startswith("edit_field_description"))
 async def edit_field_description(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Редактирование описания"""
+    expense_id, item_type = _parse_edit_target(callback.data)
     data = await state.get_data()
-    expense_id = data.get('editing_expense_id')
 
-    # Проверка что expense_id существует в FSM state
     if expense_id is None:
-        logger.warning(f"[edit_field_description] FSM state lost for user {callback.from_user.id}: editing_expense_id is None")
+        expense_id = data.get('editing_expense_id')
+    if item_type is None:
+        item_type = data.get('editing_type')
+
+    if expense_id is None:
+        logger.warning(f"[edit_field_description] Missing expense id for user {callback.from_user.id} (callback: {callback.data})")
         await callback.answer(
             "❌ Сессия редактирования истекла. Попробуйте начать заново.",
             show_alert=True
@@ -2196,12 +2249,20 @@ async def edit_field_description(callback: types.CallbackQuery, state: FSMContex
         await state.clear()
         return
 
+    await state.update_data(
+        editing_expense_id=expense_id,
+        editing_type=item_type or data.get('editing_type'),
+        lang=lang,
+    )
+
+    edit_prefix = 'income' if (item_type or data.get('editing_type')) == 'income' else 'expense'
+
     await callback.message.edit_text(
         f"📝 <b>{get_text('editing_description', lang)}</b>\n\n"
         f"{get_text('enter_new_description', lang)}",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_back_{expense_id}")]
+            [InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_back_{edit_prefix}_{expense_id}")]
         ])
     )
     # Сохраняем ID сообщения для последующего удаления
@@ -2210,12 +2271,31 @@ async def edit_field_description(callback: types.CallbackQuery, state: FSMContex
     await callback.answer()
 
 
-@router.callback_query(lambda c: c.data == "edit_field_category", EditExpenseForm.choosing_field)
+@router.callback_query(lambda c: c.data.startswith("edit_field_category"))
 async def edit_field_category(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Редактирование категории"""
     user_id = callback.from_user.id
+    expense_id, item_type = _parse_edit_target(callback.data)
     data = await state.get_data()
-    is_income = data.get('editing_type') == 'income'
+    is_income = (item_type or data.get('editing_type')) == 'income'
+    edit_prefix = 'income' if is_income else 'expense'
+    if expense_id is None:
+        expense_id = data.get('editing_expense_id')
+
+    if expense_id is None:
+        logger.warning(f"[edit_field_category] Missing expense id for user {callback.from_user.id} (callback: {callback.data})")
+        await callback.answer(
+            "❌ Сессия редактирования истекла. Попробуйте начать заново.",
+            show_alert=True
+        )
+        await state.clear()
+        return
+
+    await state.update_data(
+        editing_expense_id=expense_id,
+        editing_type=item_type or data.get('editing_type'),
+        lang=lang,
+    )
     
     # Получаем соответствующие категории
     if is_income:
@@ -2247,7 +2327,7 @@ async def edit_field_category(callback: types.CallbackQuery, state: FSMContext, 
             ))
         keyboard_buttons.append(row)
     
-    keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data="edit_cancel")])
+    keyboard_buttons.append([InlineKeyboardButton(text="❌ Отмена", callback_data=f"edit_cancel_{edit_prefix}_{expense_id}")])
     
     await callback.message.edit_text(
         f"📁 <b>Выберите новую категорию</b>:\n\n"
@@ -2259,17 +2339,21 @@ async def edit_field_category(callback: types.CallbackQuery, state: FSMContext, 
     await callback.answer()
 
 
-@router.callback_query(lambda c: c.data == "edit_cancel")
+@router.callback_query(lambda c: c.data.startswith("edit_cancel"))
 async def edit_cancel(callback: types.CallbackQuery, state: FSMContext):
     """Отмена редактирования категории"""
-    # Проверяем, откуда пришли - из редактирования траты или из управления категориями
     data = await state.get_data()
-    expense_id = data.get('editing_expense_id')
-    
+    expense_id, item_type = _parse_edit_target(callback.data)
+
+    if expense_id is None:
+        expense_id = data.get('editing_expense_id')
+    if item_type is None:
+        item_type = data.get('editing_type')
+
     if expense_id:
-        # Возвращаемся к меню редактирования траты
+        # Возвращаемся к меню редактирования траты/дохода
         lang = data.get('lang', 'ru')
-        await show_edit_menu_callback(callback, state, expense_id, lang)
+        await show_edit_menu_callback(callback, state, expense_id, lang, item_type=item_type)
     else:
         # Если это было управление категориями, просто удаляем сообщение
         await callback.message.delete()
@@ -2281,31 +2365,45 @@ async def edit_cancel(callback: types.CallbackQuery, state: FSMContext):
 @router.callback_query(lambda c: c.data.startswith("edit_back_"))
 async def edit_back_to_menu(callback: types.CallbackQuery, state: FSMContext):
     """Возврат к меню редактирования траты"""
-    expense_id_str = callback.data.split("_")[-1]
+    expense_id, item_type = _parse_edit_target(callback.data)
 
-    # Проверка на None/пустое значение
-    if expense_id_str == 'None' or not expense_id_str:
+    if expense_id is None:
         await callback.answer("❌ Ошибка: ID траты не найден")
-        return
-
-    try:
-        expense_id = int(expense_id_str)
-    except ValueError:
-        await callback.answer(f"❌ Ошибка: некорректный ID траты ({expense_id_str})")
         return
 
     data = await state.get_data()
     lang = data.get('lang', 'ru')
-    await show_edit_menu_callback(callback, state, expense_id, lang)
+    await show_edit_menu_callback(callback, state, expense_id, lang, item_type=item_type)
     await callback.answer()
 
 
-@router.callback_query(lambda c: c.data == "edit_done", EditExpenseForm.choosing_field)
+@router.callback_query(lambda c: c.data.startswith("edit_done"))
 async def edit_done(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Завершение редактирования"""
     data = await state.get_data()
-    item_id = data.get('editing_expense_id')
-    is_income = data.get('editing_type') == 'income'
+    item_id, item_type = _parse_edit_target(callback.data)
+
+    if item_id is None:
+        item_id = data.get('editing_expense_id')
+    if item_type is None:
+        item_type = data.get('editing_type')
+
+    if item_id is None:
+        logger.warning(f"[edit_done] Missing expense id for user {callback.from_user.id} (callback: {callback.data})")
+        await callback.answer(
+            "❌ Сессия редактирования истекла. Попробуйте начать заново.",
+            show_alert=True
+        )
+        await state.clear()
+        return
+
+    is_income = item_type == 'income'
+
+    await state.update_data(
+        editing_expense_id=item_id,
+        editing_type=item_type or data.get('editing_type'),
+        lang=lang,
+    )
     
     # Получаем обновленный объект
     try:
@@ -2441,69 +2539,6 @@ async def process_edit_category(callback: types.CallbackQuery, state: FSMContext
         await callback.answer(error_msg, show_alert=True)
 
 
-# Альтернативные обработчики БЕЗ привязки к состоянию
-# Срабатывают когда пользователь вернулся к редактированию после перехода в другое меню
-
-@router.callback_query(lambda c: c.data == "edit_field_amount")
-async def edit_amount_fallback(callback: types.CallbackQuery, state: FSMContext):
-    """Редактирование суммы когда состояние было сброшено"""
-    data = await state.get_data()
-    if data.get('editing_expense_id'):
-        await state.set_state(EditExpenseForm.choosing_field)
-        await edit_amount(callback, state)
-    else:
-        # Просто не реагируем, если нет контекста редактирования
-        await callback.answer()
-
-@router.callback_query(lambda c: c.data == "edit_field_description")
-async def edit_description_fallback(callback: types.CallbackQuery, state: FSMContext):
-    """Редактирование описания когда состояние было сброшено"""
-    data = await state.get_data()
-    if data.get('editing_expense_id'):
-        await state.set_state(EditExpenseForm.choosing_field)
-        await edit_description(callback, state)
-    else:
-        # Просто не реагируем, если нет контекста редактирования
-        await callback.answer()
-
-@router.callback_query(lambda c: c.data == "edit_field_category")
-async def edit_category_fallback(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Редактирование категории когда состояние было сброшено"""
-    data = await state.get_data()
-    if data.get('editing_expense_id'):
-        await state.set_state(EditExpenseForm.choosing_field)
-        await edit_field_category(callback, state, lang)
-    else:
-        # Просто не реагируем, если нет контекста редактирования
-        await callback.answer()
-
-@router.callback_query(lambda c: c.data.startswith("expense_cat_"))
-async def process_edit_category_fallback(callback: types.CallbackQuery, state: FSMContext):
-    """Обработка выбора категории когда состояние было сброшено"""
-    data = await state.get_data()
-    expense_id = data.get('editing_expense_id')
-    
-    if not expense_id:
-        # Просто не реагируем, если нет контекста редактирования
-        await callback.answer()
-        return
-    
-    await state.set_state(EditExpenseForm.editing_category)
-    await process_edit_category(callback, state)
-
-@router.callback_query(lambda c: c.data == "edit_done")
-async def finish_edit_fallback(callback: types.CallbackQuery, state: FSMContext):
-    """Завершение редактирования когда состояние было сброшено"""
-    data = await state.get_data()
-    if data.get('editing_expense_id'):
-        await state.set_state(EditExpenseForm.choosing_field)
-        await finish_edit(callback, state)
-    else:
-        # Просто не реагируем, если нет контекста редактирования
-        await callback.answer()
-
-
-# Вспомогательная функция для показа меню редактирования
 async def show_edit_menu(message: types.Message, state: FSMContext, expense_id: int, lang: str = 'ru'):
     """Показать меню редактирования после изменения"""
     from expenses.models import Expense
@@ -2515,11 +2550,13 @@ async def show_edit_menu(message: types.Message, state: FSMContext, expense_id: 
         )
         
         translated_category = get_category_display_name(expense.category, lang)
+        data = await state.get_data()
+        edit_prefix = 'income' if data.get('editing_type') == 'income' else 'expense'
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"💰 Сумма: {expense.amount:.0f} ₽", callback_data="edit_field_amount")],
-            [InlineKeyboardButton(text=f"📝 Описание: {expense.description}", callback_data="edit_field_description")],
-            [InlineKeyboardButton(text=f"📁 Категория: {translated_category}", callback_data="edit_field_category")],
-            [InlineKeyboardButton(text="✅ Готово", callback_data="edit_done")]
+            [InlineKeyboardButton(text=f"💰 Сумма: {expense.amount:.0f} ₽", callback_data=f"edit_field_amount_{edit_prefix}_{expense.id}")],
+            [InlineKeyboardButton(text=f"📝 Описание: {expense.description}", callback_data=f"edit_field_description_{edit_prefix}_{expense.id}")],
+            [InlineKeyboardButton(text=f"📁 Категория: {translated_category}", callback_data=f"edit_field_category_{edit_prefix}_{expense.id}")],
+            [InlineKeyboardButton(text="✅ Готово", callback_data=f"edit_done_{edit_prefix}_{expense.id}")]
         ])
         
         await send_message_with_cleanup(message, state,
@@ -2536,22 +2573,32 @@ async def show_edit_menu(message: types.Message, state: FSMContext, expense_id: 
         await clear_state_keep_cashback(state)
 
 
-async def show_edit_menu_callback(callback: types.CallbackQuery, state: FSMContext, expense_id: int, lang: str = 'ru'):
+async def show_edit_menu_callback(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    expense_id: int,
+    lang: str = 'ru',
+    item_type: str | None = None
+):
     """Показать меню редактирования для callback"""
-    from expenses.models import Expense
+    from expenses.models import Expense, Income
     
     try:
-        expense = await Expense.objects.select_related('category').aget(
+        data = await state.get_data()
+        is_income = (item_type or data.get('editing_type')) == 'income'
+        model = Income if is_income else Expense
+        expense = await model.objects.select_related('category').aget(
             id=expense_id,
             profile__telegram_id=callback.from_user.id
         )
         
         translated_category = get_category_display_name(expense.category, lang)
+        edit_prefix = 'income' if is_income else 'expense'
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"💰 Сумма: {expense.amount:.0f} ₽", callback_data="edit_field_amount")],
-            [InlineKeyboardButton(text=f"📝 Описание: {expense.description}", callback_data="edit_field_description")],
-            [InlineKeyboardButton(text=f"📁 Категория: {translated_category}", callback_data="edit_field_category")],
-            [InlineKeyboardButton(text="✅ Готово", callback_data="edit_done")]
+            [InlineKeyboardButton(text=f"💰 Сумма: {expense.amount:.0f} ₽", callback_data=f"edit_field_amount_{edit_prefix}_{expense.id}")],
+            [InlineKeyboardButton(text=f"📝 Описание: {expense.description}", callback_data=f"edit_field_description_{edit_prefix}_{expense.id}")],
+            [InlineKeyboardButton(text=f"📁 Категория: {translated_category}", callback_data=f"edit_field_category_{edit_prefix}_{expense.id}")],
+            [InlineKeyboardButton(text="✅ Готово", callback_data=f"edit_done_{edit_prefix}_{expense.id}")]
         ])
         
         await callback.message.edit_text(
@@ -2563,7 +2610,7 @@ async def show_edit_menu_callback(callback: types.CallbackQuery, state: FSMConte
         
         await state.set_state(EditExpenseForm.choosing_field)
         await callback.answer()
-    except Expense.DoesNotExist:
+    except (Expense.DoesNotExist, Income.DoesNotExist):
         await callback.answer("❌ Трата не найдена", show_alert=True)
         from bot.utils.state_utils import clear_state_keep_cashback
         await clear_state_keep_cashback(state)

@@ -8,6 +8,7 @@ from .logging_middleware import LoggingMiddleware
 from .anti_spam import AntiSpamMiddleware
 from .privacy_check import PrivacyCheckMiddleware
 from .fsm_cleanup import FSMCleanupMiddleware
+from .bot_unblock import BotUnblockMiddleware
 
 __all__ = [
     "DatabaseMiddleware",
@@ -18,5 +19,6 @@ __all__ = [
     "LoggingMiddleware",
     "AntiSpamMiddleware",
     "PrivacyCheckMiddleware",
-    "FSMCleanupMiddleware"
+    "FSMCleanupMiddleware",
+    "BotUnblockMiddleware",
 ]
