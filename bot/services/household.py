@@ -135,30 +135,33 @@ class HouseholdService:
             if profile.household:
                 return False, "Вы уже состоите в семейном бюджете"
             
-            # Ищем приглашение
-            invite = FamilyInvite.objects.filter(token=token).first()
-            
+            # Ищем и блокируем приглашение для предотвращения race condition
+            # (два пользователя могут одновременно использовать один токен)
+            invite = FamilyInvite.objects.select_for_update().filter(token=token).first()
+
             if not invite:
                 return False, "Приглашение не найдено"
-            
+
+            # Перепроверяем валидность после блокировки
             if not invite.is_valid():
                 return False, "Приглашение недействительно или истекло"
-            
-            household = invite.household
-            
-            # Проверяем количество участников
+
+            # Блокируем household для предотвращения превышения лимита членов
+            household = Household.objects.select_for_update().get(id=invite.household_id)
+
+            # Проверяем количество участников (после блокировки)
             if not household.can_add_member():
                 return False, f"В семейном бюджете достигнуто максимальное количество участников"
-            
-            # Присоединяем к домохозяйству
-            profile.household = household
-            profile.save()
-            
-            # Отмечаем приглашение как использованное
+
+            # Сначала отмечаем приглашение как использованное (до присоединения!)
             invite.used_by = profile
             invite.used_at = timezone.now()
             invite.is_active = False
             invite.save()
+
+            # Присоединяем к домохозяйству
+            profile.household = household
+            profile.save()
             
             logger.info(f"User {profile.telegram_id} joined household {household.id}")
             
@@ -174,22 +177,29 @@ class HouseholdService:
     def leave_household(profile: Profile) -> Tuple[bool, str]:
         """
         Выход из домохозяйства
-        
+
         Args:
             profile: Профиль пользователя
-            
+
         Returns:
             Tuple[успех, сообщение]
         """
         try:
-            if not profile.household:
+            if not profile.household_id:
                 return False, "Вы не состоите в семейном бюджете"
 
-            household = profile.household
+            # Блокируем household для предотвращения race condition
+            # (новый участник может присоединиться во время расформирования)
+            household = Household.objects.select_for_update().get(id=profile.household_id)
             household_name = household.name or "семейного бюджета"
 
             # Если выходит создатель семьи — расформировываем домохозяйство для всех
             if household.creator_id == profile.id:
+                # Сбрасываем view_scope у всех участников перед отвязкой
+                from expenses.models import UserSettings
+                member_ids = list(Profile.objects.filter(household=household).values_list('id', flat=True))
+                UserSettings.objects.filter(profile_id__in=member_ids, view_scope='household').update(view_scope='personal')
+
                 # Отвязываем всех участников
                 Profile.objects.filter(household=household).update(household=None)
                 # Деактивируем домохозяйство
@@ -199,6 +209,10 @@ class HouseholdService:
                 return True, f"Домохозяйство '{household_name}' расформировано"
 
             # Иначе — обычный выход участника
+            # Сбрасываем view_scope на personal ПЕРЕД отвязкой (атомарно)
+            from expenses.models import UserSettings
+            UserSettings.objects.filter(profile=profile, view_scope='household').update(view_scope='personal')
+
             profile.household = None
             profile.save()
 
@@ -233,13 +247,13 @@ class HouseholdService:
         
         # Формируем запрос
         expenses = Expense.objects.filter(profile_id__in=member_ids)
-        
+
         if start_date:
-            expenses = expenses.filter(date__gte=start_date)
+            expenses = expenses.filter(expense_date__gte=start_date)
         if end_date:
-            expenses = expenses.filter(date__lte=end_date)
-        
-        return expenses.order_by('-date', '-created_at')
+            expenses = expenses.filter(expense_date__lte=end_date)
+
+        return expenses.order_by('-expense_date', '-created_at')
     
     @staticmethod
     def get_household_incomes(household: Household, start_date=None, end_date=None) -> List[Income]:
@@ -259,13 +273,13 @@ class HouseholdService:
         
         # Формируем запрос
         incomes = Income.objects.filter(profile_id__in=member_ids)
-        
+
         if start_date:
-            incomes = incomes.filter(date__gte=start_date)
+            incomes = incomes.filter(income_date__gte=start_date)
         if end_date:
-            incomes = incomes.filter(date__lte=end_date)
-        
-        return incomes.order_by('-date', '-created_at')
+            incomes = incomes.filter(income_date__lte=end_date)
+
+        return incomes.order_by('-income_date', '-created_at')
     
     @staticmethod
     def get_household_members(household: Household) -> List[Profile]:

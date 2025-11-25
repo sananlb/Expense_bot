@@ -473,18 +473,25 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
 
         # Если это переключение режима, сначала переключаем
         if callback.data == "toggle_view_scope_diary":
-            @sync_to_async
-            def toggle_scope():
-                profile = Profile.objects.get(telegram_id=user_id)
-                if not profile.household_id:
-                    return False
-                settings = profile.settings if hasattr(profile, 'settings') else UserSettings.objects.create(profile=profile)
-                current = getattr(settings, 'view_scope', 'personal')
-                settings.view_scope = 'household' if current == 'personal' else 'personal'
-                settings.save()
-                return True
+            from django.db import transaction
 
-            ok = await toggle_scope()
+            @sync_to_async
+            def toggle_scope_atomic():
+                """Атомарное переключение view_scope с блокировкой"""
+                with transaction.atomic():
+                    # Блокируем профиль для предотвращения race condition
+                    profile = Profile.objects.select_for_update().get(telegram_id=user_id)
+                    if not profile.household_id:
+                        return False
+
+                    # Получаем или создаем настройки с блокировкой
+                    settings, _ = UserSettings.objects.select_for_update().get_or_create(profile=profile)
+                    current = getattr(settings, 'view_scope', 'personal')
+                    settings.view_scope = 'household' if current == 'personal' else 'personal'
+                    settings.save()
+                    return True
+
+            ok = await toggle_scope_atomic()
             if not ok:
                 await callback.answer('Нет семейного бюджета' if lang == 'ru' else 'No household', show_alert=True)
                 return

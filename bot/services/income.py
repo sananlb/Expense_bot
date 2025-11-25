@@ -118,17 +118,37 @@ def create_income(
             # Для прошлых дат используем 12:00
             income_time = time(12, 0)
         
-        # Получаем категорию
+        # Получаем категорию с валидацией household (аналогично expense.py)
         category = None
         if category_id:
             try:
-                category = IncomeCategory.objects.get(
+                category = IncomeCategory.objects.select_related('profile').get(
                     id=category_id,
-                    profile=profile,
                     is_active=True
                 )
+
+                # Проверяем что категория принадлежит пользователю или члену его семьи
+                is_valid_category = False
+
+                # Случай 1: Категория принадлежит самому пользователю
+                if category.profile_id == profile.id:
+                    is_valid_category = True
+                # Случай 2: Семейный бюджет - категория от члена семьи
+                elif profile.household_id is not None:
+                    if category.profile.household_id == profile.household_id:
+                        is_valid_category = True
+                        logger.debug(f"Income category {category_id} belongs to household member, allowed")
+
+                if not is_valid_category:
+                    logger.warning(
+                        f"User {user_id} (profile {profile.id}) tried to use income category {category_id} "
+                        f"belonging to another user (profile {category.profile_id})"
+                    )
+                    raise ValueError("Нельзя использовать категорию другого пользователя")
+
             except IncomeCategory.DoesNotExist:
                 logger.warning(f"Income category {category_id} not found for user {user_id}")
+                raise ValueError(f"Категория дохода с ID {category_id} не существует")
         
         # Создаем доход
         income = Income.objects.create(

@@ -33,17 +33,40 @@ class SettingsStates(StatesGroup):
 async def toggle_view_scope(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Переключить глобальный режим отображения (личный/семья)"""
     try:
-        profile = await get_or_create_profile(callback.from_user.id)
-        settings = await sync_to_async(lambda: profile.settings)()
-        current = getattr(settings, 'view_scope', 'personal')
-        # Нельзя переключиться в семейный режим, если нет домохозяйства
-        if current == 'personal' and not profile.household:
+        from django.db import transaction
+        from expenses.models import UserSettings
+
+        user_id = callback.from_user.id
+
+        @sync_to_async
+        def toggle_scope_atomic():
+            """Атомарное переключение view_scope с блокировкой"""
+            with transaction.atomic():
+                from expenses.models import Profile
+                # Блокируем профиль для предотвращения race condition
+                profile = Profile.objects.select_for_update().select_related('household').get(telegram_id=user_id)
+
+                # Получаем или создаем настройки
+                settings, _ = UserSettings.objects.select_for_update().get_or_create(profile=profile)
+
+                current = getattr(settings, 'view_scope', 'personal')
+
+                # Нельзя переключиться в семейный режим, если нет домохозяйства
+                if current == 'personal' and not profile.household_id:
+                    return None, 'no_household'
+
+                new_scope = 'household' if current == 'personal' else 'personal'
+                settings.view_scope = new_scope
+                settings.save()
+                return new_scope, 'ok'
+
+        new_scope, status = await toggle_scope_atomic()
+
+        if status == 'no_household':
             warn = 'Нет семейного бюджета' if lang == 'ru' else 'No household'
             await callback.answer(warn, show_alert=True)
             return
-        new_scope = 'household' if current == 'personal' else 'personal'
-        setattr(settings, 'view_scope', new_scope)
-        await sync_to_async(settings.save)()
+
         msg_key = 'scope_switched_to_household' if new_scope == 'household' else 'scope_switched_to_personal'
         await callback.answer(get_text(msg_key, lang))
         # Обновляем меню настроек
