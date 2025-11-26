@@ -167,9 +167,23 @@ async def add_recurring_start(callback: types.CallbackQuery, state: FSMContext, 
 
 
 @router.message(RecurringForm.waiting_for_description)
-async def process_description(message: types.Message, state: FSMContext):
-    """Обработка данных для добавления платежа"""
-    text = message.text.strip()
+async def process_description(message: types.Message, state: FSMContext, voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+    """Обработка данных для добавления платежа (текст или голос)"""
+    # Обработка голосовых сообщений
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.", reply_markup=get_subscription_button(), parse_mode="HTML")
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом.")
+            return
+        text = voice_text
+    elif message.text:
+        text = message.text.strip()
+    else:
+        await message.answer("❌ Пожалуйста, введите данные текстом или голосом.")
+        return
     user_id = message.from_user.id
     
     # Используем утилиту для парсинга с разрешением ввода только суммы
@@ -626,9 +640,23 @@ async def set_category(callback: types.CallbackQuery, state: FSMContext, lang: s
 
 # Обработчики редактирования отдельных полей
 @router.message(RecurringForm.editing_amount)
-async def process_edit_amount(message: types.Message, state: FSMContext, lang: str = 'ru'):
-    """Обработка новой суммы для редактирования"""
-    text = message.text.strip()
+async def process_edit_amount(message: types.Message, state: FSMContext, lang: str = 'ru', voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+    """Обработка новой суммы для редактирования (текст или голос)"""
+    # Обработка голосовых сообщений
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.", reply_markup=get_subscription_button(), parse_mode="HTML")
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом.")
+            return
+        text = voice_text
+    elif message.text:
+        text = message.text.strip()
+    else:
+        await message.answer("❌ Пожалуйста, введите сумму текстом или голосом.")
+        return
     user_id = message.from_user.id
     data = await state.get_data()
     payment_id = data.get('editing_payment_id')
@@ -662,9 +690,23 @@ async def process_edit_amount(message: types.Message, state: FSMContext, lang: s
 
 
 @router.message(RecurringForm.editing_description)
-async def process_edit_description(message: types.Message, state: FSMContext, lang: str = 'ru'):
-    """Обработка нового названия для редактирования"""
-    text = message.text.strip()
+async def process_edit_description(message: types.Message, state: FSMContext, lang: str = 'ru', voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+    """Обработка нового названия для редактирования (текст или голос)"""
+    # Обработка голосовых сообщений
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.", reply_markup=get_subscription_button(), parse_mode="HTML")
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом.")
+            return
+        text = voice_text
+    elif message.text:
+        text = message.text.strip()
+    else:
+        await message.answer("❌ Пожалуйста, введите название текстом или голосом.")
+        return
     user_id = message.from_user.id
     data = await state.get_data()
     payment_id = data.get('editing_payment_id')
@@ -700,9 +742,23 @@ async def process_edit_description(message: types.Message, state: FSMContext, la
 
 
 @router.message(RecurringForm.editing_day)
-async def process_edit_day(message: types.Message, state: FSMContext, lang: str = 'ru'):
-    """Обработка нового дня месяца для редактирования"""
-    text = message.text.strip()
+async def process_edit_day(message: types.Message, state: FSMContext, lang: str = 'ru', voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+    """Обработка нового дня месяца для редактирования (текст или голос)"""
+    # Обработка голосовых сообщений
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.", reply_markup=get_subscription_button(), parse_mode="HTML")
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом.")
+            return
+        text = voice_text
+    elif message.text:
+        text = message.text.strip()
+    else:
+        await message.answer("❌ Пожалуйста, введите день текстом или голосом.")
+        return
     user_id = message.from_user.id
     data = await state.get_data()
     payment_id = data.get('editing_payment_id')
