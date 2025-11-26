@@ -5,8 +5,9 @@ import csv
 import calendar
 from io import StringIO, BytesIO
 from datetime import datetime, date
+from dateutil.relativedelta import relativedelta
 from decimal import Decimal
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Union, Tuple
 import logging
 
 from openpyxl import Workbook
@@ -18,6 +19,7 @@ from openpyxl.chart.layout import Layout, ManualLayout
 from openpyxl.chart.label import DataLabel, DataLabelList
 from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
 from openpyxl.drawing.xdr import XDRPositiveSize2D
+from openpyxl.formatting.rule import FormulaRule
 try:
     from openpyxl.chart.text import RichText, Paragraph
     from openpyxl.drawing.text import ParagraphProperties, CharacterProperties
@@ -293,6 +295,778 @@ class ExportService:
 
         # Вернуть байты (BOM уже добавлен в начало StringIO)
         return output.getvalue().encode('utf-8')
+
+    @staticmethod
+    def _get_month_sheet_name(year: int, month: int, lang: str) -> str:
+        """Возвращает название листа в формате 'Ноя-2024' или 'Nov-2024'."""
+        month_names_en = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        month_names_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
+                         'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
+        if lang == 'ru':
+            return f"{month_names_ru[month-1]}-{year}"
+        else:
+            return f"{month_names_en[month-1]}-{year}"
+
+    @staticmethod
+    def _load_12_months_data(
+        profile_id: int,
+        current_year: int,
+        current_month: int,
+        lang: str,
+        household_id: int | None = None
+    ) -> Tuple[Dict[Tuple[int, int], Dict[str, float]], Dict[Tuple[int, int], Dict[str, float]], Dict[Tuple[int, int], Dict[str, int]], List[Tuple[int, int]], Dict[Tuple[str, str], Dict[str, Any]], Dict[Tuple[str, str], Dict[str, Any]]]:
+        """
+        Загружает данные о расходах и доходах за последние 12 месяцев.
+
+        Returns:
+            Tuple из:
+            - expenses_by_month: {(year, month): {category_name: total_amount}}
+            - incomes_by_month: {(year, month): {category_name: total_amount}}
+            - expenses_counts_by_month: {(year, month): {category_name: operations_count}}
+            - months_list: список (year, month) за 12 месяцев от старого к новому
+        """
+        # Формируем список 12 месяцев (от старого к новому)
+        months_list = []
+        current_date = date(current_year, current_month, 1)
+        for i in range(11, -1, -1):  # 11 месяцев назад до текущего
+            month_date = current_date - relativedelta(months=i)
+            months_list.append((month_date.year, month_date.month))
+        month_index = {m: idx for idx, m in enumerate(months_list)}
+        month_index = {m: idx for idx, m in enumerate(months_list)}
+
+        # Определяем диапазон дат
+        start_date = date(months_list[0][0], months_list[0][1], 1)
+        end_year, end_month = months_list[-1]
+        last_day = calendar.monthrange(end_year, end_month)[1]
+        end_date = date(end_year, end_month, last_day)
+
+        # Загружаем расходы
+        if household_id:
+            expenses = Expense.objects.filter(
+                profile__household_id=household_id,
+                expense_date__gte=start_date,
+                expense_date__lte=end_date
+            ).select_related('category')
+        else:
+            expenses = Expense.objects.filter(
+                profile_id=profile_id,
+                expense_date__gte=start_date,
+                expense_date__lte=end_date
+            ).select_related('category')
+
+        # Группируем расходы по месяцам и категориям + по операциям (описание+валюта)
+        expenses_by_month: Dict[Tuple[int, int], Dict[str, float]] = {m: {} for m in months_list}
+        expenses_counts_by_month: Dict[Tuple[int, int], Dict[str, int]] = {m: {} for m in months_list}
+        expense_operations: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        for expense in expenses:
+            year_month = (expense.expense_date.year, expense.expense_date.month)
+            category_name = expense.category.get_display_name(lang) if expense.category else 'Без категории'
+            if year_month in expenses_by_month:
+                if category_name not in expenses_by_month[year_month]:
+                    expenses_by_month[year_month][category_name] = 0
+                    expenses_counts_by_month[year_month][category_name] = 0
+                expenses_by_month[year_month][category_name] += float(expense.amount)
+                expenses_counts_by_month[year_month][category_name] += 1
+
+            desc_display = (expense.description or 'Без описания').strip()
+            desc_norm = desc_display.lower()
+            key = (desc_norm, expense.currency)
+            if key not in expense_operations:
+                expense_operations[key] = {
+                    'description': desc_display if desc_display else 'Без описания',
+                    'category': category_name,
+                    'currency': expense.currency,
+                    'monthly_totals': [0 for _ in months_list],
+                    'total': 0.0,
+                    'count': 0,
+                }
+            op = expense_operations[key]
+            idx = month_index.get(year_month)
+            if idx is not None:
+                op['monthly_totals'][idx] += float(expense.amount)
+            op['total'] += float(expense.amount)
+            op['count'] += 1
+
+        # Загружаем доходы
+        if household_id:
+            incomes = Income.objects.filter(
+                profile__household_id=household_id,
+                income_date__gte=start_date,
+                income_date__lte=end_date
+            ).select_related('category')
+        else:
+            incomes = Income.objects.filter(
+                profile_id=profile_id,
+                income_date__gte=start_date,
+                income_date__lte=end_date
+            ).select_related('category')
+
+        # Группируем доходы по месяцам и категориям + по операциям (описание+валюта)
+        incomes_by_month: Dict[Tuple[int, int], Dict[str, float]] = {m: {} for m in months_list}
+        income_operations: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        for income in incomes:
+            year_month = (income.income_date.year, income.income_date.month)
+            category_name = income.category.get_display_name(lang) if income.category else 'Без категории'
+            if year_month in incomes_by_month:
+                if category_name not in incomes_by_month[year_month]:
+                    incomes_by_month[year_month][category_name] = 0
+                incomes_by_month[year_month][category_name] += float(income.amount)
+
+            desc_display = (income.description or 'Без описания').strip()
+            desc_norm = desc_display.lower()
+            key = (desc_norm, income.currency)
+            if key not in income_operations:
+                income_operations[key] = {
+                    'description': desc_display if desc_display else 'Без описания',
+                    'category': category_name,
+                    'currency': income.currency,
+                    'monthly_totals': [0 for _ in months_list],
+                    'total': 0.0,
+                    'count': 0,
+                }
+            op = income_operations[key]
+            idx = month_index.get(year_month)
+            if idx is not None:
+                op['monthly_totals'][idx] += float(income.amount)
+            op['total'] += float(income.amount)
+            op['count'] += 1
+
+        return expenses_by_month, incomes_by_month, expenses_counts_by_month, months_list, expense_operations, income_operations
+
+    @staticmethod
+    def _add_summary_sheet(
+        wb: Workbook,
+        profile_id: int,
+        current_year: int,
+        current_month: int,
+        lang: str,
+        household_id: int | None = None
+    ) -> Dict[str, Any]:
+        """
+        Добавляет лист "Итоги 12 мес" в workbook с данными за последние 12 месяцев.
+        Текущий месяц содержит ссылки на лист с детальным отчётом.
+        """
+        # Загружаем данные
+        expenses_by_month, incomes_by_month, expenses_counts_by_month, months_list, expense_operations, income_operations = ExportService._load_12_months_data(
+            profile_id, current_year, current_month, lang, household_id
+        )
+
+        def calc_change_percent(values: list[float]) -> float | None:
+            """Среднее изменение между соседними ненулевыми месяцами."""
+            non_zero = [v for v in values if v not in (0, None)]
+            if len(non_zero) < 2:
+                return None
+            deltas = []
+            prev = non_zero[0]
+            for val in non_zero[1:]:
+                if prev != 0:
+                    deltas.append((val - prev) / prev)
+                prev = val
+            if not deltas:
+                return None
+            return sum(deltas) / len(deltas)
+
+        expense_month_totals = [sum(expenses_by_month[(y, m)].values()) for y, m in months_list]
+        income_month_totals = [sum(incomes_by_month[(y, m)].values()) for y, m in months_list]
+
+        # Создаём лист (второй после листа месяца)
+        sheet_title = "Итоги 12 мес" if lang == 'ru' else "Summary 12m"
+        ws = wb.create_sheet(title=sheet_title)  # Добавляется в конец
+
+        # Стили
+        header_font = Font(bold=True, color="FFFFFF", size=11)
+        header_fill = PatternFill(start_color="5B9BD5", end_color="5B9BD5", fill_type="solid")
+        income_header_fill = PatternFill(start_color="7FB685", end_color="7FB685", fill_type="solid")
+        header_alignment = Alignment(horizontal="center", vertical="center")
+        thin_border = Border(
+            left=Side(style='thin', color='000000'),
+            right=Side(style='thin', color='000000'),
+            top=Side(style='thin', color='000000'),
+            bottom=Side(style='thin', color='000000')
+        )
+        gray_fill = PatternFill(start_color="F2F2F2", end_color="F2F2F2", fill_type="solid")
+
+        # Названия месяцев
+        month_names_en = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        month_names_ru = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
+                         'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
+
+        def get_month_header(year: int, month: int) -> str:
+            """Возвращает заголовок месяца, например 'Ноя'24'."""
+            if lang == 'ru':
+                return f"{month_names_ru[month-1]}'{str(year)[2:]}"
+            else:
+                return f"{month_names_en[month-1]}'{str(year)[2:]}"
+
+        # ==================== СЕКЦИЯ РАСХОДОВ ====================
+        # Заголовок секции
+        section_title = 'РАСХОДЫ ЗА 12 МЕСЯЦЕВ' if lang == 'ru' else 'EXPENSES FOR 12 MONTHS'
+        title_cell = ws.cell(row=1, column=1, value=section_title)
+        title_cell.font = Font(bold=True, color="FFFFFF", size=12)
+        title_cell.fill = PatternFill(start_color="C85A54", end_color="C85A54", fill_type="solid")
+        title_cell.alignment = header_alignment
+        title_cell.border = thin_border
+
+        # Заголовки колонок: Категория | План | Мес1 | Мес2 | ... | Мес12 | Итого | Среднее | Изм. %
+        headers = ['Категория' if lang == 'ru' else 'Category',
+                   'План' if lang == 'ru' else 'Plan']
+        for year, month in months_list:
+            headers.append(get_month_header(year, month))
+        headers.append('Итого' if lang == 'ru' else 'Total')
+        headers.append('Среднее' if lang == 'ru' else 'Average')
+        headers.append('Изм. %' if lang == 'ru' else 'Change %')
+
+        for col_idx, header in enumerate(headers, start=1):
+            cell = ws.cell(row=2, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = thin_border
+
+        # Собираем все категории расходов за 12 месяцев
+        all_expense_categories = set()
+        for month_data in expenses_by_month.values():
+            all_expense_categories.update(month_data.keys())
+
+        # Сортируем по общей сумме (от большего к меньшему)
+        category_totals = {}
+        for cat in all_expense_categories:
+            total = sum(expenses_by_month[m].get(cat, 0) for m in months_list)
+            category_totals[cat] = total
+        sorted_categories = sorted(all_expense_categories, key=lambda c: category_totals[c], reverse=True)
+
+        # Заполняем данные по категориям расходов
+        current_row = 3
+        current_sheet_name = ExportService._get_month_sheet_name(current_year, current_month, lang)
+
+        # Словарь для хранения строк категорий (для ссылок)
+        expense_category_rows = {}  # {category_name: row_number}
+
+        # Колонки для формул
+        total_col = 3 + len(months_list)  # Итого
+        avg_col = total_col + 1  # Среднее
+        change_col = avg_col + 1  # Изменение %
+        first_month_col = 3  # Первая колонка с месяцем (C)
+        last_month_col = 2 + len(months_list)  # Последняя колонка с месяцем
+
+        # Вычисляем номер строки ИТОГО РАСХОДЫ заранее (для формул среднего)
+        # Строка 3 = первая категория, +len(categories) = строка после последней категории = ИТОГО
+        expenses_totals_row_num = 3 + len(sorted_categories)
+
+        for category in sorted_categories:
+            row_values: list[float] = []
+            ws.cell(row=current_row, column=1, value=category)
+            ws.cell(row=current_row, column=2, value=None)  # План - пустой
+
+            for col_offset, (year, month) in enumerate(months_list):
+                amount = expenses_by_month[(year, month)].get(category, 0)
+                col_idx = 3 + col_offset
+                is_current_month = (year == current_year and month == current_month)
+
+                if is_current_month:
+                    # Текущий месяц = формула SUMIF со ссылкой на лист месяца
+                    # K = категория, M = всего (summary_start_col=11, +2=13)
+                    formula = f"=SUMIF('{current_sheet_name}'!K:K,A{current_row},'{current_sheet_name}'!M:M)"
+                    cell = ws.cell(row=current_row, column=col_idx, value=formula)
+                    cell.font = Font(color="0563C1")  # Синий цвет для формул-ссылок
+                elif amount > 0:
+                    ws.cell(row=current_row, column=col_idx, value=smart_number(amount))
+                else:
+                    ws.cell(row=current_row, column=col_idx, value=None)
+                row_values.append(float(amount) if amount else 0)
+
+            # Итого = формула SUM по всем месяцам
+            first_col_letter = get_column_letter(first_month_col)
+            last_col_letter = get_column_letter(last_month_col)
+            sum_formula = f"=SUM({first_col_letter}{current_row}:{last_col_letter}{current_row})"
+            ws.cell(row=current_row, column=total_col, value=sum_formula)
+
+            # Среднее = Итого / количество месяцев где ИТОГО РАСХОДЫ > 0
+            # Формула: O3 / COUNTIF(C20:N20, "<>0") - где 20 = строка ИТОГО РАСХОДЫ
+            total_col_letter = get_column_letter(total_col)
+            avg_formula = f"=IFERROR({total_col_letter}{current_row}/COUNTIF({first_col_letter}{expenses_totals_row_num}:{last_col_letter}{expenses_totals_row_num},\"<>0\"),\"\")"
+            ws.cell(row=current_row, column=avg_col, value=avg_formula)
+
+            change_val = calc_change_percent(row_values)
+            change_cell = ws.cell(row=current_row, column=change_col, value=change_val)
+            if change_val is not None:
+                change_cell.number_format = '0.0%'
+
+            # Применяем границы и чередование
+            is_even = (current_row % 2 == 0)
+            for col in range(1, len(headers) + 1):
+                cell = ws.cell(row=current_row, column=col)
+                cell.border = thin_border
+                if is_even:
+                    cell.fill = gray_fill
+
+            expense_category_rows[category] = current_row
+            current_row += 1
+
+        # Строка ИТОГО РАСХОДЫ
+        expenses_totals_row = current_row
+        first_data_row = 3  # Первая строка с данными категорий
+        last_data_row = current_row - 1  # Последняя строка с данными
+
+        ws.cell(row=current_row, column=1, value='ИТОГО РАСХОДЫ' if lang == 'ru' else 'TOTAL EXPENSES')
+        ws.cell(row=current_row, column=1).font = Font(bold=True)
+        ws.cell(row=current_row, column=2, value=None)  # План
+
+        # Для каждого месяца - формула SUM по колонке
+        for col_offset, (year, month) in enumerate(months_list):
+            col_idx = 3 + col_offset
+            col_letter = get_column_letter(col_idx)
+            is_current_month = (year == current_year and month == current_month)
+
+            # Формула суммы по колонке
+            sum_col_formula = f"=SUM({col_letter}{first_data_row}:{col_letter}{last_data_row})"
+            cell = ws.cell(row=current_row, column=col_idx, value=sum_col_formula)
+            if is_current_month:
+                cell.font = Font(bold=True, color="0563C1")
+            else:
+                cell.font = Font(bold=True)
+
+        # Итого = SUM по строке (все месяцы)
+        first_col_letter = get_column_letter(first_month_col)
+        last_col_letter = get_column_letter(last_month_col)
+        sum_formula = f"=SUM({first_col_letter}{current_row}:{last_col_letter}{current_row})"
+        ws.cell(row=current_row, column=total_col, value=sum_formula)
+        ws.cell(row=current_row, column=total_col).font = Font(bold=True)
+
+        # Среднее для ИТОГО = Итого / COUNTIF по своей строке (считаем непустые месяцы)
+        total_col_letter = get_column_letter(total_col)
+        avg_formula = f"=IFERROR({total_col_letter}{current_row}/COUNTIF({first_col_letter}{current_row}:{last_col_letter}{current_row},\"<>0\"),\"\")"
+        ws.cell(row=current_row, column=avg_col, value=avg_formula)
+        ws.cell(row=current_row, column=avg_col).font = Font(bold=True)
+
+        # Изменение % для ИТОГО РАСХОДЫ
+        change_val = calc_change_percent(expense_month_totals)
+        change_cell = ws.cell(row=current_row, column=change_col, value=change_val)
+        change_cell.font = Font(bold=True)
+        if change_val is not None:
+            change_cell.number_format = '0.0%'
+
+        # Границы для строки итого
+        for col in range(1, len(headers) + 1):
+            ws.cell(row=current_row, column=col).border = thin_border
+
+        current_row += 2  # Пустая строка перед доходами
+
+        # ==================== СЕКЦИЯ ДОХОДОВ ====================
+        # Заголовок секции доходов
+        income_title = 'ДОХОДЫ ЗА 12 МЕСЯЦЕВ' if lang == 'ru' else 'INCOME FOR 12 MONTHS'
+        title_cell = ws.cell(row=current_row, column=1, value=income_title)
+        title_cell.font = Font(bold=True, color="FFFFFF", size=12)
+        title_cell.fill = PatternFill(start_color="5FA85F", end_color="5FA85F", fill_type="solid")
+        title_cell.alignment = header_alignment
+        title_cell.border = thin_border
+        current_row += 1
+
+        # Заголовки для доходов
+        for col_idx, header in enumerate(headers, start=1):
+            cell = ws.cell(row=current_row, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = PatternFill(start_color="7FB685", end_color="7FB685", fill_type="solid")
+            cell.alignment = header_alignment
+            cell.border = thin_border
+        current_row += 1
+
+        # Собираем все категории доходов
+        all_income_categories = set()
+        for month_data in incomes_by_month.values():
+            all_income_categories.update(month_data.keys())
+
+        # Сортируем по общей сумме
+        income_totals = {}
+        for cat in all_income_categories:
+            total = sum(incomes_by_month[m].get(cat, 0) for m in months_list)
+            income_totals[cat] = total
+        sorted_income_categories = sorted(all_income_categories, key=lambda c: income_totals[c], reverse=True)
+
+        # Заполняем данные по категориям доходов
+        income_category_rows = {}
+        income_first_data_row = current_row  # Запоминаем первую строку доходов
+
+        # Вычисляем номер строки ИТОГО ДОХОДЫ заранее (для формул среднего)
+        income_totals_row_num = income_first_data_row + len(sorted_income_categories)
+
+        for category in sorted_income_categories:
+            row_values: list[float] = []
+            ws.cell(row=current_row, column=1, value=category)
+            ws.cell(row=current_row, column=2, value=None)  # План
+
+            for col_offset, (year, month) in enumerate(months_list):
+                amount = incomes_by_month[(year, month)].get(category, 0)
+                col_idx = 3 + col_offset
+                is_current_month = (year == current_year and month == current_month)
+
+                if is_current_month:
+                    # Текущий месяц = формула SUMIF со ссылкой на лист месяца (доходы тоже в K:K, M:M)
+                    formula = f"=SUMIF('{current_sheet_name}'!K:K,A{current_row},'{current_sheet_name}'!M:M)"
+                    cell = ws.cell(row=current_row, column=col_idx, value=formula)
+                    cell.font = Font(color="0563C1")  # Синий цвет для формул-ссылок
+                elif amount > 0:
+                    ws.cell(row=current_row, column=col_idx, value=smart_number(amount))
+                else:
+                    ws.cell(row=current_row, column=col_idx, value=None)
+                row_values.append(float(amount) if amount else 0)
+
+            # Итого = формула SUM по всем месяцам
+            first_col_letter = get_column_letter(first_month_col)
+            last_col_letter = get_column_letter(last_month_col)
+            sum_formula = f"=SUM({first_col_letter}{current_row}:{last_col_letter}{current_row})"
+            ws.cell(row=current_row, column=total_col, value=sum_formula)
+
+            # Среднее = Итого / количество месяцев где ИТОГО ДОХОДЫ > 0
+            total_col_letter = get_column_letter(total_col)
+            avg_formula = f"=IFERROR({total_col_letter}{current_row}/COUNTIF({first_col_letter}{income_totals_row_num}:{last_col_letter}{income_totals_row_num},\"<>0\"),\"\")"
+            ws.cell(row=current_row, column=avg_col, value=avg_formula)
+
+            change_val = calc_change_percent(row_values)
+            change_cell = ws.cell(row=current_row, column=change_col, value=change_val)
+            if change_val is not None:
+                change_cell.number_format = '0.0%'
+
+            # Применяем границы и чередование
+            is_even = (current_row % 2 == 0)
+            for col in range(1, len(headers) + 1):
+                cell = ws.cell(row=current_row, column=col)
+                cell.border = thin_border
+                if is_even:
+                    cell.fill = gray_fill
+
+            income_category_rows[category] = current_row
+            current_row += 1
+
+        # Строка ИТОГО ДОХОДЫ
+        income_totals_row = current_row
+        income_last_data_row = current_row - 1  # Последняя строка доходов
+
+        ws.cell(row=current_row, column=1, value='ИТОГО ДОХОДЫ' if lang == 'ru' else 'TOTAL INCOME')
+        ws.cell(row=current_row, column=1).font = Font(bold=True)
+        ws.cell(row=current_row, column=2, value=None)
+
+        # Для каждого месяца - формула SUM по колонке (только строки доходов)
+        for col_offset, (year, month) in enumerate(months_list):
+            col_idx = 3 + col_offset
+            col_letter = get_column_letter(col_idx)
+            is_current_month = (year == current_year and month == current_month)
+
+            # Формула суммы по колонке (только строки доходов)
+            sum_col_formula = f"=SUM({col_letter}{income_first_data_row}:{col_letter}{income_last_data_row})"
+            cell = ws.cell(row=current_row, column=col_idx, value=sum_col_formula)
+            if is_current_month:
+                cell.font = Font(bold=True, color="0563C1")
+            else:
+                cell.font = Font(bold=True, color="008000")
+
+        # Итого = SUM по строке
+        first_col_letter = get_column_letter(first_month_col)
+        last_col_letter = get_column_letter(last_month_col)
+        sum_formula = f"=SUM({first_col_letter}{current_row}:{last_col_letter}{current_row})"
+        ws.cell(row=current_row, column=total_col, value=sum_formula)
+        ws.cell(row=current_row, column=total_col).font = Font(bold=True, color="008000")
+
+        # Среднее для ИТОГО ДОХОДЫ = Итого / COUNTIF по своей строке (считаем непустые месяцы)
+        total_col_letter = get_column_letter(total_col)
+        avg_formula = f"=IFERROR({total_col_letter}{current_row}/COUNTIF({first_col_letter}{current_row}:{last_col_letter}{current_row},\"<>0\"),\"\")"
+        ws.cell(row=current_row, column=avg_col, value=avg_formula)
+        ws.cell(row=current_row, column=avg_col).font = Font(bold=True, color="008000")
+
+        # Изменение % для ИТОГО ДОХОДЫ
+        change_val = calc_change_percent(income_month_totals)
+        change_cell = ws.cell(row=current_row, column=change_col, value=change_val)
+        change_cell.font = Font(bold=True, color="008000")
+        if change_val is not None:
+            change_cell.number_format = '0.0%'
+
+        for col in range(1, len(headers) + 1):
+            ws.cell(row=current_row, column=col).border = thin_border
+
+        current_row += 2  # Пустая строка перед балансом
+
+        # ==================== СТРОКА БАЛАНСА ====================
+        balance_row = current_row
+        ws.cell(row=current_row, column=1, value='БАЛАНС' if lang == 'ru' else 'BALANCE')
+        ws.cell(row=current_row, column=1).font = Font(bold=True)
+        ws.cell(row=current_row, column=2, value=None)
+
+        # Баланс = Доходы - Расходы (формула для каждого месяца)
+        balance_values = []
+        for col_offset, (year, month) in enumerate(months_list):
+            col_idx = 3 + col_offset
+            col_letter = get_column_letter(col_idx)
+            is_current_month = (year == current_year and month == current_month)
+
+            # Формула: ячейка ИТОГО ДОХОДЫ - ячейка ИТОГО РАСХОДЫ
+            balance_formula = f"={col_letter}{income_totals_row}-{col_letter}{expenses_totals_row}"
+            cell = ws.cell(row=current_row, column=col_idx, value=balance_formula)
+            if is_current_month:
+                cell.font = Font(bold=True, color="0563C1")
+            else:
+                cell.font = Font(bold=True)
+            balance_values.append(income_month_totals[col_offset] - expense_month_totals[col_offset])
+
+        # Итого = SUM по строке
+        first_col_letter = get_column_letter(first_month_col)
+        last_col_letter = get_column_letter(last_month_col)
+        sum_formula = f"=SUM({first_col_letter}{current_row}:{last_col_letter}{current_row})"
+        ws.cell(row=current_row, column=total_col, value=sum_formula)
+        ws.cell(row=current_row, column=total_col).font = Font(bold=True)
+
+        # Среднее для БАЛАНСА = Итого / COUNTIF по строке ИТОГО РАСХОДЫ (месяцы с данными)
+        total_col_letter = get_column_letter(total_col)
+        avg_formula = f"=IFERROR({total_col_letter}{current_row}/COUNTIF({first_col_letter}{expenses_totals_row}:{last_col_letter}{expenses_totals_row},\"<>0\"),\"\")"
+        ws.cell(row=current_row, column=avg_col, value=avg_formula)
+        ws.cell(row=current_row, column=avg_col).font = Font(bold=True)
+
+        # Изменение % для БАЛАНСА
+        change_val = calc_change_percent(balance_values)
+        change_cell = ws.cell(row=current_row, column=change_col, value=change_val)
+        change_cell.font = Font(bold=True)
+        if change_val is not None:
+            change_cell.number_format = '0.0%'
+
+        for col in range(1, len(headers) + 1):
+            ws.cell(row=current_row, column=col).border = thin_border
+
+        # ==================== НОРМА СБЕРЕЖЕНИЙ ====================
+        savings_row = current_row + 1
+        ws.cell(row=savings_row, column=1, value='Норма сбережений' if lang == 'ru' else 'Savings rate').font = Font(bold=True)
+        ws.cell(row=savings_row, column=2, value=None)
+
+        for col_offset, (year, month) in enumerate(months_list):
+            col_idx = 3 + col_offset
+            col_letter = get_column_letter(col_idx)
+            formula = f"=IFERROR(({col_letter}{income_totals_row}-{col_letter}{expenses_totals_row})/{col_letter}{income_totals_row},\"\")"
+            cell = ws.cell(row=savings_row, column=col_idx, value=formula)
+            cell.number_format = '0.0%'
+            cell.border = thin_border
+
+        # Итого (по суммам)
+        total_col_letter = get_column_letter(total_col)
+        total_formula = f"=IFERROR(({total_col_letter}{income_totals_row}-{total_col_letter}{expenses_totals_row})/{total_col_letter}{income_totals_row},\"\")"
+        total_cell = ws.cell(row=savings_row, column=total_col, value=total_formula)
+        total_cell.number_format = '0.0%'
+        total_cell.border = thin_border
+
+        # Среднее – используем то же отношение суммарных доходов/расходов
+        avg_col_letter = get_column_letter(avg_col)
+        avg_formula = total_formula
+        avg_cell = ws.cell(row=savings_row, column=avg_col, value=avg_formula)
+        avg_cell.number_format = '0.0%'
+        avg_cell.border = thin_border
+
+        # Столбец изменения оставляем пустым
+        ws.cell(row=savings_row, column=change_col, value=None).border = thin_border
+        ws.cell(row=savings_row, column=1).border = thin_border
+        ws.cell(row=savings_row, column=2).border = thin_border
+
+        # Подсветка отклонений от плана (>+50% вверх и <50% вниз, но не 0)
+        high_fill = PatternFill(start_color="FFF8E0E6", end_color="FFF8E0E6", fill_type="solid")  # мягкий розовый
+        low_fill = PatternFill(start_color="FFE7F6EC", end_color="FFE7F6EC", fill_type="solid")   # мягкий зелёный
+
+        def apply_plan_cf(start_row: int, end_row: int, invert: bool = False):
+            if start_row > end_row:
+                return
+            for col_idx in range(first_month_col, first_month_col + len(months_list)):
+                col_letter = get_column_letter(col_idx)
+                rng = f"{col_letter}{start_row}:{col_letter}{end_row}"
+                # Колонка B — план (фиксируем колонку, строка относительная), текущая колонка — факт
+                formula_high = f"AND($B{start_row}>0,{col_letter}{start_row}>0,({col_letter}{start_row}-$B{start_row})/$B{start_row}>0.5)"
+                formula_low = f"AND($B{start_row}>0,{col_letter}{start_row}>0,{col_letter}{start_row}/$B{start_row}<0.5)"
+                high = low_fill if invert else high_fill
+                low = high_fill if invert else low_fill
+                ws.conditional_formatting.add(rng, FormulaRule(formula=[formula_high], fill=high))
+                ws.conditional_formatting.add(rng, FormulaRule(formula=[formula_low], fill=low))
+
+        # Расходы (перерасход = розовый, недобор к плану = зелёный)
+        apply_plan_cf(3, last_data_row, invert=False)
+        # Доходы (перевыполнение плана = зелёный, недовыполнение = розовый)
+        apply_plan_cf(income_first_data_row, income_last_data_row, invert=True)
+
+        # ==================== ДОП. АНАЛИТИКА: Топ-10 операций ====================
+        def _prepare_top_ops(ops: Dict[Tuple[str, str], Dict[str, Any]]):
+            items = []
+            for op in ops.values():
+                total_amount = op['total']
+                total_count = op['count']
+                avg_ticket = total_amount / total_count if total_count else 0
+                inflation_ratio = calc_change_percent(op['monthly_totals'])
+                items.append({
+                    "description": op['description'],
+                    "category": op['category'],
+                    "currency": op['currency'],
+                    "total": total_amount,
+                    "count": total_count,
+                    "avg": avg_ticket,
+                    "inflation": inflation_ratio,
+                })
+            top_amount = sorted(items, key=lambda x: x["total"], reverse=True)[:10]
+            top_count = sorted(items, key=lambda x: x["count"], reverse=True)[:10]
+            return top_amount, top_count
+
+        expense_top_amount, expense_top_count = _prepare_top_ops(expense_operations)
+        income_top_amount, income_top_count = _prepare_top_ops(income_operations)
+
+        def _render_top_table(start_row: int, title: str, items: list[dict]) -> int:
+            ws.cell(row=start_row, column=1, value=title).font = Font(bold=True, size=12)
+            start_row += 1
+            headers = [
+                'Описание' if lang == 'ru' else 'Description',
+                'Категория' if lang == 'ru' else 'Category',
+                'Валюта' if lang == 'ru' else 'Currency',
+                'Сумма' if lang == 'ru' else 'Amount',
+                'Операций' if lang == 'ru' else 'Count',
+                'Средний чек' if lang == 'ru' else 'Avg ticket',
+                'Инфляция за год' if lang == 'ru' else 'Inflation YoY',
+            ]
+            for idx, header in enumerate(headers, start=1):
+                cell = ws.cell(row=start_row, column=idx, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = header_alignment
+                cell.border = thin_border
+            start_row += 1
+
+            for item in items:
+                ws.cell(row=start_row, column=1, value=item["description"])
+                ws.cell(row=start_row, column=2, value=item["category"])
+                ws.cell(row=start_row, column=3, value=item["currency"])
+                amt_cell = ws.cell(row=start_row, column=4, value=smart_number(item["total"]))
+                cnt_cell = ws.cell(row=start_row, column=5, value=item["count"] if item["count"] else None)
+                avg_cell = ws.cell(row=start_row, column=6, value=smart_number(item["avg"]) if item["avg"] else None)
+                infl_val = item["inflation"]
+                infl_cell = ws.cell(row=start_row, column=7, value=infl_val if infl_val is not None else None)
+                amt_cell.number_format = '#,##0.00'
+                if avg_cell.value is not None:
+                    avg_cell.number_format = '#,##0.00'
+                if infl_val is not None:
+                    infl_cell.number_format = '0.0%'
+                for col_idx in range(1, 8):
+                    ws.cell(row=start_row, column=col_idx).border = thin_border
+                start_row += 1
+            return start_row
+
+        def _render_top_table(start_row: int, start_col: int, title: str, items: list[dict], inflation_header: str, header_fill_param: PatternFill) -> int:
+            ws.cell(row=start_row, column=start_col, value=title).font = Font(bold=True, size=12)
+            start_row += 1
+            headers = [
+                'Описание' if lang == 'ru' else 'Description',
+                'Категория' if lang == 'ru' else 'Category',
+                'Валюта' if lang == 'ru' else 'Currency',
+                'Сумма' if lang == 'ru' else 'Amount',
+                'Операций' if lang == 'ru' else 'Count',
+                'Средний чек' if lang == 'ru' else 'Avg ticket',
+                inflation_header,
+            ]
+            for idx, header in enumerate(headers, start=0):
+                cell = ws.cell(row=start_row, column=start_col + idx, value=header)
+                cell.font = header_font
+                cell.fill = header_fill_param
+                cell.alignment = header_alignment
+                cell.border = thin_border
+            start_row += 1
+
+            for item in items:
+                ws.cell(row=start_row, column=start_col + 0, value=item["description"])
+                ws.cell(row=start_row, column=start_col + 1, value=item["category"])
+                ws.cell(row=start_row, column=start_col + 2, value=item["currency"])
+                amt_cell = ws.cell(row=start_row, column=start_col + 3, value=smart_number(item["total"]))
+                cnt_cell = ws.cell(row=start_row, column=start_col + 4, value=item["count"] if item["count"] else None)
+                avg_cell = ws.cell(row=start_row, column=start_col + 5, value=smart_number(item["avg"]) if item["avg"] else None)
+                infl_val = item["inflation"]
+                infl_cell = ws.cell(row=start_row, column=start_col + 6, value=infl_val if infl_val is not None else None)
+                amt_cell.number_format = '#,##0.00'
+                if avg_cell.value is not None:
+                    avg_cell.number_format = '#,##0.00'
+                if infl_val is not None:
+                    infl_cell.number_format = '0.0%'
+                for col_idx in range(start_col, start_col + 7):
+                    ws.cell(row=start_row, column=col_idx).border = thin_border
+                start_row += 1
+            return start_row
+
+        analytics_start_row = 1  # на одном уровне с основной таблицей, справа
+        tables_start_col = change_col + 2  # размещаем справа от основной таблицы
+        exp_infl_header = 'Инфл/год' if lang == 'ru' else 'Infl./yr'
+        inc_infl_header = 'Измен/год' if lang == 'ru' else 'Change/yr'
+
+        next_row = _render_top_table(
+            analytics_start_row,
+            tables_start_col,
+            'Топ-10 расходов по сумме' if lang == 'ru' else 'Top-10 expenses by amount',
+            expense_top_amount,
+            exp_infl_header,
+            header_fill
+        )
+        next_row = _render_top_table(
+            next_row + 1,
+            tables_start_col,
+            'Топ-10 расходов по частоте' if lang == 'ru' else 'Top-10 expenses by count',
+            expense_top_count,
+            exp_infl_header,
+            header_fill
+        )
+
+        next_row = _render_top_table(
+            next_row + 2,
+            tables_start_col,
+            'Топ-10 доходов по сумме' if lang == 'ru' else 'Top-10 incomes by amount',
+            income_top_amount,
+            inc_infl_header,
+            income_header_fill
+        )
+        _render_top_table(
+            next_row + 1,
+            tables_start_col,
+            'Топ-10 доходов по частоте' if lang == 'ru' else 'Top-10 incomes by count',
+            income_top_count,
+            inc_infl_header,
+            income_header_fill
+        )
+
+        # ==================== АВТОПОДБОР ШИРИНЫ КОЛОНОК ====================
+        def autosize_columns(worksheet):
+            for col_idx in range(1, worksheet.max_column + 1):
+                max_len = 0
+                for row_idx in range(1, worksheet.max_row + 1):
+                    val = worksheet.cell(row=row_idx, column=col_idx).value
+                    if val is not None:
+                        max_len = max(max_len, len(str(val)))
+                if max_len > 0:
+                    worksheet.column_dimensions[get_column_letter(col_idx)].width = min(max_len + 2, 50)
+
+        autosize_columns(ws)
+
+        # Поджимаем узкие столбцы для процентов
+        narrow_headers = {'Инфл/год', 'Infl./yr', 'Измен/год', 'Change/yr'}
+        for c in range(1, ws.max_column + 1):
+            header_val = ws.cell(row=analytics_start_row + 1, column=c).value  # строка с заголовками топов справа
+            if header_val in narrow_headers or c == change_col:
+                ws.column_dimensions[get_column_letter(c)].width = 10
+
+        # Ограничиваем ширины основных столбцов таблицы месяцев
+        ws.column_dimensions[get_column_letter(1)].width = min(ws.column_dimensions[get_column_letter(1)].width or 0, 30)  # Категория
+        ws.column_dimensions[get_column_letter(2)].width = min(ws.column_dimensions[get_column_letter(2)].width or 0, 10)  # План
+        for col_idx in range(3, 3 + len(months_list)):
+            ws.column_dimensions[get_column_letter(col_idx)].width = min(ws.column_dimensions[get_column_letter(col_idx)].width or 0, 9)  # Месяцы
+        ws.column_dimensions[get_column_letter(total_col)].width = min(ws.column_dimensions[get_column_letter(total_col)].width or 0, 12)
+        ws.column_dimensions[get_column_letter(avg_col)].width = min(ws.column_dimensions[get_column_letter(avg_col)].width or 0, 10)
+        ws.column_dimensions[get_column_letter(change_col)].width = min(ws.column_dimensions[get_column_letter(change_col)].width or 0, 10)
+
+        # Возвращаем информацию для добавления гиперссылок позже
+        return {
+            'expense_rows': expense_category_rows,
+            'income_rows': income_category_rows,
+            'expenses_totals_row': expenses_totals_row,
+            'income_totals_row': income_totals_row,
+            'balance_row': balance_row,
+            'current_month_col': 2 + len(months_list),  # Колонка текущего месяца
+            'current_sheet_name': current_sheet_name
+        }
 
     @staticmethod
     def generate_xlsx_with_charts(
@@ -690,7 +1464,7 @@ class ExportService:
                 cell.alignment = header_alignment
                 cell.border = thin_border
 
-            # Добавляем заголовки дней (1-31) после Кешбэк
+            # Добавляем заголовки дней (1-31) после Кешбэк - ВСЕ числа для таблицы
             days_start_col = summary_start_col + 6  # После Кешбэк
             for day_num in range(1, last_day + 1):
                 cell = ws.cell(row=2, column=days_start_col + day_num - 1, value=day_num)
@@ -699,6 +1473,10 @@ class ExportService:
                 cell.alignment = header_alignment
                 cell.border = thin_border
                 # Ширина колонок дней устанавливается позже в блоке автоширины
+
+            # Метки для диаграммы берутся из строки 2 (заголовки дней 1, 2, 3...)
+            # Не записываем отдельные метки 5, 10, 15... в строку 1 - они дублируют заголовки
+            chart_labels_row = 2  # Используем строку 2 с номерами дней для меток диаграммы
 
             # Заполнение Summary
             summary_row = 3  # Начинаем с 3-й строки (1 - заголовок секции, 2 - заголовки колонок)
@@ -970,12 +1748,11 @@ class ExportService:
                 from openpyxl.chart.axis import ChartLines
                 from openpyxl.drawing.line import LineProperties
 
-                # СТОЛБЧАТАЯ ДИАГРАММА (STACKED - разные цвета по категориям)
+                # СТОЛБЧАТАЯ ДИАГРАММА - один столбик на каждый день
                 bar = BarChart()
                 bar.type = "col"  # Вертикальные столбики
-                bar.grouping = "stacked"  # Наложение категорий друг на друга
-                bar.overlap = 100  # Полное наложение для stacked chart
-                bar.gapWidth = 300  # Увеличиваем расстояние между столбцами (делает столбики уже)
+                bar.grouping = "clustered"  # Обычная группировка (не stacked)
+                bar.gapWidth = 150  # Расстояние между столбцами (больше = тоньше столбики)
 
                 # Настраиваем заголовок и убираем подписи осей
                 bar.title = "Расходы по дням" if lang == 'ru' else "Expenses by Day"
@@ -983,13 +1760,15 @@ class ExportService:
                 bar.y_axis.title = None  # Убираем подпись оси Y
                 bar.legend = None  # Убираем легенду
 
-                bar.width = 16  # Чуть уже, сдвигаем ближе вправо
+                bar.width = 16  # Ширина диаграммы
                 bar.height = 11.6  # Делаем немного выше для лучшего баланса
 
-                # Настраиваем ось X (дни) - показываем метки через каждые 6 дней
-                bar.x_axis.tickLblSkip = 5  # Показываем каждую 6-ю метку
-                bar.x_axis.tickMarkSkip = 5  # Также пропускаем метки делений
+                # Настраиваем ось X (дни)
+                # Метки 5, 10, 15, 20, 25, 30 задаются через пустые значения в заголовках
+                bar.x_axis.tickLblSkip = 1  # Показываем все метки (пустые не видны)
+                bar.x_axis.tickMarkSkip = 1
                 bar.x_axis.delete = False  # Показываем ось X
+                bar.x_axis.majorTickMark = "out"  # Метки снаружи
 
                 # Настраиваем ось Y (суммы)
                 bar.y_axis.delete = False  # Показываем ось Y с числами
@@ -1008,19 +1787,18 @@ class ExportService:
                 # - Серии: категории - каждая строка (3..summary_end_row) = отдельная серия
                 # - Названия серий: из столбца summary_start_col (названия категорий)
 
-                # Метки оси X - номера дней (1, 2, 3... last_day) из строки заголовков
-                days_labels = Reference(ws, min_col=days_start_col, max_col=days_start_col + last_day - 1, min_row=2)
+                # Метки оси X - из строки 2 (заголовки дней 1, 2, 3...)
+                days_labels = Reference(ws, min_col=days_start_col, max_col=days_start_col + last_day - 1, min_row=chart_labels_row)
 
-                # Данные - ТОЛЬКО столбцы с днями (days_start_col до days_start_col + last_day - 1)
-                # Строка 2 - заголовки (номера дней), строки 3..summary_end_row - данные категорий
-                # Используем from_rows=False чтобы каждый СТОЛБЕЦ (день) был категорией на оси X
-                # Добавляем строку заголовков для правильных меток дней
+                # Данные - ТОЛЬКО строка ИТОГО (totals_row)
+                # Каждая ячейка в строке ИТОГО = значение для столбика этого дня
+                # from_rows=True указывает что данные расположены в строке (горизонтально)
                 data = Reference(ws,
                                  min_col=days_start_col,  # Начинаем с первого дня
                                  max_col=days_start_col + last_day - 1,  # До последнего дня
-                                 min_row=summary_end_row + 1,  # Строка ИТОГО (totals_row)
-                                 max_row=summary_end_row + 1)  # Только строка ИТОГО
-                bar.add_data(data, titles_from_data=False)
+                                 min_row=totals_row,  # Строка ИТОГО
+                                 max_row=totals_row)  # Только строка ИТОГО
+                bar.add_data(data, from_rows=True, titles_from_data=False)
                 bar.set_categories(days_labels)
 
                 # Применяем цвета из палитры к каждой серии (категории)
@@ -1123,7 +1901,7 @@ class ExportService:
                 cell.alignment = header_alignment
                 cell.border = thin_border
 
-            # Добавляем заголовки дней (1-31) после Кешбэк для доходов (та же позиция что и для расходов)
+            # Добавляем заголовки дней (1-31) после Кешбэк для доходов - ВСЕ числа для таблицы
             income_days_start_col = income_summary_start_col + 6  # После Кешбэк (6 колонок: Категория, Валюта, Всего, Кол-во, Средний, Кешбэк)
             for day_num in range(1, last_day + 1):
                 cell = ws.cell(row=income_header_row, column=income_days_start_col + day_num - 1, value=day_num)
@@ -1131,6 +1909,10 @@ class ExportService:
                 cell.fill = PatternFill(start_color="7FB685", end_color="7FB685", fill_type="solid")
                 cell.alignment = header_alignment
                 cell.border = thin_border
+
+            # Метки для диаграммы доходов берутся из строки заголовков (номера дней 1, 2, 3...)
+            # Не записываем отдельные метки 5, 10, 15... - они дублируют заголовки
+            income_chart_labels_row = income_header_row
 
             # Заполнение данных Summary для доходов
             income_summary_row = income_header_row + 1
@@ -1326,9 +2108,8 @@ class ExportService:
 
                 income_bar = BarChart()
                 income_bar.type = "col"
-                income_bar.grouping = "stacked"
-                income_bar.overlap = 100
-                income_bar.gapWidth = 300
+                income_bar.grouping = "clustered"  # Обычная группировка (не stacked)
+                income_bar.gapWidth = 150  # Расстояние между столбцами (больше = тоньше столбики)
 
                 income_bar.title = "Доходы по дням" if lang == 'ru' else "Income by Day"
                 income_bar.x_axis.title = None
@@ -1338,23 +2119,26 @@ class ExportService:
                 income_bar.width = 16
                 income_bar.height = 11.6
 
-                income_bar.x_axis.tickLblSkip = 5
-                income_bar.x_axis.tickMarkSkip = 5
+                # Настраиваем ось X (дни)
+                income_bar.x_axis.tickLblSkip = 1  # Показываем каждую метку
+                income_bar.x_axis.tickMarkSkip = 1
                 income_bar.x_axis.delete = False
+                income_bar.x_axis.majorTickMark = "out"
                 income_bar.y_axis.delete = False
 
                 income_bar.y_axis.majorGridlines = ChartLines()
                 income_bar.y_axis.majorGridlines.spPr = GraphicalProperties(ln=LineProperties(solidFill="D0D0D0"))
 
                 # Данные для диаграммы доходов - ТОЛЬКО строка ИТОГО для простоты
-                income_days_labels = Reference(ws, min_col=income_days_start_col, max_col=income_days_start_col + last_day - 1, min_row=income_header_row)
+                # Метки оси X - из скрытой строки (только 5, 10, 15, 20, 25, 30)
+                income_days_labels = Reference(ws, min_col=income_days_start_col, max_col=income_days_start_col + last_day - 1, min_row=income_chart_labels_row)
 
                 income_bar_data = Reference(ws,
                                           min_col=income_days_start_col,  # Начинаем с первого дня
                                           max_col=income_days_start_col + last_day - 1,  # До последнего дня
                                           min_row=income_totals_row,  # Строка ИТОГО
                                           max_row=income_totals_row)  # Только строка ИТОГО
-                income_bar.add_data(income_bar_data, titles_from_data=False)
+                income_bar.add_data(income_bar_data, from_rows=True, titles_from_data=False)
                 income_bar.set_categories(income_days_labels)
 
                 # Применяем цвета
@@ -1383,6 +2167,26 @@ class ExportService:
 
         # Закрепить заголовки (строки 1-2: заголовок секции + заголовки колонок)
         ws.freeze_panes = 'A3'
+
+        # ==================== ДОБАВЛЯЕМ ЛИСТ "ИТОГИ 12 МЕС" ====================
+        try:
+            # Получаем profile для загрузки данных за 12 месяцев
+            profile = Profile.objects.get(telegram_id=user_id)
+            household_id = profile.household_id if household_mode else None
+
+            # Добавляем лист с итогами (он станет первым листом)
+            ExportService._add_summary_sheet(
+                wb=wb,
+                profile_id=profile.id,
+                current_year=year,
+                current_month=month,
+                lang=lang,
+                household_id=household_id
+            )
+        except Profile.DoesNotExist:
+            logger.warning(f"Profile not found for user_id={user_id}, skipping summary sheet")
+        except Exception as e:
+            logger.error(f"Error adding summary sheet: {e}")
 
         # Сохранить в BytesIO
         output = BytesIO()
