@@ -457,10 +457,25 @@ async def add_category_start(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.message(CategoryForm.waiting_for_name)
-async def process_category_name(message: types.Message, state: FSMContext):
-    """Обработка названия категории"""
-    # Игнорируем команды - они обработаются в middleware
-    if message.text.startswith('/'):
+async def process_category_name(message: types.Message, state: FSMContext, voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+    """Обработка названия категории (текст или голос)"""
+    # Обработка голосовых сообщений
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.", reply_markup=get_subscription_button(), parse_mode="HTML")
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом.")
+            return
+        name = voice_text
+    elif message.text:
+        # Игнорируем команды - они обработаются в middleware
+        if message.text.startswith('/'):
+            return
+        name = message.text.strip()
+    else:
+        await message.answer("❌ Пожалуйста, введите название категории текстом или голосом.")
         return
 
     # Дополнительная проверка что мы все еще в правильном состоянии
@@ -470,8 +485,6 @@ async def process_category_name(message: types.Message, state: FSMContext):
 
     # Получаем язык пользователя
     lang = await get_user_language(message.from_user.id)
-
-    name = message.text.strip()
     
     if len(name) > 50:
         await send_message_with_cleanup(message, state, "❌ Название слишком длинное. Максимум 50 символов.")
@@ -541,17 +554,26 @@ async def custom_icon_start(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.message(CategoryForm.waiting_for_custom_icon)
-async def process_custom_icon(message: types.Message, state: FSMContext):
-    """Обработка пользовательского эмодзи"""
+async def process_custom_icon(message: types.Message, state: FSMContext, voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+    """Обработка пользовательского эмодзи (текст или голос)"""
+    # Обработка голосовых - для эмодзи голос не подходит
+    if message.voice:
+        await message.answer("❌ Для иконки нужно отправить эмодзи текстом, голос не подходит.")
+        return
+
+    if not message.text:
+        await message.answer("❌ Пожалуйста, отправьте эмодзи.")
+        return
+
     # Игнорируем команды - они обработаются в middleware
     if message.text.startswith('/'):
         return
-    
+
     # Дополнительная проверка что мы все еще в правильном состоянии
     current_state = await state.get_state()
     if current_state != CategoryForm.waiting_for_custom_icon.state:
         return
-    
+
     custom_icon = message.text.strip()
 
     # Проверяем что введены ТОЛЬКО эмодзи (используем централизованный паттерн с ZWJ/VS-16)
@@ -836,17 +858,37 @@ async def edit_category_icon_start(callback: types.CallbackQuery, state: FSMCont
 
 
 @router.message(CategoryStates.editing_name)
-async def process_edit_category_name(message: types.Message, state: FSMContext):
-    """Обработка нового названия категории"""
-    # Игнорируем команды - они обработаются в middleware
-    if message.text.startswith('/'):
-        return
-    
+async def process_edit_category_name(
+    message: types.Message,
+    state: FSMContext,
+    voice_text: str | None = None,
+    voice_no_subscription: bool = False,
+    voice_transcribe_failed: bool = False
+):
+    """Обработка нового названия категории (текст или голос)"""
     import logging
     logger = logging.getLogger(__name__)
     logger.info(f"process_edit_category_name called for user {message.from_user.id}")
-    
-    new_name = message.text.strip()
+
+    lang = await get_user_language(message.from_user.id)
+
+    # Обработка голосового ввода
+    if message.voice:
+        if voice_no_subscription:
+            await message.answer(get_text('voice_premium_only', lang))
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer(get_text('voice_recognition_failed', lang))
+            return
+        new_name = voice_text.strip()
+    elif message.text:
+        # Игнорируем команды - они обработаются в middleware
+        if message.text.startswith('/'):
+            return
+        new_name = message.text.strip()
+    else:
+        # Неподдерживаемый тип сообщения
+        return
     user_id = message.from_user.id
     
     # Получаем данные из состояния
@@ -960,18 +1002,38 @@ async def add_income_category_start(callback: types.CallbackQuery, state: FSMCon
 
 
 @router.message(IncomeCategoryForm.waiting_for_name)
-async def process_income_category_name(message: types.Message, state: FSMContext):
-    """Обработка названия категории доходов"""
-    # Игнорируем команды - они обработаются в middleware
-    if message.text.startswith('/'):
+async def process_income_category_name(
+    message: types.Message,
+    state: FSMContext,
+    voice_text: str | None = None,
+    voice_no_subscription: bool = False,
+    voice_transcribe_failed: bool = False
+):
+    """Обработка названия категории доходов (текст или голос)"""
+    lang = await get_user_language(message.from_user.id)
+
+    # Обработка голосового ввода
+    if message.voice:
+        if voice_no_subscription:
+            await message.answer(get_text('voice_premium_only', lang))
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer(get_text('voice_recognition_failed', lang))
+            return
+        name = voice_text.strip()
+    elif message.text:
+        # Игнорируем команды - они обработаются в middleware
+        if message.text.startswith('/'):
+            return
+        name = message.text.strip()
+    else:
+        # Неподдерживаемый тип сообщения
         return
-    
+
     # Дополнительная проверка что мы все еще в правильном состоянии
     current_state = await state.get_state()
     if current_state != IncomeCategoryForm.waiting_for_name.state:
         return
-    
-    name = message.text.strip()
     
     if len(name) > 50:
         await send_message_with_cleanup(message, state, "❌ Название слишком длинное. Максимум 50 символов.")
@@ -1058,16 +1120,26 @@ async def custom_income_icon_start(callback: types.CallbackQuery, state: FSMCont
 
 @router.message(IncomeCategoryForm.waiting_for_custom_icon)
 async def process_custom_income_icon(message: types.Message, state: FSMContext):
-    """Обработка пользовательского эмодзи для категории доходов"""
+    """Обработка пользовательского эмодзи для категории доходов (только текст)"""
+    # Голосовой ввод не подходит для эмодзи - игнорируем голосовые сообщения
+    if message.voice:
+        lang = await get_user_language(message.from_user.id)
+        await message.answer(get_text('send_emoji_not_voice', lang, default="❌ Пожалуйста, отправьте эмодзи текстом, не голосом"))
+        return
+
+    # Проверяем что есть текст
+    if not message.text:
+        return
+
     # Игнорируем команды - они обработаются в middleware
     if message.text.startswith('/'):
         return
-    
+
     # Дополнительная проверка что мы все еще в правильном состоянии
     current_state = await state.get_state()
     if current_state != IncomeCategoryForm.waiting_for_custom_icon.state:
         return
-    
+
     custom_icon = message.text.strip()
 
     # Проверяем что введены ТОЛЬКО эмодзи (используем централизованный паттерн с ZWJ/VS-16)
@@ -1303,10 +1375,34 @@ async def edit_income_category_icon_start(callback: types.CallbackQuery, state: 
 
 
 @router.message(IncomeCategoryForm.waiting_for_new_name)
-async def process_new_income_category_name(message: types.Message, state: FSMContext):
-    """Обработка нового названия категории доходов"""
-    new_name = message.text.strip()
-    
+async def process_new_income_category_name(
+    message: types.Message,
+    state: FSMContext,
+    voice_text: str | None = None,
+    voice_no_subscription: bool = False,
+    voice_transcribe_failed: bool = False
+):
+    """Обработка нового названия категории доходов (текст или голос)"""
+    lang = await get_user_language(message.from_user.id)
+
+    # Обработка голосового ввода
+    if message.voice:
+        if voice_no_subscription:
+            await message.answer(get_text('voice_premium_only', lang))
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer(get_text('voice_recognition_failed', lang))
+            return
+        new_name = voice_text.strip()
+    elif message.text:
+        # Игнорируем команды
+        if message.text.startswith('/'):
+            return
+        new_name = message.text.strip()
+    else:
+        # Неподдерживаемый тип сообщения
+        return
+
     if len(new_name) > 50:
         await send_message_with_cleanup(message, state, "❌ Название слишком длинное. Максимум 50 символов.")
         return

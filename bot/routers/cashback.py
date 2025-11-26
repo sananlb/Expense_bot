@@ -491,10 +491,25 @@ async def process_cashback_bank(callback: types.CallbackQuery, state: FSMContext
 
 
 @router.message(CashbackForm.waiting_for_bank)
-async def process_bank_text(message: types.Message, state: FSMContext):
-    """Обработка ввода названия банка текстом"""
+async def process_bank_text(message: types.Message, state: FSMContext, voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+    """Обработка ввода названия банка (текст или голос)"""
     lang = await get_user_language(message.from_user.id)
-    bank_name = message.text.strip()
+
+    # Обработка голосовых сообщений
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.", reply_markup=get_subscription_button(), parse_mode="HTML")
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом.")
+            return
+        bank_name = voice_text
+    elif message.text:
+        bank_name = message.text.strip()
+    else:
+        await message.answer("❌ Пожалуйста, введите название банка текстом или голосом.")
+        return
 
     if len(bank_name) > 100:
         await message.answer(get_text('cashback_bank_too_long', lang))
@@ -525,14 +540,28 @@ async def process_bank_text(message: types.Message, state: FSMContext):
 
 
 @router.message(CashbackForm.waiting_for_percent)
-async def process_percent_text(message: types.Message, state: FSMContext):
-    """Обработка ввода описания и процента кешбэка"""
+async def process_percent_text(message: types.Message, state: FSMContext, voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+    """Обработка ввода описания и процента кешбэка (текст или голос)"""
     import re
 
     # Получаем язык пользователя
     lang = await get_user_language(message.from_user.id)
 
-    text = message.text.strip()
+    # Обработка голосовых сообщений
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.", reply_markup=get_subscription_button(), parse_mode="HTML")
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом.")
+            return
+        text = voice_text
+    elif message.text:
+        text = message.text.strip()
+    else:
+        await message.answer("❌ Пожалуйста, введите процент текстом или голосом.")
+        return
 
     # Паттерн для извлечения процента - ищем число в любом месте строки
     # Если только число - это процент без описания
@@ -722,10 +751,25 @@ async def skip_edit_bank(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.message(CashbackForm.editing_bank)
-async def process_edit_bank_text(message: types.Message, state: FSMContext):
-    """Обработка ввода названия банка текстом при редактировании"""
+async def process_edit_bank_text(message: types.Message, state: FSMContext, voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+    """Обработка ввода названия банка при редактировании (текст или голос)"""
     lang = await get_user_language(message.from_user.id)
-    bank_name = message.text.strip()
+
+    # Обработка голосовых сообщений
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.", reply_markup=get_subscription_button(), parse_mode="HTML")
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом.")
+            return
+        bank_name = voice_text
+    elif message.text:
+        bank_name = message.text.strip()
+    else:
+        await message.answer("❌ Пожалуйста, введите название банка текстом или голосом.")
+        return
 
     if len(bank_name) > 100:
         await message.answer(get_text('cashback_bank_too_long', lang))
@@ -780,12 +824,27 @@ async def back_to_edit_list(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.message(CashbackForm.editing_percent)
-async def process_edit_percent(message: types.Message, state: FSMContext):
-    """Обработка ввода нового описания и процента"""
+async def process_edit_percent(message: types.Message, state: FSMContext, voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+    """Обработка ввода нового описания и процента (текст или голос)"""
     import re
 
     lang = await get_user_language(message.from_user.id)
-    text = message.text.strip()
+
+    # Обработка голосовых сообщений
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.", reply_markup=get_subscription_button(), parse_mode="HTML")
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом.")
+            return
+        text = voice_text
+    elif message.text:
+        text = message.text.strip()
+    else:
+        await message.answer("❌ Пожалуйста, введите процент текстом или голосом.")
+        return
 
     # Используем тот же парсинг, что и при добавлении
     only_percent_pattern = r'^(\d+(?:[.,]\d+)?)\s*%?$'
@@ -1208,9 +1267,23 @@ async def skip_description(callback: types.CallbackQuery, state: FSMContext):
 
 
 @router.message(CashbackForm.waiting_for_description)
-async def process_description_text(message: types.Message, state: FSMContext):
-    """Обработка ввода описания"""
-    description = message.text.strip()
+async def process_description_text(message: types.Message, state: FSMContext, voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+    """Обработка ввода описания (текст или голос)"""
+    # Обработка голосовых сообщений
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.", reply_markup=get_subscription_button(), parse_mode="HTML")
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом.")
+            return
+        description = voice_text
+    elif message.text:
+        description = message.text.strip()
+    else:
+        await message.answer("❌ Пожалуйста, введите описание текстом или голосом.")
+        return
     
     if len(description) > 200:
         await send_message_with_cleanup(message, state, "❌ Описание слишком длинное. Максимум 200 символов.")
