@@ -48,6 +48,7 @@ from .middlewares import (
 )
 from .middlewares.fsm_cleanup import FSMCleanupMiddleware
 from .middlewares.state_reset import StateResetMiddleware
+from .middlewares.voice_to_text import VoiceToTextMiddleware
 from .middleware import ActivityTrackerMiddleware, RateLimitMiddleware as AdminRateLimitMiddleware
 from .handlers import error_router
 from .utils.commands import set_bot_commands
@@ -191,6 +192,10 @@ def create_dispatcher() -> Dispatcher:
     # 8. Localization - устанавливает язык
     dp.message.middleware(LocalizationMiddleware())
     dp.callback_query.middleware(LocalizationMiddleware())
+
+    # 8.3. Voice to Text - транскрибирует голосовые сообщения в текст
+    # ПОСЛЕ Localization (нужен язык для распознавания)
+    dp.message.middleware(VoiceToTextMiddleware())
 
     # 8.5. FSM Cleanup - очищает PII из старых FSM states
     dp.message.middleware(FSMCleanupMiddleware())

@@ -687,13 +687,30 @@ async def process_edit_amount(message: types.Message, state: FSMContext, lang: s
 
 
 @router.message(EditExpenseForm.editing_description)
-async def process_edit_description(message: types.Message, state: FSMContext, lang: str = 'ru'):
-    """Обработка нового описания"""
-    if not message.text:
-        await message.answer("❌ Пожалуйста, введите описание текстом." if lang == 'ru' else "❌ Please enter description as text.")
+async def process_edit_description(message: types.Message, state: FSMContext, lang: str = 'ru', voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+    """Обработка нового описания (текст или голос)"""
+    # Обработка голосовых сообщений (транскрибировано в middleware)
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(
+                subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.",
+                reply_markup=get_subscription_button(),
+                parse_mode="HTML"
+            )
+            return
+
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом." if lang == 'ru' else "❌ Could not recognize voice message. Try again or enter as text.")
+            return
+
+        description = voice_text
+    elif message.text:
+        description = message.text.strip()
+    else:
+        await message.answer("❌ Пожалуйста, введите описание текстом или голосом." if lang == 'ru' else "❌ Please enter description as text or voice.")
         return
 
-    description = message.text.strip()
     if not description:
         await message.answer("❌ Описание не может быть пустым")
         return
@@ -735,22 +752,37 @@ async def process_edit_description(message: types.Message, state: FSMContext, la
 
 # Обработчик ввода суммы после уточнения - ДОЛЖЕН БЫТЬ ПЕРЕД основным обработчиком
 @router.message(ExpenseForm.waiting_for_amount_clarification)
-async def handle_amount_clarification(message: types.Message, state: FSMContext, lang: str = 'ru'):
-    """Обработка суммы после уточнения описания траты"""
+async def handle_amount_clarification(message: types.Message, state: FSMContext, lang: str = 'ru', voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+    """Обработка суммы после уточнения описания траты (текст или голос)"""
     from ..utils.expense_parser import parse_expense_message
     from ..services.expense import add_expense
     from ..services.category import get_or_create_category
     from ..services.cashback import calculate_expense_cashback
     from ..utils.expense_intent import is_show_expenses_request
-    
+
     user_id = message.from_user.id
 
-    # Проверяем что это текстовое сообщение
-    if not message.text:
-        await message.answer("❌ Пожалуйста, введите сумму текстом." if lang == 'ru' else "❌ Please enter the amount as text.")
-        return
+    # Обработка голосовых сообщений (транскрибировано в middleware)
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(
+                subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.",
+                reply_markup=get_subscription_button(),
+                parse_mode="HTML"
+            )
+            return
 
-    text = message.text.strip()
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом." if lang == 'ru' else "❌ Could not recognize voice message. Try again or enter as text.")
+            return
+
+        text = voice_text
+    elif message.text:
+        text = message.text.strip()
+    else:
+        await message.answer("❌ Пожалуйста, введите сумму текстом или голосом." if lang == 'ru' else "❌ Please enter the amount as text or voice.")
+        return
     
     # УЛУЧШЕНИЕ: Используем единый модуль для проверки
     is_show_request, confidence = is_show_expenses_request(text)
