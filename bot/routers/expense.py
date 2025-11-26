@@ -689,6 +689,10 @@ async def process_edit_amount(message: types.Message, state: FSMContext, lang: s
 @router.message(EditExpenseForm.editing_description)
 async def process_edit_description(message: types.Message, state: FSMContext, lang: str = 'ru'):
     """Обработка нового описания"""
+    if not message.text:
+        await message.answer("❌ Пожалуйста, введите описание текстом." if lang == 'ru' else "❌ Please enter description as text.")
+        return
+
     description = message.text.strip()
     if not description:
         await message.answer("❌ Описание не может быть пустым")
@@ -740,6 +744,12 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
     from ..utils.expense_intent import is_show_expenses_request
     
     user_id = message.from_user.id
+
+    # Проверяем что это текстовое сообщение
+    if not message.text:
+        await message.answer("❌ Пожалуйста, введите сумму текстом." if lang == 'ru' else "❌ Please enter the amount as text.")
+        return
+
     text = message.text.strip()
     
     # УЛУЧШЕНИЕ: Используем единый модуль для проверки
