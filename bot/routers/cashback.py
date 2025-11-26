@@ -21,6 +21,7 @@ from ..utils.message_utils import send_message_with_cleanup, delete_message_with
 from ..utils import get_text, get_user_language
 from ..utils.category_helpers import get_category_display_name
 from ..utils.formatters import format_currency
+from ..utils.expense_parser import convert_words_to_numbers
 import logging
 
 logger = logging.getLogger(__name__)
@@ -563,6 +564,9 @@ async def process_percent_text(message: types.Message, state: FSMContext, voice_
         await message.answer("❌ Пожалуйста, введите процент текстом или голосом.")
         return
 
+    # Конвертируем слова-числа в цифры (five -> 5, два -> 2)
+    text = convert_words_to_numbers(text)
+
     # Паттерн для извлечения процента - ищем число в любом месте строки
     # Если только число - это процент без описания
     # Если есть текст и число - текст это описание, число это процент
@@ -845,6 +849,9 @@ async def process_edit_percent(message: types.Message, state: FSMContext, voice_
     else:
         await message.answer("❌ Пожалуйста, введите процент текстом или голосом.")
         return
+
+    # Конвертируем слова-числа в цифры (five -> 5, два -> 2)
+    text = convert_words_to_numbers(text)
 
     # Используем тот же парсинг, что и при добавлении
     only_percent_pattern = r'^(\d+(?:[.,]\d+)?)\s*%?$'

@@ -26,6 +26,7 @@ from ..utils import get_text
 from ..utils.category_helpers import get_category_display_name
 from ..utils.validators import validate_amount, parse_description_amount
 from ..utils.formatters import format_currency, format_date
+from ..utils.expense_parser import convert_words_to_numbers
 from ..decorators import rate_limit
 
 router = Router(name="recurring")
@@ -343,13 +344,37 @@ async def process_day_button(callback: types.CallbackQuery, state: FSMContext, l
 
 
 @router.message(RecurringForm.waiting_for_day)
-async def process_day_text(message: types.Message, state: FSMContext):
-    """Обработка ввода дня текстом"""
+async def process_day_text(
+    message: types.Message,
+    state: FSMContext,
+    voice_text: str | None = None,
+    voice_no_subscription: bool = False,
+    voice_transcribe_failed: bool = False
+):
+    """Обработка ввода дня (текст или голос)"""
+    # Обработка голосовых сообщений
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.", reply_markup=get_subscription_button(), parse_mode="HTML")
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом.")
+            return
+        text = voice_text
+    elif message.text:
+        text = message.text.strip()
+    else:
+        return
+
+    # Конвертируем слова-числа в цифры (five -> 5, пятнадцать -> 15)
+    text = convert_words_to_numbers(text)
+
     data = await state.get_data()
     user_id = message.from_user.id
 
     try:
-        day = int(message.text.strip())
+        day = int(text)
 
         if day < 1 or day > 30:
             # Просто удаляем сообщение пользователя, меню с кнопками остается
@@ -759,14 +784,18 @@ async def process_edit_day(message: types.Message, state: FSMContext, lang: str 
     else:
         await message.answer("❌ Пожалуйста, введите день текстом или голосом.")
         return
+
+    # Конвертируем слова-числа в цифры (five -> 5, пятнадцать -> 15)
+    text = convert_words_to_numbers(text)
+
     user_id = message.from_user.id
     data = await state.get_data()
     payment_id = data.get('editing_payment_id')
-    
+
     if not payment_id:
         await send_message_with_cleanup(message, state, get_text('payment_not_found', lang))
         return
-    
+
     try:
         day = int(text)
         if not (1 <= day <= 30):
