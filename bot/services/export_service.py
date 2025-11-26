@@ -1011,15 +1011,16 @@ class ExportService:
                 # Метки оси X - номера дней (1, 2, 3... last_day) из строки заголовков
                 days_labels = Reference(ws, min_col=days_start_col, max_col=days_start_col + last_day - 1, min_row=2)
 
-                # Данные - строки категорий (от строки 3 до summary_end_row)
-                # from_rows=True означает что каждая СТРОКА = серия (категория)
-                # Включаем столбец с названиями категорий для titles_from_data
+                # Данные - ТОЛЬКО столбцы с днями (days_start_col до days_start_col + last_day - 1)
+                # Строка 2 - заголовки (номера дней), строки 3..summary_end_row - данные категорий
+                # Используем from_rows=False чтобы каждый СТОЛБЕЦ (день) был категорией на оси X
+                # Добавляем строку заголовков для правильных меток дней
                 data = Reference(ws,
-                                 min_col=summary_start_col,  # Начинаем с названия категории
+                                 min_col=days_start_col,  # Начинаем с первого дня
                                  max_col=days_start_col + last_day - 1,  # До последнего дня
-                                 min_row=3,  # Первая строка данных (без заголовков)
-                                 max_row=summary_end_row)  # До последней категории (без ИТОГО)
-                bar.add_data(data, from_rows=True, titles_from_data=True)
+                                 min_row=summary_end_row + 1,  # Строка ИТОГО (totals_row)
+                                 max_row=summary_end_row + 1)  # Только строка ИТОГО
+                bar.add_data(data, titles_from_data=False)
                 bar.set_categories(days_labels)
 
                 # Применяем цвета из палитры к каждой серии (категории)
@@ -1345,15 +1346,15 @@ class ExportService:
                 income_bar.y_axis.majorGridlines = ChartLines()
                 income_bar.y_axis.majorGridlines.spPr = GraphicalProperties(ln=LineProperties(solidFill="D0D0D0"))
 
-                # Данные для диаграммы доходов из объединённой таблицы
+                # Данные для диаграммы доходов - ТОЛЬКО строка ИТОГО для простоты
                 income_days_labels = Reference(ws, min_col=income_days_start_col, max_col=income_days_start_col + last_day - 1, min_row=income_header_row)
 
                 income_bar_data = Reference(ws,
-                                          min_col=income_summary_start_col,
-                                          max_col=income_days_start_col + last_day - 1,
-                                          min_row=income_header_row + 1,
-                                          max_row=income_summary_end_row)
-                income_bar.add_data(income_bar_data, from_rows=True, titles_from_data=True)
+                                          min_col=income_days_start_col,  # Начинаем с первого дня
+                                          max_col=income_days_start_col + last_day - 1,  # До последнего дня
+                                          min_row=income_totals_row,  # Строка ИТОГО
+                                          max_row=income_totals_row)  # Только строка ИТОГО
+                income_bar.add_data(income_bar_data, titles_from_data=False)
                 income_bar.set_categories(income_days_labels)
 
                 # Применяем цвета
