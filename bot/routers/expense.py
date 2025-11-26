@@ -582,12 +582,39 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
 
 # Обработчики ввода новых значений
 @router.message(EditExpenseForm.editing_amount)
-async def process_edit_amount(message: types.Message, state: FSMContext, lang: str = 'ru'):
-    """Обработка новой суммы"""
+async def process_edit_amount(
+    message: types.Message,
+    state: FSMContext,
+    lang: str = 'ru',
+    voice_text: str | None = None,
+    voice_no_subscription: bool = False,
+    voice_transcribe_failed: bool = False
+):
+    """Обработка новой суммы (текст или голос)"""
     import re
-    from ..utils.expense_parser import detect_currency, CURRENCY_PATTERNS
+    from ..utils.expense_parser import detect_currency, CURRENCY_PATTERNS, convert_words_to_numbers
 
-    text = (message.text or "").strip()
+    # Обработка голосовых сообщений
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(
+                subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.",
+                reply_markup=get_subscription_button(),
+                parse_mode="HTML"
+            )
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом.")
+            return
+        text = voice_text.strip()
+    elif message.text:
+        text = message.text.strip()
+    else:
+        return
+
+    # Конвертируем слова-числа в цифры (five -> 5, тысяча двести -> 1200)
+    text = convert_words_to_numbers(text)
     text_no_spaces = re.sub(r"\s+", "", text)
 
     # Получаем валюту пользователя для определения валюты по умолчанию

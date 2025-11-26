@@ -186,7 +186,10 @@ async def process_description(message: types.Message, state: FSMContext, voice_t
         await message.answer("❌ Пожалуйста, введите данные текстом или голосом.")
         return
     user_id = message.from_user.id
-    
+
+    # Конвертируем слова-числа в цифры (five thousand -> 5000, пятьсот -> 500)
+    text = convert_words_to_numbers(text)
+
     # Используем утилиту для парсинга с разрешением ввода только суммы
     try:
         parsed = parse_description_amount(text, allow_only_amount=True)
@@ -682,14 +685,18 @@ async def process_edit_amount(message: types.Message, state: FSMContext, lang: s
     else:
         await message.answer("❌ Пожалуйста, введите сумму текстом или голосом.")
         return
+
+    # Конвертируем слова-числа в цифры (five thousand -> 5000, пятьсот -> 500)
+    text = convert_words_to_numbers(text)
+
     user_id = message.from_user.id
     data = await state.get_data()
     payment_id = data.get('editing_payment_id')
-    
+
     if not payment_id:
         await send_message_with_cleanup(message, state, get_text('payment_not_found', lang))
         return
-    
+
     try:
         amount = await validate_amount(text)
     except ValueError:
