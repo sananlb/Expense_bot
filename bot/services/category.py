@@ -291,15 +291,14 @@ async def create_category(user_id: int, name: str, icon: str = '💰') -> Expens
             
             # Определяем язык категории
             import re
-            from bot.utils.language import get_user_language
-            
+
             # Определяем, на каком языке название
             has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', name))
             has_latin = bool(re.search(r'[a-zA-Z]', name))
-            
-            # Получаем язык пользователя
-            user_lang = get_user_language(user_id)
-            
+
+            # Получаем язык пользователя напрямую из профиля (он уже загружен)
+            user_lang = getattr(profile, 'language_code', None) or 'ru'
+
             # Определяем оригинальный язык категории
             if has_cyrillic and not has_latin:
                 original_language = 'ru'
