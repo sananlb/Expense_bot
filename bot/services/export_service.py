@@ -6,9 +6,8 @@ import calendar
 from io import StringIO, BytesIO
 from datetime import datetime, date
 from decimal import Decimal
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 import logging
-import math
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
@@ -34,23 +33,20 @@ logger = logging.getLogger(__name__)
 CM_TO_EMU = 360000  # 1 сантиметр в единицах EMU (Excel)
 
 
-def _width_units_to_cm(width_units: float) -> float:
-    """Преобразовать ширину столбца Excel (в условных единицах) в сантиметры."""
-    if width_units <= 0:
-        return 0.0
-    if width_units <= 1:
-        pixels = width_units * 12  # Excel использует 12 px для очень узких столбцов
-    else:
-        pixels = math.floor(width_units * 7 + 5)  # эмпирическая формула Excel
-    return pixels * 0.026458333  # 1 px ~= 0.026458333 см
-
-
-def _get_column_width_cm(ws, col_idx: int) -> float:
-    """Получить фактическую ширину столбца по индексу (1-based) в сантиметрах."""
-    letter = get_column_letter(col_idx)
-    dimension = ws.column_dimensions.get(letter)
-    width_units = dimension.width if dimension and dimension.width else 8.43
-    return _width_units_to_cm(width_units)
+def smart_number(value) -> Union[int, float]:
+    """
+    Конвертирует число для Excel: целые как int, дробные как float.
+    Это гарантирует корректное отображение без лишних десятичных знаков.
+    """
+    if value is None:
+        return 0
+    if isinstance(value, Decimal):
+        value = float(value)
+    if isinstance(value, (int, float)):
+        if value == int(value):
+            return int(value)
+        return round(value, 2)
+    return value
 
 
 class ExportService:
@@ -430,11 +426,11 @@ class ExportService:
             # Заполняем колонки A-G или A-H (в зависимости от has_any_cashback)
             ws.cell(row=current_row, column=1, value=op['date'].strftime('%d.%m.%Y'))
             ws.cell(row=current_row, column=2, value=op['time'].strftime('%H:%M'))
-            ws.cell(row=current_row, column=3, value=op['amount'])
+            ws.cell(row=current_row, column=3, value=smart_number(op['amount']))
 
             if has_any_cashback:
                 # С колонкой кешбэка: Дата, Время, Сумма, Кешбэк, Валюта, Категория, Описание, Тип
-                ws.cell(row=current_row, column=4, value=cashback if op['type'] == 'expense' else None)
+                ws.cell(row=current_row, column=4, value=smart_number(cashback) if op['type'] == 'expense' else None)
                 ws.cell(row=current_row, column=5, value=op['currency'])
                 ws.cell(row=current_row, column=6, value=category)
                 ws.cell(row=current_row, column=7, value=description)
@@ -460,13 +456,13 @@ class ExportService:
                 amount_cell.font = Font(color="008000", bold=True)
             else:
                 amount_cell.font = Font(color="000000")  # Черный цвет для трат
-            amount_cell.number_format = '#,##0.00'
+            amount_cell.number_format = 'General'
 
             # Форматирование кешбэка (зеленым цветом)
             if has_any_cashback and cashback > 0:
                 cashback_cell = ws.cell(row=current_row, column=4)
                 cashback_cell.font = Font(color="008000", bold=True)
-                cashback_cell.number_format = '#,##0.00'
+                cashback_cell.number_format = 'General'
 
             # Подсчет по валютам
             currency = op['currency']
@@ -507,7 +503,7 @@ class ExportService:
             label = 'Расходы:' if lang == 'ru' else 'Expenses:'
             ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
             ws.cell(row=current_row, column=2, value=None)
-            ws.cell(row=current_row, column=3, value=-expense_total)
+            ws.cell(row=current_row, column=3, value=smart_number(-expense_total))
             if has_any_cashback:
                 ws.cell(row=current_row, column=4, value=None)
                 ws.cell(row=current_row, column=5, value=currency)
@@ -521,14 +517,14 @@ class ExportService:
             for col in range(1, ops_end_col + 1):
                 ws.cell(row=current_row, column=col).border = thin_border
             ws.cell(row=current_row, column=3).font = Font(bold=True, color="000000")  # Черный цвет
-            ws.cell(row=current_row, column=3).number_format = '#,##0.00'
+            ws.cell(row=current_row, column=3).number_format = 'General'
             current_row += 1
 
             # Доходы (ВСЕГДА показываем, даже если 0)
             label = 'Доходы:' if lang == 'ru' else 'Income:'
             ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
             ws.cell(row=current_row, column=2, value=None)
-            ws.cell(row=current_row, column=3, value=income_total)
+            ws.cell(row=current_row, column=3, value=smart_number(income_total))
             if has_any_cashback:
                 ws.cell(row=current_row, column=4, value=None)
                 ws.cell(row=current_row, column=5, value=currency)
@@ -542,7 +538,7 @@ class ExportService:
             for col in range(1, ops_end_col + 1):
                 ws.cell(row=current_row, column=col).border = thin_border
             ws.cell(row=current_row, column=3).font = Font(bold=True, color="008000")
-            ws.cell(row=current_row, column=3).number_format = '#,##0.00'
+            ws.cell(row=current_row, column=3).number_format = 'General'
             current_row += 1
 
             # Кешбэк (показываем только если есть)
@@ -550,7 +546,7 @@ class ExportService:
                 label = 'Кешбэк:' if lang == 'ru' else 'Cashback:'
                 ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
                 ws.cell(row=current_row, column=2, value=None)
-                ws.cell(row=current_row, column=3, value=cashback_total)
+                ws.cell(row=current_row, column=3, value=smart_number(cashback_total))
                 if has_any_cashback:
                     ws.cell(row=current_row, column=4, value=None)
                     ws.cell(row=current_row, column=5, value=currency)
@@ -564,14 +560,14 @@ class ExportService:
                 for col in range(1, ops_end_col + 1):
                     ws.cell(row=current_row, column=col).border = thin_border
                 ws.cell(row=current_row, column=3).font = Font(bold=True, color="008000")
-                ws.cell(row=current_row, column=3).number_format = '#,##0.00'
+                ws.cell(row=current_row, column=3).number_format = 'General'
                 current_row += 1
 
             # Баланс (ВСЕГДА показываем)
             label = 'Баланс:' if lang == 'ru' else 'Balance:'
             ws.cell(row=current_row, column=1, value=label).font = Font(bold=True)
             ws.cell(row=current_row, column=2, value=None)
-            ws.cell(row=current_row, column=3, value=balance)
+            ws.cell(row=current_row, column=3, value=smart_number(balance))
             if has_any_cashback:
                 ws.cell(row=current_row, column=4, value=None)
                 ws.cell(row=current_row, column=5, value=currency)
@@ -585,7 +581,7 @@ class ExportService:
             for col in range(1, ops_end_col + 1):
                 ws.cell(row=current_row, column=col).border = thin_border
             ws.cell(row=current_row, column=3).font = Font(bold=True, color="0000FF")
-            ws.cell(row=current_row, column=3).number_format = '#,##0.00'
+            ws.cell(row=current_row, column=3).number_format = 'General'
             current_row += 2
 
         # Автоширина для колонок A-G или A-H
@@ -632,6 +628,39 @@ class ExportService:
         pie_block_height = 11.5  # Высота блока диаграммы (для расчета позиции таблицы)
         table_start_row = charts_start_row + int(pie_block_height + 15)  # Таблица под диаграммами
 
+        # Подсчет расходов по дням и категориям (нужно ДО заполнения Summary для столбцов дней)
+        daily_expenses_by_category = {}  # {category: {day: amount}}
+        daily_cashback = {}  # Кешбек по дням
+
+        # Получаем информацию о кешбеке для категорий (синхронно)
+        category_cashback_rates = {}
+        cashbacks_for_rates = Cashback.objects.filter(profile__telegram_id=user_id)
+        for cb in cashbacks_for_rates:
+            if cb.category_id:
+                category_cashback_rates[cb.category_id] = float(cb.cashback_percent) / 100.0
+
+        for op in operations:
+            if op['type'] == 'expense':
+                category = op['category'] or get_text('no_category', lang)
+                day = op['date'].day
+                amount = abs(op['amount'])
+
+                # Расходы по категориям и дням
+                if category not in daily_expenses_by_category:
+                    daily_expenses_by_category[category] = {}
+                if day not in daily_expenses_by_category[category]:
+                    daily_expenses_by_category[category][day] = 0
+                daily_expenses_by_category[category][day] += amount
+
+                # Кешбек по дням
+                cat_id = op.get('category_id')
+                if cat_id and cat_id in category_cashback_rates:
+                    cashback_rate = category_cashback_rates[cat_id]
+                    day_cashback = amount * cashback_rate
+                    if day not in daily_cashback:
+                        daily_cashback[day] = 0
+                    daily_cashback[day] += day_cashback
+
         # ЕСЛИ ЕСТЬ РАСХОДЫ - создаем секцию расходов (заголовки, summary, диаграммы)
         if category_stats:
             sorted_categories = sorted(
@@ -661,6 +690,16 @@ class ExportService:
                 cell.alignment = header_alignment
                 cell.border = thin_border
 
+            # Добавляем заголовки дней (1-31) после Кешбэк
+            days_start_col = summary_start_col + 6  # После Кешбэк
+            for day_num in range(1, last_day + 1):
+                cell = ws.cell(row=2, column=days_start_col + day_num - 1, value=day_num)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = header_alignment
+                cell.border = thin_border
+                # Ширина колонок дней устанавливается позже в блоке автоширины
+
             # Заполнение Summary
             summary_row = 3  # Начинаем с 3-й строки (1 - заголовок секции, 2 - заголовки колонок)
             for (category, currency), stats in sorted_categories:
@@ -675,23 +714,30 @@ class ExportService:
                 # Заполняем колонки Summary
                 ws.cell(row=summary_row, column=summary_start_col, value=truncate_text(category))
                 ws.cell(row=summary_row, column=summary_start_col + 1, value=currency)
-                ws.cell(row=summary_row, column=summary_start_col + 2, value=stats['total'])
+                ws.cell(row=summary_row, column=summary_start_col + 2, value=smart_number(stats['total']))
                 ws.cell(row=summary_row, column=summary_start_col + 3, value=stats['count'])
-                ws.cell(row=summary_row, column=summary_start_col + 4, value=average)
-                ws.cell(row=summary_row, column=summary_start_col + 5, value=cashback)
+                ws.cell(row=summary_row, column=summary_start_col + 4, value=smart_number(average))
+                ws.cell(row=summary_row, column=summary_start_col + 5, value=smart_number(cashback))
 
-                # Применяем границы и чередующуюся заливку к строке Summary
+                # Заполняем данные по дням для этой категории
+                for day_num in range(1, last_day + 1):
+                    day_amount = daily_expenses_by_category.get(category, {}).get(day_num, None)
+                    cell = ws.cell(row=summary_row, column=days_start_col + day_num - 1, value=smart_number(day_amount) if day_amount else None)
+                    if day_amount:
+                        cell.number_format = 'General'
+
+                # Применяем границы и чередующуюся заливку к строке Summary (включая дни)
                 is_even_row = (summary_row % 2 == 0)
-                for col in range(summary_start_col, summary_start_col + 6):
+                for col in range(summary_start_col, days_start_col + last_day):
                     cell = ws.cell(row=summary_row, column=col)
                     cell.border = thin_border
                     if is_even_row:
                         cell.fill = gray_fill
 
                 # Форматирование
-                ws.cell(row=summary_row, column=summary_start_col + 2).number_format = '#,##0.00'
-                ws.cell(row=summary_row, column=summary_start_col + 4).number_format = '#,##0.00'
-                ws.cell(row=summary_row, column=summary_start_col + 5).number_format = '#,##0.00'
+                ws.cell(row=summary_row, column=summary_start_col + 2).number_format = 'General'
+                ws.cell(row=summary_row, column=summary_start_col + 4).number_format = 'General'
+                ws.cell(row=summary_row, column=summary_start_col + 5).number_format = 'General'
 
                 # Кешбэк зеленым если > 0
                 if cashback > 0:
@@ -704,22 +750,77 @@ class ExportService:
 
             summary_end_row = summary_row - 1
 
-            # Автоширина для колонок Summary
-            for col in range(summary_start_col, summary_start_col + 6):
+            # Добавляем строку ИТОГО
+            totals_row = summary_row
+            ws.cell(row=totals_row, column=summary_start_col, value='ИТОГО' if lang == 'ru' else 'TOTAL')
+            ws.cell(row=totals_row, column=summary_start_col).font = Font(bold=True)
+            ws.cell(row=totals_row, column=summary_start_col + 1, value='')  # Валюта - пусто
+            # Сумма всех расходов
+            total_all = sum(stats['total'] for _, stats in sorted_categories)
+            ws.cell(row=totals_row, column=summary_start_col + 2, value=smart_number(total_all))
+            ws.cell(row=totals_row, column=summary_start_col + 2).number_format = 'General'
+            ws.cell(row=totals_row, column=summary_start_col + 2).font = Font(bold=True)
+            # Количество всех операций
+            total_count = sum(stats['count'] for _, stats in sorted_categories)
+            ws.cell(row=totals_row, column=summary_start_col + 3, value=total_count)
+            ws.cell(row=totals_row, column=summary_start_col + 3).font = Font(bold=True)
+            # Средний чек общий
+            avg_all = total_all / total_count if total_count > 0 else 0
+            ws.cell(row=totals_row, column=summary_start_col + 4, value=smart_number(avg_all))
+            ws.cell(row=totals_row, column=summary_start_col + 4).number_format = 'General'
+            ws.cell(row=totals_row, column=summary_start_col + 4).font = Font(bold=True)
+            # Сумма всех кешбэков
+            total_cashback_sum = sum(category_cashbacks.get(cat_id, 0) for (_, _), stats in sorted_categories for cat_id in stats.get('category_ids', set()))
+            ws.cell(row=totals_row, column=summary_start_col + 5, value=smart_number(total_cashback_sum))
+            ws.cell(row=totals_row, column=summary_start_col + 5).number_format = 'General'
+            if total_cashback_sum > 0:
+                ws.cell(row=totals_row, column=summary_start_col + 5).font = Font(color="008000", bold=True)
+            else:
+                ws.cell(row=totals_row, column=summary_start_col + 5).font = Font(bold=True)
+
+            # Итоги по дням
+            for day_num in range(1, last_day + 1):
+                day_total = sum(daily_expenses_by_category.get(cat, {}).get(day_num, 0) for cat in daily_expenses_by_category)
+                cell = ws.cell(row=totals_row, column=days_start_col + day_num - 1, value=smart_number(day_total) if day_total else None)
+                if day_total:
+                    cell.number_format = 'General'
+                    cell.font = Font(bold=True)
+
+            # Применяем границы к строке ИТОГО
+            for col in range(summary_start_col, days_start_col + last_day):
+                ws.cell(row=totals_row, column=col).border = thin_border
+
+            summary_row += 1
+
+            # Автоширина для всех колонок расходов (Summary + дни)
+            for col in range(summary_start_col, days_start_col + last_day):
                 max_length = 0
-                for row in range(1, summary_row):
+                for row in range(1, summary_row + 1):  # Включая ИТОГО
                     cell = ws.cell(row=row, column=col)
                     if cell.value:
-                        max_length = max(max_length, len(str(cell.value)))
+                        # Для чисел форматируем с разделителями
+                        val = cell.value
+                        if isinstance(val, (int, float)):
+                            formatted = f"{val:,.2f}" if isinstance(val, float) else str(val)
+                            max_length = max(max_length, len(formatted))
+                        else:
+                            max_length = max(max_length, len(str(val)))
 
-                # Увеличенная ширина для столбцов Total и Count, Cashback уже
                 col_offset = col - summary_start_col
-                if col_offset in [2, 3]:  # Total (2) и Count (3)
-                    ws.column_dimensions[get_column_letter(col)].width = min(max_length + 5, 40)
-                elif col_offset == 5:  # Cashback (5) - в 2 раза уже
-                    ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 40)
-                else:
-                    ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 40)
+                if col_offset == 0:  # Категория - шире
+                    ws.column_dimensions[get_column_letter(col)].width = min(max(max_length + 3, 18), 45)
+                elif col_offset == 1:  # Валюта
+                    ws.column_dimensions[get_column_letter(col)].width = min(max(max_length + 2, 8), 12)
+                elif col_offset == 2:  # Всего - числа с разделителями
+                    ws.column_dimensions[get_column_letter(col)].width = min(max(max_length + 3, 12), 20)
+                elif col_offset == 3:  # Количество
+                    ws.column_dimensions[get_column_letter(col)].width = min(max(max_length + 2, 10), 14)
+                elif col_offset == 4:  # Средний чек
+                    ws.column_dimensions[get_column_letter(col)].width = min(max(max_length + 3, 12), 18)
+                elif col_offset == 5:  # Кешбэк
+                    ws.column_dimensions[get_column_letter(col)].width = min(max(max_length + 2, 10), 14)
+                else:  # Дни - компактно но читаемо
+                    ws.column_dimensions[get_column_letter(col)].width = min(max(max_length + 1, 6), 12)
 
             total_expenses = sum(stats['total'] for _, stats in sorted_categories)
             pie_segment_ratios = []
@@ -729,8 +830,8 @@ class ExportService:
                 pie_segment_ratios.append(ratio)
             # ==================== ГРАФИКИ ====================
             # Диаграммы размещаются ПОД таблицей Summary (вертикально)
-            # Пересчитываем charts_start_row на основе фактического количества категорий расходов
-            charts_start_row = summary_end_row + 2  # Начало диаграмм под таблицей
+            # Пересчитываем charts_start_row - после строки ИТОГО с отступом
+            charts_start_row = totals_row + 2  # Начало диаграмм под ИТОГО с отступом в 1 строку
             # pie_block_height уже инициализирован выше
 
             # КРУГОВАЯ ДИАГРАММА ПО КАТЕГОРИЯМ (под таблицей Summary)
@@ -858,129 +959,16 @@ class ExportService:
                 pie.anchor = OneCellAnchor(_from=pie_anchor, ext=pie_extent)
                 ws.add_chart(pie)
 
-            # СТОЛБЧАТАЯ ДИАГРАММА ПО ДНЯМ И КАТЕГОРИЯМ
-            # Подсчет расходов по дням и категориям для stacked bar chart
-            # last_day уже инициализирован выше
+            # СТОЛБЧАТАЯ ДИАГРАММА ПО ДНЯМ - берёт данные из объединённой таблицы Summary
+            # Данные уже заполнены в столбцах дней (days_start_col + 0..last_day-1)
+            # Строки: 3 до summary_end_row (категории), totals_row (ИТОГО)
 
-            daily_expenses = {}  # Общие расходы по дням (для обратной совместимости)
-            daily_expenses_by_category = {}  # {category: {day: amount}}
-            daily_cashback = {}  # Кешбек по дням
-
-            # Получаем информацию о кешбеке для категорий (синхронно)
-            category_cashbacks = {}
-            cashbacks = Cashback.objects.filter(profile__telegram_id=user_id)
-            for cb in cashbacks:
-                if cb.category_id:
-                    category_cashbacks[cb.category_id] = float(cb.cashback_percent) / 100.0
-
-            # Собираем все уникальные категории
-            all_categories = set()
-            category_to_id = {}  # Маппинг название категории -> id
-
-            for op in operations:
-                if op['type'] == 'expense':
-                    category = op['category'] or get_text('no_category', lang)
-                    all_categories.add(category)
-                    category_to_id[category] = op.get('category_id')
-
-                    day = op['date'].day
-                    amount = abs(op['amount'])
-
-                    # Общие расходы по дням
-                    if day not in daily_expenses:
-                        daily_expenses[day] = 0
-                    daily_expenses[day] += amount
-
-                    # Расходы по категориям и дням
-                    if category not in daily_expenses_by_category:
-                        daily_expenses_by_category[category] = {}
-                    if day not in daily_expenses_by_category[category]:
-                        daily_expenses_by_category[category][day] = 0
-                    daily_expenses_by_category[category][day] += amount
-
-                    # Кешбек по дням
-                    cat_id = op.get('category_id')
-                    if cat_id and cat_id in category_cashbacks:
-                        cashback_rate = category_cashbacks[cat_id]
-                        day_cashback = amount * cashback_rate
-                        if day not in daily_cashback:
-                            daily_cashback[day] = 0
-                        daily_cashback[day] += day_cashback
-
-            # Сортируем категории для стабильности отображения
-            sorted_categories = sorted(all_categories)
-            # sorted_days уже инициализирован выше
-
-            # Пересчитываем динамическую колонку для секции доходов с учетом количества категорий расходов
-            # Таблица расходов: колонка 11 (День) + категории + кешбэк
-            # Максимальная колонка расходов = 12 + len(sorted_categories)
-            expense_table_last_col = 12 + len(sorted_categories)
-            # Добавляем зазор минимум 5 колонок, но не меньше чем колонка 30 (AD)
-            dynamic_income_start_col = max(30, expense_table_last_col + 5)
-
-            # СТОЛБЧАТАЯ ДИАГРАММА размещается СПРАВА от круговой
+            num_categories = len(sorted_categories)
             bar_chart_row = charts_start_row  # Используем тот же ряд что и круговая диаграмма
 
-            # Таблица данных для stacked bar chart размещается ПОД диаграммами
-            if sorted_categories and sorted_days:
-                # Пересчитываем table_start_row для размещения под диаграммами расходов
-                table_start_row = bar_chart_row + int(pie_block_height + 15)
-                # Размещаем в тех же колонках что и диаграммы (начиная с K = 11)
-                chart_data_start_col = 11
-
-                day_header = 'День' if lang == 'ru' else 'Day'
-                day_cell = ws.cell(row=table_start_row, column=chart_data_start_col, value=day_header)
-                day_cell.font = header_font
-                day_cell.fill = header_fill
-                day_cell.alignment = header_alignment
-                day_cell.border = thin_border
-
-                for idx, category in enumerate(sorted_categories):
-                    col = chart_data_start_col + 1 + idx
-                    cell = ws.cell(row=table_start_row, column=col, value=category)
-                    cell.font = header_font
-                    cell.fill = header_fill
-                    cell.alignment = header_alignment
-                    cell.border = thin_border
-
-                # Заголовок для кешбэка
-                cashback_col = chart_data_start_col + 1 + len(sorted_categories)
-                cashback_cell = ws.cell(row=table_start_row, column=cashback_col, value='Кешбэк' if lang == 'ru' else 'Cashback')
-                cashback_cell.font = header_font
-                cashback_cell.fill = header_fill
-                cashback_cell.alignment = header_alignment
-                cashback_cell.border = thin_border
-
-                for offset, day in enumerate(sorted_days, start=1):
-                    row_num = table_start_row + offset
-                    ws.cell(row=row_num, column=chart_data_start_col, value=day)
-                    ws.cell(row=row_num, column=chart_data_start_col).border = thin_border
-
-                    is_even_row = (row_num % 2 == 0)
-                    for idx, category in enumerate(sorted_categories):
-                        col = chart_data_start_col + 1 + idx
-                        amount = daily_expenses_by_category.get(category, {}).get(day, 0)
-                        cell = ws.cell(row=row_num, column=col, value=amount if amount else None)
-                        cell.number_format = '#,##0.00'
-                        cell.border = thin_border
-                        if is_even_row:
-                            cell.fill = gray_fill
-
-                    # Данные кешбека (отрицательные для отображения столбиков вниз)
-                    cashback_amount = daily_cashback.get(day, 0)
-                    cashback_cell = ws.cell(row=row_num, column=cashback_col, value=-cashback_amount if cashback_amount else None)
-                    cashback_cell.number_format = '#,##0.00'
-                    cashback_cell.border = thin_border
-                    if is_even_row:
-                        cashback_cell.fill = gray_fill
-
-                    if is_even_row:
-                        ws.cell(row=row_num, column=chart_data_start_col).fill = gray_fill
-
-                days_start_row = table_start_row + 1
-                days_end_row = table_start_row + len(sorted_days)
-                categories_start_col = chart_data_start_col + 1
-                categories_end_col = chart_data_start_col + len(sorted_categories)
+            if num_categories > 0 and last_day > 0:
+                from openpyxl.chart.axis import ChartLines
+                from openpyxl.drawing.line import LineProperties
 
                 # СТОЛБЧАТАЯ ДИАГРАММА (STACKED - разные цвета по категориям)
                 bar = BarChart()
@@ -998,9 +986,7 @@ class ExportService:
                 bar.width = 16  # Чуть уже, сдвигаем ближе вправо
                 bar.height = 11.6  # Делаем немного выше для лучшего баланса
 
-                # Настраиваем ось X (дни) - показываем метки 0, 6, 12, 18, 24, 30
-                # tickLblSkip определяет как часто показывать метки
-                # Для показа через каждые 6 дней нужно пропускать каждые 5 меток (показывать каждую 6-ю)
+                # Настраиваем ось X (дни) - показываем метки через каждые 6 дней
                 bar.x_axis.tickLblSkip = 5  # Показываем каждую 6-ю метку
                 bar.x_axis.tickMarkSkip = 5  # Также пропускаем метки делений
                 bar.x_axis.delete = False  # Показываем ось X
@@ -1008,23 +994,32 @@ class ExportService:
                 # Настраиваем ось Y (суммы)
                 bar.y_axis.delete = False  # Показываем ось Y с числами
 
-                # Серые горизонтальные линии сетки
-                from openpyxl.chart.axis import ChartLines
-                from openpyxl.drawing.line import LineProperties
-
                 # Основные линии сетки Y (серые)
                 bar.y_axis.majorGridlines = ChartLines()
-                bar.y_axis.majorGridlines.spPr = GraphicalProperties(ln=LineProperties(solidFill="D0D0D0"))  # Серый цвет
+                bar.y_axis.majorGridlines.spPr = GraphicalProperties(ln=LineProperties(solidFill="D0D0D0"))
 
-                # Данные для столбцов: категории в столбцах, дни в строках
-                days_labels = Reference(ws, min_col=chart_data_start_col, min_row=days_start_row, max_row=days_end_row)
+                # Данные для диаграммы берём из объединённой таблицы:
+                # Структура таблицы:
+                # Строка 2: заголовки (Категория, Валюта, Всего, Кол-во, Средний, Кешбэк, 1, 2, 3... last_day)
+                # Строки 3..summary_end_row: данные категорий
+                #
+                # Для stacked bar chart:
+                # - Ось X: дни (1, 2, 3... last_day) - берём из строки 2, столбцы days_start_col..
+                # - Серии: категории - каждая строка (3..summary_end_row) = отдельная серия
+                # - Названия серий: из столбца summary_start_col (названия категорий)
 
+                # Метки оси X - номера дней (1, 2, 3... last_day) из строки заголовков
+                days_labels = Reference(ws, min_col=days_start_col, max_col=days_start_col + last_day - 1, min_row=2)
+
+                # Данные - строки категорий (от строки 3 до summary_end_row)
+                # from_rows=True означает что каждая СТРОКА = серия (категория)
+                # Включаем столбец с названиями категорий для titles_from_data
                 data = Reference(ws,
-                                 min_col=categories_start_col,
-                                 max_col=categories_end_col,
-                                 min_row=table_start_row,
-                                 max_row=days_end_row)
-                bar.add_data(data, titles_from_data=True)
+                                 min_col=summary_start_col,  # Начинаем с названия категории
+                                 max_col=days_start_col + last_day - 1,  # До последнего дня
+                                 min_row=3,  # Первая строка данных (без заголовков)
+                                 max_row=summary_end_row)  # До последней категории (без ИТОГО)
+                bar.add_data(data, from_rows=True, titles_from_data=True)
                 bar.set_categories(days_labels)
 
                 # Применяем цвета из палитры к каждой серии (категории)
@@ -1033,30 +1028,15 @@ class ExportService:
                     series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dLbls = None
 
-                # Добавляем столбики кешбека (зеленые столбики вниз) на ту же ось Y
-                # Данные для кешбека (отрицательные значения)
-                cashback_data = Reference(ws,
-                                         min_col=cashback_col,
-                                         min_row=table_start_row,
-                                         max_row=days_end_row)
-                bar.add_data(cashback_data, titles_from_data=True)
-
-                # Применяем зеленый цвет к серии кешбека (последняя добавленная серия)
-                if bar.series:
-                    cashback_series = bar.series[-1]  # Последняя серия - это кешбэк
-                    cashback_series.graphicalProperties = GraphicalProperties(solidFill="00AA00")  # Зеленый цвет
-                    cashback_series.dLbls = None
-
                 # Настраиваем ось Y
                 bar.y_axis.axId = 100
                 bar.y_axis.crosses = "autoZero"
 
-                # Размещение СПРАВА от круговой диаграммы - чуть ближе (≈ половина столбца)
-                bar_anchor_column = 17  # Колонка Q
-                half_column_cm = _get_column_width_cm(ws, bar_anchor_column) / 2
+                # Размещение СПРАВА от круговой диаграммы (с отступом)
+                bar_anchor_column = 20  # Колонка T - сдвинули правее для зазора между диаграммами
                 bar_anchor = AnchorMarker(
                     col=bar_anchor_column - 1,
-                    colOff=int(round(half_column_cm * CM_TO_EMU)),
+                    colOff=0,
                     row=max(bar_chart_row - 1, 0),
                     rowOff=0
                 )
@@ -1067,7 +1047,7 @@ class ExportService:
                 bar.anchor = OneCellAnchor(_from=bar_anchor, ext=bar_extent)
                 ws.add_chart(bar)
 
-        # ==================== ДИАГРАММЫ ДОХОДОВ ====================
+        # ==================== СЕКЦИЯ ДОХОДОВ (ПОД РАСХОДАМИ) ====================
         # Подсчет статистики по категориям доходов
         income_category_stats = {}
         for op in operations:
@@ -1083,7 +1063,21 @@ class ExportService:
                 income_category_stats[key]['total'] += amount
                 income_category_stats[key]['count'] += 1
 
-        # Если есть доходы, создаем диаграммы
+        # Подсчет доходов по дням и категориям (нужно ДО заполнения Summary)
+        daily_incomes_by_category = {}  # {category: {day: amount}}
+        for op in operations:
+            if op['type'] == 'income':
+                category = op['category'] or get_text('no_category', lang)
+                day = op['date'].day
+                amount = abs(op['amount'])
+
+                if category not in daily_incomes_by_category:
+                    daily_incomes_by_category[category] = {}
+                if day not in daily_incomes_by_category[category]:
+                    daily_incomes_by_category[category][day] = 0
+                daily_incomes_by_category[category][day] += amount
+
+        # Если есть доходы, создаем секцию доходов
         if income_category_stats:
             sorted_income_categories = sorted(
                 income_category_stats.items(), key=lambda x: x[1]['total'], reverse=True
@@ -1091,52 +1085,82 @@ class ExportService:
             total_incomes = sum(stats['total'] for _, stats in sorted_income_categories)
             income_pie_segment_ratios: List[float] = []
 
-            # ТАБЛИЦА SUMMARY ДЛЯ ДОХОДОВ (справа от диаграмм расходов)
-            # Используем динамически рассчитанную колонку для предотвращения наложения с таблицей расходов
-            income_summary_start_col = dynamic_income_start_col
-            if lang == 'en':
-                income_headers = ['Category', 'Currency', 'Total', 'Count', 'Average']
+            # Секция доходов размещается ПОД расходами (те же столбцы K+)
+            # Вычисляем начальную строку для доходов ДИНАМИЧЕСКИ
+            if category_stats:
+                # Высота диаграммы в строках (примерно 1 строка = 0.5 см, диаграмма ~11.5 см = ~23 строки)
+                chart_height_rows = 23
+                # Начинаем после: таблицы расходов + ИТОГО + отступ + диаграммы + отступ
+                # totals_row - последняя строка таблицы расходов
+                # charts_start_row - где начинаются диаграммы
+                income_section_start_row = charts_start_row + chart_height_rows + 2
             else:
-                income_headers = ['Категория', 'Валюта', 'Всего', 'Количество', 'Средний']
+                income_section_start_row = 1
+
+            income_summary_start_col = summary_start_col  # Те же столбцы что и расходы (K)
+
+            # Заголовки такие же как для расходов (включая Кешбэк для выравнивания столбцов)
+            if lang == 'en':
+                income_headers = ['Category', 'Currency', 'Total', 'Count', 'Average', 'Cashback']
+            else:
+                income_headers = ['Категория', 'Валюта', 'Всего', 'Количество', 'Средний', 'Кешбэк']
 
             # Заголовок секции доходов
             income_section_title = 'ДОХОДЫ' if lang == 'ru' else 'INCOME'
-            title_cell = ws.cell(row=1, column=income_summary_start_col, value=income_section_title)
+            title_cell = ws.cell(row=income_section_start_row, column=income_summary_start_col, value=income_section_title)
             title_cell.font = Font(bold=True, color="FFFFFF", size=12)
             title_cell.fill = PatternFill(start_color="5FA85F", end_color="5FA85F", fill_type="solid")  # Зеленый мягкий
             title_cell.alignment = header_alignment
             title_cell.border = thin_border
 
             # Заголовки колонок для Summary доходов
+            income_header_row = income_section_start_row + 1
             for idx, header in enumerate(income_headers):
-                cell = ws.cell(row=2, column=income_summary_start_col + idx, value=header)
+                cell = ws.cell(row=income_header_row, column=income_summary_start_col + idx, value=header)
                 cell.font = header_font
                 cell.fill = PatternFill(start_color="7FB685", end_color="7FB685", fill_type="solid")  # Мятный зеленый
                 cell.alignment = header_alignment
                 cell.border = thin_border
 
+            # Добавляем заголовки дней (1-31) после Кешбэк для доходов (та же позиция что и для расходов)
+            income_days_start_col = income_summary_start_col + 6  # После Кешбэк (6 колонок: Категория, Валюта, Всего, Кол-во, Средний, Кешбэк)
+            for day_num in range(1, last_day + 1):
+                cell = ws.cell(row=income_header_row, column=income_days_start_col + day_num - 1, value=day_num)
+                cell.font = header_font
+                cell.fill = PatternFill(start_color="7FB685", end_color="7FB685", fill_type="solid")
+                cell.alignment = header_alignment
+                cell.border = thin_border
+
             # Заполнение данных Summary для доходов
-            income_summary_row = 3
+            income_summary_row = income_header_row + 1
             for (category, currency), stats in sorted_income_categories:
                 average = stats['total'] / stats['count'] if stats['count'] > 0 else 0
 
                 ws.cell(row=income_summary_row, column=income_summary_start_col, value=truncate_text(category))
                 ws.cell(row=income_summary_row, column=income_summary_start_col + 1, value=currency)
-                ws.cell(row=income_summary_row, column=income_summary_start_col + 2, value=stats['total'])
+                ws.cell(row=income_summary_row, column=income_summary_start_col + 2, value=smart_number(stats['total']))
                 ws.cell(row=income_summary_row, column=income_summary_start_col + 3, value=stats['count'])
-                ws.cell(row=income_summary_row, column=income_summary_start_col + 4, value=average)
+                ws.cell(row=income_summary_row, column=income_summary_start_col + 4, value=smart_number(average))
+                ws.cell(row=income_summary_row, column=income_summary_start_col + 5, value='')  # Пустой Кешбэк для выравнивания с расходами
 
-                # Применяем границы и чередующуюся заливку
+                # Заполняем данные по дням для этой категории доходов
+                for day_num in range(1, last_day + 1):
+                    day_amount = daily_incomes_by_category.get(category, {}).get(day_num, None)
+                    cell = ws.cell(row=income_summary_row, column=income_days_start_col + day_num - 1, value=smart_number(day_amount) if day_amount else None)
+                    if day_amount:
+                        cell.number_format = 'General'
+
+                # Применяем границы и чередующуюся заливку (включая дни)
                 is_even_row = (income_summary_row % 2 == 0)
-                for col in range(income_summary_start_col, income_summary_start_col + 5):
+                for col in range(income_summary_start_col, income_days_start_col + last_day):
                     cell = ws.cell(row=income_summary_row, column=col)
                     cell.border = thin_border
                     if is_even_row:
                         cell.fill = gray_fill
 
                 # Форматирование чисел
-                ws.cell(row=income_summary_row, column=income_summary_start_col + 2).number_format = '#,##0.00'
-                ws.cell(row=income_summary_row, column=income_summary_start_col + 4).number_format = '#,##0.00'
+                ws.cell(row=income_summary_row, column=income_summary_start_col + 2).number_format = 'General'
+                ws.cell(row=income_summary_row, column=income_summary_start_col + 4).number_format = 'General'
 
                 ratio = (stats['total'] / total_incomes) if total_incomes else 0
                 income_pie_segment_ratios.append(ratio)
@@ -1145,31 +1169,47 @@ class ExportService:
 
             income_summary_end_row = income_summary_row - 1
 
-            # Автоширина для колонок доходов
-            for col in range(income_summary_start_col, income_summary_start_col + 5):
-                max_length = 0
-                for row in range(1, income_summary_row):
-                    cell = ws.cell(row=row, column=col)
-                    if cell.value:
-                        max_length = max(max_length, len(str(cell.value)))
+            # Добавляем строку ИТОГО для доходов
+            income_totals_row = income_summary_row
+            ws.cell(row=income_totals_row, column=income_summary_start_col, value='ИТОГО' if lang == 'ru' else 'TOTAL')
+            ws.cell(row=income_totals_row, column=income_summary_start_col).font = Font(bold=True)
+            ws.cell(row=income_totals_row, column=income_summary_start_col + 1, value='')  # Валюта - пусто
+            # Сумма всех доходов
+            income_total_all = sum(stats['total'] for _, stats in sorted_income_categories)
+            ws.cell(row=income_totals_row, column=income_summary_start_col + 2, value=smart_number(income_total_all))
+            ws.cell(row=income_totals_row, column=income_summary_start_col + 2).number_format = 'General'
+            ws.cell(row=income_totals_row, column=income_summary_start_col + 2).font = Font(bold=True, color="008000")
+            # Количество всех операций доходов
+            income_total_count = sum(stats['count'] for _, stats in sorted_income_categories)
+            ws.cell(row=income_totals_row, column=income_summary_start_col + 3, value=income_total_count)
+            ws.cell(row=income_totals_row, column=income_summary_start_col + 3).font = Font(bold=True)
+            # Средний доход общий
+            income_avg_all = income_total_all / income_total_count if income_total_count > 0 else 0
+            ws.cell(row=income_totals_row, column=income_summary_start_col + 4, value=smart_number(income_avg_all))
+            ws.cell(row=income_totals_row, column=income_summary_start_col + 4).number_format = 'General'
+            ws.cell(row=income_totals_row, column=income_summary_start_col + 4).font = Font(bold=True)
+            ws.cell(row=income_totals_row, column=income_summary_start_col + 5, value='')  # Пустой Кешбэк для выравнивания
 
-                # Ограниченная ширина для стабильного размещения диаграмм (макс 20 вместо 40)
-                col_offset = col - income_summary_start_col
-                if col_offset == 2 or col_offset == 3:  # Total (2) и Count (3)
-                    ws.column_dimensions[get_column_letter(col)].width = min(max_length + 5, 20)
-                else:
-                    ws.column_dimensions[get_column_letter(col)].width = min(max_length + 2, 20)
+            # Итоги по дням для доходов
+            for day_num in range(1, last_day + 1):
+                day_total = sum(daily_incomes_by_category.get(cat, {}).get(day_num, 0) for cat in daily_incomes_by_category)
+                cell = ws.cell(row=income_totals_row, column=income_days_start_col + day_num - 1, value=smart_number(day_total) if day_total else None)
+                if day_total:
+                    cell.number_format = 'General'
+                    cell.font = Font(bold=True)
 
-            # Фиксированная ширина круговой диаграммы и желаемый зазор: увеличиваем на ~0.5 столбца
-            income_pie_width_cm = 19.3
-            half_income_column_cm = _get_column_width_cm(ws, income_summary_start_col) / 2
-            desired_horizontal_offset_cm = income_pie_width_cm + 4 + half_income_column_cm
+            # Применяем границы к строке ИТОГО доходов
+            for col in range(income_summary_start_col, income_days_start_col + last_day):
+                ws.cell(row=income_totals_row, column=col).border = thin_border
 
-            # КРУГОВАЯ ДИАГРАММА ДОХОДОВ (в буферной зоне, не в таблице!)
+            # Диаграммы доходов размещаются ПОД таблицей доходов (как в расходах - сразу после ИТОГО)
+            income_charts_start_row = income_totals_row + 2  # +2 как в расходах (summary_end_row + 2)
+
+            # КРУГОВАЯ ДИАГРАММА ДОХОДОВ
             income_pie = PieChart()
             income_pie.title = "Доходы по категориям" if lang == 'ru' else "Income by Category"
             income_pie.varyColors = True
-            income_pie.width = income_pie_width_cm  # Та же ширина что и расходы (реальная круговая часть ~12.5см из-за легенды)
+            income_pie.width = 19.3
             income_pie.height = 11.5488
             income_pie.layout = Layout(
                 manualLayout=ManualLayout(
@@ -1177,8 +1217,8 @@ class ExportService:
                     yMode="factor",
                     wMode="factor",
                     hMode="factor",
-                    x=0.115,  # Сдвинули на 5% правее (было 0.065)
-                    y=0.05,   # Стандартное положение по вертикали
+                    x=0.115,
+                    y=0.05,
                     w=0.42,
                     h=0.8
                 )
@@ -1195,22 +1235,21 @@ class ExportService:
             # Легенда внутри области диаграммы справа
             income_pie.legend = Legend()
             income_pie.legend.position = 'r'
-            income_pie.legend.overlay = False  # Легенда не накладывается на диаграмму
-            # Настройка позиции легенды - начало с 65%, увеличенная высота для одного столбца
+            income_pie.legend.overlay = False
             income_pie.legend.layout = Layout(
                 manualLayout=ManualLayout(
                     xMode="edge",
                     yMode="edge",
-                    x=0.65,  # Начало легенды на 65% ширины
-                    y=0.02,  # Минимальный отступ сверху
-                    w=0.32,  # Ширина 32% для длинных категорий
-                    h=0.96  # Максимальная высота - принудительно вертикальное размещение
+                    x=0.65,
+                    y=0.02,
+                    w=0.32,
+                    h=0.96
                 )
             )
 
             # Данные для круговой диаграммы доходов
-            income_labels = Reference(ws, min_col=income_summary_start_col, min_row=3, max_row=income_summary_end_row)
-            income_data = Reference(ws, min_col=income_summary_start_col + 2, min_row=2, max_row=income_summary_end_row)
+            income_labels = Reference(ws, min_col=income_summary_start_col, min_row=income_header_row + 1, max_row=income_summary_end_row)
+            income_data = Reference(ws, min_col=income_summary_start_col + 2, min_row=income_header_row, max_row=income_summary_end_row)
             income_pie.add_data(income_data, titles_from_data=True)
             income_pie.set_categories(income_labels)
 
@@ -1227,7 +1266,7 @@ class ExportService:
                 data_labels.showLegendKey = False
                 data_labels.showSerName = False
                 data_labels.showBubbleSize = False
-                data_labels.dLblPos = "bestFit"  # Автоматическое позиционирование для избежания перекрытий
+                data_labels.dLblPos = "bestFit"
                 data_labels.numFmt = "0%"
                 point_labels: List[DataLabel] = []
                 if RichText and ParagraphProperties and CharacterProperties:
@@ -1252,97 +1291,44 @@ class ExportService:
                             showLegendKey=False,
                             showLeaderLines=False
                         )
-                        # Устанавливаем позицию для каждой метки
                         point_label.dLblPos = "bestFit"
                         point_labels.append(point_label)
                 if point_labels:
                     data_labels.dLbl = point_labels
 
-                for idx in range(income_summary_end_row - 2):
+                for idx in range(income_summary_end_row - income_header_row):
                     color_idx = idx % len(ExportService.CATEGORY_COLORS)
                     color_hex = ExportService.CATEGORY_COLORS[color_idx].lstrip('#').upper()
                     pt = DataPoint(idx=idx)
                     pt.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dPt.append(pt)
 
-            # Размещение круговой диаграммы доходов (под заголовком секции ДОХОДЫ)
-            # Круговая остается на исходном месте (первая колонка таблицы Summary)
-            income_pie_col = get_column_letter(income_summary_start_col)
-            ws.add_chart(income_pie, f"{income_pie_col}{charts_start_row}")
+            # Размещение круговой диаграммы доходов под таблицей доходов
+            income_pie_anchor = AnchorMarker(
+                col=income_summary_start_col - 1,
+                colOff=0,
+                row=max(income_charts_start_row - 1, 0),
+                rowOff=0
+            )
+            income_pie_extent = XDRPositiveSize2D(
+                cx=int(round(income_pie.width * CM_TO_EMU)),
+                cy=int(round(income_pie.height * CM_TO_EMU))
+            )
+            income_pie.anchor = OneCellAnchor(_from=income_pie_anchor, ext=income_pie_extent)
+            ws.add_chart(income_pie)
 
             # СТОЛБЧАТАЯ ДИАГРАММА ДОХОДОВ ПО ДНЯМ
-            # Подсчет доходов по дням и категориям
-            daily_incomes_by_category = {}  # {category: {day: amount}}
-            income_categories = set()
+            num_income_categories = len(sorted_income_categories)
+            if num_income_categories > 0 and last_day > 0:
+                from openpyxl.chart.axis import ChartLines
+                from openpyxl.drawing.line import LineProperties
 
-            for op in operations:
-                if op['type'] == 'income':
-                    category = op['category'] or get_text('no_category', lang)
-                    income_categories.add(category)
-
-                    day = op['date'].day
-                    amount = abs(op['amount'])
-
-                    if category not in daily_incomes_by_category:
-                        daily_incomes_by_category[category] = {}
-                    if day not in daily_incomes_by_category[category]:
-                        daily_incomes_by_category[category][day] = 0
-                    daily_incomes_by_category[category][day] += amount
-
-            sorted_income_categories_list = sorted(income_categories)
-
-            if sorted_income_categories_list and sorted_days:
-                # Таблица данных для столбчатой диаграммы доходов
-                income_table_start_row = table_start_row  # Используем тот же ряд что и для расходов
-                income_chart_data_start_col = income_summary_start_col  # Динамическая колонка (зависит от количества категорий расходов)
-
-                day_header = 'День' if lang == 'ru' else 'Day'
-                day_cell = ws.cell(row=income_table_start_row, column=income_chart_data_start_col, value=day_header)
-                day_cell.font = header_font
-                day_cell.fill = PatternFill(start_color="7FB685", end_color="7FB685", fill_type="solid")  # Мятный зеленый
-                day_cell.alignment = header_alignment
-                day_cell.border = thin_border
-
-                for idx, category in enumerate(sorted_income_categories_list):
-                    col = income_chart_data_start_col + 1 + idx
-                    cell = ws.cell(row=income_table_start_row, column=col, value=category)
-                    cell.font = header_font
-                    cell.fill = PatternFill(start_color="7FB685", end_color="7FB685", fill_type="solid")  # Мятный зеленый
-                    cell.alignment = header_alignment
-                    cell.border = thin_border
-
-                # Заполнение данных по дням
-                for offset, day in enumerate(sorted_days, start=1):
-                    row_num = income_table_start_row + offset
-                    ws.cell(row=row_num, column=income_chart_data_start_col, value=day)
-                    ws.cell(row=row_num, column=income_chart_data_start_col).border = thin_border
-
-                    is_even_row = (row_num % 2 == 0)
-                    for idx, category in enumerate(sorted_income_categories_list):
-                        col = income_chart_data_start_col + 1 + idx
-                        amount = daily_incomes_by_category.get(category, {}).get(day, 0)
-                        cell = ws.cell(row=row_num, column=col, value=amount if amount else None)
-                        cell.number_format = '#,##0.00'
-                        cell.border = thin_border
-                        if is_even_row:
-                            cell.fill = gray_fill
-
-                    if is_even_row:
-                        ws.cell(row=row_num, column=income_chart_data_start_col).fill = gray_fill
-
-                income_days_start_row = income_table_start_row + 1
-                income_days_end_row = income_table_start_row + len(sorted_days)
-                income_categories_start_col = income_chart_data_start_col + 1
-                income_categories_end_col = income_chart_data_start_col + len(sorted_income_categories_list)
-
-                # СТОЛБЧАТАЯ ДИАГРАММА ДОХОДОВ (STACKED)
                 income_bar = BarChart()
                 income_bar.type = "col"
                 income_bar.grouping = "stacked"
                 income_bar.overlap = 100
-                income_bar.gapWidth = 300  # Увеличиваем расстояние между столбцами (делает столбики уже)
+                income_bar.gapWidth = 300
 
-                # Добавляем заголовок
                 income_bar.title = "Доходы по дням" if lang == 'ru' else "Income by Day"
                 income_bar.x_axis.title = None
                 income_bar.y_axis.title = None
@@ -1351,24 +1337,23 @@ class ExportService:
                 income_bar.width = 16
                 income_bar.height = 11.6
 
-                # Настройки оси - показываем метки через каждые 6 дней (0, 6, 12, 18, 24, 30)
                 income_bar.x_axis.tickLblSkip = 5
                 income_bar.x_axis.tickMarkSkip = 5
                 income_bar.x_axis.delete = False
                 income_bar.y_axis.delete = False
 
-                # Серые линии сетки
                 income_bar.y_axis.majorGridlines = ChartLines()
                 income_bar.y_axis.majorGridlines.spPr = GraphicalProperties(ln=LineProperties(solidFill="D0D0D0"))
 
-                # Данные для столбцов
-                income_days_labels = Reference(ws, min_col=income_chart_data_start_col, min_row=income_days_start_row, max_row=income_days_end_row)
+                # Данные для диаграммы доходов из объединённой таблицы
+                income_days_labels = Reference(ws, min_col=income_days_start_col, max_col=income_days_start_col + last_day - 1, min_row=income_header_row)
+
                 income_bar_data = Reference(ws,
-                                          min_col=income_categories_start_col,
-                                          max_col=income_categories_end_col,
-                                          min_row=income_table_start_row,
-                                          max_row=income_days_end_row)
-                income_bar.add_data(income_bar_data, titles_from_data=True)
+                                          min_col=income_summary_start_col,
+                                          max_col=income_days_start_col + last_day - 1,
+                                          min_row=income_header_row + 1,
+                                          max_row=income_summary_end_row)
+                income_bar.add_data(income_bar_data, from_rows=True, titles_from_data=True)
                 income_bar.set_categories(income_days_labels)
 
                 # Применяем цвета
@@ -1377,63 +1362,22 @@ class ExportService:
                     series.graphicalProperties = GraphicalProperties(solidFill=color_hex)
                     series.dLbls = None
 
-                # Подбираем позицию с точностью до сантиметров (избегаем погрешностей ширины столбцов)
-                accumulated_offset_cm = 0.0
-                previous_offset_cm = 0.0
-                current_col_index = income_summary_start_col
-                previous_col_index = income_summary_start_col
-                safety_counter = 0
+                income_bar.y_axis.axId = 100
+                income_bar.y_axis.crosses = "autoZero"
 
-                while accumulated_offset_cm < desired_horizontal_offset_cm and safety_counter < 500:
-                    safety_counter += 1
-                    previous_col_index = current_col_index
-                    previous_offset_cm = accumulated_offset_cm
-
-                    accumulated_offset_cm += _get_column_width_cm(ws, current_col_index)
-                    current_col_index += 1
-
-                if safety_counter >= 500:
-                    anchor_col_index = income_summary_start_col + 9  # запасной вариант (примерно ширина + зазор)
-                    col_offset_cm = 0.0
-                else:
-                    anchor_col_index = previous_col_index
-                    col_offset_cm = max(desired_horizontal_offset_cm - previous_offset_cm, 0.0)
-
-                anchor_column_width_cm = _get_column_width_cm(ws, anchor_col_index)
-
-                adjustment_guard = 0
-                while col_offset_cm >= anchor_column_width_cm and adjustment_guard < 100:
-                    col_offset_cm -= anchor_column_width_cm
-                    anchor_col_index += 1
-                    anchor_column_width_cm = _get_column_width_cm(ws, anchor_col_index)
-                    adjustment_guard += 1
-
-                if adjustment_guard >= 100:
-                    col_offset_cm = 0.0
-
-                # Дополнительно сдвигаем диаграмму левее на фиксированное число колонок
-                shift_columns_left = 2
-                shift_count = 0
-                while shift_count < shift_columns_left and anchor_col_index - 1 >= income_summary_start_col:
-                    anchor_col_index -= 1
-                    shift_count += 1
-
-                # После сдвига убеждаемся что смещение не выходит за рамки новой колонки
-                anchor_column_width_cm = _get_column_width_cm(ws, anchor_col_index)
-                if col_offset_cm > anchor_column_width_cm:
-                    col_offset_cm = anchor_column_width_cm
-
-                anchor_marker = AnchorMarker(
-                    col=max(anchor_col_index - 1, 0),
-                    colOff=int(round(col_offset_cm * CM_TO_EMU)),
-                    row=max(charts_start_row - 1, 0),
+                # Размещение справа от круговой диаграммы доходов (с отступом)
+                income_bar_anchor_column = 20  # Колонка T - как в расходах
+                income_bar_anchor = AnchorMarker(
+                    col=income_bar_anchor_column - 1,
+                    colOff=0,
+                    row=max(income_charts_start_row - 1, 0),
                     rowOff=0
                 )
-                anchor_extent = XDRPositiveSize2D(
+                income_bar_extent = XDRPositiveSize2D(
                     cx=int(round(income_bar.width * CM_TO_EMU)),
                     cy=int(round(income_bar.height * CM_TO_EMU))
                 )
-                income_bar.anchor = OneCellAnchor(_from=anchor_marker, ext=anchor_extent)
+                income_bar.anchor = OneCellAnchor(_from=income_bar_anchor, ext=income_bar_extent)
                 ws.add_chart(income_bar)
 
         # Закрепить заголовки (строки 1-2: заголовок секции + заголовки колонок)
