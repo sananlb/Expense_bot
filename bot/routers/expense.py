@@ -1859,52 +1859,28 @@ Record <b>+{display_amount}</b> as income?"""
 # Обработчик голосовых сообщений
 @router.message(F.voice)
 @rate_limit(max_calls=10, period=60)  # 10 голосовых в минуту
-async def handle_voice_expense(message: types.Message, state: FSMContext, lang: str = 'ru'):
-    """Обработка голосовых сообщений"""
-    # Проверяем подписку
-    from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
-    
-    has_subscription = await check_subscription(message.from_user.id)
-    if not has_subscription:
+async def handle_voice_expense(message: types.Message, state: FSMContext, lang: str = 'ru', voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+    """Обработка голосовых сообщений (транскрибировано в VoiceToTextMiddleware)"""
+    from bot.services.subscription import subscription_required_message, get_subscription_button
+
+    # Проверка подписки уже выполнена в middleware
+    if voice_no_subscription:
         await message.answer(
             subscription_required_message() + "\n\n⚠️ Голосовой ввод доступен только с подпиской.",
             reply_markup=get_subscription_button(),
             parse_mode="HTML"
         )
         return
-    
-    # Получаем язык пользователя из middleware/настроек
-    stored_lang = None
-    try:
-        stored_lang = await get_user_language(message.from_user.id)
-    except Exception:
-        stored_lang = None
 
-    user_language = stored_lang or lang or getattr(message, 'user_language', 'ru') or 'ru'
-    bot = message.bot
-    
-    try:
-        # Пробуем использовать простой встроенный распознаватель
-        from bot.services.voice_recognition import process_voice_for_expense
-        
-        # Распознаем голосовое сообщение с учетом языка
-        text = await process_voice_for_expense(message, bot, user_language)
-        
-    except ImportError:
-        # Если библиотеки не установлены, используем старый метод
-        from bot.services.voice_processing import process_voice_expense
-        
-        # Распознаем голосовое сообщение
-        text = await process_voice_expense(message, bot, user_language)
-    
-    if not text:
+    # Проверка результата транскрибации из middleware
+    if voice_transcribe_failed or not voice_text:
+        # Ничего не делаем - middleware уже залогировал ошибку
         return
 
-    logger.info(f"[VOICE_EXPENSE] User {message.from_user.id} | Voice recognized successfully | Processing text: {text[:100]}")
+    logger.info(f"[VOICE_EXPENSE] User {message.from_user.id} | Voice recognized | Processing text: {voice_text[:100]}")
 
-    # Вызываем обработчик текстовых сообщений напрямую с распознанным текстом
-    # Как это сделано в nutrition_bot
-    await handle_text_expense(message, state, text=text, lang=user_language)
+    # Вызываем обработчик текстовых сообщений с распознанным текстом
+    await handle_text_expense(message, state, text=voice_text, lang=lang)
 
 
 # Обработчик фото (чеков)

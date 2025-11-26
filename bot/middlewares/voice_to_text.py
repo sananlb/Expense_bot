@@ -2,8 +2,13 @@
 Middleware для автоматической транскрибации голосовых сообщений в текст.
 
 Этот middleware перехватывает голосовые сообщения и преобразует их в текст,
-добавляя результат в message.text, чтобы все последующие обработчики
-могли работать с голосовыми сообщениями как с текстовыми.
+добавляя результат в data['voice_text'], чтобы все последующие обработчики
+могли работать с голосовыми сообщениями через параметр voice_text.
+
+Параметры передаваемые в обработчики:
+- voice_text: str | None - распознанный текст из голосового сообщения
+- voice_no_subscription: bool - True если у пользователя нет подписки
+- voice_transcribe_failed: bool - True если распознавание не удалось
 """
 import logging
 from typing import Any, Awaitable, Callable, Dict
@@ -53,7 +58,7 @@ class VoiceToTextMiddleware(BaseMiddleware):
         # Получаем язык пользователя
         lang = data.get('lang', 'ru')
         if not lang:
-            from bot.services.user_settings import get_user_language
+            from bot.utils.language import get_user_language
             try:
                 lang = await get_user_language(user_id) or 'ru'
             except Exception:
