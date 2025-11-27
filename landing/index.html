@@ -341,54 +341,17 @@
       font-family: var(--font-display);
       font-size: 48px;
       font-weight: 600;
-      line-height: 1.1;
+      line-height: 1.2;
       margin-bottom: 28px;
-      letter-spacing: -0.055em;
+      letter-spacing: -0.02em;
       max-width: 100%;
-      white-space: nowrap;
+      white-space: normal;
       position: relative;
       color: var(--dark);
-      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-    }
-
-    /* For English multi-line title */
-    [data-lang="en"] .hero-text h1 {
-      white-space: normal;
     }
 
     .hero-text h1 span {
-      position: relative;
-      display: inline-block;
-      background: linear-gradient(180deg, #0f172a 0%, #546379 100%);
-      background-clip: text;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      padding-right: 0.055em; /* Compensate for negative letter-spacing */
-    }
-
-    /* Fallback для браузеров без поддержки градиента */
-    @supports not (background-clip: text) {
-      .hero-text h1 span {
-        background: none;
-        -webkit-text-fill-color: #1e293b;
-        color: #1e293b;
-      }
-    }
-
-    .hero-text h1 span::after {
-      content: '';
-      position: absolute;
-      bottom: -4px;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg,
-        transparent 0%,
-        rgba(148, 163, 184, 0.05) 20%,
-        rgba(148, 163, 184, 0.07) 50%,
-        rgba(148, 163, 184, 0.05) 80%,
-        transparent 100%);
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.015);
+      color: var(--dark);
     }
 
     /* Hide underline for br elements */
@@ -830,10 +793,134 @@
       line-height: 1.6;
     }
 
-    /* Demo Section - белый фон */
+    /* Analytics Section */
+    .analytics-section {
+      padding: 80px 0;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+      position: relative;
+    }
+
+    .analytics-container {
+      display: grid;
+      grid-template-columns: 3fr 2fr;
+      gap: 20px;
+      align-items: center;
+    }
+
+    .analytics-image {
+      position: relative;
+      overflow: visible;
+    }
+
+    .analytics-image img {
+      width: 125%;
+      max-width: 825px;
+      height: auto;
+      margin-left: -15%;
+    }
+
+    .analytics-content {
+      padding: 20px 0 20px 40px;
+    }
+
+    .analytics-title {
+      font-size: 36px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: var(--dark);
+      font-family: var(--font-display);
+    }
+
+    .analytics-subtitle {
+      font-size: 18px;
+      color: var(--gray);
+      margin-bottom: 28px;
+      line-height: 1.7;
+    }
+
+    .analytics-content p {
+      font-size: 18px;
+      color: var(--gray);
+      margin-bottom: 28px;
+      line-height: 1.7;
+    }
+
+    .format-badges {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+
+    .format-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.08) 0%, rgba(37, 99, 235, 0.04) 100%);
+      border: 1px solid rgba(37, 99, 235, 0.15);
+      border-radius: 50px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--primary);
+      transition: all 0.3s ease;
+    }
+
+    .format-badge:hover {
+      background: linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(37, 99, 235, 0.08) 100%);
+      transform: translateY(-2px);
+    }
+
+    .format-badge svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .format-badge-xlsx {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.06) 100%);
+      border-color: rgba(16, 185, 129, 0.2);
+      color: #059669;
+    }
+
+    .format-badge-xlsx:hover {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(16, 185, 129, 0.1) 100%);
+    }
+
+    .analytics-features {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .analytics-features li {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      font-size: 16px;
+      color: var(--dark);
+      line-height: 1.6;
+    }
+
+    .analytics-features li::before {
+      content: '✓';
+      width: 24px;
+      height: 24px;
+      background: var(--gradient-1);
+      color: var(--white);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
+    /* Demo Section - цветной фон */
     .demo-section {
       padding: 80px 0;
-      background: linear-gradient(180deg, #ffffff 0%, #f9fafb 100%);
+      background: linear-gradient(180deg, rgba(230, 240, 250, 0.4) 0%, rgba(220, 235, 248, 0.35) 100%);
       position: relative;
       margin-top: 0;
       min-height: 600px;
@@ -1190,11 +1277,11 @@
       50% { transform: scale(1.05); }
     }
 
-    /* Pricing - едва заметный серо-голубой оттенок */
+    /* Pricing - белый фон */
     .pricing {
       padding: 80px 0;
       position: relative;
-      background: linear-gradient(180deg, rgba(225, 237, 250, 0.45) 0%, rgba(215, 230, 245, 0.4) 100%);
+      background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
       margin-top: 0;
     }
 
@@ -1739,6 +1826,48 @@
       }
 
       .step-desc {
+        font-size: 14px;
+      }
+
+      /* Analytics */
+      .analytics-section {
+        padding: 60px 0;
+      }
+
+      .analytics-container {
+        grid-template-columns: 1fr;
+        gap: 32px;
+      }
+
+      .analytics-image {
+        order: -1;
+        text-align: center;
+      }
+
+      .analytics-image img {
+        max-width: 100%;
+        width: 100%;
+        margin-left: 0;
+      }
+
+      .analytics-content h2 {
+        font-size: 28px;
+      }
+
+      .analytics-content p {
+        font-size: 16px;
+      }
+
+      .format-badges {
+        gap: 8px;
+      }
+
+      .format-badge {
+        padding: 8px 14px;
+        font-size: 13px;
+      }
+
+      .analytics-features li {
         font-size: 14px;
       }
 
@@ -2434,8 +2563,8 @@
     <div class="container">
       <div class="hero-content">
         <div class="hero-text reveal">
-          <h1><span data-i18n="hero_title">Вести бюджет — просто</span></h1>
-          <p data-i18n="hero_subtitle">Скажите "кофе 200" или "такси 500". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.</p>
+          <h1><span data-i18n="hero_title">Coins — телеграм-бот для ведения бюджета</span></h1>
+          <p data-i18n="hero_subtitle">Вести бюджет — просто. Скажите "кофе 200" или "такси 500". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.</p>
           <div class="hero-buttons">
             <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" class="btn btn-primary">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -2486,7 +2615,7 @@
     <div class="container">
       <div class="section-header reveal">
         <span class="section-tag" data-i18n="features_tag">Возможности</span>
-        <h2 class="section-title" data-i18n="features_title">Coins — телеграм-бот для ведения бюджета</h2>
+        <h2 class="section-title" data-i18n="features_title">Всё для контроля финансов</h2>
         <p class="section-subtitle" data-i18n="features_subtitle">Мощные инструменты в простом интерфейсе</p>
       </div>
       <div class="features-grid">
@@ -2548,6 +2677,42 @@
           <h3 class="step-title" data-i18n="how_step3_title">Получите аналитику</h3>
           <p class="step-desc" data-i18n="how_step3_desc">Просматривайте дневник, статистику трат по категориям</p>
         </div>
+    </div>
+  </section>
+
+  <!-- Analytics Section -->
+  <section class="analytics-section" id="analytics">
+    <div class="container">
+      <div class="section-header reveal">
+        <span class="section-tag" data-i18n="analytics_tag">Аналитика</span>
+        <h2 class="section-title" data-i18n="analytics_title">Глубокий анализ операций</h2>
+        <p class="section-subtitle" data-i18n="analytics_desc">Экспортируйте данные в удобном формате и анализируйте свои финансы как вам удобно</p>
+      </div>
+      <div class="analytics-container">
+        <div class="analytics-image reveal">
+          <img src="laptop_xlsx.png" alt="Excel analytics report">
+        </div>
+        <div class="analytics-content reveal">
+          <div class="format-badges">
+            <span class="format-badge">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+              PDF
+            </span>
+            <span class="format-badge">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+              CSV
+            </span>
+            <span class="format-badge format-badge-xlsx">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+              XLSX
+            </span>
+          </div>
+          <ul class="analytics-features">
+            <li data-i18n="analytics_feat1">XLSX с детальной аналитикой: топ категорий, тренды по месяцам, отклонения от плана</li>
+            <li data-i18n="analytics_feat2">Сохраняйте месячные отчеты и стройте собственные сводные таблицы</li>
+            <li data-i18n="analytics_feat3">Настраивайте итоговый шаблон анализа под свои потребности</li>
+          </ul>
+        </div>
       </div>
     </div>
   </section>
@@ -2555,13 +2720,13 @@
   <!-- Demo Section -->
   <section class="demo-section" id="demo">
     <div class="container">
-      <div class="section-header reveal" style="text-align: center; margin-bottom: 40px;">
+      <div class="section-header reveal">
         <span class="section-tag" data-i18n="demo_tag">ДЕМО</span>
+        <h2 class="section-title" data-i18n="demo_title">Бот в действии</h2>
+        <p class="section-subtitle" data-i18n="demo_subtitle">Реальные примеры использования</p>
       </div>
       <div class="demo-container">
         <div class="demo-text reveal">
-          <h2 data-i18n="demo_title">Посмотрите бота в действии</h2>
-          <p data-i18n="demo_subtitle">Реальные примеры использования от наших пользователей</p>
           <ul class="demo-list desktop-only">
             <li data-i18n="demo_li1">Быстрая запись трат одним сообщением</li>
             <li data-i18n="demo_li2">Голосовые команды для hands-free режима</li>
@@ -2729,8 +2894,8 @@
           btn_go_to_bot: 'Перейти в бота',
           btn_demo: 'Посмотреть демо',
           btn_try_now: 'Попробовать сейчас',
-          hero_title: 'Вести бюджет — просто',
-          hero_subtitle: 'Скажите "кофе 200" или "такси 500". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.',
+          hero_title: 'Coins — телеграм-бот<br>для ведения бюджета',
+          hero_subtitle: 'Вести бюджет — просто. Скажите "кофе 200" или "такси 500". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.',
           trust_free: 'Бесплатный старт',
           trust_no_banks: 'Без привязки к банкам',
           demo_tag: 'ДЕМО',
@@ -2771,7 +2936,7 @@
           feat_voice: 'Голосовой ввод',
           feat_voice_desc: 'Продиктуйте траты голосом — бот распознает и сохранит автоматически',
           features_tag: 'Возможности',
-          features_title: 'Coins — телеграм-бот для ведения бюджета',
+          features_title: 'Всё для контроля финансов',
           features_subtitle: 'Мощные инструменты в простом интерфейсе',
           feat_ai_desc: 'Умное определение категорий на основе ваших предыдущих трат',
           feat_family: 'Семейный доступ',
@@ -2790,6 +2955,13 @@
           how_step2_desc: 'Напишите или продиктуйте "такси 540" или "продукты 1200"',
           how_step3_title: 'Получите аналитику',
           how_step3_desc: 'Просматривайте дневник, статистику трат по категориям',
+          analytics_tag: 'Аналитика',
+          analytics_title: 'Глубокий анализ операций',
+          analytics_desc: 'Экспортируйте данные в удобном формате и анализируйте свои финансы как вам удобно',
+          analytics_feat1: 'XLSX с детальной аналитикой: топ категорий, тренды по месяцам, отклонения от плана',
+          analytics_feat2: 'Сохраняйте месячные отчеты и стройте собственные сводные таблицы',
+          analytics_feat3: 'Настраивайте итоговый шаблон анализа под свои потребности',
+
           pricing_try7: 'Попробовать 30 дней бесплатно',
           plan_free: 'Бесплатный',
           plan_forever: 'навсегда',
@@ -2832,12 +3004,12 @@
           btn_go_to_bot: 'Go to Bot',
           btn_demo: 'Watch demo',
           btn_try_now: 'Try it now',
-          hero_title: '<span>Simple money</span><br><span>management</span>',
-          hero_subtitle: 'Say "coffee 200" or "taxi 500".<br>AI recognizes, categorizes, and builds reports.<br>No banks, no complex apps.',
+          hero_title: 'Coins — Telegram bot<br>for budgeting',
+          hero_subtitle: 'Budgeting made simple. Say "coffee 200" or "taxi 500". AI recognizes, categorizes, and builds reports. No banks, no complex apps.',
           trust_free: 'Free to start',
           trust_no_banks: 'No bank linking required',
           demo_tag: 'DEMO',
-          demo_title: 'See the bot in action',
+          demo_title: 'Bot in action',
           demo_subtitle: 'Real usage examples',
           demo_li1: 'Log expenses quickly in one message',
           demo_li2: 'Voice commands for hands‑free mode',
@@ -2874,7 +3046,7 @@
           feat_voice: 'Voice input',
           feat_voice_desc: 'Dictate expenses by voice — the bot recognizes and saves automatically',
           features_tag: 'Features',
-          features_title: 'Coins — Telegram bot for budgeting',
+          features_title: 'Everything for financial control',
           features_subtitle: 'Powerful tools in a simple interface',
           feat_ai_desc: 'Smart category detection based on your history',
           feat_family: 'Family access',
@@ -2893,6 +3065,13 @@
           how_step2_desc: 'Type or say "taxi 540" or "groceries 1200"',
           how_step3_title: 'Get analytics',
           how_step3_desc: 'View diary, spending and income stats by categories',
+          analytics_tag: 'Analytics',
+          analytics_title: 'Deep operations analysis',
+          analytics_desc: 'Export data in a convenient format and analyze your finances however you need',
+          analytics_feat1: 'XLSX with detailed analytics: top categories, monthly trends, plan deviations',
+          analytics_feat2: 'Save monthly reports and build your own pivot tables',
+          analytics_feat3: 'Customize the summary template to fit your needs',
+
           pricing_try7: 'Try 30 days free',
           plan_free: 'Free',
           plan_forever: 'forever',

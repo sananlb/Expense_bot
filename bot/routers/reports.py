@@ -940,7 +940,7 @@ async def callback_export_month_csv(callback: CallbackQuery, state: FSMContext, 
                          'July', 'August', 'September', 'October', 'November', 'December']
         month_name = month_names_ru[month - 1] if lang == 'ru' else month_names_en[month - 1]
 
-        filename = f"expenses_{month_name}_{year}.csv"
+        filename = f"coins_{month_name}_{year}.csv"
         document = BufferedInputFile(csv_bytes, filename=filename)
 
         # Формируем caption с рекламным текстом
@@ -1077,7 +1077,7 @@ async def callback_export_month_excel(callback: CallbackQuery, state: FSMContext
                          'July', 'August', 'September', 'October', 'November', 'December']
         month_name = month_names_ru[month - 1] if lang == 'ru' else month_names_en[month - 1]
 
-        filename = f"expenses_{month_name}_{year}.xlsx"
+        filename = f"coins_{month_name}_{year}.xlsx"
         document = BufferedInputFile(xlsx_buffer.read(), filename=filename)
 
         # Формируем caption с рекламным текстом
@@ -1184,7 +1184,7 @@ async def callback_monthly_report_csv(callback: CallbackQuery, state: FSMContext
                          'July', 'August', 'September', 'October', 'November', 'December']
         month_name = month_names_ru[month - 1] if lang == 'ru' else month_names_en[month - 1]
 
-        filename = f"expenses_{month_name}_{year}.csv"
+        filename = f"coins_{month_name}_{year}.csv"
         document = BufferedInputFile(csv_bytes, filename=filename)
 
         # Добавляем рекламный текст в caption
@@ -1291,7 +1291,7 @@ async def callback_monthly_report_xlsx(callback: CallbackQuery, state: FSMContex
                          'July', 'August', 'September', 'October', 'November', 'December']
         month_name = month_names_ru[month - 1] if lang == 'ru' else month_names_en[month - 1]
 
-        filename = f"expenses_{month_name}_{year}.xlsx"
+        filename = f"coins_{month_name}_{year}.xlsx"
         document = BufferedInputFile(xlsx_buffer.read(), filename=filename)
 
         # Добавляем рекламный текст в caption

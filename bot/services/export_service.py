@@ -452,20 +452,49 @@ class ExportService:
             profile_id, current_year, current_month, lang, household_id
         )
 
-        def calc_change_percent(values: list[float]) -> float | None:
-            """Среднее изменение между соседними ненулевыми месяцами."""
-            non_zero = [v for v in values if v not in (0, None)]
-            if len(non_zero) < 2:
+        # Функция для создания Excel формулы тренда (линейная регрессия)
+        def make_trend_formula(first_col: str, last_col: str, row: int, num_months: int) -> str:
+            """
+            Создаёт Excel формулу для расчёта годового тренда через SLOPE.
+            Формула: SLOPE(данные, {1,2,...,n}) * 12 / AVERAGE(данные)
+            Результат: % изменения за год на основе линейного тренда
+            """
+            # Создаём массив индексов {1,2,3,...,n}
+            indices = ",".join(str(i) for i in range(1, num_months + 1))
+            data_range = f"{first_col}{row}:{last_col}{row}"
+            # IFERROR на случай если все значения 0 или нет данных
+            return f'=IFERROR(SLOPE({data_range},{{{indices}}})*12/AVERAGE({data_range}),"")'
+
+        def calc_trend_python(values: list[float]) -> float | None:
+            """
+            Python версия расчёта тренда (линейная регрессия).
+            Используется для аналитических таблиц где данные уже в Python.
+            Возвращает: % изменения за год на основе линейного тренда.
+            """
+            # Фильтруем None, но оставляем 0 (важно для тренда)
+            clean_values = [v if v is not None else 0 for v in values]
+            n = len(clean_values)
+            if n < 2:
                 return None
-            deltas = []
-            prev = non_zero[0]
-            for val in non_zero[1:]:
-                if prev != 0:
-                    deltas.append((val - prev) / prev)
-                prev = val
-            if not deltas:
+
+            # Проверяем есть ли хоть какие-то данные
+            if all(v == 0 for v in clean_values):
                 return None
-            return sum(deltas) / len(deltas)
+
+            # Линейная регрессия: slope = Σ(x-x̄)(y-ȳ) / Σ(x-x̄)²
+            x_mean = (n - 1) / 2  # среднее индексов 0,1,2,...,n-1
+            y_mean = sum(clean_values) / n
+
+            numerator = sum((i - x_mean) * (v - y_mean) for i, v in enumerate(clean_values))
+            denominator = sum((i - x_mean) ** 2 for i in range(n))
+
+            if denominator == 0 or y_mean == 0:
+                return None
+
+            slope = numerator / denominator
+            # Экстраполяция на год и нормализация к среднему
+            annual_change = (slope * 12) / y_mean
+            return annual_change
 
         expense_month_totals = [sum(expenses_by_month[(y, m)].values()) for y, m in months_list]
         income_month_totals = [sum(incomes_by_month[(y, m)].values()) for y, m in months_list]
@@ -589,10 +618,10 @@ class ExportService:
             avg_formula = f"=IFERROR({total_col_letter}{current_row}/COUNTIF({first_col_letter}{expenses_totals_row_num}:{last_col_letter}{expenses_totals_row_num},\"<>0\"),\"\")"
             ws.cell(row=current_row, column=avg_col, value=avg_formula)
 
-            change_val = calc_change_percent(row_values)
-            change_cell = ws.cell(row=current_row, column=change_col, value=change_val)
-            if change_val is not None:
-                change_cell.number_format = '0.0%'
+            # Изменение = Excel формула тренда (SLOPE)
+            trend_formula = make_trend_formula(first_col_letter, last_col_letter, current_row, len(months_list))
+            change_cell = ws.cell(row=current_row, column=change_col, value=trend_formula)
+            change_cell.number_format = '0.0%'
 
             # Применяем границы и чередование
             is_even = (current_row % 2 == 0)
@@ -605,10 +634,13 @@ class ExportService:
             expense_category_rows[category] = current_row
             current_row += 1
 
+        # Пустая строка перед ИТОГО
+        last_data_row = current_row - 1  # Последняя строка с данными категорий
+        current_row += 1  # Пропускаем строку
+
         # Строка ИТОГО РАСХОДЫ
         expenses_totals_row = current_row
         first_data_row = 3  # Первая строка с данными категорий
-        last_data_row = current_row - 1  # Последняя строка с данными
 
         ws.cell(row=current_row, column=1, value='ИТОГО РАСХОДЫ' if lang == 'ru' else 'TOTAL EXPENSES')
         ws.cell(row=current_row, column=1).font = Font(bold=True)
@@ -641,12 +673,11 @@ class ExportService:
         ws.cell(row=current_row, column=avg_col, value=avg_formula)
         ws.cell(row=current_row, column=avg_col).font = Font(bold=True)
 
-        # Изменение % для ИТОГО РАСХОДЫ
-        change_val = calc_change_percent(expense_month_totals)
-        change_cell = ws.cell(row=current_row, column=change_col, value=change_val)
+        # Изменение % для ИТОГО РАСХОДЫ (Excel формула тренда)
+        trend_formula = make_trend_formula(first_col_letter, last_col_letter, current_row, len(months_list))
+        change_cell = ws.cell(row=current_row, column=change_col, value=trend_formula)
         change_cell.font = Font(bold=True)
-        if change_val is not None:
-            change_cell.number_format = '0.0%'
+        change_cell.number_format = '0.0%'
 
         # Границы для строки итого
         for col in range(1, len(headers) + 1):
@@ -724,10 +755,10 @@ class ExportService:
             avg_formula = f"=IFERROR({total_col_letter}{current_row}/COUNTIF({first_col_letter}{income_totals_row_num}:{last_col_letter}{income_totals_row_num},\"<>0\"),\"\")"
             ws.cell(row=current_row, column=avg_col, value=avg_formula)
 
-            change_val = calc_change_percent(row_values)
-            change_cell = ws.cell(row=current_row, column=change_col, value=change_val)
-            if change_val is not None:
-                change_cell.number_format = '0.0%'
+            # Изменение = Excel формула тренда (SLOPE)
+            trend_formula = make_trend_formula(first_col_letter, last_col_letter, current_row, len(months_list))
+            change_cell = ws.cell(row=current_row, column=change_col, value=trend_formula)
+            change_cell.number_format = '0.0%'
 
             # Применяем границы и чередование
             is_even = (current_row % 2 == 0)
@@ -740,9 +771,12 @@ class ExportService:
             income_category_rows[category] = current_row
             current_row += 1
 
+        # Пустая строка перед ИТОГО ДОХОДЫ
+        income_last_data_row = current_row - 1  # Последняя строка с данными категорий доходов
+        current_row += 1  # Пропускаем строку
+
         # Строка ИТОГО ДОХОДЫ
         income_totals_row = current_row
-        income_last_data_row = current_row - 1  # Последняя строка доходов
 
         ws.cell(row=current_row, column=1, value='ИТОГО ДОХОДЫ' if lang == 'ru' else 'TOTAL INCOME')
         ws.cell(row=current_row, column=1).font = Font(bold=True)
@@ -775,12 +809,11 @@ class ExportService:
         ws.cell(row=current_row, column=avg_col, value=avg_formula)
         ws.cell(row=current_row, column=avg_col).font = Font(bold=True, color="008000")
 
-        # Изменение % для ИТОГО ДОХОДЫ
-        change_val = calc_change_percent(income_month_totals)
-        change_cell = ws.cell(row=current_row, column=change_col, value=change_val)
+        # Изменение % для ИТОГО ДОХОДЫ (Excel формула тренда)
+        trend_formula = make_trend_formula(first_col_letter, last_col_letter, current_row, len(months_list))
+        change_cell = ws.cell(row=current_row, column=change_col, value=trend_formula)
         change_cell.font = Font(bold=True, color="008000")
-        if change_val is not None:
-            change_cell.number_format = '0.0%'
+        change_cell.number_format = '0.0%'
 
         for col in range(1, len(headers) + 1):
             ws.cell(row=current_row, column=col).border = thin_border
@@ -822,12 +855,8 @@ class ExportService:
         ws.cell(row=current_row, column=avg_col, value=avg_formula)
         ws.cell(row=current_row, column=avg_col).font = Font(bold=True)
 
-        # Изменение % для БАЛАНСА
-        change_val = calc_change_percent(balance_values)
-        change_cell = ws.cell(row=current_row, column=change_col, value=change_val)
-        change_cell.font = Font(bold=True)
-        if change_val is not None:
-            change_cell.number_format = '0.0%'
+        # Изменение для БАЛАНСА - оставляем пустым (не информативно)
+        ws.cell(row=current_row, column=change_col, value=None).font = Font(bold=True)
 
         for col in range(1, len(headers) + 1):
             ws.cell(row=current_row, column=col).border = thin_border
@@ -894,7 +923,7 @@ class ExportService:
                 total_amount = op['total']
                 total_count = op['count']
                 avg_ticket = total_amount / total_count if total_count else 0
-                inflation_ratio = calc_change_percent(op['monthly_totals'])
+                inflation_ratio = calc_trend_python(op['monthly_totals'])
                 items.append({
                     "description": op['description'],
                     "category": op['category'],
