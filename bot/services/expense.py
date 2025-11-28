@@ -211,11 +211,279 @@ def get_user_expenses(
             queryset = queryset.filter(category_id=category_id)
             
         return list(queryset.select_related('category').order_by('-expense_date', '-created_at')[:limit])
-        
-        pass
     except Exception as e:
         logger.error(f"Error getting expenses: {e}")
         return []
+
+
+# =============================================================================
+# Helper functions for get_expenses_summary (refactored for lower complexity)
+# =============================================================================
+
+def _get_expenses_queryset(
+    profile: Profile,
+    start_date: date,
+    end_date: date,
+    household_mode: bool = False
+):
+    """
+    Get expenses queryset with optional household mode.
+
+    Returns:
+        QuerySet of expenses and list of household profiles (or None)
+    """
+    if household_mode and profile.household:
+        household_profiles = Profile.objects.filter(household=profile.household)
+        expenses = Expense.objects.filter(
+            profile__in=household_profiles,
+            expense_date__gte=start_date,
+            expense_date__lte=end_date
+        ).select_related('category')
+        return expenses, household_profiles
+    else:
+        expenses = Expense.objects.filter(
+            profile=profile,
+            expense_date__gte=start_date,
+            expense_date__lte=end_date
+        ).select_related('category')
+        return expenses, None
+
+
+def _group_expenses_by_category(
+    expenses,
+    user_lang: str
+) -> tuple:
+    """
+    Group expenses by category and currency.
+
+    Returns:
+        Tuple of (expenses_by_currency, categories, total_count)
+    """
+    from bot.utils.language import get_text
+
+    expenses_by_currency = {}
+    categories = {}
+    total_count = 0
+
+    for expense in expenses:
+        currency = expense.currency or 'RUB'
+
+        # Currency statistics
+        if currency not in expenses_by_currency:
+            expenses_by_currency[currency] = {'total': Decimal('0'), 'count': 0}
+
+        expenses_by_currency[currency]['total'] += expense.amount
+        expenses_by_currency[currency]['count'] += 1
+        total_count += 1
+
+        # Category grouping
+        if expense.category:
+            cat_id = expense.category.id
+            cat_icon = expense.category.icon or ''
+            cat_name = get_category_display_name(expense.category, user_lang)
+        else:
+            cat_id = 0
+            cat_name = get_text('no_category', user_lang)
+            cat_icon = ''
+
+        if cat_id not in categories:
+            categories[cat_id] = {
+                'id': cat_id,
+                'name': cat_name,
+                'icon': cat_icon,
+                'amounts': {},
+                'count': 0
+            }
+
+        if currency not in categories[cat_id]['amounts']:
+            categories[cat_id]['amounts'][currency] = Decimal('0')
+
+        categories[cat_id]['amounts'][currency] += expense.amount
+        categories[cat_id]['count'] += 1
+
+    return expenses_by_currency, categories, total_count
+
+
+def _get_income_summary(
+    profile: Profile,
+    start_date: date,
+    end_date: date,
+    household_mode: bool = False
+) -> Dict:
+    """
+    Get income summary for the period.
+
+    Returns:
+        Dict with income_total, income_count, by_income_category
+    """
+    from expenses.models import Income, IncomeCategory
+    from bot.utils.language import get_text
+
+    user_lang = profile.language_code or 'ru'
+
+    if household_mode and profile.household:
+        household_profiles = Profile.objects.filter(household=profile.household)
+        incomes = Income.objects.filter(
+            profile__in=household_profiles,
+            income_date__gte=start_date,
+            income_date__lte=end_date
+        )
+    else:
+        incomes = Income.objects.filter(
+            profile=profile,
+            income_date__gte=start_date,
+            income_date__lte=end_date
+        )
+
+    income_total = incomes.aggregate(total=Sum('amount'))['total'] or Decimal('0')
+    income_count = incomes.count()
+
+    # Group by income category
+    by_income_category = incomes.values('category__id').annotate(
+        total=Sum('amount'),
+        count=Count('id')
+    ).order_by('-total')
+
+    income_categories_list = []
+    for cat in by_income_category:
+        category_id = cat['category__id']
+        if category_id:
+            try:
+                category = IncomeCategory.objects.get(id=category_id)
+                cat_name = category.get_display_name(user_lang)
+            except IncomeCategory.DoesNotExist:
+                cat_name = f"💰 {get_text('other_income', user_lang)}"
+        else:
+            cat_name = f"💰 {get_text('other_income', user_lang)}"
+
+        icon = cat_name.split()[0] if cat_name else '💰'
+
+        income_categories_list.append({
+            'id': category_id or 0,
+            'name': cat_name,
+            'icon': icon,
+            'total': cat['total'],
+            'count': cat['count']
+        })
+
+    return {
+        'income_total': income_total,
+        'income_count': income_count,
+        'by_income_category': income_categories_list
+    }
+
+
+def _calculate_personal_cashback(
+    profile: Profile,
+    categories_list: List[Dict],
+    main_currency: str,
+    current_month: int
+) -> Decimal:
+    """
+    Calculate potential cashback for personal (non-household) mode.
+    """
+    potential_cashback = Decimal('0')
+
+    cashbacks = Cashback.objects.filter(
+        profile=profile,
+        month=current_month
+    ).select_related('category')
+
+    cashback_map = {}
+    for cb in cashbacks:
+        if cb.category_id not in cashback_map:
+            cashback_map[cb.category_id] = []
+        cashback_map[cb.category_id].append(cb)
+
+    for cat in categories_list:
+        if cat['id'] in cashback_map:
+            cat_total = cat['amounts'].get(main_currency, Decimal('0'))
+            max_cashback = max(cashback_map[cat['id']], key=lambda x: x.cashback_percent)
+
+            if max_cashback.limit_amount:
+                cashback_amount = min(
+                    cat_total * max_cashback.cashback_percent / 100,
+                    max_cashback.limit_amount
+                )
+            else:
+                cashback_amount = cat_total * max_cashback.cashback_percent / 100
+
+            potential_cashback += cashback_amount
+
+    return potential_cashback
+
+
+def _calculate_household_cashback(
+    expenses,
+    main_currency: str,
+    current_month: int
+) -> Decimal:
+    """
+    Calculate potential cashback for household mode.
+    """
+    potential_cashback = Decimal('0')
+
+    # Collect totals by category for each household member
+    member_totals: Dict[int, Dict[int, Decimal]] = {}
+    for exp in expenses:
+        if (exp.currency or 'RUB') != main_currency:
+            continue
+        if not exp.category_id:
+            continue
+
+        pid = exp.profile_id
+        cid = exp.category_id
+
+        if pid not in member_totals:
+            member_totals[pid] = {}
+        if cid not in member_totals[pid]:
+            member_totals[pid][cid] = Decimal('0')
+
+        member_totals[pid][cid] += exp.amount
+
+    # Apply each member's cashback rules
+    for pid, cat_map in member_totals.items():
+        cashbacks = Cashback.objects.filter(
+            profile_id=pid,
+            month=current_month
+        ).select_related('category')
+
+        per_cat: Dict[int, list] = {}
+        for cb in cashbacks:
+            key = cb.category_id
+            if key not in per_cat:
+                per_cat[key] = []
+            per_cat[key].append(cb)
+
+        for cid, total_sum in cat_map.items():
+            if cid not in per_cat:
+                continue
+
+            max_cb = max(per_cat[cid], key=lambda x: x.cashback_percent)
+            if max_cb.limit_amount:
+                cb_amount = min(total_sum * max_cb.cashback_percent / 100, max_cb.limit_amount)
+            else:
+                cb_amount = total_sum * max_cb.cashback_percent / 100
+
+            potential_cashback += cb_amount
+
+    return potential_cashback
+
+
+def _build_empty_summary() -> Dict:
+    """Return empty summary dict for error cases."""
+    return {
+        'total': Decimal('0'),
+        'count': 0,
+        'by_category': [],
+        'currency': 'RUB',
+        'potential_cashback': Decimal('0'),
+        'currency_totals': {},
+        'income_total': Decimal('0'),
+        'income_count': 0,
+        'by_income_category': [],
+        'balance': Decimal('0')
+    }
 
 
 @sync_to_async
@@ -247,118 +515,41 @@ def get_expenses_summary(
     logger.info(f"get_expenses_summary called: user_id={user_id}, start={start_date}, end={end_date}, household={household_mode}")
     profile = get_or_create_user_profile_sync(user_id)
     logger.info(f"Profile found/created: {profile.id} for telegram_id={profile.telegram_id}")
-    
-    try:
-        # Если включен режим семейного бюджета, получаем траты всех участников
-        if household_mode and profile.household:
-            # Получаем всех участников домохозяйства
-            household_profiles = Profile.objects.filter(household=profile.household)
-            expenses = Expense.objects.filter(
-                profile__in=household_profiles,
-                expense_date__gte=start_date,
-                expense_date__lte=end_date
-            ).select_related('category')
-            logger.info(f"Household mode: found {household_profiles.count()} members, {expenses.count()} expenses")
-        else:
-            expenses = Expense.objects.filter(
-                profile=profile,
-                expense_date__gte=start_date,
-                expense_date__lte=end_date
-            ).select_related('category')
-        logger.info(f"Query: profile={profile.id}, date>={start_date}, date<={end_date}, found={expenses.count()} expenses")
-        
-        # Группируем по категориям (все валюты вместе)
-        expenses_by_currency = {}  # Общая статистика по валютам
-        categories = {}  # Категории с суммами по валютам
 
-        # Получаем язык пользователя для мультиязычных категорий
-        from bot.utils.language import get_user_language, get_text
+    try:
+        # Get user language for multilingual categories
+        from bot.utils.language import get_user_language
         from asgiref.sync import async_to_sync
         user_lang = async_to_sync(get_user_language)(user_id)
 
-        total_count = 0  # Общее количество трат
+        # Get expenses queryset
+        expenses, household_profiles = _get_expenses_queryset(
+            profile, start_date, end_date, household_mode
+        )
+        if household_profiles:
+            logger.info(f"Household mode: found {household_profiles.count()} members, {expenses.count()} expenses")
+        logger.info(f"Query: profile={profile.id}, date>={start_date}, date<={end_date}, found={expenses.count()} expenses")
 
-        for expense in expenses:
-            currency = expense.currency or 'RUB'
+        # Group expenses by category and currency
+        expenses_by_currency, categories, total_count = _group_expenses_by_category(
+            expenses, user_lang
+        )
 
-            # Статистика по валютам
-            if currency not in expenses_by_currency:
-                expenses_by_currency[currency] = {
-                    'total': Decimal('0'),
-                    'count': 0
-                }
-
-            expenses_by_currency[currency]['total'] += expense.amount
-            expenses_by_currency[currency]['count'] += 1
-            total_count += 1
-
-            # Получаем мультиязычное название категории с учетом is_translatable
-            if expense.category:
-                cat_id = expense.category.id
-                cat_icon = expense.category.icon or ''
-
-                # Проверяем флаг is_translatable для правильной обработки кастомных категорий
-                if not expense.category.is_translatable:
-                    # Кастомная категория - берем оригинал без перевода
-                    if expense.category.original_language == 'ru':
-                        cat_name = expense.category.name_ru
-                    elif expense.category.original_language == 'en':
-                        cat_name = expense.category.name_en
-                    else:
-                        # Fallback на старое поле
-                        cat_name = expense.category.name.replace(cat_icon, '').strip() if cat_icon else expense.category.name
-                else:
-                    # Системная категория - переводим на язык пользователя
-                    if user_lang == 'en' and expense.category.name_en:
-                        cat_name = expense.category.name_en
-                    elif user_lang == 'ru' and expense.category.name_ru:
-                        cat_name = expense.category.name_ru
-                    else:
-                        # Fallback на старое поле
-                        cat_name = expense.category.name.replace(cat_icon, '').strip() if cat_icon else expense.category.name
-            else:
-                cat_id = 0
-                cat_name = get_text('no_category', user_lang)
-                cat_icon = ''
-
-            # Группируем по категориям, храним суммы по каждой валюте
-            if cat_id not in categories:
-                categories[cat_id] = {
-                    'id': cat_id,
-                    'name': cat_name,
-                    'icon': cat_icon,
-                    'amounts': {},  # Суммы по валютам
-                    'count': 0
-                }
-
-            # Добавляем сумму к валюте категории
-            if currency not in categories[cat_id]['amounts']:
-                categories[cat_id]['amounts'][currency] = Decimal('0')
-
-            categories[cat_id]['amounts'][currency] += expense.amount
-            categories[cat_id]['count'] += 1
-
-        # Преобразуем категории в список и сортируем
+        # Convert categories to sorted list
         if categories:
-            # Сортируем по общей сумме (берем первую валюту или сумму всех)
             categories_list = sorted(
                 categories.values(),
                 key=lambda x: sum(x['amounts'].values()),
                 reverse=True
             )
-
-            # Логируем список категорий для отладки
             logger.info(f"Categories with all currencies: {[(c['name'], c['amounts']) for c in categories_list]}")
         else:
             categories_list = []
 
-        # Сохраняем суммы по валютам для повторного использования в интерфейсах
-        currency_totals = {
-            cur: data['total']
-            for cur, data in expenses_by_currency.items()
-        }
+        # Calculate currency totals
+        currency_totals = {cur: data['total'] for cur, data in expenses_by_currency.items()}
 
-        # Определяем основную валюту и общие суммы (для обратной совместимости)
+        # Determine main currency and totals (for backward compatibility)
         if expenses_by_currency:
             main_currency = max(expenses_by_currency.items(), key=lambda x: x[1]['count'])[0]
             total = expenses_by_currency[main_currency]['total']
@@ -368,164 +559,39 @@ def get_expenses_summary(
             total = Decimal('0')
             count = 0
 
-        # НОВОЕ: Получаем данные о доходах (учитываем семейный режим)
-        from expenses.models import Income
-        if household_mode and profile.household:
-            household_profiles = Profile.objects.filter(household=profile.household)
-            incomes = Income.objects.filter(
-                profile__in=household_profiles,
-                income_date__gte=start_date,
-                income_date__lte=end_date
-            )
-        else:
-            incomes = Income.objects.filter(
-                profile=profile,
-                income_date__gte=start_date,
-                income_date__lte=end_date
-            )
-        
-        # Общая сумма и количество доходов
-        income_total = incomes.aggregate(total=Sum('amount'))['total'] or Decimal('0')
-        income_count = incomes.count()
-        
-        # По категориям доходов
-        user_lang = profile.language_code or 'ru'
-        by_income_category = incomes.values(
-            'category__id'
-        ).annotate(
-            total=Sum('amount'),
-            count=Count('id')
-        ).order_by('-total')
+        # Get income summary
+        income_data = _get_income_summary(profile, start_date, end_date, household_mode)
 
-        # Преобразуем в список словарей с мультиязычными названиями
-        from expenses.models import IncomeCategory
-        from bot.utils.language import get_text
+        # Calculate balance
+        balance = income_data['income_total'] - total
 
-        income_categories_list = []
-        for cat in by_income_category:
-            category_id = cat['category__id']
-            if category_id:
-                try:
-                    category = IncomeCategory.objects.get(id=category_id)
-                    cat_name = category.get_display_name(user_lang)
-                except IncomeCategory.DoesNotExist:
-                    cat_name = f"💰 {get_text('other_income', user_lang)}"
-            else:
-                cat_name = f"💰 {get_text('other_income', user_lang)}"
-
-            # Извлекаем иконку из названия
-            icon = cat_name.split()[0] if cat_name else '💰'
-
-            income_categories_list.append({
-                'id': category_id or 0,
-                'name': cat_name,
-                'icon': icon,
-                'total': cat['total'],
-                'count': cat['count']
-            })
-        
-        # Рассчитываем баланс
-        balance = income_total - total
-        
-        # Рассчитываем потенциальный кешбэк
-        potential_cashback = Decimal('0')
+        # Calculate potential cashback
         current_month = start_date.month
-        
         if household_mode and profile.household and expenses_by_currency:
-            # Считаем кешбэк по участникам семьи и суммируем. Используем основную валюту.
-            main_cur = main_currency
-
-            # Собираем суммы по категориям для каждого участника (только основная валюта)
-            member_totals: Dict[int, Dict[int, Decimal]] = {}
-            for exp in expenses:
-                if (exp.currency or 'RUB') != main_cur:
-                    continue
-                if not exp.category_id:
-                    continue  # кешбэк без категории не применяется
-                pid = exp.profile_id
-                cid = exp.category_id
-                if pid not in member_totals:
-                    member_totals[pid] = {}
-                if cid not in member_totals[pid]:
-                    member_totals[pid][cid] = Decimal('0')
-                member_totals[pid][cid] += exp.amount
-
-            # Для каждого участника применяем его правила кешбэка
-            for pid, cat_map in member_totals.items():
-                cbs = Cashback.objects.filter(profile_id=pid, month=current_month).select_related('category')
-
-                per_cat: Dict[int, list] = {}
-                for cb in cbs:
-                    key = cb.category_id
-                    if key not in per_cat:
-                        per_cat[key] = []
-                    per_cat[key].append(cb)
-
-                for cid, total_sum in cat_map.items():
-                    if cid not in per_cat:
-                        continue
-                    max_cb = max(per_cat[cid], key=lambda x: x.cashback_percent)
-                    if max_cb.limit_amount:
-                        cb_amount = min(total_sum * max_cb.cashback_percent / 100, max_cb.limit_amount)
-                    else:
-                        cb_amount = total_sum * max_cb.cashback_percent / 100
-                    potential_cashback += cb_amount
+            potential_cashback = _calculate_household_cashback(
+                expenses, main_currency, current_month
+            )
         else:
-            # Обычный (личный) расчет кешбэка
-            cashbacks = Cashback.objects.filter(
-                profile=profile,
-                month=current_month
-            ).select_related('category')
-            
-            cashback_map = {}
-            for cb in cashbacks:
-                if cb.category_id not in cashback_map:
-                    cashback_map[cb.category_id] = []
-                cashback_map[cb.category_id].append(cb)
-            
-            for cat in categories_list:
-                if cat['id'] in cashback_map:
-                    # Берем сумму в основной валюте для расчета кешбэка
-                    cat_total = cat['amounts'].get(main_currency, Decimal('0'))
-                    max_cashback = max(cashback_map[cat['id']], key=lambda x: x.cashback_percent)
-                    if max_cashback.limit_amount:
-                        cashback_amount = min(
-                            cat_total * max_cashback.cashback_percent / 100,
-                            max_cashback.limit_amount
-                        )
-                    else:
-                        cashback_amount = cat_total * max_cashback.cashback_percent / 100
-                    potential_cashback += cashback_amount
-                
+            potential_cashback = _calculate_personal_cashback(
+                profile, categories_list, main_currency, current_month
+            )
+
         return {
             'total': total,
             'count': count,
             'by_category': categories_list,
-            'currency': main_currency,  # Используем валюту с наибольшим количеством операций
+            'currency': main_currency,
             'potential_cashback': potential_cashback,
             'currency_totals': {k: float(v) for k, v in currency_totals.items()},
-            # НОВЫЕ ПОЛЯ для доходов и баланса
-            'income_total': income_total,
-            'income_count': income_count,
-            'by_income_category': income_categories_list,
+            'income_total': income_data['income_total'],
+            'income_count': income_data['income_count'],
+            'by_income_category': income_data['by_income_category'],
             'balance': balance
         }
-        
+
     except Exception as e:
         logger.error(f"Error getting expenses summary: {e}")
-        return {
-            'total': Decimal('0'),
-            'count': 0,
-            'by_category': [],
-            'currency': 'RUB',
-            'potential_cashback': Decimal('0'),
-            'currency_totals': {},
-            # НОВЫЕ ПОЛЯ для доходов и баланса
-            'income_total': Decimal('0'),
-            'income_count': 0,
-            'by_income_category': [],
-            'balance': Decimal('0')
-        }
+        return _build_empty_summary()
 
 
 @sync_to_async

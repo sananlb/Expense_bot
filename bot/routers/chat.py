@@ -94,41 +94,130 @@ class ChatContextManager:
         return data.get('chat_messages', [])
 
 
+def is_greeting(text: str) -> bool:
+    """Проверить, является ли сообщение приветствием"""
+    text_lower = text.lower().strip()
+
+    greetings = {
+        # Русские приветствия
+        'привет', 'приветик', 'здравствуй', 'здравствуйте', 'добрый день',
+        'доброе утро', 'добрый вечер', 'хай', 'хэй', 'йо', 'салют',
+        'здарова', 'здорово', 'прив', 'ку', 'хелло', 'хеллоу',
+        # Английские приветствия
+        'hi', 'hello', 'hey', 'good morning', 'good evening', 'good afternoon',
+        'howdy', 'greetings', 'yo', 'sup', "what's up", 'whats up'
+    }
+
+    # Проверяем точное совпадение
+    if text_lower in greetings:
+        return True
+
+    # Проверяем начало с приветствия
+    for greeting in greetings:
+        if text_lower.startswith(greeting + ' ') or text_lower.startswith(greeting + ',') or text_lower.startswith(greeting + '!'):
+            return True
+
+    return False
+
+
+def get_greeting_response(lang: str = 'ru') -> str:
+    """Получить ответ на приветствие с примерами вопросов"""
+    if lang == 'en':
+        return """👋 Hello! I'm your personal finance assistant.
+
+<b>What I can do:</b>
+
+💸 <b>Track expenses</b> — just send:
+• "Coffee 200"
+• "Taxi 450 to airport"
+
+📊 <b>View reports</b> — ask me:
+• "Show expenses for today"
+• "How much did I spend in November?"
+• "Show expenses for August 19"
+
+🔍 <b>Search expenses</b>:
+• "Find coffee expenses"
+• "Show all groceries"
+
+📈 <b>Analytics</b>:
+• "Compare this month to last month"
+• "What day did I spend the most?"
+
+💰 <b>Track income</b>:
+• "+50000 salary"
+• "Income 1000 freelance"
+
+Try asking something!"""
+    else:
+        return """👋 Привет! Я твой помощник по учету финансов.
+
+<b>Что я умею:</b>
+
+💸 <b>Записывать траты</b> — просто отправь:
+• "Кофе 200"
+• "Такси 450"
+Редактируй категорию — я запомню и в следующий раз подставлю правильно!
+
+📊 <b>Показывать отчеты</b> — спроси меня:
+• "Покажи траты за неделю"
+• "Сколько потратил в ноябре?"
+• "Покажи траты за 19 августа"
+
+🔍 <b>Искать траты</b>:
+• "Найди траты на кофе"
+• "Покажи траты на продукты в ноябре"
+
+📈 <b>Аналитика</b>:
+• "Какая моя самая дорогая покупка в сентябре?"
+• "В какой день я потратил больше всего?"
+
+💰 <b>Учет доходов</b>:
+• "+50000 зарплата"
+• "Доход 1000 фриланс"
+
+Попробуй спросить что-нибудь!"""
+
+
 def classify_by_heuristics(text: str, lang: str = 'ru') -> str:
     """Классифицировать сообщение по эвристикам"""
     text_lower = text.lower().strip()
-    
+
+    # Приветствия обрабатываются отдельно
+    if is_greeting(text):
+        return 'greeting'
+
     # Вопросы всегда чат
     if text.strip().endswith('?'):
         return 'chat'
-    
+
     # Слова-стартеры чата
     chat_start_words = {
         'ru': {'что', 'как', 'почему', 'зачем', 'когда', 'где', 'сколько', 'покажи', 'показать', 'выведи', 'вывести'},
         'en': {'what', 'how', 'why', 'when', 'where', 'can', 'should', 'show', 'display'}
     }
-    
+
     first_word = text_lower.split()[0] if text_lower.split() else ""
     if first_word in chat_start_words.get(lang, set()):
         return 'chat'
-    
+
     # Фразы для отчетов
     report_phrases = {
         'ru': ['траты за', 'расходы за', 'потратил за', 'сколько потратил', 'покажи траты', 'отчет за'],
         'en': ['expenses for', 'spent in', 'show expenses', 'report for']
     }
-    
+
     for phrase in report_phrases.get(lang, []):
         if phrase in text_lower:
             return 'report'
-    
+
     # По умолчанию пытаемся распознать как расход
     return 'expense'
 
 
 async def process_chat_message(message: types.Message, state: FSMContext, text: str, use_ai: bool = True, skip_typing: bool = False):
     """Обработать сообщение как чат
-    
+
     Args:
         message: Сообщение Telegram
         state: Состояние FSM
@@ -137,11 +226,18 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
         skip_typing: Пропустить ли индикатор печатания (если уже запущен извне)
     """
     user_id = message.from_user.id
-    
+
+    # Проверяем приветствия - отвечаем мгновенно без AI
+    if is_greeting(text):
+        lang = await get_user_language(user_id)
+        response = get_greeting_response(lang)
+        await send_message_with_cleanup(message, state, response, parse_mode="HTML")
+        return
+
     # Основная логика обработки
     # УБРАНО: Больше не проверяем запросы дневника трат
     # Все сообщения идут через AI
-    
+
     # Проверяем подписку для AI чата (включая пробный период)
     has_subscription = await check_subscription(user_id, include_trial=True)
     
@@ -494,7 +590,15 @@ async def parse_dates_from_text(text: str) -> Optional[tuple[datetime.date, date
 async def handle_chat_message(message: types.Message, state: FSMContext):
     """Обработка текстовых сообщений как чат"""
     text = message.text.strip()
-    
+    user_id = message.from_user.id
+
+    # Проверяем, является ли сообщение приветствием
+    if is_greeting(text):
+        lang = await get_user_language(user_id)
+        response = get_greeting_response(lang)
+        await send_message_with_cleanup(message, state, response, parse_mode="HTML")
+        return
+
     # Если сообщение дошло до этого обработчика, значит expense handler
     # не смог его распознать как трату, поэтому обрабатываем как чат
     # Не запускаем свой typing indicator, так как process_chat_message сам управляет им

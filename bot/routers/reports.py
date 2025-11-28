@@ -321,10 +321,8 @@ async def show_expenses_summary(
                 if total_categories <= 22:
                     # Показываем все категории
                     for cat in summary['by_category']:
-                        # Формируем название с эмодзи
-                        icon = cat.get('icon', '')
-                        name = cat.get('name', get_text('no_category', lang))
-                        category_display = f"{icon} {name}" if icon else name
+                        # Название уже содержит эмодзи из get_category_display_name
+                        category_display = cat.get('name', get_text('no_category', lang))
 
                         # Формируем строку с суммами по валютам
                         amounts = cat.get('amounts', {})
@@ -333,10 +331,8 @@ async def show_expenses_summary(
                 else:
                     # Показываем первые 20 категорий
                     for cat in summary['by_category'][:20]:
-                        # Формируем название с эмодзи
-                        icon = cat.get('icon', '')
-                        name = cat.get('name', get_text('no_category', lang))
-                        category_display = f"{icon} {name}" if icon else name
+                        # Название уже содержит эмодзи из get_category_display_name
+                        category_display = cat.get('name', get_text('no_category', lang))
 
                         # Формируем строку с суммами по валютам
                         amounts = cat.get('amounts', {})

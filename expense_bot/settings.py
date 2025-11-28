@@ -18,7 +18,10 @@ load_dotenv(override=True)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-expense-bot-dev-key-change-in-production')
+# SECRET_KEY MUST be set in .env file - no default for security
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable is required. Add it to .env file.")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False').lower() == 'true'
@@ -339,12 +342,16 @@ YANDEX_SPEECH_TOPIC = os.getenv('YANDEX_SPEECH_TOPIC', 'general:rc')
 # OpenRouter модели управляются централизованно в ai_selector.py
 # Для изменения модели используйте OPENROUTER_MODEL_DEFAULT или OPENROUTER_MODEL_VOICE в .env
 
-print(f"[SETTINGS] Загружено OpenAI ключей: {len(OPENAI_API_KEYS)}")
-print(f"[SETTINGS] Загружено Google API ключей: {len(GOOGLE_API_KEYS)}")
-print(f"[SETTINGS] Загружено DeepSeek API ключей: {len(DEEPSEEK_API_KEYS)}")
-print(f"[SETTINGS] Загружено Qwen API ключей: {len(DASHSCOPE_API_KEYS)}")
-print(f"[SETTINGS] Загружено OpenRouter API ключей: {len(OPENROUTER_API_KEYS)}")
-print(f"[SETTINGS] Yandex SpeechKit настроен: {bool(YANDEX_API_KEY and YANDEX_FOLDER_ID)}")
+# API key counts logged only in DEBUG mode via proper logging
+# These were print() statements which could leak info in production logs
+_settings_logger = logging.getLogger(__name__)
+if DEBUG:
+    _settings_logger.debug(f"Loaded OpenAI keys: {len(OPENAI_API_KEYS)}")
+    _settings_logger.debug(f"Loaded Google API keys: {len(GOOGLE_API_KEYS)}")
+    _settings_logger.debug(f"Loaded DeepSeek API keys: {len(DEEPSEEK_API_KEYS)}")
+    _settings_logger.debug(f"Loaded Qwen API keys: {len(DASHSCOPE_API_KEYS)}")
+    _settings_logger.debug(f"Loaded OpenRouter API keys: {len(OPENROUTER_API_KEYS)}")
+    _settings_logger.debug(f"Yandex SpeechKit configured: {bool(YANDEX_API_KEY and YANDEX_FOLDER_ID)}")
 
 # AI Fallback providers (comma-separated lists)
 def parse_fallback_providers(env_key: str, default: str = 'deepseek,qwen,openai') -> list:

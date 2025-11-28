@@ -16,6 +16,174 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# Helper functions for search_expenses
+# =============================================================================
+
+def _parse_search_query(query: str) -> list:
+    """
+    Parse search query into parts.
+    Handles: "кофе и круассаны", "кофе, булочки", etc.
+    But preserves phrases with prepositions like "кофе с молоком".
+    """
+    import re
+
+    query_parts = []
+
+    # Split by explicit separators: " и ", " or ", ", "
+    split_pattern = r'\s+и\s+|\s+or\s+|,\s*'
+    potential_parts = re.split(split_pattern, query, flags=re.IGNORECASE)
+
+    for part in potential_parts:
+        part = part.strip()
+        if part and len(part) >= 2:
+            query_parts.append(part)
+
+    # If only one part - try splitting by spaces (if no prepositions)
+    if len(query_parts) == 1:
+        single_query = query_parts[0]
+        has_prepositions = re.search(
+            r'\s+(с|в|на|для|из|от|до|по|при|за|над|под|между)\s+',
+            single_query, re.IGNORECASE
+        )
+        if not has_prepositions:
+            words = single_query.split()
+            meaningful_words = [w for w in words if len(w) >= 3]
+            if len(meaningful_words) > 1:
+                query_parts = meaningful_words
+
+    return query_parts
+
+
+def _apply_date_filters(queryset, start_date: str, end_date: str):
+    """Apply date filters to queryset."""
+    from datetime import datetime as dt
+
+    if start_date:
+        try:
+            start_dt = dt.strptime(start_date, '%Y-%m-%d').date()
+            queryset = queryset.filter(expense_date__gte=start_dt)
+        except ValueError:
+            logger.warning(f"Invalid start_date format: {start_date}")
+
+    if end_date:
+        try:
+            end_dt = dt.strptime(end_date, '%Y-%m-%d').date()
+            queryset = queryset.filter(expense_date__lte=end_dt)
+        except ValueError:
+            logger.warning(f"Invalid end_date format: {end_date}")
+
+    return queryset
+
+
+def _build_search_filter(query_parts: list):
+    """Build Q filter for expense search."""
+    from functools import reduce
+    from operator import or_
+
+    q_filters = []
+    for qpart in query_parts:
+        q_filters.append(
+            Q(description__icontains=qpart) |
+            Q(category__name__icontains=qpart) |
+            Q(category__name_ru__icontains=qpart) |
+            Q(category__name_en__icontains=qpart)
+        )
+
+    if q_filters:
+        return reduce(or_, q_filters)
+    return None
+
+
+def _fuzzy_search_expenses(queryset, query_parts: list, limit: int) -> list:
+    """
+    Perform fuzzy search on expenses when standard search returns nothing.
+    """
+    import re
+    from bot.services.expense import normalize_russian_word, _calculate_similarity
+
+    FUZZY_SEARCH_LIMIT = 500
+    SIMILARITY_THRESHOLD = 0.75
+
+    all_expenses = queryset.select_related('category').order_by(
+        '-expense_date', '-expense_time'
+    )[:FUZZY_SEARCH_LIMIT]
+
+    query_parts_lower = [qp.lower() for qp in query_parts]
+    query_parts_normalized = [normalize_russian_word(qp.lower()) for qp in query_parts]
+
+    filtered_expenses = []
+
+    for exp in all_expenses:
+        if _expense_matches_query(exp, query_parts_lower, query_parts_normalized, SIMILARITY_THRESHOLD):
+            filtered_expenses.append(exp)
+            if len(filtered_expenses) >= limit:
+                break
+
+    return filtered_expenses
+
+
+def _expense_matches_query(
+    exp,
+    query_parts_lower: list,
+    query_parts_normalized: list,
+    threshold: float
+) -> bool:
+    """Check if expense matches any of the query parts."""
+    import re
+    from bot.services.expense import normalize_russian_word, _calculate_similarity
+
+    for query_lower, query_normalized in zip(query_parts_lower, query_parts_normalized):
+        # Check description
+        if exp.description:
+            desc_lower = exp.description.lower()
+
+            # Exact match
+            if query_lower in desc_lower or query_normalized in desc_lower:
+                return True
+
+            # Fuzzy match on words
+            desc_words = re.findall(r'[а-яёa-z]+', desc_lower)
+            for word in desc_words:
+                word_normalized = normalize_russian_word(word)
+                if query_normalized == word_normalized:
+                    return True
+                if len(query_normalized) >= 3 and len(word_normalized) >= 3:
+                    similarity = _calculate_similarity(query_normalized, word_normalized)
+                    if similarity >= threshold:
+                        return True
+
+        # Check category
+        if exp.category:
+            for cat_name in [exp.category.name, exp.category.name_ru, exp.category.name_en]:
+                if cat_name:
+                    cat_lower = cat_name.lower()
+                    if query_lower in cat_lower or query_normalized in cat_lower:
+                        return True
+
+    return False
+
+
+def _format_search_results(expenses, lang: str) -> tuple:
+    """Format expenses for search results."""
+    results = []
+    total_amount = 0.0
+
+    for exp in expenses:
+        amount = float(exp.amount)
+        total_amount += amount
+        results.append({
+            'date': exp.expense_date.isoformat(),
+            'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
+            'amount': amount,
+            'category': get_category_display_name(exp.category, lang) if exp.category else get_text('no_category', lang),
+            'description': exp.description,
+            'currency': exp.currency
+        })
+
+    return results, total_amount
+
+
 class ExpenseFunctions:
     """Класс с функциями для анализа трат, вызываемыми через AI function calling"""
     
@@ -399,15 +567,15 @@ class ExpenseFunctions:
     @sync_to_async
     def search_expenses(user_id: int, query: str, limit: int = 20, start_date: str = None, end_date: str = None, period: str = None) -> Dict[str, Any]:
         """
-        Поиск трат по тексту
+        Search expenses by text query.
 
         Args:
-            user_id: ID пользователя
-            query: Поисковый запрос
-            limit: Максимальное количество результатов
-            start_date: Начальная дата периода (YYYY-MM-DD)
-            end_date: Конечная дата периода (YYYY-MM-DD)
-            period: Период ('last_week', 'last_month', 'week', 'month', etc.)
+            user_id: User ID
+            query: Search query
+            limit: Maximum number of results
+            start_date: Start date (YYYY-MM-DD)
+            end_date: End date (YYYY-MM-DD)
+            period: Period ('last_week', 'last_month', 'week', 'month', etc.)
         """
         try:
             from bot.utils.date_utils import get_period_dates
@@ -417,172 +585,43 @@ class ExpenseFunctions:
                 defaults={'language_code': 'ru'}
             )
 
-            # Определяем даты периода
+            # Determine period dates
             if period:
-                # Если задан период, используем его
                 period_start, period_end = get_period_dates(period)
                 start_date = period_start.isoformat()
                 end_date = period_end.isoformat()
 
             logger.info(f"search_expenses: profile_id={profile.id}, query='{query}', limit={limit}, period={start_date} to {end_date}")
 
-            # Парсим множественный запрос: "кофе и круассаны", "кофе, булочки", "капельницы новомед"
-            # НО: "кофе с молоком" - это одно словосочетание, не разделяем
-            import re
-            query_parts = []
-
-            # Сначала пробуем разделить по явным разделителям: " и ", " or ", ", "
-            split_pattern = r'\s+и\s+|\s+or\s+|,\s*'
-            potential_parts = re.split(split_pattern, query, flags=re.IGNORECASE)
-
-            for part in potential_parts:
-                part = part.strip()
-                if part and len(part) >= 2:
-                    query_parts.append(part)
-
-            # Если не удалось разбить по разделителям (одна часть) - пробуем разбить по пробелам
-            # Но только если нет предлогов типа "с", "в", "на" (которые указывают на фразу)
-            if len(query_parts) == 1:
-                single_query = query_parts[0]
-                # Проверяем нет ли предлогов, указывающих на связную фразу
-                has_prepositions = re.search(r'\s+(с|в|на|для|из|от|до|по|при|за|над|под|между)\s+', single_query, re.IGNORECASE)
-                if not has_prepositions:
-                    # Разбиваем по пробелам, оставляем слова >= 3 символов
-                    words = single_query.split()
-                    meaningful_words = [w for w in words if len(w) >= 3]
-                    if len(meaningful_words) > 1:
-                        query_parts = meaningful_words
-
+            # Parse query into parts
+            query_parts = _parse_search_query(query)
             logger.info(f"search_expenses: parsed query parts: {query_parts}")
 
-            # Поиск по описанию и категориям
-            # Сначала пробуем стандартный поиск
+            # Build base queryset with date filters
             queryset = Expense.objects.filter(profile=profile)
+            queryset = _apply_date_filters(queryset, start_date, end_date)
 
-            # Добавляем фильтрацию по датам если указаны
-            if start_date:
-                from datetime import datetime
-                try:
-                    start_dt = datetime.strptime(start_date, '%Y-%m-%d').date()
-                    queryset = queryset.filter(expense_date__gte=start_dt)
-                except ValueError:
-                    logger.warning(f"Invalid start_date format: {start_date}")
-
-            if end_date:
-                from datetime import datetime
-                try:
-                    end_dt = datetime.strptime(end_date, '%Y-%m-%d').date()
-                    queryset = queryset.filter(expense_date__lte=end_dt)
-                except ValueError:
-                    logger.warning(f"Invalid end_date format: {end_date}")
-
-            # Строим SQL запрос для всех частей (OR между частями)
-            from functools import reduce
-            from operator import or_
-
-            q_filters = []
-            for qpart in query_parts:
-                q_filters.append(
-                    Q(description__icontains=qpart) |
-                    Q(category__name__icontains=qpart) |
-                    Q(category__name_ru__icontains=qpart) |
-                    Q(category__name_en__icontains=qpart)
+            # Try standard SQL search first
+            search_filter = _build_search_filter(query_parts)
+            if search_filter:
+                expenses = list(
+                    queryset.filter(search_filter)
+                    .select_related('category')
+                    .order_by('-expense_date', '-expense_time')[:limit]
                 )
-
-            if q_filters:
-                combined_filter = reduce(or_, q_filters)
-                expenses = queryset.filter(combined_filter).select_related('category').order_by('-expense_date', '-expense_time')[:limit]
             else:
                 expenses = []
 
-            # Если ничего не найдено - используем расширенный поиск с нормализацией и fuzzy matching
-            # Ограничиваем выборку для предотвращения тяжелых запросов
-            FUZZY_SEARCH_LIMIT = 500  # Максимум трат для fuzzy поиска
-            if len(expenses) == 0:
-                from bot.services.expense import normalize_russian_word, _calculate_similarity
-
-                # Получаем последние N трат пользователя с учетом дат (не все!)
-                all_expenses = queryset.select_related('category').order_by('-expense_date', '-expense_time')[:FUZZY_SEARCH_LIMIT]
-
-                # Подготовим нормализованные версии всех частей запроса
-                query_parts_lower = [qp.lower() for qp in query_parts]
-                query_parts_normalized = [normalize_russian_word(qp.lower()) for qp in query_parts]
-
-                filtered_expenses = []
-                SIMILARITY_THRESHOLD = 0.75  # 75% схожести для fuzzy поиска
-
-                for exp in all_expenses:
-                    matched = False
-
-                    # Проверяем каждую часть запроса (достаточно совпадения хотя бы одной)
-                    for query_lower, query_normalized in zip(query_parts_lower, query_parts_normalized):
-
-                        # 1. Проверяем описание
-                        if exp.description:
-                            desc_lower = exp.description.lower()
-                            # Точное вхождение
-                            if query_lower in desc_lower:
-                                matched = True
-                                break
-                            # Нормализованное вхождение
-                            elif query_normalized in desc_lower:
-                                matched = True
-                                break
-                            else:
-                                # Fuzzy поиск по словам описания
-                                desc_words = re.findall(r'[а-яёa-z]+', desc_lower)
-                                for word in desc_words:
-                                    word_normalized = normalize_russian_word(word)
-                                    # Проверяем нормализованные основы
-                                    if query_normalized == word_normalized:
-                                        matched = True
-                                        break
-                                    # Fuzzy matching
-                                    if len(query_normalized) >= 3 and len(word_normalized) >= 3:
-                                        similarity = _calculate_similarity(query_normalized, word_normalized)
-                                        if similarity >= SIMILARITY_THRESHOLD:
-                                            logger.debug(f"Fuzzy match: '{query_lower}' ~ '{word}' ({similarity:.0%})")
-                                            matched = True
-                                            break
-                                if matched:
-                                    break
-
-                        # 2. Проверяем категорию (если ещё не нашли)
-                        if not matched and exp.category:
-                            cat_names = [exp.category.name, exp.category.name_ru, exp.category.name_en]
-                            for cat_name in cat_names:
-                                if cat_name:
-                                    cat_lower = cat_name.lower()
-                                    if query_lower in cat_lower or query_normalized in cat_lower:
-                                        matched = True
-                                        break
-                            if matched:
-                                break
-
-                    if matched:
-                        filtered_expenses.append(exp)
-
-                expenses = filtered_expenses[:limit]
+            # If nothing found - use fuzzy search
+            if not expenses:
+                expenses = _fuzzy_search_expenses(queryset, query_parts, limit)
                 logger.info(f"search_expenses: extended search found {len(expenses)} expenses")
 
             logger.info(f"search_expenses: found {len(expenses)} expenses for query '{query}'")
 
-            # Получаем язык пользователя
+            # Format results
             lang = profile.language_code or 'ru'
-
-            results = []
-            total_amount = 0
-            for exp in expenses:
-                amount = float(exp.amount)
-                total_amount += amount
-                results.append({
-                    'date': exp.expense_date.isoformat(),
-                    'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
-                    'amount': amount,
-                    'category': get_category_display_name(exp.category, lang) if exp.category else get_text('no_category', profile.language_code or 'ru'),
-                    'description': exp.description,
-                    'currency': exp.currency
-                })
+            results, total_amount = _format_search_results(expenses, lang)
 
             return {
                 'success': True,
@@ -591,9 +630,8 @@ class ExpenseFunctions:
                 'total': total_amount,
                 'results': results
             }
-            
+
         except Profile.DoesNotExist:
-            from bot.utils import get_text
             return {
                 'success': False,
                 'message': get_text('profile_not_found', 'ru')

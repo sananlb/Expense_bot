@@ -15,205 +15,250 @@ from bot.utils.emoji_utils import EMOJI_PREFIX_RE, normalize_category_for_matchi
 
 logger = logging.getLogger(__name__)
 
-def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCategory:
-    """Получить категорию по имени или вернуть категорию 'Прочие расходы'"""
-    original_category_name = category_name or ''
-    category_name = EMOJI_PREFIX_RE.sub('', original_category_name).strip()
-    normalized_category_name = category_name.lower() if category_name else ""
-    if original_category_name and original_category_name != category_name:
-        if category_name:
-            logger.debug(
-                f"Normalized category name from '{original_category_name}' to '{category_name}'"
-            )
-        else:
-            logger.debug(
-                f"Category name '{original_category_name}' normalized to empty string"
-            )
-    effective_name = category_name or original_category_name
-    logger.info(f"Looking for category '{effective_name}' for user {user_id}")
 
-    profile = get_or_create_user_profile_sync(user_id)
+# =============================================================================
+# Category mapping for parser-to-category matching
+# =============================================================================
 
-    # Определяем язык пользователя для правильного отображения категорий
-    lang_code = profile.language_code if profile and hasattr(profile, 'language_code') and profile.language_code else 'ru'
+CATEGORY_MAPPING = {
+    'продукты': ['продукты', 'еда', 'супермаркет', 'магазин', 'groceries', 'food', 'supermarket'],
+    'кафе и рестораны': ['кафе', 'ресторан', 'рестораны', 'обед', 'кофе', 'cafe', 'cafes', 'restaurant', 'restaurants'],
+    'транспорт': ['транспорт', 'такси', 'метро', 'автобус', 'транспорт', 'transport', 'taxi', 'bus', 'metro'],
+    'автомобиль': ['автомобиль', 'машина', 'авто', 'бензин', 'дизель', 'заправка', 'азс', 'топливо', 'car', 'gas station', 'fuel', 'petrol'],
+    'жилье': ['жилье', 'квартира', 'дом', 'аренда', 'housing', 'rent', 'apartment'],
+    'аптеки': ['аптека', 'аптеки', 'лекарства', 'таблетки', 'витамины', 'pharmacy', 'pharmacies', 'medicine'],
+    'медицина': ['медицина', 'врач', 'доктор', 'больница', 'клиника', 'medicine', 'doctor', 'hospital', 'clinic'],
+    'красота': ['красота', 'салон', 'парикмахерская', 'косметика', 'маникюр', 'beauty', 'salon', 'cosmetics'],
+    'спорт и фитнес': ['спорт', 'фитнес', 'тренажерный зал', 'йога', 'бассейн', 'sports', 'fitness', 'gym', 'yoga'],
+    'одежда и обувь': ['одежда', 'обувь', 'вещи', 'одежда', 'clothes', 'clothing', 'shoes', 'apparel'],
+    'развлечения': ['развлечения', 'кино', 'театр', 'концерт', 'отдых', 'entertainment'],
+    'образование': ['образование', 'курсы', 'учеба', 'обучение', 'education'],
+    'подарки': ['подарки', 'подарок', 'цветы', 'букет', 'gifts'],
+    'путешествия': ['путешествия', 'отпуск', 'поездка', 'тур', 'travel'],
+    'коммуналка и подписки': [
+        'коммуналка', 'жкх', 'квартплата', 'свет', 'вода', 'газ',
+        'интернет', 'связь', 'телефон', 'подписка',
+        'коммунальные услуги и подписки',
+        'utilities', 'utilities and subscriptions'
+    ],
+    'прочие расходы': ['другое', 'прочее', 'разное', 'other'],
+}
 
-    # Словарь для сопоставления категорий из парсера с реальными категориями
-    # Поддерживает и русские, и английские названия для мультиязычности
-    category_mapping = {
-        'продукты': ['продукты', 'еда', 'супермаркет', 'магазин', 'groceries', 'food', 'supermarket'],
-        'кафе и рестораны': ['кафе', 'ресторан', 'рестораны', 'обед', 'кофе', 'cafe', 'cafes', 'restaurant', 'restaurants'],
-        'транспорт': ['транспорт', 'такси', 'метро', 'автобус', 'транспорт', 'transport', 'taxi', 'bus', 'metro'],
-        'автомобиль': ['автомобиль', 'машина', 'авто', 'бензин', 'дизель', 'заправка', 'азс', 'топливо', 'car', 'gas station', 'fuel', 'petrol'],
-        'жилье': ['жилье', 'квартира', 'дом', 'аренда', 'housing', 'rent', 'apartment'],
-        'аптеки': ['аптека', 'аптеки', 'лекарства', 'таблетки', 'витамины', 'pharmacy', 'pharmacies', 'medicine'],
-        'медицина': ['медицина', 'врач', 'доктор', 'больница', 'клиника', 'medicine', 'doctor', 'hospital', 'clinic'],
-        'красота': ['красота', 'салон', 'парикмахерская', 'косметика', 'маникюр', 'beauty', 'salon', 'cosmetics'],
-        'спорт и фитнес': ['спорт', 'фитнес', 'тренажерный зал', 'йога', 'бассейн', 'sports', 'fitness', 'gym', 'yoga'],
-        'одежда и обувь': ['одежда', 'обувь', 'вещи', 'одежда', 'clothes', 'clothing', 'shoes', 'apparel'],
-        'развлечения': ['развлечения', 'кино', 'театр', 'концерт', 'отдых', 'entertainment'],
-        'образование': ['образование', 'курсы', 'учеба', 'обучение', 'education'],
-        'подарки': ['подарки', 'подарок', 'цветы', 'букет', 'gifts'],
-        'путешествия': ['путешествия', 'отпуск', 'поездка', 'тур', 'travel'],
-        'коммуналка и подписки': [
-            'коммуналка', 'жкх', 'квартплата', 'свет', 'вода', 'газ',
-            'интернет', 'связь', 'телефон', 'подписка',
-            'коммунальные услуги и подписки',  # старое название для обратной совместимости
-            'utilities', 'utilities and subscriptions'
-        ],
-        'прочие расходы': ['другое', 'прочее', 'разное', 'other'],
-    }
-    
-    # Ищем среди категорий пользователя
-    # Сначала точное совпадение (игнорируя эмодзи в начале)
-    all_categories = ExpenseCategory.objects.filter(profile=profile)
-    
-    # Проверяем точное совпадение без учета эмодзи
-    for cat in all_categories:
-        # Проверяем оба языковых поля
-        for field_name in ['name_ru', 'name_en']:
-            field_value = getattr(cat, field_name, None)
-            if not field_value:
-                continue
 
-            # Убираем эмодзи из начала названия для сравнения (включая композитные с ZWJ)
-            name_without_emoji = strip_leading_emoji(field_value)
-            if name_without_emoji.lower() == category_name.lower():
-                # Безопасное логирование для Windows
-                safe_name = field_value.encode('ascii', 'ignore').decode('ascii').strip()
-                if not safe_name:
-                    safe_name = f"category with emoji (id={cat.id})"
-                logger.info(f"Found exact match in {field_name}: {safe_name}")
-                return cat
-    
-    # Если не нашли точное, ищем частичное совпадение
-    # Например, "кафе" найдет "Кафе и рестораны"
+# =============================================================================
+# Helper functions for get_or_create_category_sync
+# =============================================================================
+
+def _safe_category_name(cat, lang_code: str = 'ru') -> str:
+    """Get safe ASCII-friendly category name for logging."""
+    display_name = get_category_display_name(cat, lang_code)
+    safe_name = display_name.encode('ascii', 'ignore').decode('ascii').strip()
+    return safe_name if safe_name else f"category id={cat.id}"
+
+
+def _find_exact_match(categories, category_name: str, lang_code: str):
+    """Find category by exact name match (ignoring emoji prefix)."""
     category_name_lower = category_name.lower()
-    for cat in all_categories:
-        # Проверяем оба языковых поля
+
+    for cat in categories:
         for field_name in ['name_ru', 'name_en']:
             field_value = getattr(cat, field_name, None)
             if not field_value:
                 continue
-                
-            name_lower = field_value.lower()
-            
-            # Проверяем, содержит ли категория искомое название
-            if category_name_lower in name_lower:
-                safe_name = field_value.encode('ascii', 'ignore').decode('ascii').strip()
-                if not safe_name:
-                    safe_name = f"category with emoji (id={cat.id})"
-                logger.info(f"Found partial match in {field_name}: {safe_name}")
+
+            name_without_emoji = strip_leading_emoji(field_value)
+            if name_without_emoji.lower() == category_name_lower:
+                logger.info(f"Found exact match in {field_name}: {_safe_category_name(cat, lang_code)}")
                 return cat
-            
-            # Проверяем каждое слово из искомой категории
+    return None
+
+
+def _find_partial_match(categories, category_name: str, lang_code: str):
+    """Find category by partial name match."""
+    category_name_lower = category_name.lower()
+
+    for cat in categories:
+        for field_name in ['name_ru', 'name_en']:
+            field_value = getattr(cat, field_name, None)
+            if not field_value:
+                continue
+
+            name_lower = field_value.lower()
+
+            # Check if category contains the searched name
+            if category_name_lower in name_lower:
+                logger.info(f"Found partial match in {field_name}: {_safe_category_name(cat, lang_code)}")
+                return cat
+
+            # Check each word from searched category
             words = category_name_lower.split()
             if any(word in name_lower for word in words if len(word) > 3):
-                safe_name = field_value.encode('ascii', 'ignore').decode('ascii').strip()
-                if not safe_name:
-                    safe_name = f"category with emoji (id={cat.id})"
-                logger.info(f"Found word match in {field_name}: {safe_name}")
+                logger.info(f"Found word match in {field_name}: {_safe_category_name(cat, lang_code)}")
                 return cat
-    
-    # Пробуем найти через словарь сопоставления
+    return None
+
+
+def _find_by_mapping(profile, category_name: str, lang_code: str):
+    """Find category through category mapping keywords."""
     category_name_lower = category_name.lower()
-    for cat_group, keywords in category_mapping.items():
+
+    for cat_group, keywords in CATEGORY_MAPPING.items():
         if category_name_lower in keywords:
-            # Ищем категорию пользователя, содержащую ключевое слово группы
             for keyword in [cat_group] + keywords:
-                # Пробуем разные варианты поиска для лучшей совместимости с кириллицей
-                # Ищем в обоих языковых полях
                 category = ExpenseCategory.objects.filter(
                     profile=profile
                 ).filter(
-                    Q(name_ru__icontains=keyword) | 
+                    Q(name_ru__icontains=keyword) |
                     Q(name_en__icontains=keyword) |
-                    Q(name__icontains=keyword)  # Fallback на старое поле
+                    Q(name__icontains=keyword)
                 ).first()
-                
+
                 if category:
-                    display_name = get_category_display_name(category, lang_code)
-                    safe_name = display_name.encode('ascii', 'ignore').decode('ascii').strip()
-                    if not safe_name:
-                        safe_name = f"category with emoji (id={category.id})"
-                    logger.info(f"Found category '{safe_name}' through mapping keyword '{keyword}'")
+                    logger.info(f"Found category '{_safe_category_name(category, lang_code)}' through mapping keyword '{keyword}'")
                     return category
-    
-    # Дополнительная проверка: если category_name это "кафе", ищем любую категорию со словом "кафе"
-    if 'кафе' in category_name.lower() or 'cafe' in category_name.lower():
-        for cat in all_categories:
-            # Проверяем оба языковых поля
-            name_ru = cat.name_ru or ''
-            name_en = cat.name_en or ''
-            if ('кафе' in name_ru.lower() or 'ресторан' in name_ru.lower() or
-                'cafe' in name_en.lower() or 'restaurant' in name_en.lower()):
-                display_name = get_category_display_name(cat, lang_code)
-                safe_name = display_name.encode('ascii', 'ignore').decode('ascii').strip()
-                if not safe_name:
-                    safe_name = f"category with emoji (id={cat.id})"
-                logger.info(f"Found category '{safe_name}' by cafe/restaurant keyword")
-                return cat
-    
-    # Дополнительная попытка: ищем ближайшее совпадение по названию
-    if normalized_category_name:
-        candidate_map = {}
-        for cat in all_categories:
-            for field_name in ('name_ru', 'name_en', 'name'):
-                field_value = getattr(cat, field_name, None)
-                if not field_value:
-                    continue
-                sanitized_value = EMOJI_PREFIX_RE.sub('', field_value).strip().lower()
-                if sanitized_value:
-                    candidate_map[sanitized_value] = cat
-        if candidate_map:
-            close_matches = get_close_matches(normalized_category_name, list(candidate_map.keys()), n=1, cutoff=0.72)
-            if close_matches:
-                matched_key = close_matches[0]
-                category = candidate_map[matched_key]
-                display_name = get_category_display_name(category, lang_code)
-                safe_name = display_name.encode('ascii', 'ignore').decode('ascii').strip() or f"category id={category.id}"
-                logger.info(f"Found category '{safe_name}' by fuzzy match (input='{original_category_name}', matched='{matched_key}')")
-                return category
+    return None
 
-    # Если категория не найдена, возвращаем "Прочие расходы" / "Other Expenses"
-    logger.warning(f"Category '{category_name}' not found for user {user_id}, using default")
 
-    # Сначала пытаемся найти существующую категорию "Прочие расходы" / "Other Expenses"
+def _find_cafe_restaurant(categories, category_name: str, lang_code: str):
+    """Special search for cafe/restaurant categories."""
+    name_lower = category_name.lower()
+    if 'кафе' not in name_lower and 'cafe' not in name_lower:
+        return None
+
+    for cat in categories:
+        name_ru = (cat.name_ru or '').lower()
+        name_en = (cat.name_en or '').lower()
+
+        if ('кафе' in name_ru or 'ресторан' in name_ru or
+            'cafe' in name_en or 'restaurant' in name_en):
+            logger.info(f"Found category '{_safe_category_name(cat, lang_code)}' by cafe/restaurant keyword")
+            return cat
+    return None
+
+
+def _find_fuzzy_match(categories, category_name: str, lang_code: str):
+    """Find category by fuzzy string matching."""
+    normalized = category_name.lower()
+    if not normalized:
+        return None
+
+    candidate_map = {}
+    for cat in categories:
+        for field_name in ('name_ru', 'name_en', 'name'):
+            field_value = getattr(cat, field_name, None)
+            if not field_value:
+                continue
+            sanitized_value = EMOJI_PREFIX_RE.sub('', field_value).strip().lower()
+            if sanitized_value:
+                candidate_map[sanitized_value] = cat
+
+    if not candidate_map:
+        return None
+
+    close_matches = get_close_matches(normalized, list(candidate_map.keys()), n=1, cutoff=0.72)
+    if close_matches:
+        matched_key = close_matches[0]
+        category = candidate_map[matched_key]
+        logger.info(f"Found category '{_safe_category_name(category, lang_code)}' by fuzzy match (matched='{matched_key}')")
+        return category
+    return None
+
+
+def _get_or_create_default_category(profile, user_id: int):
+    """Get or create the 'Other Expenses' default category."""
+    user_lang = profile.language_code or 'ru'
+
+    # Try to find existing "Other Expenses" category
     other_category = ExpenseCategory.objects.filter(
         profile=profile
     ).filter(
         Q(name_ru__icontains='прочие') |
         Q(name_en__icontains='other') |
-        Q(name__icontains='прочие') |  # Fallback на старое поле
-        Q(name__icontains='other')     # Fallback на старое поле для EN
+        Q(name__icontains='прочие') |
+        Q(name__icontains='other')
     ).first()
 
-    if not other_category:
-        # Если нет категории "Прочие расходы" / "Other Expenses", создаем её
-        # Определяем язык пользователя для правильного имени категории
-        user_lang = profile.language_code or 'ru'
+    if other_category:
+        return other_category
 
-        if user_lang == 'en':
-            category_name_display = '💰 Other Expenses'
-            original_lang = 'en'
-        else:
-            category_name_display = '💰 Прочие расходы'
-            original_lang = 'ru'
+    # Create new default category
+    if user_lang == 'en':
+        category_name_display = '💰 Other Expenses'
+        original_lang = 'en'
+    else:
+        category_name_display = '💰 Прочие расходы'
+        original_lang = 'ru'
 
-        other_category, created = ExpenseCategory.objects.get_or_create(
-            name=category_name_display,
-            profile=profile,
-            defaults={
-                'icon': '💰',
-                'name_ru': 'Прочие расходы',
-                'name_en': 'Other Expenses',
-                'original_language': original_lang,
-                'is_translatable': True
-            }
-        )
-        if created:
-            logger.info(f"Created default category '{category_name_display}' for user {user_id} (lang: {user_lang})")
+    other_category, created = ExpenseCategory.objects.get_or_create(
+        name=category_name_display,
+        profile=profile,
+        defaults={
+            'icon': '💰',
+            'name_ru': 'Прочие расходы',
+            'name_en': 'Other Expenses',
+            'original_language': original_lang,
+            'is_translatable': True
+        }
+    )
+
+    if created:
+        logger.info(f"Created default category '{category_name_display}' for user {user_id} (lang: {user_lang})")
 
     return other_category
+
+
+def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCategory:
+    """
+    Get category by name or return 'Other Expenses' default category.
+
+    Search order:
+    1. Exact match (ignoring emoji prefix)
+    2. Partial match (substring)
+    3. Category mapping keywords
+    4. Cafe/restaurant special search
+    5. Fuzzy string matching
+    6. Fallback to 'Other Expenses'
+    """
+    # Normalize category name
+    original_category_name = category_name or ''
+    category_name = EMOJI_PREFIX_RE.sub('', original_category_name).strip()
+
+    if original_category_name and original_category_name != category_name:
+        logger.debug(f"Normalized category name from '{original_category_name}' to '{category_name}'")
+
+    effective_name = category_name or original_category_name
+    logger.info(f"Looking for category '{effective_name}' for user {user_id}")
+
+    profile = get_or_create_user_profile_sync(user_id)
+    lang_code = profile.language_code if profile and profile.language_code else 'ru'
+
+    # Get all user categories once
+    all_categories = list(ExpenseCategory.objects.filter(profile=profile))
+
+    # Search strategies in order of priority
+    result = _find_exact_match(all_categories, category_name, lang_code)
+    if result:
+        return result
+
+    result = _find_partial_match(all_categories, category_name, lang_code)
+    if result:
+        return result
+
+    result = _find_by_mapping(profile, category_name, lang_code)
+    if result:
+        return result
+
+    result = _find_cafe_restaurant(all_categories, category_name, lang_code)
+    if result:
+        return result
+
+    result = _find_fuzzy_match(all_categories, category_name, lang_code)
+    if result:
+        return result
+
+    # Category not found - return default
+    logger.warning(f"Category '{category_name}' not found for user {user_id}, using default")
+    return _get_or_create_default_category(profile, user_id)
 
 
 get_or_create_category = sync_to_async(get_or_create_category_sync)
