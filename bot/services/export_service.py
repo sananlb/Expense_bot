@@ -972,9 +972,9 @@ class ExportService:
                 avg_cell = ws.cell(row=start_row, column=6, value=smart_number(item["avg"]) if item["avg"] else None)
                 infl_val = item["inflation"]
                 infl_cell = ws.cell(row=start_row, column=7, value=infl_val if infl_val is not None else None)
-                amt_cell.number_format = '#,##0.00'
+                amt_cell.number_format = 'General'
                 if avg_cell.value is not None:
-                    avg_cell.number_format = '#,##0.00'
+                    avg_cell.number_format = 'General'
                 if infl_val is not None:
                     infl_cell.number_format = '0.0%'
                 for col_idx in range(1, 8):
@@ -1011,9 +1011,9 @@ class ExportService:
                 avg_cell = ws.cell(row=start_row, column=start_col + 5, value=smart_number(item["avg"]) if item["avg"] else None)
                 infl_val = item["inflation"]
                 infl_cell = ws.cell(row=start_row, column=start_col + 6, value=infl_val if infl_val is not None else None)
-                amt_cell.number_format = '#,##0.00'
+                amt_cell.number_format = 'General'
                 if avg_cell.value is not None:
-                    avg_cell.number_format = '#,##0.00'
+                    avg_cell.number_format = 'General'
                 if infl_val is not None:
                     infl_cell.number_format = '0.0%'
                 for col_idx in range(start_col, start_col + 7):
