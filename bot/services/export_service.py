@@ -922,8 +922,11 @@ class ExportService:
             for op in ops.values():
                 total_amount = op['total']
                 total_count = op['count']
-                avg_ticket = total_amount / total_count if total_count else 0
+                avg_ticket = round(total_amount / total_count, 2) if total_count else 0
                 inflation_ratio = calc_trend_python(op['monthly_totals'])
+                # Округляем тренд до 4 знаков (это проценты: 0.1234 = 12.34%)
+                if inflation_ratio is not None:
+                    inflation_ratio = round(inflation_ratio, 4)
                 items.append({
                     "description": op['description'],
                     "category": op['category'],
