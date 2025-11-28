@@ -613,9 +613,9 @@ class ExportService:
             ws.cell(row=current_row, column=total_col, value=sum_formula)
 
             # Среднее = Итого / количество месяцев где ИТОГО РАСХОДЫ > 0
-            # Формула: O3 / COUNTIF(C20:N20, "<>0") - где 20 = строка ИТОГО РАСХОДЫ
+            # Формула: ROUND(O3 / COUNTIF(C20:N20, "<>0"), 2) - где 20 = строка ИТОГО РАСХОДЫ
             total_col_letter = get_column_letter(total_col)
-            avg_formula = f"=IFERROR({total_col_letter}{current_row}/COUNTIF({first_col_letter}{expenses_totals_row_num}:{last_col_letter}{expenses_totals_row_num},\"<>0\"),\"\")"
+            avg_formula = f"=IFERROR(ROUND({total_col_letter}{current_row}/COUNTIF({first_col_letter}{expenses_totals_row_num}:{last_col_letter}{expenses_totals_row_num},\"<>0\"),2),\"\")"
             ws.cell(row=current_row, column=avg_col, value=avg_formula)
 
             # Изменение = Excel формула тренда (SLOPE)
@@ -667,9 +667,9 @@ class ExportService:
         ws.cell(row=current_row, column=total_col, value=sum_formula)
         ws.cell(row=current_row, column=total_col).font = Font(bold=True)
 
-        # Среднее для ИТОГО = Итого / COUNTIF по своей строке (считаем непустые месяцы)
+        # Среднее для ИТОГО = ROUND(Итого / COUNTIF по своей строке, 2)
         total_col_letter = get_column_letter(total_col)
-        avg_formula = f"=IFERROR({total_col_letter}{current_row}/COUNTIF({first_col_letter}{current_row}:{last_col_letter}{current_row},\"<>0\"),\"\")"
+        avg_formula = f"=IFERROR(ROUND({total_col_letter}{current_row}/COUNTIF({first_col_letter}{current_row}:{last_col_letter}{current_row},\"<>0\"),2),\"\")"
         ws.cell(row=current_row, column=avg_col, value=avg_formula)
         ws.cell(row=current_row, column=avg_col).font = Font(bold=True)
 
@@ -750,9 +750,9 @@ class ExportService:
             sum_formula = f"=SUM({first_col_letter}{current_row}:{last_col_letter}{current_row})"
             ws.cell(row=current_row, column=total_col, value=sum_formula)
 
-            # Среднее = Итого / количество месяцев где ИТОГО ДОХОДЫ > 0
+            # Среднее = ROUND(Итого / количество месяцев где ИТОГО ДОХОДЫ > 0, 2)
             total_col_letter = get_column_letter(total_col)
-            avg_formula = f"=IFERROR({total_col_letter}{current_row}/COUNTIF({first_col_letter}{income_totals_row_num}:{last_col_letter}{income_totals_row_num},\"<>0\"),\"\")"
+            avg_formula = f"=IFERROR(ROUND({total_col_letter}{current_row}/COUNTIF({first_col_letter}{income_totals_row_num}:{last_col_letter}{income_totals_row_num},\"<>0\"),2),\"\")"
             ws.cell(row=current_row, column=avg_col, value=avg_formula)
 
             # Изменение = Excel формула тренда (SLOPE)
@@ -803,9 +803,9 @@ class ExportService:
         ws.cell(row=current_row, column=total_col, value=sum_formula)
         ws.cell(row=current_row, column=total_col).font = Font(bold=True, color="008000")
 
-        # Среднее для ИТОГО ДОХОДЫ = Итого / COUNTIF по своей строке (считаем непустые месяцы)
+        # Среднее для ИТОГО ДОХОДЫ = ROUND(Итого / COUNTIF по своей строке, 2)
         total_col_letter = get_column_letter(total_col)
-        avg_formula = f"=IFERROR({total_col_letter}{current_row}/COUNTIF({first_col_letter}{current_row}:{last_col_letter}{current_row},\"<>0\"),\"\")"
+        avg_formula = f"=IFERROR(ROUND({total_col_letter}{current_row}/COUNTIF({first_col_letter}{current_row}:{last_col_letter}{current_row},\"<>0\"),2),\"\")"
         ws.cell(row=current_row, column=avg_col, value=avg_formula)
         ws.cell(row=current_row, column=avg_col).font = Font(bold=True, color="008000")
 
@@ -849,9 +849,9 @@ class ExportService:
         ws.cell(row=current_row, column=total_col, value=sum_formula)
         ws.cell(row=current_row, column=total_col).font = Font(bold=True)
 
-        # Среднее для БАЛАНСА = Итого / COUNTIF по строке ИТОГО РАСХОДЫ (месяцы с данными)
+        # Среднее для БАЛАНСА = ROUND(Итого / COUNTIF по строке ИТОГО РАСХОДЫ, 2)
         total_col_letter = get_column_letter(total_col)
-        avg_formula = f"=IFERROR({total_col_letter}{current_row}/COUNTIF({first_col_letter}{expenses_totals_row}:{last_col_letter}{expenses_totals_row},\"<>0\"),\"\")"
+        avg_formula = f"=IFERROR(ROUND({total_col_letter}{current_row}/COUNTIF({first_col_letter}{expenses_totals_row}:{last_col_letter}{expenses_totals_row},\"<>0\"),2),\"\")"
         ws.cell(row=current_row, column=avg_col, value=avg_formula)
         ws.cell(row=current_row, column=avg_col).font = Font(bold=True)
 
