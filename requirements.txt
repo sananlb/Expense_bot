@@ -5,7 +5,7 @@ psycopg2-binary==2.9.10
 
 # Telegram Bot (aiogram вместо python-telegram-bot)
 aiogram==3.13.1
-aiohttp==3.11.11
+aiohttp==3.10.11
 magic-filter==1.0.12
 
 # Redis & Celery
