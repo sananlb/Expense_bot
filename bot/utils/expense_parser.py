@@ -671,6 +671,34 @@ def detect_income_intent(text: str) -> bool:
     return False
 
 
+def is_number_only(text: str) -> bool:
+    """
+    Проверяет, содержит ли текст только число (с опциональным знаком +/- и валютой).
+
+    Примеры:
+    - "10000" -> True
+    - "+10000" -> True
+    - "-400" -> True
+    - "2500" -> True
+    - "+10000 рублей" -> True (число + валюта)
+    - "10к" -> True (сокращения)
+    - "+5 тыс" -> True
+    - "кофе 200" -> False (есть описание)
+    - "+5000 зарплата" -> False (есть описание)
+    - "200 продукты" -> False (есть описание)
+    """
+    if not text:
+        return False
+
+    text_clean = text.strip()
+
+    # Паттерн для числа с опциональным знаком и валютой/сокращениями
+    # Поддерживаем: +10000, -400, 2500, 10к, 5 тыс, 10000 рублей, $100, 100$
+    number_only_pattern = r'^[+\-]?\s*(?:\$|€|£)?\s*\d+(?:[.,]\d+)?\s*(?:к|k|т|тыс|тысяч|руб|рублей|р|₽|\$|€|£|usd|eur|rub|kzt|тенге|тг)?\.?\s*$'
+
+    return bool(re.match(number_only_pattern, text_clean, re.IGNORECASE))
+
+
 # Ключевые слова для определения намерения задать бюджет/лимит
 BUDGET_KEYWORDS = {
     'ru': ['бюджет', 'лимит', 'баланс', 'осталось', 'всего', 'на месяц'],
@@ -996,12 +1024,27 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         'expense_date': expense_date  # Добавляем дату, если она была указана
     }
 
+    # Если текст содержит только число (без описания), пропускаем AI
+    # и сразу назначаем "Прочие расходы"
+    if not category and is_number_only(original_text):
+        logger.info(f"Number-only expense detected: '{original_text}', skipping AI")
+        # Назначаем "Прочие расходы" / "Other expenses"
+        result['category_key'] = DEFAULT_EXPENSE_CATEGORY_KEY
+        # Используем язык пользователя для отображения категории
+        if profile and hasattr(profile, 'language_code'):
+            lang_code = profile.language_code if profile.language_code in ('ru', 'en') else 'ru'
+        else:
+            lang_code = 'ru'
+        result['category'] = get_expense_category_display_for_key(DEFAULT_EXPENSE_CATEGORY_KEY, lang_code)
+        result['confidence'] = 0.5
+        return result
+
     # Попробуем улучшить с помощью AI, если:
     # 1. Не нашли категорию по ключевым словам
     # 2. Или нашли, но её нет у пользователя
     if use_ai and user_id and profile:
         should_use_ai = False
-        
+
         # Проверяем, нужно ли использовать AI
         if not category:
             should_use_ai = True
@@ -1290,6 +1333,14 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     detected_key = detect_income_category_key(text_lower)
     if detected_key:
         category_key = detected_key
+        category = get_income_category_display_for_key(category_key, lang_code)
+        income_type = get_income_type(category_key)
+
+    # Если текст содержит только число (без описания), пропускаем AI
+    # и сразу назначаем "Прочие доходы"
+    if not category and is_number_only(original_text):
+        logger.info(f"Number-only income detected: '{original_text}', skipping AI")
+        category_key = DEFAULT_INCOME_CATEGORY_KEY
         category = get_income_category_display_for_key(category_key, lang_code)
         income_type = get_income_type(category_key)
 
