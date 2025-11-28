@@ -8,7 +8,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramNotFound, TelegramForbiddenError
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Optional
 import asyncio
 import logging
@@ -1216,73 +1216,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             # После ответа корректно останавливаем индикатор
             await cancel_typing()
             return
-    
-    # НОВОЕ: Проверка на бюджет перед проверкой дохода
-    from ..utils.expense_parser import detect_budget_intent, detect_income_intent, parse_income_message
-    data = await state.get_data()
-    skip_budget_intent = data.get('skip_budget_intent', False)
-    if skip_budget_intent:
-        await state.update_data(skip_budget_intent=False)
 
-    if not skip_budget_intent and detect_budget_intent(text) and not detect_income_intent(text):
-        logger.info(f"Detected budget intent: '{text}'")
-
-        # Извлекаем сумму из текста
-        from ..utils.expense_parser import extract_amount_from_patterns
-        amount, text_without_amount = extract_amount_from_patterns(text)
-
-        if amount and amount > 0:
-            # Отменяем индикатор печатания
-            await cancel_typing()
-
-            display_amount = format_decimal_amount(amount)
-            # Конвертируем в строку без лишних нулей после точки
-            amount_plain = str(amount)
-            if '.' in amount_plain:
-                amount_plain = amount_plain.rstrip('0').rstrip('.')
-
-            # Формируем сообщение с предложением записать как доход
-            if lang == 'en':
-                budget_text = f"""💰 <b>Set budget or balance?</b>
-
-It looks like you want to add <b>{display_amount}</b> to your balance.
-
-Budget or balance is recorded as income with a "+" sign. Expenses will be deducted from income, and you will see the final balance in reports.
-
-Record <b>+{display_amount}</b> as income?"""
-                btn_yes = "✅ Yes, record as income"
-                btn_no = "❌ No, it's an expense"
-            else:
-                budget_text = f"""💰 <b>Задать бюджет или баланс?</b>
-
-Похоже, вы хотите добавить на баланс <b>{display_amount}</b>.
-
-Бюджет или баланс записывается как доход со знаком "+". Расходы будут вычитаться из доходов, и вы увидите итоговый баланс в отчётах.
-
-Записать <b>+{display_amount}</b> как доход?"""
-                btn_yes = "✅ Да, записать как доход"
-                btn_no = "❌ Нет, это трата"
-
-            # Создаем кнопки подтверждения
-            from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [
-                    InlineKeyboardButton(text=btn_no, callback_data=f"budget_decline:{amount_plain}"),
-                    InlineKeyboardButton(text=btn_yes, callback_data=f"budget_confirm:{amount_plain}")
-                ]
-            ])
-
-            # Сохраняем оригинальный текст в состояние для обработки в callback
-            # Конвертируем Decimal в str для JSON-сериализации в Redis
-            await state.update_data(budget_original_text=text, budget_amount=str(amount))
-
-            await message.answer(budget_text, reply_markup=keyboard, parse_mode="HTML")
-            return
-        else:
-            # Если не удалось извлечь сумму, продолжаем обычную обработку
-            logger.warning(f"Budget intent detected but no amount found: '{text}'")
-
-    # НОВОЕ: Проверка на доход перед парсингом как расход
+    # Проверка на доход перед парсингом как расход
+    from ..utils.expense_parser import detect_income_intent, parse_income_message
     if detect_income_intent(text):
         logger.info(f"Detected income intent: '{text}'")
 
@@ -2826,90 +2762,3 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
         await callback.answer(error_msg, show_alert=True)
         from bot.utils.state_utils import clear_state_keep_cashback
         await clear_state_keep_cashback(state)
-
-
-# Обработчик подтверждения записи бюджета как дохода
-@router.callback_query(lambda c: c.data.startswith("budget_confirm:"))
-async def budget_confirm_callback(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Подтверждение записи бюджета как дохода"""
-    user_id = callback.from_user.id
-    lang = await get_user_language(user_id)
-
-    # Извлекаем сумму из callback data
-    amount_str = callback.data.split(":")[1]
-    try:
-        amount = Decimal(amount_str)
-    except (InvalidOperation, ValueError):
-        error_msg = "⚠️ Некорректная сумма" if lang == 'ru' else "⚠️ Invalid amount"
-        await callback.answer(error_msg, show_alert=True)
-        return
-
-    # Получаем оригинальный текст из состояния
-    data = await state.get_data()
-    original_text = data.get('budget_original_text', '') or (callback.message.text or '')
-
-    # Формируем текст для записи как доход: добавляем знак +
-    # Используем amount_str без разделителей тысяч для парсера
-    income_text = f"+{amount_str}"
-
-    # Добавляем описание если было в оригинальном тексте
-    # (убираем ключевые слова бюджета)
-    from ..utils.expense_parser import BUDGET_KEYWORDS
-    description_words = []
-    for word in original_text.split():
-        word_lower = word.lower()
-        is_budget_keyword = False
-        for lang_keywords in BUDGET_KEYWORDS.values():
-            if word_lower in lang_keywords:
-                is_budget_keyword = True
-                break
-        # Также пропускаем числа
-        if not is_budget_keyword and not word.replace('.', '').replace(',', '').isdigit():
-            description_words.append(word)
-
-    if description_words:
-        income_text += " " + " ".join(description_words)
-    else:
-        # Если описания нет, добавляем "Бюджет" или "Budget"
-        income_text += " " + ("Бюджет" if lang == 'ru' else "Budget")
-
-    # Удаляем сообщение с подтверждением
-    try:
-        await callback.message.delete()
-    except:
-        pass
-
-    # Сбрасываем флаг намерения бюджета, чтобы не попасть снова в воронку
-    await state.update_data(skip_budget_intent=True, budget_original_text=None, budget_amount=None)
-
-    # Обрабатываем как доход через существующую логику
-    # Используем callback.message который имеет связь с bot, но передаём правильный user_id
-    await handle_text_expense(callback.message, state, text=income_text, lang=lang, user_id=user_id)
-
-    await callback.answer()
-
-
-# Обработчик отклонения записи бюджета (записать как трату)
-@router.callback_query(lambda c: c.data.startswith("budget_decline:"))
-async def budget_decline_callback(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Отклонение записи бюджета - обрабатываем как обычную трату"""
-    user_id = callback.from_user.id
-    lang = await get_user_language(user_id)
-
-    # Получаем оригинальный текст из состояния
-    data = await state.get_data()
-    original_text = data.get('budget_original_text', '') or (callback.message.text or '')
-
-    # Удаляем сообщение с подтверждением
-    try:
-        await callback.message.delete()
-    except:
-        pass
-
-    # Ставим флаг пропуска бюджетной воронки и очищаем сохранённые данные
-    await state.update_data(skip_budget_intent=True, budget_original_text=None, budget_amount=None)
-
-    # Обрабатываем как обычную трату через основной пайплайн
-    # Используем callback.message который имеет связь с bot, но передаём правильный user_id
-    await handle_text_expense(callback.message, state, text=original_text, lang=lang, user_id=user_id)
-    await callback.answer()

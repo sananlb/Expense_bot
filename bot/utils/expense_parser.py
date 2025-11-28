@@ -718,54 +718,6 @@ def is_number_only(text: str) -> bool:
     return bool(re.match(number_only_pattern, text_clean, re.IGNORECASE))
 
 
-# Ключевые слова для определения намерения задать бюджет/лимит
-BUDGET_KEYWORDS = {
-    'ru': ['бюджет', 'лимит', 'баланс', 'осталось', 'всего', 'на месяц'],
-    'en': ['budget', 'limit', 'balance', 'monthly', 'for month', 'total']
-}
-
-
-def detect_budget_intent(text: str) -> bool:
-    """
-    Определяет, хочет ли пользователь задать бюджет/лимит на месяц
-
-    Примеры:
-    - "50000 бюджет" -> True
-    - "лимит 100000" -> True
-    - "бюджет на месяц 50000" -> True
-    - "баланс 80000" -> True
-    - "всего 120000" -> True
-    - "осталось 50000" -> True
-    - "budget 50000" -> True
-    - "limit 100000" -> True
-    - "monthly budget 50000" -> True
-    - "кофе 200" -> False
-    - "зарплата 50000" -> False (это доход, не бюджет)
-    - "потратил всего 5000" -> False (это трата, не бюджет)
-    """
-    if not text:
-        return False
-
-    text_lower = text.lower().strip()
-
-    # Исключающие слова - если они есть, то это не бюджет
-    excluding_words = ['потратил', 'купил', 'заплатил', 'spent', 'paid', 'bought', 'трата', 'расход']
-    for word in excluding_words:
-        if word in text_lower:
-            return False
-
-    # Проверяем наличие ключевых слов бюджета
-    for lang_keywords in BUDGET_KEYWORDS.values():
-        for keyword in lang_keywords:
-            if keyword in text_lower:
-                # Дополнительно проверяем что в тексте есть число
-                # (чтобы "расскажи про бюджет" не определялось как бюджет)
-                if re.search(r'\d', text_lower):
-                    return True
-
-    return False
-
-
 def detect_currency(text: str, user_currency: str = 'RUB') -> str:
     """
     Detect currency from text.
