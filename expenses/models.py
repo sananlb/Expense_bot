@@ -1320,14 +1320,6 @@ DEFAULT_INCOME_CATEGORIES = [
     ('Прочие доходы', '💰')
 ]
 
-# Импортируем ключевые слова из отдельного модуля
-from .category_keywords import (
-    CATEGORY_KEYWORDS,
-    CATEGORY_KEYWORDS_RU,
-    CATEGORY_KEYWORDS_EN,
-    CATEGORY_NAME_MAPPING
-)
-
 
 # ============================================
 # МОДЕЛИ ДЛЯ РЕФЕРАЛЬНОЙ ПРОГРАММЫ TELEGRAM STARS
