@@ -966,10 +966,10 @@ def find_similar_expenses(
                 if expense.expense_date > unique_amounts[key]['last_date']:
                     unique_amounts[key]['last_date'] = expense.expense_date
         
-        # Сортируем по частоте использования и дате
+        # Сортируем по дате последнего использования (последняя трата первой)
         result = sorted(
             unique_amounts.values(),
-            key=lambda x: (x['count'], x['last_date']),
+            key=lambda x: x['last_date'],
             reverse=True
         )
         

@@ -1043,10 +1043,10 @@ def find_similar_incomes(
                     unique_amounts[amount_key]['last_date'] = income.income_date
                     unique_amounts[amount_key]['description'] = income.description
         
-        # Сортируем по частоте и возвращаем топ-5
+        # Сортируем по дате последнего использования (последний доход первым)
         sorted_amounts = sorted(
             unique_amounts.values(),
-            key=lambda x: (x['count'], x['last_date']),
+            key=lambda x: x['last_date'],
             reverse=True
         )[:5]
         
