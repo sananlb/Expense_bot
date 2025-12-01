@@ -1702,6 +1702,8 @@ class MonthlyInsight(models.Model):
             ('google', 'Google AI'),
             ('deepseek', 'DeepSeek'),
             ('qwen', 'Qwen'),
+            ('openrouter', 'OpenRouter'),  # Fallback provider
+            ('basic', 'Basic Summary'),  # Final fallback when all AI fails
         ],
         verbose_name='AI �஢�����'
     )

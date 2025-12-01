@@ -1133,7 +1133,8 @@ def process_recurring_payments():
     """Process recurring payments for today at 12:00"""
     try:
         from bot.services.recurring import process_recurring_payments_for_today
-        from bot.utils.expense_messages import format_expense_added_message
+        from bot.utils.expense_messages import format_expense_added_message, format_income_added_message
+        from bot.utils import get_text
         from aiogram import Bot
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
         # Use main bot token for user-facing notifications
@@ -1153,7 +1154,8 @@ def process_recurring_payments():
         for payment_info in processed_payments:
             try:
                 user_id = payment_info['user_id']
-                expense = payment_info['expense']
+                operation = payment_info['operation']
+                operation_type = payment_info.get('operation_type')
                 payment = payment_info['payment']
                 
                 # Получаем язык пользователя из профиля
@@ -1161,29 +1163,40 @@ def process_recurring_payments():
                 profile = Profile.objects.filter(telegram_id=user_id).first()
                 user_lang = profile.language_code if profile else 'ru'
                 
-                # Для ежемесячных платежей не считаем кешбэк
                 cashback_text = ""
                 
-                # Форматируем сообщение используя стандартную функцию
-                text = loop.run_until_complete(
-                    format_expense_added_message(
-                        expense=expense,
-                        category=expense.category,
-                        cashback_text=cashback_text,
-                        is_recurring=True,  # Флаг для ежемесячного платежа
-                        lang=user_lang
+                # Форматируем сообщение, как при ручном создании операции
+                if operation_type == 'income':
+                    text = loop.run_until_complete(
+                        format_income_added_message(
+                            income=operation,
+                            category=getattr(operation, 'category', None),
+                            is_recurring=True,
+                            lang=user_lang
+                        )
                     )
-                )
+                    edit_callback = f"edit_income_{operation.id}"
+                else:
+                    text = loop.run_until_complete(
+                        format_expense_added_message(
+                            expense=operation,
+                            category=operation.category,
+                            cashback_text=cashback_text,
+                            is_recurring=True,
+                            lang=user_lang
+                        )
+                    )
+                    edit_callback = f"edit_expense_{operation.id}"
                 
-                # Создаем клавиатуру с кнопками редактирования
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [
-                        InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"edit_expense_{expense.id}"),
-                        InlineKeyboardButton(text="🗑 Удалить", callback_data=f"delete_expense_{expense.id}")
+                        InlineKeyboardButton(
+                            text=get_text('edit_button', user_lang),
+                            callback_data=edit_callback
+                        )
                     ]
                 ])
                 
-                # Отправляем уведомление
                 loop.run_until_complete(
                     bot.send_message(
                         chat_id=user_id,
@@ -1196,7 +1209,7 @@ def process_recurring_payments():
                 logger.info(f"Sent notification to user {user_id} about recurring payment")
                 
             except Exception as e:
-                logger.error(f"Error sending notification to user {payment_info['user_id']}: {e}")
+                logger.error(f"Error sending notification to user {payment_info.get('user_id')}: {e}")
         
         loop.close()
         
