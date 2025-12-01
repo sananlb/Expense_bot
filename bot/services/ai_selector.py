@@ -9,14 +9,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Дефолтная модель OpenRouter (централизованно, меняется ТОЛЬКО здесь или в .env)
-OPENROUTER_DEFAULT_MODEL = os.getenv('OPENROUTER_MODEL_DEFAULT', 'google/gemini-2.5-flash')
+OPENROUTER_DEFAULT_MODEL = os.getenv('OPENROUTER_MODEL_DEFAULT', 'deepseek/deepseek-chat')
 
 # Конфигурация AI провайдеров
 AI_PROVIDERS = {
     'categorization': {
         'provider': os.getenv('AI_PROVIDER_CATEGORIZATION', 'deepseek'),  # DeepSeek по умолчанию
         'model': {
-            'google': os.getenv('GOOGLE_MODEL_CATEGORIZATION', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_CATEGORIZATION', 'gpt-4o-mini'),
             'deepseek': os.getenv('DEEPSEEK_MODEL_CATEGORIZATION', 'deepseek-chat'),
             'qwen': os.getenv('QWEN_MODEL_CATEGORIZATION', 'qwen-plus'),
@@ -26,7 +25,6 @@ AI_PROVIDERS = {
     'chat': {
         'provider': os.getenv('AI_PROVIDER_CHAT', 'deepseek'),  # DeepSeek по умолчанию
         'model': {
-            'google': os.getenv('GOOGLE_MODEL_CHAT', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_CHAT', 'gpt-4o-mini'),
             'deepseek': os.getenv('DEEPSEEK_MODEL_CHAT', 'deepseek-chat'),
             'qwen': os.getenv('QWEN_MODEL_CHAT', 'qwen-plus'),
@@ -36,9 +34,8 @@ AI_PROVIDERS = {
     'insights': {
         'provider': os.getenv('AI_PROVIDER_INSIGHTS', 'deepseek'),  # DeepSeek по умолчанию
         'model': {
-            'google': os.getenv('GOOGLE_MODEL_INSIGHTS', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_INSIGHTS', 'gpt-4o-mini'),
-            'deepseek': os.getenv('DEEPSEEK_MODEL_INSIGHTS', 'deepseek-chat'),
+            'deepseek': os.getenv('DEEPSEEK_MODEL_INSIGHTS', 'deepseek-reasoner'),  # Reasoner для лучшего анализа
             'qwen': os.getenv('QWEN_MODEL_INSIGHTS', 'qwen-plus'),
             'openrouter': os.getenv('OPENROUTER_MODEL_INSIGHTS', OPENROUTER_DEFAULT_MODEL)
         }
@@ -52,7 +49,6 @@ AI_PROVIDERS = {
     'default': {
         'provider': os.getenv('AI_PROVIDER_DEFAULT', 'deepseek'),  # DeepSeek по умолчанию
         'model': {
-            'google': os.getenv('GOOGLE_MODEL_DEFAULT', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_DEFAULT', 'gpt-4o-mini'),
             'deepseek': os.getenv('DEEPSEEK_MODEL_DEFAULT', 'deepseek-chat'),
             'qwen': os.getenv('QWEN_MODEL_DEFAULT', 'qwen-plus'),
@@ -74,12 +70,6 @@ class AISelector:
                 from .openai_service import OpenAIService
                 cls._instances[provider_type] = OpenAIService()
                 logger.info(f"OpenAIService instance created")
-            elif provider_type == 'google':
-                logger.info(f"[AISelector] Using adaptive GoogleAIService...")
-                from .google_ai_service_adaptive import GoogleAIService
-                logger.info(f"[AISelector] Creating GoogleAIService instance...")
-                cls._instances[provider_type] = GoogleAIService()
-                logger.info(f"[AISelector] GoogleAIService created successfully")
             elif provider_type in ('deepseek', 'qwen', 'openrouter'):
                 logger.info(f"[AISelector] Creating UnifiedAIService for {provider_type}...")
                 from .unified_ai_service import UnifiedAIService
@@ -109,8 +99,8 @@ def get_service(service_type: str = 'default'):
         Экземпляр AI сервиса
     """
     config = AI_PROVIDERS.get(service_type, AI_PROVIDERS['default'])
-    provider = config.get('provider', 'google')
-    
+    provider = config.get('provider', 'deepseek')
+
     logger.info(f"Using {provider} for {service_type}")
     return AISelector(provider)
 
@@ -127,16 +117,14 @@ def get_model(service_type: str = 'default', provider: Optional[str] = None) -> 
         Имя модели
     """
     config = AI_PROVIDERS.get(service_type, AI_PROVIDERS['default'])
-    
+
     if not provider:
-        provider = config.get('provider', 'google')
-    
+        provider = config.get('provider', 'deepseek')
+
     models = config.get('model', {})
     if isinstance(models, dict):
         # Возвращаем дефолтную модель в зависимости от провайдера, если не найдена в конфиге
-        if provider == 'google':
-            return models.get(provider, 'gemini-2.5-flash')
-        elif provider == 'openai':
+        if provider == 'openai':
             return models.get(provider, 'gpt-4o-mini')
         elif provider == 'deepseek':
             return models.get(provider, 'deepseek-chat')
@@ -144,7 +132,7 @@ def get_model(service_type: str = 'default', provider: Optional[str] = None) -> 
             return models.get(provider, 'qwen-plus')
         elif provider == 'openrouter':
             return models.get(provider, OPENROUTER_DEFAULT_MODEL)
-        return models.get(provider, 'gpt-4o-mini')
+        return models.get(provider, 'deepseek-chat')
     else:
         return models
 
@@ -160,26 +148,7 @@ def get_provider_settings(provider: str) -> Dict[str, Any]:
         Словарь с настройками
     """
     logger.info(f"get_provider_settings called for: {provider}")
-    if provider == 'google':
-        # Импортируем настройки чтобы получить ключи
-        logger.info("Importing Django settings...")
-        from expense_bot import settings
-        logger.info("Django settings imported")
-        
-        # ВАЖНО: НЕ используем конкретный ключ - сервисы сами управляют ротацией
-        api_keys_available = False
-        if hasattr(settings, 'GOOGLE_API_KEYS') and settings.GOOGLE_API_KEYS:
-            api_keys_available = True
-        elif hasattr(settings, 'GOOGLE_API_KEY') or os.getenv('GOOGLE_API_KEY'):
-            api_keys_available = True
-            
-        return {
-            'api_keys_available': api_keys_available,
-            'default_model': 'gemini-2.5-flash',
-            'max_tokens': 1500,
-            'temperature': 0.1
-        }
-    elif provider == 'openai':
+    if provider == 'openai':
         # Импортируем настройки чтобы получить ключи
         from expense_bot import settings
         
@@ -262,7 +231,7 @@ def get_fallback_chain(service_type: str = 'default', primary_provider: Optional
     # Получаем основного провайдера если не указан
     if not primary_provider:
         config = AI_PROVIDERS.get(service_type, AI_PROVIDERS['default'])
-        primary_provider = config.get('provider', 'google')
+        primary_provider = config.get('provider', 'deepseek')
 
     # Получаем список fallback провайдеров из настроек
     fallback_attr_name = f'AI_FALLBACK_{service_type.upper()}'

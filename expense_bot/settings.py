@@ -278,11 +278,9 @@ ADMIN_TELEGRAM_ID = os.getenv('ADMIN_TELEGRAM_ID')
 # AI Configuration
 # Единичные ключи для обратной совместимости
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 
 # Множественные API ключи для ротации
 OPENAI_API_KEYS = []
-GOOGLE_API_KEYS = []
 
 # Загружаем OpenAI ключи (OPENAI_API_KEY_1, OPENAI_API_KEY_2, ...)
 for i in range(1, 10):
@@ -293,16 +291,6 @@ for i in range(1, 10):
 # Если нет множественных ключей, используем единичный
 if not OPENAI_API_KEYS and OPENAI_API_KEY:
     OPENAI_API_KEYS = [OPENAI_API_KEY]
-
-# Загружаем Google ключи (GOOGLE_API_KEY_1, GOOGLE_API_KEY_2, ...)
-for i in range(1, 10):
-    key = os.getenv(f'GOOGLE_API_KEY_{i}')
-    if key:
-        GOOGLE_API_KEYS.append(key)
-
-# Если нет множественных ключей, используем единичный
-if not GOOGLE_API_KEYS and GOOGLE_API_KEY:
-    GOOGLE_API_KEYS = [GOOGLE_API_KEY]
 
 # DeepSeek API Keys
 DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
@@ -347,7 +335,6 @@ YANDEX_SPEECH_TOPIC = os.getenv('YANDEX_SPEECH_TOPIC', 'general:rc')
 _settings_logger = logging.getLogger(__name__)
 if DEBUG:
     _settings_logger.debug(f"Loaded OpenAI keys: {len(OPENAI_API_KEYS)}")
-    _settings_logger.debug(f"Loaded Google API keys: {len(GOOGLE_API_KEYS)}")
     _settings_logger.debug(f"Loaded DeepSeek API keys: {len(DEEPSEEK_API_KEYS)}")
     _settings_logger.debug(f"Loaded Qwen API keys: {len(DASHSCOPE_API_KEYS)}")
     _settings_logger.debug(f"Loaded OpenRouter API keys: {len(OPENROUTER_API_KEYS)}")

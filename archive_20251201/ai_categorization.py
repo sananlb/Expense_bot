@@ -1,0 +1,383 @@
+import os
+import json
+import logging
+import hashlib
+import threading
+from typing import Optional, Dict, Any, List
+from datetime import datetime, timedelta
+import asyncio
+from decimal import Decimal
+from django.conf import settings
+from asgiref.sync import sync_to_async
+
+import openai
+import google.generativeai as genai
+from aiogram.types import User
+
+from expenses.models import ExpenseCategory, Expense, IncomeCategory, Income, Profile
+from bot.utils.category_helpers import get_category_display_name
+from .key_rotation_mixin import GoogleKeyRotationMixin, OpenAIKeyRotationMixin
+
+logger = logging.getLogger(__name__)
+
+# Создаем пул ключей Google AI из настроек
+GOOGLE_API_KEYS = []
+if hasattr(settings, 'GOOGLE_API_KEYS') and settings.GOOGLE_API_KEYS:
+    GOOGLE_API_KEYS = settings.GOOGLE_API_KEYS
+    logger.info(f"[AICategorizationService] Initialized {len(GOOGLE_API_KEYS)} Google API keys for rotation")
+else:
+    logger.warning("[AICategorizationService] No GOOGLE_API_KEYS found in settings")
+
+# Создаем пул ключей OpenAI из настроек
+OPENAI_API_KEYS = []
+if hasattr(settings, 'OPENAI_API_KEYS') and settings.OPENAI_API_KEYS:
+    OPENAI_API_KEYS = settings.OPENAI_API_KEYS
+    logger.info(f"[AICategorizationService] Initialized {len(OPENAI_API_KEYS)} OpenAI API keys for rotation")
+else:
+    logger.warning("[AICategorizationService] No OPENAI_API_KEYS found in settings")
+
+
+class AIConfig:
+    # Не используем единичные ключи, только пулы ключей
+    
+    OPENAI_MODEL = os.getenv('OPENAI_MODEL', 'gpt-4o-mini')
+    GOOGLE_MODEL = os.getenv('GOOGLE_MODEL', 'gemini-2.5-flash')
+    
+    USE_OPENAI = bool(OPENAI_API_KEYS)  # Проверяем пул ключей OpenAI
+    USE_GOOGLE = bool(GOOGLE_API_KEYS)  # Проверяем пул ключей Google
+    
+    AI_CONFIDENCE_THRESHOLD = float(os.getenv('AI_CONFIDENCE_THRESHOLD', '0.7'))
+    MAX_AI_REQUESTS_PER_DAY = int(os.getenv('MAX_AI_REQUESTS_PER_DAY', '100'))
+    MAX_AI_REQUESTS_PER_HOUR = int(os.getenv('MAX_AI_REQUESTS_PER_HOUR', '20'))
+    
+    CACHE_TTL_HOURS = int(os.getenv('AI_CACHE_TTL_HOURS', '24'))
+
+
+class AIUsageLimiter:
+    def __init__(self):
+        self._usage = {}  # {user_id: [(timestamp, provider), ...]}
+    
+    def can_use(self, user_id: int) -> bool:
+        now = datetime.now()
+        if user_id not in self._usage:
+            self._usage[user_id] = []
+        
+        # Clean old entries
+        self._usage[user_id] = [
+            (ts, prov) for ts, prov in self._usage[user_id]
+            if now - ts < timedelta(days=1)
+        ]
+        
+        # Check daily limit
+        daily_count = len(self._usage[user_id])
+        if daily_count >= AIConfig.MAX_AI_REQUESTS_PER_DAY:
+            return False
+        
+        # Check hourly limit
+        hour_ago = now - timedelta(hours=1)
+        hourly_count = sum(1 for ts, _ in self._usage[user_id] if ts > hour_ago)
+        if hourly_count >= AIConfig.MAX_AI_REQUESTS_PER_HOUR:
+            return False
+        
+        return True
+    
+    def record_usage(self, user_id: int, provider: str):
+        if user_id not in self._usage:
+            self._usage[user_id] = []
+        self._usage[user_id].append((datetime.now(), provider))
+
+
+class AIResponseCache:
+    def __init__(self):
+        self._cache = {}  # {hash: (response, timestamp)}
+    
+    def _get_key(self, text: str, user_id: int) -> str:
+        content = f"{text}:{user_id}"
+        return hashlib.md5(content.encode()).hexdigest()
+    
+    def get(self, text: str, user_id: int) -> Optional[Dict[str, Any]]:
+        key = self._get_key(text, user_id)
+        if key in self._cache:
+            response, timestamp = self._cache[key]
+            if datetime.now() - timestamp < timedelta(hours=AIConfig.CACHE_TTL_HOURS):
+                return response
+            else:
+                del self._cache[key]
+        return None
+    
+    def set(self, text: str, user_id: int, response: Dict[str, Any]):
+        key = self._get_key(text, user_id)
+        self._cache[key] = (response, datetime.now())
+
+
+class ExpenseCategorizer(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
+    
+    def __init__(self):
+        self.usage_limiter = AIUsageLimiter()
+        self.cache = AIResponseCache()
+        self.operation_type = 'expense'
+        
+        # Не инициализируем ключи здесь, будем использовать ротацию при каждом вызове
+    
+    def get_system_prompt(self, operation_type: str = 'expense') -> str:
+        return "Extract amount, description and category from text. Return only valid JSON."
+
+    def get_categorization_prompt(self, text: str, categories: List[str],
+                                  user_context: Optional[Dict[str, Any]] = None,
+                                  operation_type: str = 'expense') -> str:
+        categories_list = ', '.join(categories)
+
+        if operation_type == 'income':
+            examples = '''"50000 salary" -> {"amount": 50000, "description": "Salary", "category": "Зарплата", "confidence": 0.95}
+"Премия 10к" -> {"amount": 10000, "description": "Премия", "category": "Премии и бонусы", "confidence": 0.9}'''
+        else:
+            examples = '''"Кофе 300" -> {"amount": 300, "description": "Кофе", "category": "Кафе и рестораны", "confidence": 0.9}
+"taxi 450" -> {"amount": 450, "description": "Taxi", "category": "Транспорт", "confidence": 0.95}
+"1500 стиральный порошок" -> {"amount": 1500, "description": "Стиральный порошок", "category": "Жилье", "confidence": 0.9}
+"жкх 3000" -> {"amount": 3000, "description": "ЖКХ", "category": "Коммуналка и подписки", "confidence": 0.95}'''
+
+        return f'''Text: "{text}"
+
+Categories: {categories_list}
+
+Return JSON: {{"amount": number, "description": "short description (1-3 words)", "category": "from list above", "confidence": 0.0-1.0, "currency": "RUB"}}
+
+Examples:
+{examples}'''
+    
+    async def categorize_with_openai(self, text: str, categories: List[str],
+                                    user_context: Optional[Dict[str, Any]] = None,
+                                    operation_type: str = 'expense') -> Optional[Dict[str, Any]]:
+        try:
+            from openai import OpenAI
+            
+            # Получаем следующий ключ для ротации
+            key_result = OpenAIKeyRotationMixin.get_next_key()
+            if not key_result:
+                logger.error("[AICategorizationService] No OpenAI API keys available")
+                return None
+            api_key, key_index = key_result
+            
+            # Создаем клиент OpenAI с ключом из ротации
+            client = OpenAI(api_key=api_key)
+            logger.debug(f"[ExpenseCategorizer] Using OpenAI key for categorization")
+            
+            prompt = self.get_categorization_prompt(text, categories, user_context)
+            
+            # Используем новый API
+            response = await asyncio.to_thread(
+                client.chat.completions.create,
+                model=AIConfig.OPENAI_MODEL,
+                messages=[
+                    {"role": "system", "content": self.get_system_prompt()},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=150,
+                temperature=0.1
+            )
+            
+            content = response.choices[0].message.content.strip()
+            return json.loads(content)
+            
+        except Exception as e:
+            logger.error(f"OpenAI categorization error: {e}")
+            return None
+    
+    async def categorize_with_google(self, text: str, categories: List[str],
+                                   user_context: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        try:
+            # Получаем следующий ключ для ротации из GoogleKeyRotationMixin
+            key_result = GoogleKeyRotationMixin.get_next_key()
+            if not key_result:
+                logger.error("[AICategorizationService] No Google API keys available")
+                return None
+            api_key, key_index = key_result
+            
+            # Конфигурируем с новым ключом
+            genai.configure(api_key=api_key)
+            google_model = genai.GenerativeModel(AIConfig.GOOGLE_MODEL)
+            
+            prompt = self.get_categorization_prompt(text, categories, user_context)
+            full_prompt = f"{self.get_system_prompt()}\n\n{prompt}"
+            
+            response = await asyncio.to_thread(
+                google_model.generate_content,
+                full_prompt
+            )
+            
+            content = response.text.strip()
+            # Remove markdown code blocks if present
+            if content.startswith('```json'):
+                content = content[7:]
+            if content.endswith('```'):
+                content = content[:-3]
+            
+            return json.loads(content.strip())
+            
+        except Exception as e:
+            logger.error(f"Google AI categorization error: {e}")
+            return None
+    
+    def validate_result(self, result: Dict[str, Any], categories: List[str]) -> bool:
+        """Validate AI response"""
+        required_fields = ['amount', 'description', 'category', 'confidence']
+        
+        # Check required fields
+        if not all(field in result for field in required_fields):
+            return False
+        
+        # Validate amount
+        try:
+            amount = float(result['amount'])
+            if amount <= 0 or amount > 10_000_000:
+                return False
+        except (ValueError, TypeError):
+            return False
+        
+        # Validate category
+        if result['category'] not in categories:
+            return False
+        
+        # Validate confidence
+        try:
+            confidence = float(result['confidence'])
+            if not 0 <= confidence <= 1:
+                return False
+        except (ValueError, TypeError):
+            return False
+        
+        # Validate description
+        if not isinstance(result['description'], str) or len(result['description']) > 100:
+            return False
+        
+        return True
+    
+    async def categorize(self, text: str, user_id: int, 
+                        profile: Optional[Profile] = None) -> Optional[Dict[str, Any]]:
+        """Main categorization method"""
+        
+        # Check cache
+        cached = self.cache.get(text, user_id)
+        if cached:
+            logger.info(f"Using cached result for user {user_id}")
+            return cached
+        
+        # Check usage limits
+        if not self.usage_limiter.can_use(user_id):
+            logger.warning(f"AI usage limit exceeded for user {user_id}")
+            return None
+        
+        # Get categories for user
+        @sync_to_async
+        def get_user_categories():
+            if profile:
+                lang_code = getattr(profile, 'language_code', None) or 'ru'
+                if self.operation_type == 'income':
+                    queryset = IncomeCategory.objects.filter(
+                        profile=profile,
+                        is_active=True
+                    )
+                else:
+                    queryset = ExpenseCategory.objects.filter(
+                        profile=profile,
+                        is_active=True
+                    )
+
+                return [
+                    get_category_display_name(category, lang_code)
+                    for category in queryset
+                ]
+            else:
+                # Если нет профиля, используем дефолтные категории на русском
+                if self.operation_type == 'income':
+                    from bot.utils.income_category_definitions import (
+                        INCOME_CATEGORY_DEFINITIONS,
+                        get_income_category_display_name
+                    )
+                    return [
+                        get_income_category_display_name(key, 'ru')
+                        for key in INCOME_CATEGORY_DEFINITIONS.keys()
+                    ]
+                else:
+                    from bot.utils.expense_category_definitions import (
+                        EXPENSE_CATEGORY_DEFINITIONS,
+                        get_expense_category_display_name
+                    )
+                    return [
+                        get_expense_category_display_name(key, 'ru')
+                        for key in EXPENSE_CATEGORY_DEFINITIONS.keys()
+                    ]
+        
+        categories = await get_user_categories()
+        
+        # Get user context
+        @sync_to_async
+        def get_user_context():
+            context = {}
+            if profile:
+                lang_code = getattr(profile, 'language_code', None) or 'ru'
+
+                # Get recent categories based on operation type
+                if self.operation_type == 'income':
+                    recent_items = Income.objects.filter(
+                        profile=profile
+                    ).order_by('-income_date', '-income_time')[:10]
+                else:
+                    recent_items = Expense.objects.filter(
+                        profile=profile
+                    ).order_by('-created_at')[:10]
+
+                recent_items = list(recent_items)
+                recent_categories = [
+                    get_category_display_name(item.category, lang_code)
+                    for item in recent_items
+                    if getattr(item, 'category', None)
+                ]
+                if recent_categories:
+                    # dict.fromkeys сохраняет порядок появления
+                    context['recent_categories'] = list(dict.fromkeys(recent_categories))[:5]
+            
+                # Get preferred currency
+                currencies = [
+                    getattr(item, 'currency', None)
+                    for item in recent_items
+                    if getattr(item, 'currency', None)
+                ]
+                if currencies:
+                    from collections import Counter
+                    currency_counts = Counter(currencies)
+                    context['preferred_currency'] = currency_counts.most_common(1)[0][0]
+            
+            return context
+        
+        user_context = await get_user_context()
+        
+        result = None
+        
+        # Try Google AI first (Gemini 2.0 Flash)
+        if AIConfig.USE_GOOGLE:
+            result = await self.categorize_with_google(text, categories, user_context)
+            if result and self.validate_result(result, categories):
+                self.usage_limiter.record_usage(user_id, 'google')
+                self.cache.set(text, user_id, result)
+                return result
+        
+        # Fallback to OpenAI (GPT-4o-mini)
+        if AIConfig.USE_OPENAI:
+            result = await self.categorize_with_openai(text, categories, user_context)
+            if result and self.validate_result(result, categories):
+                self.usage_limiter.record_usage(user_id, 'openai')
+                self.cache.set(text, user_id, result)
+                return result
+        
+        logger.warning(f"All AI providers failed for user {user_id}")
+        return None
+
+
+# Singleton instance
+categorizer = ExpenseCategorizer()
+
+
+async def categorize_expense(text: str, user: User, profile: Optional[Profile] = None) -> Optional[Dict[str, Any]]:
+    """Helper function for easy integration"""
+    return await categorizer.categorize(text, user.id, profile)

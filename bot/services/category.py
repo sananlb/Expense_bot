@@ -1109,101 +1109,19 @@ def auto_learn_keywords(user_id: int) -> dict:
 
 async def optimize_keywords_for_new_category(user_id: int, new_category_id: int):
     """
-    Оптимизирует ключевые слова для новой категории используя AI
-    Запускается асинхронно в фоне при создании категории
+    DEPRECATED: Эта функция не используется в production коде.
+
+    Оптимизирует ключевые слова для новой категории используя AI.
+    Требует переработки для использования ai_selector вместо устаревшего gemini_service.
+
+    TODO: Если понадобится эта функциональность, переписать с использованием:
+          - bot.services.ai_selector.get_service() вместо gemini_service
+          - Универсальный AI провайдер (DeepSeek/Qwen/OpenAI)
     """
-    try:
-        from bot.services.gemini_ai_service import gemini_service
-        
-        # Получаем все категории пользователя с их ключевыми словами
-        @sync_to_async
-        def get_categories_with_keywords():
-            profile = Profile.objects.get(telegram_id=user_id)
-            categories = []
-            
-            # Используем prefetch_related для загрузки всех keywords одним запросом
-            for cat in ExpenseCategory.objects.filter(profile=profile).prefetch_related('categorykeyword_set'):
-                keywords = list(cat.categorykeyword_set.values_list('keyword', flat=True))
-                
-                categories.append({
-                    'id': cat.id,
-                    'name': cat.name,
-                    'keywords': keywords
-                })
-            
-            return categories
-        
-        all_categories = await get_categories_with_keywords()
-        
-        # Находим новую категорию
-        new_category = None
-        for cat in all_categories:
-            if cat['id'] == new_category_id:
-                new_category = cat
-                break
-        
-        if not new_category:
-            logger.error(f"New category {new_category_id} not found")
-            return
-        
-        # Получаем рекомендации от AI
-        optimized = await gemini_service.optimize_category_keywords(
-            new_category['name'],
-            all_categories
-        )
-        
-        # Применяем изменения
-        @sync_to_async
-        def apply_keyword_changes():
-            from django.db import transaction
-            with transaction.atomic():
-                for cat_name, changes in optimized.items():
-                    # Находим категорию по имени
-                    category = None
-                    for cat in all_categories:
-                        if cat['name'] == cat_name:
-                            category_obj = ExpenseCategory.objects.get(id=cat['id'])
-                            break
-                    else:
-                        # Пробуем найти по частичному совпадению
-                        for cat in all_categories:
-                            if cat_name.lower() in cat['name'].lower() or cat['name'].lower() in cat_name.lower():
-                                category_obj = ExpenseCategory.objects.get(id=cat['id'])
-                                break
-                        else:
-                            continue
-                    
-                    # Добавляем новые ключевые слова с гарантией уникальности
-                    for keyword in changes.get('add', []):
-                        keyword_lower = keyword.lower().strip()
-
-                        # ШАБЛОН УНИКАЛЬНОСТИ: Удаляем это слово из ВСЕХ категорий пользователя
-                        deleted = CategoryKeyword.objects.filter(
-                            category__profile=category_obj.profile,
-                            keyword=keyword_lower
-                        ).delete()
-
-                        if deleted[0] > 0:
-                            logger.debug(f"Removed keyword '{keyword}' from {deleted[0]} other categories during AI optimization")
-
-                        # Добавляем слово в целевую категорию
-                        CategoryKeyword.objects.get_or_create(
-                            category=category_obj,
-                            keyword=keyword_lower
-                        )
-
-                    # Удаляем ключевые слова
-                    for keyword in changes.get('remove', []):
-                        CategoryKeyword.objects.filter(
-                            category=category_obj,
-                            keyword__iexact=keyword.strip()
-                        ).delete()
-        
-        await apply_keyword_changes()
-        logger.info(f"Keywords optimized for new category {new_category['name']} (user {user_id})")
-        
-    except Exception as e:
-        logger.error(f"Error optimizing keywords for new category: {e}")
+    logger.warning(
+        f"optimize_keywords_for_new_category called for user {user_id}, category {new_category_id}. "
+        "This function is deprecated and does nothing. Use manual keyword management instead."
+    )
 
 
 async def learn_from_category_change(user_id: int, expense_id: int, new_category_id: int, description: str, old_category_id: int = None):

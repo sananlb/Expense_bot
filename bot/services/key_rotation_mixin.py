@@ -127,30 +127,6 @@ class KeyRotationMixin(ABC):
             logger.info(f"[{cls.__name__}] Key rotation index and status reset")
 
 
-class GoogleKeyRotationMixin(KeyRotationMixin):
-    """
-    Специализированный mixin для ротации Google API ключей.
-    Автоматически загружает ключи из настроек Django.
-    """
-    
-    @classmethod
-    def get_api_keys(cls) -> List[str]:
-        """
-        Возвращает список Google API ключей из настроек.
-        
-        Returns:
-            List[str]: Список Google API ключей
-        """
-        if hasattr(settings, 'GOOGLE_API_KEYS') and settings.GOOGLE_API_KEYS:
-            return settings.GOOGLE_API_KEYS
-        return []
-    
-    @classmethod
-    def get_key_name(cls, key_index: int) -> str:
-        """Возвращает имя Google API ключа."""
-        return f"GOOGLE_API_KEY_{key_index + 1}"
-
-
 class OpenAIKeyRotationMixin(KeyRotationMixin):
     """
     Специализированный mixin для ротации OpenAI API ключей.
@@ -179,6 +155,35 @@ class OpenAIKeyRotationMixin(KeyRotationMixin):
         if hasattr(settings, 'OPENAI_API_KEY') and not hasattr(settings, 'OPENAI_API_KEYS'):
             return "OPENAI_API_KEY"
         return f"OPENAI_API_KEY_{key_index + 1}"
+
+
+class GoogleKeyRotationMixin(KeyRotationMixin):
+    """
+    Mixin для ротации Google API ключей.
+    Нужен для обратной совместимости с voice_processing и Google STT fallback.
+    """
+    # Redeclare state to ensure independence
+    _key_index: ClassVar[int] = 0
+    _key_lock: ClassVar[threading.Lock] = threading.Lock()
+    _key_status: ClassVar[Dict[int, Tuple[bool, Optional[datetime]]]] = {}
+
+    @classmethod
+    def get_api_keys(cls) -> List[str]:
+        """
+        Возвращает список Google API ключей из настроек или env.
+        """
+        if hasattr(settings, 'GOOGLE_API_KEYS') and getattr(settings, 'GOOGLE_API_KEYS'):
+            return settings.GOOGLE_API_KEYS
+        if hasattr(settings, 'GOOGLE_API_KEY') and getattr(settings, 'GOOGLE_API_KEY'):
+            return [settings.GOOGLE_API_KEY]
+        # Fallback на env (legacy для STT)
+        import os
+        key = os.getenv('GOOGLE_API_KEY')
+        return [key] if key else []
+
+    @classmethod
+    def get_key_name(cls, key_index: int) -> str:
+        return f"GOOGLE_API_KEY_{key_index + 1}"
 
 
 class DeepSeekKeyRotationMixin(KeyRotationMixin):

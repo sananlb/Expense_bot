@@ -160,15 +160,27 @@ class UnifiedAIService(AIBaseService):
         self,
         message: str,
         context: List[Dict[str, str]],
-        user_context: Optional[Dict[str, Any]] = None
+        user_context: Optional[Dict[str, Any]] = None,
+        disable_functions: bool = False
     ) -> str:
         """
         Чат с поддержкой вызова функций (через эмуляцию FUNCTION_CALL)
+
+        Args:
+            message: User message
+            context: Conversation context
+            user_context: User metadata (user_id, language)
+            disable_functions: If True, skip function calling and use simple chat
         """
         user_id = user_context.get('user_id') if user_context else None
         user_language = user_context.get('language', 'ru') if user_context else 'ru'
 
         try:
+            # Skip function calling if disabled
+            if disable_functions:
+                # Direct chat without function calling
+                return await self._simple_chat(message, context, user_id)
+
             # 1. Попытка определить функцию (Intent Recognition)
             from bot.services.prompt_builder import build_function_call_prompt
             fc_prompt = build_function_call_prompt(message, context, user_language)
@@ -273,6 +285,70 @@ class UnifiedAIService(AIBaseService):
                 user_id=user_id
             )
             return "Извините, сервис временно недоступен."
+
+    async def _simple_chat(
+        self,
+        message: str,
+        context: List[Dict[str, str]],
+        user_id: Optional[int] = None
+    ) -> str:
+        """
+        Simple chat without function calling - just direct AI response
+
+        Args:
+            message: User message
+            context: Conversation context
+            user_id: Optional user ID for logging
+
+        Returns:
+            AI response text
+        """
+        model_name = get_model('chat', self.provider_name)
+        client, key_index = self._get_client()
+
+        start_time = time.time()
+
+        # Build messages without Intent Recognition
+        messages = [
+            {"role": "system", "content": "Ты - умный помощник в боте для учета личных расходов и доходов."}
+        ]
+        if context:
+            for msg in context[-10:]:
+                messages.append({"role": msg['role'], "content": msg['content']})
+        messages.append({"role": "user", "content": message})
+
+        try:
+            response = await asyncio.to_thread(
+                client.chat.completions.create,
+                model=model_name,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=2000
+            )
+            # Request успешен - ключ рабочий
+            if self.api_key_mixin:
+                self.api_key_mixin.mark_key_success(key_index)
+
+        except Exception as api_error:
+            # Если ошибка API, помечаем ключ как проблемный
+            if self.api_key_mixin:
+                self.api_key_mixin.mark_key_failure(key_index, api_error)
+            raise api_error
+
+        response_time = time.time() - start_time
+        response_text = response.choices[0].message.content.strip()
+
+        self._log_metrics(
+            operation='simple_chat',
+            response_time=response_time,
+            success=True,
+            model=model_name,
+            input_len=len(message),
+            tokens=response.usage.total_tokens if hasattr(response, 'usage') else None,
+            user_id=user_id
+        )
+
+        return response_text
 
     async def _execute_function_call(self, call_text: str, original_message: str, user_id: int) -> str:
         """Парсинг и выполнение функции из текстового ответа"""

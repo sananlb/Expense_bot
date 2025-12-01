@@ -307,21 +307,14 @@ class MonthlyInsightsService:
         logger.info(f"Generating insights for user {profile.telegram_id} for {month}/{year}")
 
         try:
-            # Call AI service
-            if provider == 'google':
-                # For Google, use the chat method with empty context
-                response = await self.ai_service.chat(
-                    message=prompt,
-                    context=[],
-                    user_context={'user_id': profile.telegram_id}
-                )
-            else:
-                # For OpenAI, use the chat method
-                response = await self.ai_service.chat(
-                    message=prompt,
-                    context=[],
-                    user_context={'user_id': profile.telegram_id}
-                )
+            # Call AI service with function calling disabled
+            # (insights generation requires JSON response, not function calls)
+            response = await self.ai_service.chat(
+                message=prompt,
+                context=[],
+                user_context={'user_id': profile.telegram_id},
+                disable_functions=True  # IMPORTANT: Skip function calling for JSON response
+            )
 
             # Parse JSON response
             try:

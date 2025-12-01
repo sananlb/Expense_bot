@@ -54,12 +54,13 @@ class NotificationService:
                         profile=profile,
                         year=report_year,
                         month=report_month,
-                        provider='google',
+                        provider='deepseek',  # Use DeepSeek instead of Google
                         force_regenerate=False
                     )
 
-                if insight:
+                if insight and insight.ai_summary and not insight.ai_summary.startswith("Извините"):
                     # Формируем текст инсайта и добавляем к caption
+                    # ВАЖНО: показываем инсайт только если он успешно сгенерирован (не содержит сообщений об ошибках)
                     user_lang = profile.language_code or 'ru'
                     insight_text = self._format_insight_text(insight, report_month, report_year, user_lang)
                     full_caption = f"{caption}\n\n{insight_text}\n\n💡 <i>Выберите формат отчета для скачивания:</i>"
@@ -78,19 +79,25 @@ class NotificationService:
 
                     logger.info(f"Monthly insights generated for user {user_id} for {report_year}-{report_month:02d}")
                 else:
+                    # Инсайт не сгенерирован или содержит ошибку - просто не показываем его пользователю
                     caption += "\n\n💡 <i>Выберите формат отчета для скачивания:</i>"
-                    logger.info(f"No insights generated for user {user_id} for {report_year}-{report_month:02d} (not enough data)")
+                    if insight:
+                        logger.warning(f"Insight exists but contains error message for user {user_id} for {report_year}-{report_month:02d}")
+                    else:
+                        logger.info(f"No insights generated for user {user_id} for {report_year}-{report_month:02d} (not enough data)")
 
             except Exception as e:
+                # Ошибка при генерации инсайтов - НЕ показываем пользователю
                 logger.error(f"Error generating insights for user {user_id}: {e}")
                 caption += "\n\n💡 <i>Выберите формат отчета для скачивания:</i>"
 
             # Создаем клавиатуру с кнопками форматов (в один ряд)
+            # ИСПОЛЬЗУЕМ ИКОНКИ КАК В МЕНЮ /expenses
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="📋 CSV", callback_data=f"monthly_report_csv_{report_year}_{report_month}"),
-                    InlineKeyboardButton(text="📊 Excel", callback_data=f"monthly_report_xlsx_{report_year}_{report_month}"),
-                    InlineKeyboardButton(text="📄 PDF", callback_data=f"monthly_report_pdf_{report_year}_{report_month}")
+                    InlineKeyboardButton(text="📄 CSV", callback_data=f"monthly_report_csv_{report_year}_{report_month}"),
+                    InlineKeyboardButton(text="📈 Excel", callback_data=f"monthly_report_xlsx_{report_year}_{report_month}"),
+                    InlineKeyboardButton(text="📊 PDF", callback_data=f"monthly_report_pdf_{report_year}_{report_month}")
                 ]
             ])
 
