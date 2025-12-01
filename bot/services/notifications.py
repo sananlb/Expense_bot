@@ -27,6 +27,9 @@ class NotificationService:
 
             today = date.today()
 
+            # Get user language first
+            user_lang = profile.language_code or 'ru'
+
             # Если год/месяц не указаны - используем предыдущий месяц
             if year is None or month is None:
                 if today.month == 1:
@@ -39,10 +42,10 @@ class NotificationService:
                 report_year = year
                 report_month = month
 
-            month_name = get_month_name(report_month, 'ru')
+            month_name = get_month_name(report_month, user_lang)
 
             # Генерируем AI инсайты
-            caption = f"📊 Ваш отчет за {month_name} {report_year} готов!"
+            caption = f"📊 {get_text('monthly_report_ready', user_lang, month=month_name, year=report_year)}"
 
             try:
                 insights_service = MonthlyInsightsService()
@@ -58,45 +61,57 @@ class NotificationService:
                         force_regenerate=False
                     )
 
-                if insight and insight.ai_summary and not insight.ai_summary.startswith("Извините"):
-                    # Формируем текст инсайта и добавляем к caption
-                    # ВАЖНО: показываем инсайт только если он успешно сгенерирован (не содержит сообщений об ошибках)
-                    user_lang = profile.language_code or 'ru'
-                    insight_text = self._format_insight_text(insight, report_month, report_year, user_lang)
-                    full_caption = f"{caption}\n\n{insight_text}\n\n💡 <i>Выберите формат отчета для скачивания:</i>"
+                # Check if insight is valid and doesn't contain error messages
+                error_phrases = ['извините', 'временно недоступен', 'service unavailable', 'error', 'failed', 'test summary']
+                has_error = insight and insight.ai_summary and any(
+                    phrase in insight.ai_summary.lower() for phrase in error_phrases
+                )
 
-                    # Telegram ограничивает текстовые сообщения до 4096 символов
-                    if len(full_caption) <= 4000:
-                        caption = full_caption
+                # Check minimum summary length (real AI summaries are at least 50 characters)
+                is_too_short = insight and insight.ai_summary and len(insight.ai_summary.strip()) < 50
+
+                if not insight or not insight.ai_summary or has_error or is_too_short:
+                    # Инсайт не сгенерирован или содержит ошибку - НЕ отправляем уведомление вообще
+                    if has_error:
+                        logger.warning(f"Insight contains error message for user {user_id} for {report_year}-{report_month:02d}. Notification not sent.")
+                    elif is_too_short:
+                        logger.warning(f"Insight summary too short ({len(insight.ai_summary.strip())} chars) for user {user_id} for {report_year}-{report_month:02d}. Notification not sent.")
+                    elif insight:
+                        logger.warning(f"Insight exists but ai_summary is empty for user {user_id} for {report_year}-{report_month:02d}. Notification not sent.")
                     else:
-                        # Если текст слишком длинный, обрезаем инсайт
-                        max_insight_length = 4000 - len(caption) - 50
-                        if max_insight_length > 100:
-                            truncated_insight = insight_text[:max_insight_length] + "..."
-                            caption = f"{caption}\n\n{truncated_insight}\n\n💡 <i>Выберите формат отчета для скачивания:</i>"
-                        else:
-                            caption += "\n\n💡 <i>Выберите формат отчета для скачивания:</i>"
+                        logger.info(f"No insights generated for user {user_id} for {report_year}-{report_month:02d} (not enough data). Notification not sent.")
+                    return  # Exit without sending notification
 
-                    logger.info(f"Monthly insights generated for user {user_id} for {report_year}-{report_month:02d}")
+                # Формируем текст инсайта и добавляем к caption
+                # ВАЖНО: показываем инсайт только если он успешно сгенерирован (не содержит сообщений об ошибках)
+                insight_text = await self._format_insight_text(insight, report_month, report_year, user_lang)
+                choose_format_text = get_text('monthly_report_choose_format', user_lang)
+                full_caption = f"{caption}\n\n{insight_text}\n\n💡 <i>{choose_format_text}</i>"
+
+                # Telegram ограничивает текстовые сообщения до 4096 символов
+                if len(full_caption) <= 4000:
+                    caption = full_caption
                 else:
-                    # Инсайт не сгенерирован или содержит ошибку - просто не показываем его пользователю
-                    caption += "\n\n💡 <i>Выберите формат отчета для скачивания:</i>"
-                    if insight:
-                        logger.warning(f"Insight exists but contains error message for user {user_id} for {report_year}-{report_month:02d}")
+                    # Если текст слишком длинный, обрезаем инсайт
+                    max_insight_length = 4000 - len(caption) - 50
+                    if max_insight_length > 100:
+                        truncated_insight = insight_text[:max_insight_length] + "..."
+                        caption = f"{caption}\n\n{truncated_insight}\n\n💡 <i>{choose_format_text}</i>"
                     else:
-                        logger.info(f"No insights generated for user {user_id} for {report_year}-{report_month:02d} (not enough data)")
+                        caption += f"\n\n💡 <i>{choose_format_text}</i>"
+
+                logger.info(f"Monthly insights generated for user {user_id} for {report_year}-{report_month:02d}")
 
             except Exception as e:
-                # Ошибка при генерации инсайтов - НЕ показываем пользователю
-                logger.error(f"Error generating insights for user {user_id}: {e}")
-                caption += "\n\n💡 <i>Выберите формат отчета для скачивания:</i>"
+                # Ошибка при генерации инсайтов - НЕ отправляем уведомление вообще
+                logger.error(f"Error generating insights for user {user_id}: {e}. Notification not sent.")
+                return  # Exit without sending notification
 
             # Создаем клавиатуру с кнопками форматов (в один ряд)
-            # ИСПОЛЬЗУЕМ ИКОНКИ КАК В МЕНЮ /expenses
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [
                     InlineKeyboardButton(text="📄 CSV", callback_data=f"monthly_report_csv_{report_year}_{report_month}"),
-                    InlineKeyboardButton(text="📈 Excel", callback_data=f"monthly_report_xlsx_{report_year}_{report_month}"),
+                    InlineKeyboardButton(text="📈 XLSX", callback_data=f"monthly_report_xlsx_{report_year}_{report_month}"),
                     InlineKeyboardButton(text="📊 PDF", callback_data=f"monthly_report_pdf_{report_year}_{report_month}")
                 ]
             ])
@@ -114,25 +129,108 @@ class NotificationService:
         except Exception as e:
             logger.error(f"Error sending monthly report notification to user {user_id}: {e}")
 
-    def _format_insight_text(self, insight, month: int, year: int, lang: str = 'ru') -> str:
+    async def _calculate_category_changes(self, insight, month: int, year: int):
+        """
+        Calculate category changes compared to previous month
+        Called ONCE per user per month when sending notification
+
+        Args:
+            insight: Current month MonthlyInsight instance
+            month: Current month (1-12)
+            year: Current year
+
+        Returns:
+            List of category changes sorted by absolute change (biggest first)
+        """
+        import asyncio
+        from expenses.models import MonthlyInsight
+
+        # Get previous month
+        prev_month = month - 1 if month > 1 else 12
+        prev_year = year if month > 1 else year - 1
+
+        # Get previous month insight (1 DB query - not critical for monthly task)
+        prev_insight = await asyncio.to_thread(
+            lambda: MonthlyInsight.objects.filter(
+                profile=insight.profile,
+                year=prev_year,
+                month=prev_month
+            ).first()
+        )
+
+        if not prev_insight or not prev_insight.top_categories:
+            return []  # No previous data to compare
+
+        # Build dict for fast lookup
+        prev_cats = {cat['category']: cat['amount'] for cat in prev_insight.top_categories}
+
+        changes = []
+        for cat in insight.top_categories:
+            cat_name = cat['category']
+            current_amount = cat['amount']
+            prev_amount = prev_cats.get(cat_name, 0)
+
+            # Calculate change (new categories have prev_amount = 0)
+            change = current_amount - prev_amount
+
+            # Only show categories with meaningful change (>= 100 RUB to avoid noise)
+            if abs(change) < 100:
+                continue
+
+            # Calculate percentage change
+            if prev_amount > 0:
+                # Existing category: calculate normal percentage
+                change_pct = (change / prev_amount * 100)
+            else:
+                # New category: show as +100% (появилась впервые)
+                change_pct = 100.0
+
+            changes.append({
+                'category': cat_name,
+                'change': change,
+                'change_percent': round(change_pct, 1),
+                'trend': '📈' if change > 0 else '📉' if change < 0 else '➡️'
+            })
+
+        # Sort by absolute change (biggest changes first)
+        changes.sort(key=lambda x: abs(x['change']), reverse=True)
+        return changes
+
+    async def _format_insight_text(self, insight, month: int, year: int, lang: str = 'ru') -> str:
         """Format insight for display in message"""
+        from bot.utils.language import format_amount
+
         text = ""
 
+        # Get user currency
+        currency = insight.profile.currency or 'RUB'
+
         # Финансовая сводка (каждый показатель с новой строки)
-        text += f"💸 Расходы: {float(insight.total_expenses):,.0f} ₽\n".replace(',', ' ')
-        text += f"💵 Доходы: {float(insight.total_incomes):,.0f} ₽\n".replace(',', ' ')
+        expenses_label = get_text('monthly_report_expenses', lang)
+        text += f"💸 {expenses_label}: {format_amount(float(insight.total_expenses), currency, lang)}\n"
+
+        # NEW: Если нет доходов - явно об этом сказать
+        if insight.total_incomes > 0:
+            incomes_label = get_text('monthly_report_incomes', lang)
+            text += f"💵 {incomes_label}: {format_amount(float(insight.total_incomes), currency, lang)}\n"
+        else:
+            no_incomes_text = get_text('monthly_report_no_incomes', lang)
+            text += f"ℹ️ <i>{no_incomes_text}</i>\n"
 
         # Баланс показываем всегда
         balance = insight.balance
         balance_emoji = "📈" if balance >= 0 else "📉"
         balance_sign = "+" if balance >= 0 else ""
-        text += f"⚖️ Баланс: {balance_emoji} {balance_sign}{float(balance):,.0f} ₽\n".replace(',', ' ')
+        balance_label = get_text('monthly_report_balance', lang)
+        text += f"⚖️ {balance_label}: {balance_emoji} {balance_sign}{format_amount(abs(float(balance)), currency, lang)}\n"
 
-        text += f"🧮 Количество трат: {insight.expenses_count}\n\n"
+        expenses_count_label = get_text('monthly_report_expenses_count', lang)
+        text += f"🧮 {expenses_count_label}: {insight.expenses_count}\n\n"
 
         # Топ 5 категорий (только с ненулевыми расходами)
         if insight.top_categories:
-            text += f"🏆 <b>Топ категорий:</b>\n"
+            top_categories_label = get_text('monthly_report_top_categories', lang)
+            text += f"🏆 <b>{top_categories_label}</b>\n"
             displayed_count = 0
             for cat in insight.top_categories:
                 percentage = cat.get('percentage', 0)
@@ -142,26 +240,76 @@ class NotificationService:
                 # Показываем только категории с ненулевыми расходами
                 if amount > 0:
                     displayed_count += 1
-                    text += f"{displayed_count}. {category_name}: {amount:,.0f}₽ ({percentage:.0f}%)\n".replace(',', ' ')
+                    text += f"{displayed_count}. {category_name}: {format_amount(amount, currency, lang)} ({percentage:.0f}%)\n"
 
                     # Ограничиваем вывод 5 категориями
                     if displayed_count >= 5:
                         break
             text += "\n"
 
+        # NEW: Топ-5 изменений с прошлого месяца
+        category_changes = await self._calculate_category_changes(insight, month, year)
+        if category_changes:
+            category_changes_label = get_text('monthly_report_category_changes', lang)
+            text += f"📈 <b>{category_changes_label}</b>\n"
+            for i, change in enumerate(category_changes[:5], 1):
+                cat_name = change['category']
+                change_pct = change['change_percent']
+                change_amount = change['change']
+                trend = change['trend']
+
+                sign = '+' if change_amount > 0 else ''
+                text += f"{i}. {cat_name}: {sign}{format_amount(abs(change_amount), currency, lang)} ({sign}{change_pct:.0f}% {trend})\n"
+            text += "\n"
+
         # AI резюме
         if insight.ai_summary:
             text += f"📝 {insight.ai_summary}\n\n"
 
-        # AI анализ (исключаем первый пункт о топ категории, берем 2-4 пункты)
+        # AI анализ
         if insight.ai_analysis:
             analysis_lines = insight.ai_analysis.split('\n')
-            # Берем только пункты со значком •
-            all_points = [line for line in analysis_lines if line.strip().startswith('•')]
-            # Пропускаем первый пункт (обычно дублирует топ категорию), берем следующие 3
-            key_points = all_points[1:4] if len(all_points) > 1 else []
-            if key_points:
-                text += f"📊 <b>Ключевые моменты:</b>\n"
-                text += '\n'.join(key_points) + "\n"
+
+            # Check format: Russian format uses "•" bullets, English format uses "**Title:**"
+            has_bullets = any(line.strip().startswith('•') for line in analysis_lines)
+
+            if has_bullets:
+                # Russian format: берем только пункты со значком •
+                all_points = [line for line in analysis_lines if line.strip().startswith('•')]
+                # Пропускаем первый пункт (обычно дублирует топ категорию), берем следующие 3
+                key_points = all_points[1:4] if len(all_points) > 1 else []
+
+                if key_points:
+                    key_points_label = get_text('monthly_report_key_points', lang) if lang == 'en' else 'Ключевые моменты:'
+                    text += f"🔍 <b>{key_points_label}</b>\n"
+                    # Remove bullets and add blank lines between points
+                    formatted_points = []
+                    for point in key_points:
+                        # Remove bullet marker and strip whitespace
+                        clean_point = point.strip().lstrip('•').strip()
+                        formatted_points.append(clean_point)
+                    text += '\n\n'.join(formatted_points) + "\n"
+            else:
+                # English format: split by double newlines to get individual points
+                points = [p.strip() for p in insight.ai_analysis.split('\n\n') if p.strip()]
+
+                # Skip first point if it's about main categories (to avoid duplication with Top-5)
+                if points and 'main categories' in points[0].lower():
+                    points = points[1:]
+
+                # Take up to 3 points
+                key_points = points[:3]
+
+                if key_points:
+                    key_points_label = get_text('monthly_report_key_points', lang) if lang == 'en' else 'Ключевые моменты:'
+                    text += f"🔍 <b>{key_points_label}</b>\n"
+                    # Convert markdown bold to HTML and add blank lines between points
+                    formatted_points = []
+                    for p in key_points:
+                        # Convert markdown **bold** to HTML <b>bold</b>
+                        import re
+                        p_html = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', p)
+                        formatted_points.append(p_html)
+                    text += '\n\n'.join(formatted_points) + "\n"
 
         return text
