@@ -53,12 +53,12 @@ def send_monthly_reports():
             expense_date__lte=month_end
         ).values_list('profile_id', flat=True).distinct()
 
-        # Filter profiles with active subscription
+        # Filter profiles with active subscription (paid or trial)
         profiles = Profile.objects.filter(
             id__in=profiles_with_expenses
         ).filter(
             Q(subscriptions__is_active=True, subscriptions__end_date__gt=timezone.now()) |
-            Q(subscriptions__is_trial=True, subscriptions__is_active=True)
+            Q(subscriptions__type='trial', subscriptions__is_active=True, subscriptions__end_date__gt=timezone.now())
         ).distinct()
 
         logger.info(f"Sending monthly reports to {profiles.count()} users with expenses")
@@ -115,12 +115,12 @@ def generate_monthly_insights():
             expense_date__lte=month_end
         ).values_list('profile_id', flat=True).distinct()
 
-        # Filter profiles with active subscription
+        # Filter profiles with active subscription (paid or trial)
         profiles = Profile.objects.filter(
             id__in=profiles_with_expenses
         ).filter(
             Q(subscriptions__is_active=True, subscriptions__end_date__gt=timezone.now()) |
-            Q(subscriptions__is_trial=True, subscriptions__is_active=True)
+            Q(subscriptions__type='trial', subscriptions__is_active=True, subscriptions__end_date__gt=timezone.now())
         ).distinct()
 
         logger.info(f"Generating AI insights for {profiles.count()} users with active subscriptions")
