@@ -378,6 +378,7 @@ class ExportService:
                     'category': category_name,
                     'currency': expense.currency,
                     'monthly_totals': [0 for _ in months_list],
+                    'monthly_counts': [0 for _ in months_list],
                     'total': 0.0,
                     'count': 0,
                 }
@@ -385,6 +386,7 @@ class ExportService:
             idx = month_index.get(year_month)
             if idx is not None:
                 op['monthly_totals'][idx] += float(expense.amount)
+                op['monthly_counts'][idx] += 1
             op['total'] += float(expense.amount)
             op['count'] += 1
 
@@ -422,6 +424,7 @@ class ExportService:
                     'category': category_name,
                     'currency': income.currency,
                     'monthly_totals': [0 for _ in months_list],
+                    'monthly_counts': [0 for _ in months_list],
                     'total': 0.0,
                     'count': 0,
                 }
@@ -429,6 +432,7 @@ class ExportService:
             idx = month_index.get(year_month)
             if idx is not None:
                 op['monthly_totals'][idx] += float(income.amount)
+                op['monthly_counts'][idx] += 1
             op['total'] += float(income.amount)
             op['count'] += 1
 
@@ -471,22 +475,18 @@ class ExportService:
             Используется для аналитических таблиц где данные уже в Python.
             Возвращает: % изменения за год на основе линейного тренда.
             """
-            # Фильтруем None, но оставляем 0 (важно для тренда)
-            clean_values = [v if v is not None else 0 for v in values]
-            n = len(clean_values)
-            if n < 2:
+            points = [(idx, v) for idx, v in enumerate(values) if v not in (None, 0)]
+            if len(points) < 2:
                 return None
 
-            # Проверяем есть ли хоть какие-то данные
-            if all(v == 0 for v in clean_values):
+            n = len(points)
+            x_mean = sum(idx for idx, _ in points) / n
+            y_mean = sum(v for _, v in points) / n
+            if y_mean == 0:
                 return None
 
-            # Линейная регрессия: slope = Σ(x-x̄)(y-ȳ) / Σ(x-x̄)²
-            x_mean = (n - 1) / 2  # среднее индексов 0,1,2,...,n-1
-            y_mean = sum(clean_values) / n
-
-            numerator = sum((i - x_mean) * (v - y_mean) for i, v in enumerate(clean_values))
-            denominator = sum((i - x_mean) ** 2 for i in range(n))
+            numerator = sum((idx - x_mean) * (v - y_mean) for idx, v in points)
+            denominator = sum((idx - x_mean) ** 2 for idx, _ in points)
 
             if denominator == 0 or y_mean == 0:
                 return None
@@ -923,10 +923,23 @@ class ExportService:
                 total_amount = op['total']
                 total_count = op['count']
                 avg_ticket = round(total_amount / total_count, 2) if total_count else 0
-                inflation_ratio = calc_trend_python(op['monthly_totals'])
-                # Округляем тренд до 4 знаков (это проценты: 0.1234 = 12.34%)
-                if inflation_ratio is not None:
-                    inflation_ratio = round(inflation_ratio, 4)
+                monthly_counts = op.get('monthly_counts') or [0 for _ in op['monthly_totals']]
+                # Гарантируем одинаковую длину списков для безопасного zipping
+                if len(monthly_counts) < len(op['monthly_totals']):
+                    monthly_counts = monthly_counts + [0] * (len(op['monthly_totals']) - len(monthly_counts))
+                elif len(monthly_counts) > len(op['monthly_totals']):
+                    monthly_counts = monthly_counts[: len(op['monthly_totals'])]
+                monthly_avg_prices = [
+                    (total / cnt) if cnt else None
+                    for total, cnt in zip(op['monthly_totals'], monthly_counts)
+                ]
+                inflation_ratio = None
+                non_zero_months = sum(1 for cnt in monthly_counts if cnt)
+                if total_count > 1 and non_zero_months > 1:
+                    inflation_ratio = calc_trend_python(monthly_avg_prices)
+                    # Округляем тренд до 4 знаков (это проценты: 0.1234 = 12.34%)
+                    if inflation_ratio is not None:
+                        inflation_ratio = round(inflation_ratio, 4)
                 items.append({
                     "description": op['description'],
                     "category": op['category'],
@@ -1407,10 +1420,20 @@ class ExportService:
         # ==================== ПРАВАЯ ЧАСТЬ: SUMMARY (Колонки K-P) ====================
         summary_start_col = 11  # Колонка K (отступ 2 столбца от дневника)
 
+
+        # ������� �������� ������ (����� ������� �������)
+        primary_currency = None
+        if expenses:
+            primary_currency = getattr(expenses[0].profile, 'currency', None) or expenses[0].currency
+        elif incomes:
+            primary_currency = getattr(incomes[0].profile, 'currency', None) or incomes[0].currency
+        if not primary_currency:
+            primary_currency = 'RUB'
+
         # Подсчет статистики по категориям РАСХОДОВ
         category_stats = {}
         for op in operations:
-            if op['type'] == 'expense':
+            if op['type'] == 'expense' and op.get('currency') == primary_currency:
                 category_name = op['category'] or get_text('no_category', lang)
                 currency = op['currency']
                 amount = abs(op['amount'])
@@ -1446,7 +1469,7 @@ class ExportService:
                 category_cashback_rates[cb.category_id] = float(cb.cashback_percent) / 100.0
 
         for op in operations:
-            if op['type'] == 'expense':
+            if op['type'] == 'expense' and op.get('currency') == primary_currency:
                 category = op['category'] or get_text('no_category', lang)
                 day = op['date'].day
                 amount = abs(op['amount'])
@@ -1862,7 +1885,7 @@ class ExportService:
         # Подсчет статистики по категориям доходов
         income_category_stats = {}
         for op in operations:
-            if op['type'] == 'income':
+            if op['type'] == 'income' and op.get('currency') == primary_currency:
                 category_name = op['category'] or get_text('no_category', lang)
                 currency = op['currency']
                 amount = abs(op['amount'])
@@ -1877,7 +1900,7 @@ class ExportService:
         # Подсчет доходов по дням и категориям (нужно ДО заполнения Summary)
         daily_incomes_by_category = {}  # {category: {day: amount}}
         for op in operations:
-            if op['type'] == 'income':
+            if op['type'] == 'income' and op.get('currency') == primary_currency:
                 category = op['category'] or get_text('no_category', lang)
                 day = op['date'].day
                 amount = abs(op['amount'])

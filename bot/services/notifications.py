@@ -162,13 +162,17 @@ class NotificationService:
             return []  # No previous data to compare
 
         # Build dict for fast lookup
-        prev_cats = {cat['category']: cat['amount'] for cat in prev_insight.top_categories}
+        prev_cats = {}
+        for cat in prev_insight.top_categories:
+            key = cat.get('category_id') or cat.get('category')
+            prev_cats[key] = cat.get('amount', 0)
 
         changes = []
         for cat in insight.top_categories:
-            cat_name = cat['category']
-            current_amount = cat['amount']
-            prev_amount = prev_cats.get(cat_name, 0)
+            cat_key = cat.get('category_id') or cat.get('category')
+            cat_name = cat.get('category')
+            current_amount = cat.get('amount', 0)
+            prev_amount = prev_cats.get(cat_key, 0)
 
             # Calculate change (new categories have prev_amount = 0)
             change = current_amount - prev_amount

@@ -113,11 +113,14 @@ class PDFReportService:
             if household_mode and getattr(profile, 'household', None) and getattr(profile.household, 'name', None):
                 household_name = profile.household.name
 
+            primary_currency = getattr(profile, 'currency', None) or 'RUB'
+
             def build_filters(prefix: str, start: date, end: date) -> Dict[str, object]:
-                """Сформировать фильтр для расходов/доходов с учетом режима просмотра."""
+                """������������ ������ ��� ��������/������� � ������ ������ ��������� � �������� ������."""
                 filters: Dict[str, object] = {
                     f"{prefix}_date__gte": start,
                     f"{prefix}_date__lte": end,
+                    "currency": primary_currency,
                 }
                 if household_mode and getattr(profile, 'household', None):
                     filters['profile__household'] = profile.household

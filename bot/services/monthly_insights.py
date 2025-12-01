@@ -11,7 +11,7 @@ from django.db.models import Sum, Count, Q, Avg
 from django.utils import timezone
 from expenses.models import (
     Profile, Expense, Income, MonthlyInsight,
-    ExpenseCategory, IncomeCategory
+    ExpenseCategory, IncomeCategory, UserSettings
 )
 from .ai_selector import get_service, get_model, get_provider_settings, get_fallback_chain
 
@@ -81,21 +81,43 @@ class MonthlyInsightsService:
         start_date = datetime(year, month, 1).date()
         end_date = datetime(year, month, last_day).date()
 
+        # Determine scope (personal vs household) and primary currency
+        try:
+            settings_obj = await asyncio.to_thread(
+                lambda: UserSettings.objects.filter(profile=profile).first()
+            )
+        except Exception:
+            settings_obj = None
+
+        household_mode = (
+            bool(getattr(profile, 'household_id', None)) and
+            settings_obj and getattr(settings_obj, 'view_scope', 'personal') == 'household'
+        )
+        primary_currency = getattr(profile, 'currency', None) or 'RUB'
+
+        def build_filters(prefix: str, start: datetime.date, end: datetime.date) -> Dict[str, object]:
+            filters: Dict[str, object] = {
+                f"{prefix}_date__gte": start,
+                f"{prefix}_date__lte": end,
+                "currency": primary_currency
+            }
+            if household_mode and getattr(profile, 'household', None):
+                filters['profile__household'] = profile.household
+            else:
+                filters['profile'] = profile
+            return filters
+
         # Collect expenses
         expenses = await asyncio.to_thread(
             lambda: list(Expense.objects.filter(
-                profile=profile,
-                expense_date__gte=start_date,
-                expense_date__lte=end_date
+                **build_filters('expense', start_date, end_date)
             ).select_related('category').order_by('-expense_date'))
         )
 
         # Collect incomes
         incomes = await asyncio.to_thread(
             lambda: list(Income.objects.filter(
-                profile=profile,
-                income_date__gte=start_date,
-                income_date__lte=end_date
+                **build_filters('income', start_date, end_date)
             ).select_related('category').order_by('-income_date'))
         )
 
@@ -105,37 +127,49 @@ class MonthlyInsightsService:
 
         # Group by categories
         user_lang = profile.language_code or 'ru'
-        expenses_by_category = {}
+        expenses_by_category: Dict[int, Dict[str, Any]] = {}
         for expense in expenses:
             if expense.category:
+                cat_id = expense.category.id
                 cat_name = expense.category.get_display_name(user_lang)
-                if cat_name not in expenses_by_category:
-                    expenses_by_category[cat_name] = {
+                if cat_id not in expenses_by_category:
+                    expenses_by_category[cat_id] = {
+                        'id': cat_id,
+                        'name': cat_name,
                         'amount': Decimal('0'),
                         'count': 0,
                         'items': []
                     }
-                expenses_by_category[cat_name]['amount'] += expense.amount
-                expenses_by_category[cat_name]['count'] += 1
-                expenses_by_category[cat_name]['items'].append({
+                expenses_by_category[cat_id]['amount'] += expense.amount
+                expenses_by_category[cat_id]['count'] += 1
+                expenses_by_category[cat_id]['items'].append({
                     'date': expense.expense_date.strftime('%d.%m'),
                     'amount': float(expense.amount),
-                    'description': expense.description[:50]
+                    'description': (expense.description or '')[:50]
                 })
 
         # Sort categories by amount
         sorted_categories = sorted(
-            expenses_by_category.items(),
-            key=lambda x: x[1]['amount'],
+            expenses_by_category.values(),
+            key=lambda x: x['amount'],
             reverse=True
         )
 
         # Prepare top categories for storage
         top_categories = []
-        for cat_name, cat_data in sorted_categories[:10]:
+        expenses_by_category_named = {}
+        for cat_data in sorted_categories:
+            expenses_by_category_named[cat_data['name']] = {
+                'amount': cat_data['amount'],
+                'count': cat_data['count'],
+                'items': cat_data['items']
+            }
+
+        for cat_data in sorted_categories[:10]:
             percentage = (cat_data['amount'] / total_expenses * 100) if total_expenses > 0 else 0
             top_categories.append({
-                'category': cat_name,
+                'category_id': cat_data.get('id'),
+                'category': cat_data.get('name'),
                 'amount': float(cat_data['amount']),
                 'percentage': round(float(percentage), 2),
                 'count': cat_data['count']
@@ -148,10 +182,118 @@ class MonthlyInsightsService:
             'incomes': incomes,
             'total_expenses': total_expenses,
             'total_incomes': total_incomes,
-            'expenses_by_category': dict(sorted_categories),
+            'expenses_by_category': expenses_by_category_named,
             'top_categories': top_categories,
             'balance': total_incomes - total_expenses
         }
+
+    async def _collect_historical_data(
+        self,
+        profile: Profile,
+        year: int,
+        month: int,
+        months_back: int = 6
+    ) -> List[Dict[str, Any]]:
+        """
+        Collect historical expense data for the last N months (excluding current month)
+
+        Args:
+            profile: User profile
+            year: Current year
+            month: Current month (1-12)
+            months_back: Number of months to collect (default: 6)
+
+        Returns:
+            List of monthly summaries sorted by date (oldest first)
+        """
+        from dateutil.relativedelta import relativedelta
+
+        # Determine scope and currency
+        try:
+            settings_obj = await asyncio.to_thread(
+                lambda: UserSettings.objects.filter(profile=profile).first()
+            )
+        except Exception:
+            settings_obj = None
+
+        household_mode = (
+            bool(getattr(profile, 'household_id', None)) and
+            settings_obj and getattr(settings_obj, 'view_scope', 'personal') == 'household'
+        )
+        primary_currency = getattr(profile, 'currency', None) or 'RUB'
+
+        # Build filters for single aggregated query
+        current_date = datetime(year, month, 1).date()
+        start_date = current_date - relativedelta(months=months_back)
+
+        def expense_filters():
+            filters: Dict[str, object] = {
+                "expense_date__gte": start_date,
+                "expense_date__lt": current_date,
+                "currency": primary_currency
+            }
+            if household_mode and getattr(profile, 'household', None):
+                filters["profile__household"] = profile.household
+            else:
+                filters["profile"] = profile
+            return filters
+
+        def income_filters():
+            filters: Dict[str, object] = {
+                "income_date__gte": start_date,
+                "income_date__lt": current_date,
+                "currency": primary_currency
+            }
+            if household_mode and getattr(profile, 'household', None):
+                filters["profile__household"] = profile.household
+            else:
+                filters["profile"] = profile
+            return filters
+
+        expenses_data = await asyncio.to_thread(
+            lambda: list(
+                Expense.objects.filter(**expense_filters())
+                .values('expense_date__year', 'expense_date__month')
+                .annotate(total=Sum('amount'), count=Count('id'))
+            )
+        )
+
+        incomes_data = await asyncio.to_thread(
+            lambda: list(
+                Income.objects.filter(**income_filters())
+                .values('income_date__year', 'income_date__month')
+                .annotate(total=Sum('amount'), count=Count('id'))
+            )
+        )
+
+        expenses_by_month = {
+            (item['expense_date__year'], item['expense_date__month']): item
+            for item in expenses_data
+        }
+        incomes_by_month = {
+            (item['income_date__year'], item['income_date__month']): item
+            for item in incomes_data
+        }
+
+        historical_data: List[Dict[str, Any]] = []
+        for i in range(1, months_back + 1):
+            target_date = current_date - relativedelta(months=i)
+            key = (target_date.year, target_date.month)
+
+            exp_data = expenses_by_month.get(key, {'total': 0, 'count': 0})
+            inc_data = incomes_by_month.get(key, {'total': 0, 'count': 0})
+
+            historical_data.append({
+                'year': target_date.year,
+                'month': target_date.month,
+                'total_expenses': float(exp_data.get('total') or 0),
+                'total_incomes': float(inc_data.get('total') or 0),
+                'expenses_count': exp_data.get('count') or 0,
+                'top_categories': []
+            })
+
+        historical_data.sort(key=lambda x: (x['year'], x['month']))
+        return historical_data
 
     def _build_analysis_prompt(
         self,
@@ -159,7 +301,8 @@ class MonthlyInsightsService:
         month_data: Dict[str, Any],
         prev_month_data: Optional[Dict[str, Any]],
         year: int,
-        month: int
+        month: int,
+        historical_data: Optional[List[Dict[str, Any]]] = None
     ) -> str:
         """
         Build prompt for AI analysis
@@ -174,13 +317,25 @@ class MonthlyInsightsService:
         Returns:
             Prompt string
         """
+        # Get user language
+        user_lang = profile.language_code or 'ru'
+
+        # Get month name in user's language
+        from bot.utils.language import get_month_name as get_month_name_i18n
+        month_name = get_month_name_i18n(month, user_lang)
+
+        # Month names for historical data
         months_ru = {
             1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
             5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
             9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
         }
-
-        month_name = months_ru.get(month, str(month))
+        months_en = {
+            1: 'January', 2: 'February', 3: 'March', 4: 'April',
+            5: 'May', 6: 'June', 7: 'July', 8: 'August',
+            9: 'September', 10: 'October', 11: 'November', 12: 'December'
+        }
+        months_dict = months_en if user_lang == 'en' else months_ru
 
         # Helper функция для форматирования сумм без лишних нулей
         def format_amount(amount):
@@ -202,7 +357,7 @@ class MonthlyInsightsService:
         if prev_month_data:
             # Calculate previous month
             prev_month = month - 1 if month > 1 else 12
-            prev_month_name = months_ru.get(prev_month, str(prev_month))
+            prev_month_name = months_dict.get(prev_month, str(prev_month))
 
             # Calculate changes
             expense_change = month_data['total_expenses'] - prev_month_data['total_expenses']
@@ -226,6 +381,116 @@ class MonthlyInsightsService:
 - Количество трат в прошлом месяце: {len(prev_month_data['expenses'])}
 """
 
+        # Build historical context section if available
+        historical_section = ""
+        # Only show history if we have at least 3 months with actual data
+        valid_historical_data = [h for h in (historical_data or []) if h['total_expenses'] > 0]
+
+        if valid_historical_data and len(valid_historical_data) >= 3:
+            historical_lines = []
+            for h in valid_historical_data:
+                h_month_name = months_dict.get(h['month'], str(h['month']))
+
+                # Format top categories (only show if exist)
+                if h['top_categories']:
+                    top_cats = ", ".join([f"{c['category']} ({format_amount(c['amount'])}₽)" for c in h['top_categories'][:2]])
+                    historical_lines.append(
+                        f"- {h_month_name} {h['year']}: {format_amount(h['total_expenses'])} ₽ (топ: {top_cats})"
+                    )
+                else:
+                    historical_lines.append(
+                        f"- {h_month_name} {h['year']}: {format_amount(h['total_expenses'])} ₽"
+                    )
+
+            historical_section = f"""
+ИСТОРИЧЕСКИЙ КОНТЕКСТ (последние {len(valid_historical_data)} месяцев):
+{chr(10).join(historical_lines)}
+"""
+
+        # Build expense details section (top 50 expenses for detailed analysis)
+        expense_details_section = ""
+        if len(month_data['expenses']) > 0:
+            # Sort expenses by amount (highest first)
+            sorted_expenses = sorted(month_data['expenses'], key=lambda x: x.amount, reverse=True)
+            top_expenses = sorted_expenses[:50]  # Limit to top 50
+
+            expense_lines = []
+            for exp in top_expenses[:20]:  # Show only top 20 in prompt to save tokens
+                exp_date = exp.expense_date.strftime('%d.%m')
+                exp_desc = exp.description[:30] if exp.description else '(без описания)'
+                exp_amount = format_amount(exp.amount)
+                expense_lines.append(f"  - {exp_date}: {exp_desc} - {exp_amount}₽")
+
+            if len(top_expenses) > 20:
+                expense_lines.append(f"  ... и ещё {len(top_expenses) - 20} трат")
+
+            expense_details_section = f"""
+ДЕТАЛИ КРУПНЫХ ТРАТ:
+{chr(10).join(expense_lines)}
+"""
+
+        # Analyze unusual expenses (significantly above average)
+        unusual_expenses_section = ""
+        if len(month_data['expenses']) >= 5:
+            avg_expense = month_data['total_expenses'] / len(month_data['expenses'])
+            # Find expenses significantly above average (2x or more)
+            unusual = [
+                exp for exp in month_data['expenses']
+                if exp.amount >= avg_expense * 2
+            ]
+
+            if unusual:
+                unusual_lines = []
+                for exp in sorted(unusual, key=lambda x: x.amount, reverse=True)[:5]:
+                    exp_date = exp.expense_date.strftime('%d.%m')
+                    exp_desc = exp.description[:30] if exp.description else '(без описания)'
+                    exp_amount = format_amount(exp.amount)
+                    times_avg = exp.amount / avg_expense
+                    unusual_lines.append(f"  - {exp_date}: {exp_desc} - {exp_amount}₽ (в {times_avg:.1f}x больше среднего)")
+
+                unusual_expenses_section = f"""
+НЕОБЫЧНЫЕ ТРАТЫ (значительно выше среднего):
+Средняя трата: {format_amount(avg_expense)}₽
+{chr(10).join(unusual_lines)}
+"""
+
+        # Analyze regular expenses (by description frequency)
+        regular_expenses_section = ""
+        if len(month_data['expenses']) >= 3:
+            from collections import Counter
+
+            # Count descriptions (normalized)
+            desc_counter = Counter()
+            desc_amounts = {}
+
+            for exp in month_data['expenses']:
+                if exp.description:
+                    # Normalize description (lowercase, trim)
+                    desc_norm = exp.description.lower().strip()[:50]
+                    desc_counter[desc_norm] += 1
+
+                    if desc_norm not in desc_amounts:
+                        desc_amounts[desc_norm] = []
+                    desc_amounts[desc_norm].append(float(exp.amount))
+
+            # Find recurring expenses (2+ times)
+            regular = [(desc, count) for desc, count in desc_counter.most_common(10) if count >= 2]
+
+            if regular:
+                regular_lines = []
+                for desc, count in regular[:5]:
+                    amounts = desc_amounts[desc]
+                    avg_amount = sum(amounts) / len(amounts)
+                    total_amount = sum(amounts)
+                    regular_lines.append(
+                        f"  - \"{desc[:30]}\": {count}x, средняя {format_amount(avg_amount)}₽, всего {format_amount(total_amount)}₽"
+                    )
+
+                regular_expenses_section = f"""
+РЕГУЛЯРНЫЕ РАСХОДЫ:
+{chr(10).join(regular_lines)}
+"""
+
         # Build financial summary section (only expenses if no income)
         if has_income:
             finance_section = f"""ДАННЫЕ ЗА ТЕКУЩИЙ МЕСЯЦ:
@@ -238,41 +503,67 @@ class MonthlyInsightsService:
 - Всего потрачено: {format_amount(month_data['total_expenses'])} ₽
 - Количество трат: {len(month_data['expenses'])}"""
 
-        prompt = f"""Ты финансовый аналитик. Проанализируй траты пользователя за {month_name} {year} года.
+        # Build prompt based on user language
+        if user_lang == 'en':
+            prompt = f"""You are a financial analyst. Analyze the user's expenses for {month_name} {year}.
+
+{finance_section}
+
+EXPENSES BY CATEGORY:
+{chr(10).join(category_details)}
+{comparison_section}{historical_section}{expense_details_section}{unusual_expenses_section}{regular_expenses_section}
+TASK:
+Create a deep financial analysis in JSON format with two sections:
+
+1. "summary" - brief monthly summary (2-3 sentences):
+   - Main figures{"and comparison with previous month" if prev_month_data else ""}
+   - {"Expense dynamics (growth/decline)" if prev_month_data else "Overall expense picture"}
+   - {"Context relative to historical data" if valid_historical_data and len(valid_historical_data) >= 3 else ""}
+
+2. "analysis" - detailed analysis (4 points):
+   - **Main categories:** Largest category and its share{"with change" if prev_month_data else ""}
+   - **{"Unusual expenses" if unusual_expenses_section else "Large expenses"}:** Highlight unusually large purchases or expenses above average
+   - **{"Regular expenses" if regular_expenses_section else "Spending patterns"}:** Indicate recurring expenses or financial habits
+   - **Personal advice:** Specific recommendation on how to optimize expenses or what to pay attention to
+
+IMPORTANT:
+- Write in English, concisely and to the point
+- Use specific figures from data (amounts, percentages, dates)
+- {"MUST compare with previous month where appropriate" if prev_month_data else ""}
+- {"DO NOT mention income and balance, focus only on expenses" if not has_income else ""}
+- Tone is friendly, motivating, but professional
+- Response format: JSON with "summary", "analysis" fields
+- In "analysis" field use array of 4 strings (each string is a separate point with bullet marker)"""
+        else:
+            prompt = f"""Ты финансовый аналитик. Проанализируй траты пользователя за {month_name} {year} года.
 
 {finance_section}
 
 РАСХОДЫ ПО КАТЕГОРИЯМ:
 {chr(10).join(category_details)}
-{comparison_section}
+{comparison_section}{historical_section}{expense_details_section}{unusual_expenses_section}{regular_expenses_section}
 ЗАДАНИЕ:
-Создай два раздела анализа в формате JSON:
+Создай глубокий анализ финансов в формате JSON с двумя разделами:
 
-1. "summary" - краткое резюме месяца (1-2 предложения). Основные цифры{"и сравнение с прошлым месяцем" if prev_month_data else ""}.
+1. "summary" - краткое резюме месяца (2-3 предложения):
+   - Основные цифры{"и сравнение с прошлым месяцем" if prev_month_data else ""}
+   - {"Динамика трат (рост/снижение)" if prev_month_data else "Общая картина расходов"}
+   - {"Контекст относительно исторических данных" if valid_historical_data and len(valid_historical_data) >= 3 else ""}
 
-2. "analysis" - ключевые моменты (максимум 3 пункта):
-   - Самая большая категория расходов{"и её изменение" if prev_month_data else ""}
-   - {"Динамика по сравнению с прошлым месяцем" if prev_month_data else "Необычные траты"}
-   - {"Общий тренд (рост/снижение расходов)" if prev_month_data else "Финансовое поведение"}
+2. "analysis" - детальный анализ (4 пункта):
+   - **Основные категории:** Самая большая категория и её доля{"с изменением" if prev_month_data else ""}
+   - **{"Необычные траты" if unusual_expenses_section else "Крупные траты"}:** Выдели необычно большие покупки или траты выше среднего
+   - **{"Регулярные расходы" if regular_expenses_section else "Паттерны трат"}:** Укажи повторяющиеся траты или финансовые привычки
+   - **Персональный совет:** Конкретная рекомендация как оптимизировать расходы или на что обратить внимание
 
 ВАЖНО:
 - Пиши на русском языке, кратко и по делу
-- Используй конкретные цифры из данных
-- {"ОБЯЗАТЕЛЬНО указывай сравнение с предыдущим месяцем" if prev_month_data else ""}
-- {"НЕ упоминай доходы и баланс в анализе, фокусируйся только на расходах" if not has_income else ""}
-- Тон дружелюбный и мотивирующий
+- Используй конкретные цифры из данных (суммы, проценты, даты)
+- {"ОБЯЗАТЕЛЬНО сравнивай с предыдущим месяцем где уместно" if prev_month_data else ""}
+- {"НЕ упоминай доходы и баланс, фокусируйся только на расходах" if not has_income else ""}
+- Тон дружелюбный, мотивирующий, но профессиональный
 - Формат ответа: JSON с полями "summary", "analysis"
-- В поле "analysis" используй массив из 3 коротких строк
-
-Пример формата ответа:
-{{
-  "summary": "За {month_name} вы потратили X рублей, что на Y% {"меньше/больше чем в прошлом месяце" if prev_month_data else "при Z тратах"}.",
-  "analysis": [
-    "Основная категория: название (X₽, Y%)",
-    "{"Расходы снизились/выросли на X%" if prev_month_data else "Заметная трата: описание"}",
-    "{"Количество трат: X (было Y)" if prev_month_data else "Общее финансовое поведение"}"
-  ]
-}}"""
+- В поле "analysis" используй массив из 4 строк (каждая строка - отдельный пункт с маркером)"""
 
         return prompt
 
@@ -283,7 +574,8 @@ class MonthlyInsightsService:
         prev_month_data: Optional[Dict[str, Any]],
         year: int,
         month: int,
-        provider: str = 'deepseek'
+        provider: str = 'deepseek',
+        historical_data: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, str]:
         """
         Generate AI insights using the specified provider
@@ -301,8 +593,10 @@ class MonthlyInsightsService:
         """
         self._initialize_ai(provider)
 
-        # Build prompt with comparison data
-        prompt = self._build_analysis_prompt(profile, month_data, prev_month_data, year, month)
+        # Build prompt with comparison data and historical context
+        prompt = self._build_analysis_prompt(
+            profile, month_data, prev_month_data, year, month, historical_data
+        )
 
         logger.info(f"Generating insights for user {profile.telegram_id} for {month}/{year}")
 
@@ -340,7 +634,7 @@ class MonthlyInsightsService:
 
                 # Convert lists to formatted strings if needed
                 if isinstance(result['analysis'], list):
-                    result['analysis'] = '\n\n'.join(f"• {item}" for item in result['analysis'])
+                    result['analysis'] = '\n\n'.join(result['analysis'])
 
                 return {
                     'summary': result['summary'],
@@ -352,11 +646,35 @@ class MonthlyInsightsService:
                 logger.error(f"Failed to parse AI response as JSON: {e}")
                 logger.error(f"Response was: {response[:500]}")
 
-                # Fallback: split response into sections
-                return self._fallback_parse_response(response)
+                # Check if response contains error message from AI service
+                error_phrases = [
+                    'извините',
+                    'временно недоступен',
+                    'service unavailable',
+                    'error',
+                    'failed'
+                ]
+
+                if any(phrase in response.lower() for phrase in error_phrases):
+                    # AI service returned error - re-raise to trigger fallback provider
+                    logger.error("AI service returned error response, triggering provider fallback")
+                    raise Exception(f"AI provider returned error: {response[:200]}")
+
+                # Otherwise try to parse response as text (non-JSON format)
+                try:
+                    parsed = self._fallback_parse_response(response)
+                    if parsed and parsed.get('summary') and parsed.get('analysis'):
+                        return parsed
+                    else:
+                        raise ValueError("Fallback parsing returned empty result")
+                except Exception as parse_error:
+                    # If parsing completely fails, re-raise to trigger provider fallback
+                    logger.error(f"Fallback parsing failed: {parse_error}")
+                    raise Exception(f"Failed to parse AI response: {e}")
 
         except Exception as e:
             logger.error(f"Error generating AI insights: {e}")
+            # Re-raise exception to allow provider fallback in generate_insight()
             raise
 
     def _fallback_parse_response(self, response: str) -> Dict[str, str]:
@@ -398,6 +716,92 @@ class MonthlyInsightsService:
             sections['recommendations'] = response[1500:] if len(response) > 1500 else ''
 
         return sections
+
+    def _generate_basic_summary(
+        self,
+        month_data: Dict[str, Any],
+        prev_month_data: Optional[Dict[str, Any]],
+        year: int,
+        month: int
+    ) -> Dict[str, str]:
+        """
+        Generate basic summary when AI fails
+        Returns minimal but useful information as fallback
+
+        Args:
+            month_data: Current month data
+            prev_month_data: Previous month data (optional)
+            year: Year
+            month: Month
+
+        Returns:
+            Dictionary with summary and analysis
+        """
+        months_ru = {
+            1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля',
+            5: 'мая', 6: 'июня', 7: 'июля', 8: 'августа',
+            9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
+        }
+        month_name = months_ru.get(month, str(month))
+
+        total = float(month_data['total_expenses'])
+        count = len(month_data['expenses'])
+
+        # Basic summary
+        summary = f"За {month_name} вы потратили {total:,.0f} рублей ({count} трат).".replace(',', ' ')
+
+        # Add comparison if available
+        if prev_month_data:
+            prev_total = float(prev_month_data['total_expenses'])
+            change = total - prev_total
+            change_pct = (change / prev_total * 100) if prev_total > 0 else 0
+
+            if change > 0:
+                summary += f" Это на {change:,.0f}₽ ({change_pct:.0f}%) больше, чем в прошлом месяце.".replace(',', ' ')
+            elif change < 0:
+                summary += f" Это на {abs(change):,.0f}₽ ({abs(change_pct):.0f}%) меньше, чем в прошлом месяце.".replace(',', ' ')
+            else:
+                summary += " Траты остались на том же уровне."
+
+        # Basic analysis with 4 bullet points
+        analysis_parts = []
+
+        # Point 1: Top category or general note
+        top_cats = list(month_data['expenses_by_category'].items())[:3]
+        if top_cats:
+            cat_name, cat_data = top_cats[0]
+            cat_amount = float(cat_data['amount'])
+            cat_pct = (cat_amount / total * 100) if total > 0 else 0
+            analysis_parts.append(f"• Основная категория: {cat_name} ({cat_amount:,.0f}₽, {cat_pct:.0f}%)".replace(',', ' '))
+        else:
+            analysis_parts.append("• За этот месяц трат не было")
+
+        # Point 2: Comparison observation
+        if prev_month_data:
+            change = total - float(prev_month_data['total_expenses'])
+            if change > 0:
+                analysis_parts.append("• Расходы выросли по сравнению с прошлым месяцем")
+            elif change < 0:
+                analysis_parts.append("• Расходы снизились по сравнению с прошлым месяцем")
+            else:
+                analysis_parts.append("• Расходы остались на том же уровне")
+        else:
+            analysis_parts.append("• Финансовое поведение в пределах нормы")
+
+        # Point 3: Spending pattern
+        avg_expense = total / count if count > 0 else 0
+        analysis_parts.append(f"• Средняя трата: {avg_expense:,.0f}₽".replace(',', ' '))
+
+        # Point 4: Generic advice
+        analysis_parts.append("• Совет: продолжайте отслеживать расходы для контроля бюджета")
+
+        analysis = '\n\n'.join(analysis_parts)
+
+        return {
+            'summary': summary,
+            'analysis': analysis,
+            'recommendations': ''  # Empty for backwards compatibility
+        }
 
     async def generate_insight(
         self,
@@ -446,7 +850,7 @@ class MonthlyInsightsService:
                 profile=profile,
                 year=year,
                 month=month
-            ).first()
+            ).select_related('profile').first()
         )
 
         if existing_insight and not force_regenerate:
@@ -476,13 +880,27 @@ class MonthlyInsightsService:
                 logger.warning(f"Failed to collect previous month data: {e}")
                 prev_month_data = None
 
-            # Generate AI insights with comparison and fallback
+            # Collect historical data (last 3-6 months)
+            historical_data = []
+            try:
+                historical_data = await self._collect_historical_data(profile, year, month, months_back=6)
+                # Filter out months with insufficient data
+                historical_data = [
+                    h for h in historical_data
+                    if h['total_expenses'] > 0 and h['expenses_count'] >= 3
+                ]
+                logger.info(f"Collected {len(historical_data)} months of historical data for user {profile.telegram_id}")
+            except Exception as e:
+                logger.warning(f"Failed to collect historical data: {e}")
+                historical_data = []
+
+            # Generate AI insights with comparison, historical context and fallback
             ai_insights = None
 
             primary_provider = provider
             try:
                 ai_insights = await self._generate_ai_insights(
-                    profile, month_data, prev_month_data, year, month, provider
+                    profile, month_data, prev_month_data, year, month, provider, historical_data
                 )
             except Exception as e:
                 logger.error(f"Primary AI provider ({provider}) failed: {e}")
@@ -494,7 +912,7 @@ class MonthlyInsightsService:
                             f"Attempting fallback to {fallback_provider} for user {profile.telegram_id}"
                         )
                         ai_insights = await self._generate_ai_insights(
-                            profile, month_data, prev_month_data, year, month, fallback_provider
+                            profile, month_data, prev_month_data, year, month, fallback_provider, historical_data
                         )
                         provider = fallback_provider
                         await self._notify_admin_fallback(
@@ -507,8 +925,17 @@ class MonthlyInsightsService:
                         )
 
                 if not ai_insights:
+                    # All AI providers failed - use basic summary as final fallback
+                    logger.error(f"All AI providers failed for user {profile.telegram_id}, using basic summary")
                     await self._notify_admin_failure(profile.telegram_id, year, month)
-                    raise
+                    ai_insights = self._generate_basic_summary(month_data, prev_month_data, year, month)
+                    provider = 'basic'  # Mark that we used basic fallback
+
+            # Validate AI result before saving
+            if not ai_insights or not ai_insights.get('summary') or not ai_insights.get('analysis'):
+                logger.warning(f"AI response empty for user {profile.telegram_id}, using basic summary fallback")
+                ai_insights = self._generate_basic_summary(month_data, prev_month_data, year, month)
+                provider = 'basic'
 
             # Create or update insight
             if existing_insight:
@@ -581,7 +1008,7 @@ class MonthlyInsightsService:
                 profile=profile,
                 year=year,
                 month=month
-            ).first()
+            ).select_related('profile').first()
         )
 
         return insight
