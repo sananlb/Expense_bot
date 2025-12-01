@@ -135,12 +135,12 @@ def generate_monthly_insights():
         success_count = 0
         fail_count = 0
 
-        insights_provider = os.getenv('AI_PROVIDER_INSIGHTS') or os.getenv('AI_PROVIDER_DEFAULT') or 'google'
+        insights_provider = os.getenv('AI_PROVIDER_INSIGHTS') or os.getenv('AI_PROVIDER_DEFAULT') or 'deepseek'
         insights_provider = insights_provider.lower()
-        valid_providers = {'google', 'openai', 'deepseek', 'qwen'}
+        valid_providers = {'google', 'openai', 'deepseek', 'qwen', 'openrouter'}
         if insights_provider not in valid_providers:
-            logger.warning(f"Unknown AI provider for insights: {insights_provider}, falling back to google")
-            insights_provider = 'google'
+            logger.warning(f"Unknown AI provider for insights: {insights_provider}, falling back to deepseek")
+            insights_provider = 'deepseek'
 
         for profile in profiles:
             try:

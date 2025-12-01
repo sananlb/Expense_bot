@@ -14,7 +14,7 @@ OPENROUTER_DEFAULT_MODEL = os.getenv('OPENROUTER_MODEL_DEFAULT', 'google/gemini-
 # Конфигурация AI провайдеров
 AI_PROVIDERS = {
     'categorization': {
-        'provider': os.getenv('AI_PROVIDER_CATEGORIZATION', 'google'),  # Google по умолчанию
+        'provider': os.getenv('AI_PROVIDER_CATEGORIZATION', 'deepseek'),  # DeepSeek по умолчанию
         'model': {
             'google': os.getenv('GOOGLE_MODEL_CATEGORIZATION', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_CATEGORIZATION', 'gpt-4o-mini'),
@@ -24,7 +24,7 @@ AI_PROVIDERS = {
         }
     },
     'chat': {
-        'provider': os.getenv('AI_PROVIDER_CHAT', 'google'),  # Google по умолчанию
+        'provider': os.getenv('AI_PROVIDER_CHAT', 'deepseek'),  # DeepSeek по умолчанию
         'model': {
             'google': os.getenv('GOOGLE_MODEL_CHAT', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_CHAT', 'gpt-4o-mini'),
@@ -34,7 +34,7 @@ AI_PROVIDERS = {
         }
     },
     'insights': {
-        'provider': os.getenv('AI_PROVIDER_INSIGHTS', 'google'),  # Google по умолчанию
+        'provider': os.getenv('AI_PROVIDER_INSIGHTS', 'deepseek'),  # DeepSeek по умолчанию
         'model': {
             'google': os.getenv('GOOGLE_MODEL_INSIGHTS', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_INSIGHTS', 'gpt-4o-mini'),
@@ -50,7 +50,7 @@ AI_PROVIDERS = {
         }
     },
     'default': {
-        'provider': os.getenv('AI_PROVIDER_DEFAULT', 'google'),  # Google по умолчанию
+        'provider': os.getenv('AI_PROVIDER_DEFAULT', 'deepseek'),  # DeepSeek по умолчанию
         'model': {
             'google': os.getenv('GOOGLE_MODEL_DEFAULT', 'gemini-2.5-flash'),
             'openai': os.getenv('OPENAI_MODEL_DEFAULT', 'gpt-4o-mini'),

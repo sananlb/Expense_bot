@@ -32,7 +32,7 @@ class MonthlyInsightsService:
         self.ai_provider = None
         self.ai_model = None
 
-    def _initialize_ai(self, provider: str = 'google'):
+    def _initialize_ai(self, provider: str = 'deepseek'):
         """Initialize AI service based on provider"""
         if not self.ai_service or self.ai_provider != provider:
             # Clear cache to force new provider
@@ -283,7 +283,7 @@ class MonthlyInsightsService:
         prev_month_data: Optional[Dict[str, Any]],
         year: int,
         month: int,
-        provider: str = 'google'
+        provider: str = 'deepseek'
     ) -> Dict[str, str]:
         """
         Generate AI insights using the specified provider
@@ -294,7 +294,7 @@ class MonthlyInsightsService:
             prev_month_data: Previous month data for comparison
             year: Year
             month: Month
-            provider: AI provider ('google' or 'openai')
+            provider: AI provider ('deepseek', 'openrouter', 'openai', etc.)
 
         Returns:
             Dictionary with AI-generated texts
@@ -411,7 +411,7 @@ class MonthlyInsightsService:
         profile: Profile,
         year: Optional[int] = None,
         month: Optional[int] = None,
-        provider: str = 'google',
+        provider: str = 'deepseek',
         force_regenerate: bool = False
     ) -> Optional[MonthlyInsight]:
         """
