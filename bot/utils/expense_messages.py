@@ -51,15 +51,15 @@ async def format_expense_added_message(
     # Используем неразрывные пробелы (U+00A0) и символ нулевой ширины (U+200B)
     invisible_padding = "\u200B" * 20  # Символы нулевой ширины для расширения
     
-    # Добавляем заголовок для ежемесячного платежа
+    # Формируем сообщение
     message = ""
-    if is_recurring:
-        message = "🔄 <b>Ежемесячный платеж</b>\n\n"
-    
+
     # Убираем префикс [Ежемесячный] из описания если он есть
     description = expense.description
     if description.startswith("[Ежемесячный] "):
         description = description.replace("[Ежемесячный] ", "")
+    if description.startswith("[Регулярный] "):
+        description = description.replace("[Регулярный] ", "")
     
     message += f"✅ <b>{description}</b>{invisible_padding}\n\n"
     message += f"🧾 {amount_text}{cashback_text}\n"
@@ -75,7 +75,12 @@ async def format_expense_added_message(
     if similar_expense or reused_from_last:
         hint_text = "Used data from last similar record" if lang == 'en' else "Использованы данные из последней похожей записи"
         message += f"\n\n<i>💡 {hint_text}</i>"
-    
+
+    # Добавляем метку регулярной операции (курсивом, перед разделительной чертой)
+    if is_recurring:
+        recurring_label = "💡 Recurring operation" if lang == 'en' else "💡 Регулярная операция"
+        message += f"\n\n<i>{recurring_label}</i>"
+
     # Получаем сводку за дату операции
     try:
         # Определяем за какой день показывать итоги
@@ -145,6 +150,7 @@ async def format_income_added_message(
     income,
     category,
     similar_income: bool = False,
+    is_recurring: bool = False,
     lang: str = 'ru'
 ) -> str:
     """
@@ -166,7 +172,15 @@ async def format_income_added_message(
     # Делаем описание жирным и добавляем невидимые символы для расширения
     invisible_padding = "\u200B" * 20  # Символы нулевой ширины для расширения
     
-    message = f"✅ <b>{income.description}</b>{invisible_padding}\n\n"
+    message = ""
+
+    description = income.description
+    if description.startswith("[Регулярный] "):
+        description = description.replace("[Регулярный] ", "")
+    if description.startswith("[Ежемесячный] "):
+        description = description.replace("[Ежемесячный] ", "")
+
+    message += f"✅ <b>{description}</b>{invisible_padding}\n\n"
     message += f"🧾 +{amount_text}\n"
     
     # Получаем отображаемое имя категории на языке пользователя
@@ -180,7 +194,12 @@ async def format_income_added_message(
     if similar_income:
         hint_text = "Used data from last similar record" if lang == 'en' else "Использованы данные из последней похожей записи"
         message += f"\n\n<i>💡 {hint_text}</i>"
-    
+
+    # Добавляем метку регулярной операции (курсивом, перед разделительной чертой)
+    if is_recurring:
+        recurring_label = "💡 Recurring operation" if lang == 'en' else "💡 Регулярная операция"
+        message += f"\n\n<i>{recurring_label}</i>"
+
     # Получаем сводку за дату операции (доходы)
     try:
         # Определяем за какой день показывать итоги
