@@ -315,7 +315,7 @@ class ExportService:
         current_month: int,
         lang: str,
         household_id: int | None = None
-    ) -> Tuple[Dict[Tuple[int, int], Dict[str, float]], Dict[Tuple[int, int], Dict[str, float]], Dict[Tuple[int, int], Dict[str, int]], List[Tuple[int, int]], Dict[Tuple[str, str], Dict[str, Any]], Dict[Tuple[str, str], Dict[str, Any]]]:
+    ) -> Tuple[Dict[Tuple[int, int], Dict[str, float]], Dict[Tuple[int, int], Dict[str, float]], Dict[Tuple[int, int], Dict[str, int]], Dict[Tuple[int, int], Dict[str, int]], List[Tuple[int, int]], Dict[Tuple[str, str], Dict[str, Any]], Dict[Tuple[str, str], Dict[str, Any]]]:
         """
         Загружает данные о расходах и доходах за последние 12 месяцев.
 
@@ -324,7 +324,9 @@ class ExportService:
             - expenses_by_month: {(year, month): {category_name: total_amount}}
             - incomes_by_month: {(year, month): {category_name: total_amount}}
             - expenses_counts_by_month: {(year, month): {category_name: operations_count}}
+            - incomes_counts_by_month: {(year, month): {category_name: operations_count}}
             - months_list: список (year, month) за 12 месяцев от старого к новому
+            - expense_operations, income_operations: операции для топ-10
         """
         # Формируем список 12 месяцев (от старого к новому)
         months_list = []
@@ -406,6 +408,7 @@ class ExportService:
 
         # Группируем доходы по месяцам и категориям + по операциям (описание+валюта)
         incomes_by_month: Dict[Tuple[int, int], Dict[str, float]] = {m: {} for m in months_list}
+        incomes_counts_by_month: Dict[Tuple[int, int], Dict[str, int]] = {m: {} for m in months_list}
         income_operations: Dict[Tuple[str, str], Dict[str, Any]] = {}
         for income in incomes:
             year_month = (income.income_date.year, income.income_date.month)
@@ -413,7 +416,9 @@ class ExportService:
             if year_month in incomes_by_month:
                 if category_name not in incomes_by_month[year_month]:
                     incomes_by_month[year_month][category_name] = 0
+                    incomes_counts_by_month[year_month][category_name] = 0
                 incomes_by_month[year_month][category_name] += float(income.amount)
+                incomes_counts_by_month[year_month][category_name] += 1
 
             desc_display = (income.description or 'Без описания').strip()
             desc_norm = desc_display.lower()
@@ -436,7 +441,7 @@ class ExportService:
             op['total'] += float(income.amount)
             op['count'] += 1
 
-        return expenses_by_month, incomes_by_month, expenses_counts_by_month, months_list, expense_operations, income_operations
+        return expenses_by_month, incomes_by_month, expenses_counts_by_month, incomes_counts_by_month, months_list, expense_operations, income_operations
 
     @staticmethod
     def _add_summary_sheet(
@@ -452,7 +457,7 @@ class ExportService:
         Текущий месяц содержит ссылки на лист с детальным отчётом.
         """
         # Загружаем данные
-        expenses_by_month, incomes_by_month, expenses_counts_by_month, months_list, expense_operations, income_operations = ExportService._load_12_months_data(
+        expenses_by_month, incomes_by_month, expenses_counts_by_month, incomes_counts_by_month, months_list, expense_operations, income_operations = ExportService._load_12_months_data(
             profile_id, current_year, current_month, lang, household_id
         )
 
@@ -469,32 +474,93 @@ class ExportService:
             # IFERROR на случай если все значения 0 или нет данных
             return f'=IFERROR(SLOPE({data_range},{{{indices}}})*12/AVERAGE({data_range}),"")'
 
-        def calc_trend_python(values: list[float]) -> float | None:
+        def calc_trend_python(values: list[float], weights: list[int] | None = None, for_top10: bool = False) -> float | None:
             """
-            Python версия расчёта тренда (линейная регрессия).
-            Используется для аналитических таблиц где данные уже в Python.
-            Возвращает: % изменения за год на основе линейного тренда.
+            Python версия расчёта тренда.
+
+            Для категорий (for_top10=False):
+                Аналог Excel: SLOPE(data, {1,2,...,n}) * 12 / AVERAGE(data)
+                Использует ВСЕ 12 точек (с 0 для пустых месяцев).
+
+            Для топ-10 операций (for_top10=True, weights заданы):
+                Метод взвешенных третей (аналог индекса потребительских цен):
+                - Делим период на первую треть и последнюю треть
+                - Считаем взвешенное среднее цен в каждой трети (вес = кол-во операций)
+                - Изменение = (средняя_последней_трети / средняя_первой_трети) - 1
             """
-            points = [(idx, v) for idx, v in enumerate(values) if v not in (None, 0)]
-            if len(points) < 2:
-                return None
+            if for_top10 and weights is not None:
+                # Для топ-10: метод взвешенных третей
+                # Берём только месяцы с данными (avg > 0 и count > 0)
+                points = []
+                for idx, (v, w) in enumerate(zip(values, weights)):
+                    if v is not None and v > 0 and w > 0:
+                        points.append((idx + 1, v, w))  # (месяц, средняя_цена, кол-во_операций)
 
-            n = len(points)
-            x_mean = sum(idx for idx, _ in points) / n
-            y_mean = sum(v for _, v in points) / n
-            if y_mean == 0:
-                return None
+                if len(points) < 2:
+                    return None
 
-            numerator = sum((idx - x_mean) * (v - y_mean) for idx, v in points)
-            denominator = sum((idx - x_mean) ** 2 for idx, _ in points)
+                # Определяем границы третей
+                first_idx = points[0][0]
+                last_idx = points[-1][0]
+                period_len = last_idx - first_idx
 
-            if denominator == 0 or y_mean == 0:
-                return None
+                if period_len == 0:
+                    return None
 
-            slope = numerator / denominator
-            # Экстраполяция на год и нормализация к среднему
-            annual_change = (slope * 12) / y_mean
-            return annual_change
+                third = period_len / 3
+                first_third_end = first_idx + third
+                last_third_start = last_idx - third
+
+                # Разбиваем точки на первую и последнюю трети
+                first_third = [(x, y, w) for x, y, w in points if x <= first_third_end]
+                last_third = [(x, y, w) for x, y, w in points if x >= last_third_start]
+
+                # Если одна из третей пустая, берём крайние точки
+                if not first_third:
+                    first_third = [points[0]]
+                if not last_third:
+                    last_third = [points[-1]]
+
+                # Взвешенные средние цены
+                first_total_weight = sum(w for _, _, w in first_third)
+                last_total_weight = sum(w for _, _, w in last_third)
+
+                if first_total_weight == 0 or last_total_weight == 0:
+                    return None
+
+                first_weighted_avg = sum(y * w for _, y, w in first_third) / first_total_weight
+                last_weighted_avg = sum(y * w for _, y, w in last_third) / last_total_weight
+
+                if first_weighted_avg == 0:
+                    return None
+
+                # Изменение = (последняя / первая) - 1
+                change = (last_weighted_avg / first_weighted_avg) - 1
+                return change
+            else:
+                # Для категорий — стандартная формула как в Excel (с нулями)
+                clean_values = [v if v is not None else 0 for v in values]
+                non_zero_count = sum(1 for v in clean_values if v > 0)
+                if non_zero_count < 2:
+                    return None
+
+                n = len(clean_values)
+                x_vals = list(range(1, n + 1))
+                x_mean = sum(x_vals) / n
+                y_mean = sum(clean_values) / n
+
+                if y_mean == 0:
+                    return None
+
+                numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_vals, clean_values))
+                denominator = sum((x - x_mean) ** 2 for x in x_vals)
+
+                if denominator == 0:
+                    return None
+
+                slope = numerator / denominator
+                annual_change = (slope * 12) / y_mean
+                return annual_change
 
         expense_month_totals = [sum(expenses_by_month[(y, m)].values()) for y, m in months_list]
         income_month_totals = [sum(incomes_by_month[(y, m)].values()) for y, m in months_list]
@@ -586,11 +652,13 @@ class ExportService:
 
         for category in sorted_categories:
             row_values: list[float] = []
+            row_counts: list[int] = []  # Количество операций по месяцам для весов
             ws.cell(row=current_row, column=1, value=category)
             ws.cell(row=current_row, column=2, value=None)  # План - пустой
 
             for col_offset, (year, month) in enumerate(months_list):
                 amount = expenses_by_month[(year, month)].get(category, 0)
+                count = expenses_counts_by_month[(year, month)].get(category, 0)
                 col_idx = 3 + col_offset
                 is_current_month = (year == current_year and month == current_month)
 
@@ -605,6 +673,7 @@ class ExportService:
                 else:
                     ws.cell(row=current_row, column=col_idx, value=None)
                 row_values.append(float(amount) if amount else 0)
+                row_counts.append(count)
 
             # Итого = формула SUM по всем месяцам
             first_col_letter = get_column_letter(first_month_col)
@@ -618,9 +687,9 @@ class ExportService:
             avg_formula = f"=IFERROR(ROUND({total_col_letter}{current_row}/COUNTIF({first_col_letter}{expenses_totals_row_num}:{last_col_letter}{expenses_totals_row_num},\"<>0\"),2),\"\")"
             ws.cell(row=current_row, column=avg_col, value=avg_formula)
 
-            # Изменение = Excel формула тренда (SLOPE)
-            trend_formula = make_trend_formula(first_col_letter, last_col_letter, current_row, len(months_list))
-            change_cell = ws.cell(row=current_row, column=change_col, value=trend_formula)
+            # Изменение = метод взвешенных третей (Python расчёт)
+            change_value = calc_trend_python(row_values, weights=row_counts, for_top10=True)
+            change_cell = ws.cell(row=current_row, column=change_col, value=change_value)
             change_cell.number_format = '0.0%'
 
             # Применяем границы и чередование
@@ -673,9 +742,11 @@ class ExportService:
         ws.cell(row=current_row, column=avg_col, value=avg_formula)
         ws.cell(row=current_row, column=avg_col).font = Font(bold=True)
 
-        # Изменение % для ИТОГО РАСХОДЫ (Excel формула тренда)
-        trend_formula = make_trend_formula(first_col_letter, last_col_letter, current_row, len(months_list))
-        change_cell = ws.cell(row=current_row, column=change_col, value=trend_formula)
+        # Изменение % для ИТОГО РАСХОДЫ (метод взвешенных третей)
+        total_amounts = [sum(expenses_by_month[m].values()) for m in months_list]
+        total_counts = [sum(expenses_counts_by_month[m].values()) for m in months_list]
+        change_value = calc_trend_python(total_amounts, weights=total_counts, for_top10=True)
+        change_cell = ws.cell(row=current_row, column=change_col, value=change_value)
         change_cell.font = Font(bold=True)
         change_cell.number_format = '0.0%'
 
@@ -725,11 +796,13 @@ class ExportService:
 
         for category in sorted_income_categories:
             row_values: list[float] = []
+            row_counts: list[int] = []  # Количество операций по месяцам для весов
             ws.cell(row=current_row, column=1, value=category)
             ws.cell(row=current_row, column=2, value=None)  # План
 
             for col_offset, (year, month) in enumerate(months_list):
                 amount = incomes_by_month[(year, month)].get(category, 0)
+                count = incomes_counts_by_month[(year, month)].get(category, 0)
                 col_idx = 3 + col_offset
                 is_current_month = (year == current_year and month == current_month)
 
@@ -743,6 +816,7 @@ class ExportService:
                 else:
                     ws.cell(row=current_row, column=col_idx, value=None)
                 row_values.append(float(amount) if amount else 0)
+                row_counts.append(count)
 
             # Итого = формула SUM по всем месяцам
             first_col_letter = get_column_letter(first_month_col)
@@ -755,9 +829,9 @@ class ExportService:
             avg_formula = f"=IFERROR(ROUND({total_col_letter}{current_row}/COUNTIF({first_col_letter}{income_totals_row_num}:{last_col_letter}{income_totals_row_num},\"<>0\"),2),\"\")"
             ws.cell(row=current_row, column=avg_col, value=avg_formula)
 
-            # Изменение = Excel формула тренда (SLOPE)
-            trend_formula = make_trend_formula(first_col_letter, last_col_letter, current_row, len(months_list))
-            change_cell = ws.cell(row=current_row, column=change_col, value=trend_formula)
+            # Изменение = метод взвешенных третей (Python расчёт)
+            change_value = calc_trend_python(row_values, weights=row_counts, for_top10=True)
+            change_cell = ws.cell(row=current_row, column=change_col, value=change_value)
             change_cell.number_format = '0.0%'
 
             # Применяем границы и чередование
@@ -809,9 +883,11 @@ class ExportService:
         ws.cell(row=current_row, column=avg_col, value=avg_formula)
         ws.cell(row=current_row, column=avg_col).font = Font(bold=True, color="008000")
 
-        # Изменение % для ИТОГО ДОХОДЫ (Excel формула тренда)
-        trend_formula = make_trend_formula(first_col_letter, last_col_letter, current_row, len(months_list))
-        change_cell = ws.cell(row=current_row, column=change_col, value=trend_formula)
+        # Изменение % для ИТОГО ДОХОДЫ (метод взвешенных третей)
+        total_income_amounts = [sum(incomes_by_month[m].values()) for m in months_list]
+        total_income_counts = [sum(incomes_counts_by_month[m].values()) for m in months_list]
+        income_change_value = calc_trend_python(total_income_amounts, weights=total_income_counts, for_top10=True)
+        change_cell = ws.cell(row=current_row, column=change_col, value=income_change_value)
         change_cell.font = Font(bold=True, color="008000")
         change_cell.number_format = '0.0%'
 
@@ -936,8 +1012,9 @@ class ExportService:
                 inflation_ratio = None
                 non_zero_months = sum(1 for cnt in monthly_counts if cnt)
                 if total_count > 1 and non_zero_months > 1:
-                    inflation_ratio = calc_trend_python(monthly_avg_prices)
-                    # Округляем тренд до 4 знаков (это проценты: 0.1234 = 12.34%)
+                    # Взвешенный SLOPE: веса = количество операций в месяце
+                    inflation_ratio = calc_trend_python(monthly_avg_prices, weights=monthly_counts, for_top10=True)
+                    # Округляем до 4 знаков (это проценты: 0.1234 = 12.34%)
                     if inflation_ratio is not None:
                         inflation_ratio = round(inflation_ratio, 4)
                 items.append({
