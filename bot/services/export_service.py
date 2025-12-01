@@ -1160,15 +1160,6 @@ class ExportService:
         wb = Workbook()
         ws = wb.active
 
-        # Функция для обрезания длинного текста с многоточием
-        def truncate_text(text: str, max_length: int = 33) -> str:
-            """Обрезает текст до max_length символов, добавляя многоточие если нужно
-            max_length=33 соответствует длине "Коммунальные услуги и подписки"
-            """
-            if len(text) > max_length:
-                return text[:max_length-1] + '…'
-            return text
-
         # ==================== НАЗВАНИЕ ЛИСТА В ФОРМАТЕ Oct-2025 ====================
         month_names_en = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -1545,7 +1536,8 @@ class ExportService:
                 cashback = total_cashback
 
                 # Заполняем колонки Summary
-                ws.cell(row=summary_row, column=summary_start_col, value=truncate_text(category))
+                # ВАЖНО: category НЕ обрезаем - используется для SUMIF ссылок с листа "Итоги 12 мес"
+                ws.cell(row=summary_row, column=summary_start_col, value=category)
                 ws.cell(row=summary_row, column=summary_start_col + 1, value=currency)
                 ws.cell(row=summary_row, column=summary_start_col + 2, value=smart_number(stats['total']))
                 ws.cell(row=summary_row, column=summary_start_col + 3, value=stats['count'])
@@ -1974,7 +1966,8 @@ class ExportService:
             for (category, currency), stats in sorted_income_categories:
                 average = stats['total'] / stats['count'] if stats['count'] > 0 else 0
 
-                ws.cell(row=income_summary_row, column=income_summary_start_col, value=truncate_text(category))
+                # ВАЖНО: category НЕ обрезаем - используется для SUMIF ссылок с листа "Итоги 12 мес"
+                ws.cell(row=income_summary_row, column=income_summary_start_col, value=category)
                 ws.cell(row=income_summary_row, column=income_summary_start_col + 1, value=currency)
                 ws.cell(row=income_summary_row, column=income_summary_start_col + 2, value=smart_number(stats['total']))
                 ws.cell(row=income_summary_row, column=income_summary_start_col + 3, value=stats['count'])
