@@ -70,32 +70,49 @@ class FAQMatcher:
         """
         Find FAQ answer.
 
+        Searches in BOTH language indices (RU and EN) to match user's question,
+        but returns answer in the user's preferred language (lang parameter).
+
         Returns: (answer, confidence, faq_id)
         """
         text_norm = _normalize_text(text)
         if not text_norm:
             return None, 0.0, None
 
-        questions_index = self._get_questions_index(lang)
+        # Search in BOTH indices - user may write in any language
+        all_indices = [
+            ("ru", self._questions_ru),
+            ("en", self._questions_en),
+        ]
 
-        # 1) Exact match
-        if text_norm in questions_index:
-            entry = questions_index[text_norm]
+        # 1) Exact match in any language
+        for idx_lang, questions_index in all_indices:
+            if text_norm in questions_index:
+                entry = questions_index[text_norm]
+                # Answer in user's preferred language
+                raw_answer = entry.get(f"answer_{lang}") or entry.get("answer_ru")
+                answer = _resolve_answer(raw_answer, lang)
+                logger.info(f"[FAQ] Exact match ({idx_lang}): '{text_norm}' -> {entry['id']}")
+                return answer, 1.0, entry["id"]
+
+        # 2) Fuzzy match in any language - find best match across both
+        best_match: Optional[Tuple[str, FAQEntry, float, str]] = None  # (matched_q, entry, ratio, idx_lang)
+
+        for idx_lang, questions_index in all_indices:
+            all_questions = list(questions_index.keys())
+            close = get_close_matches(text_norm, all_questions, n=1, cutoff=self.FUZZY_CUTOFF)
+            if close:
+                matched_q = close[0]
+                entry = questions_index[matched_q]
+                ratio = SequenceMatcher(None, text_norm, matched_q).ratio()
+                if best_match is None or ratio > best_match[2]:
+                    best_match = (matched_q, entry, ratio, idx_lang)
+
+        if best_match:
+            matched_q, entry, ratio, idx_lang = best_match
             raw_answer = entry.get(f"answer_{lang}") or entry.get("answer_ru")
             answer = _resolve_answer(raw_answer, lang)
-            logger.info(f"[FAQ] Exact match: '{text_norm}' -> {entry['id']}")
-            return answer, 1.0, entry["id"]
-
-        # 2) Fuzzy match
-        all_questions = list(questions_index.keys())
-        close = get_close_matches(text_norm, all_questions, n=1, cutoff=self.FUZZY_CUTOFF)
-        if close:
-            matched_q = close[0]
-            entry = questions_index[matched_q]
-            ratio = SequenceMatcher(None, text_norm, matched_q).ratio()
-            raw_answer = entry.get(f"answer_{lang}") or entry.get("answer_ru")
-            answer = _resolve_answer(raw_answer, lang)
-            logger.info(f"[FAQ] Fuzzy match: '{text_norm}' -> '{matched_q}' (ratio={ratio:.2f})")
+            logger.info(f"[FAQ] Fuzzy match ({idx_lang}): '{text_norm}' -> '{matched_q}' (ratio={ratio:.2f})")
             return answer, ratio, entry["id"]
 
         # 3) Keyword overlap (need at least 2 common keywords)
