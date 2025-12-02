@@ -1376,8 +1376,15 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 )
                 return
         else:
-            # Если не удалось распарсить как доход, продолжаем как расход
+            # Если не удалось распарсить как доход, показываем ошибку
+            # НЕ создаем расход когда intent явно доход (знак + или "плюс")
             logger.warning(f"Failed to parse as income despite intent: '{text}'")
+            await cancel_typing()
+            await message.answer(
+                "❌ Не удалось распознать доход. Попробуйте формат: +5000 зарплата",
+                parse_mode="HTML"
+            )
+            return
     
     # Парсим сообщение с AI поддержкой (как расход)
     from expenses.models import Profile
