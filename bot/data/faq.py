@@ -28,6 +28,8 @@ FAQ_DATA: List[FAQEntry] = [
             "кто ты",
             "help",
             "помощь",
+            "как дела",
+            "привет как дела",
         ],
         "questions_en": [
             "what can you do",
@@ -35,6 +37,7 @@ FAQ_DATA: List[FAQEntry] = [
             "what is this bot",
             "help",
             "capabilities",
+            "how are you",
         ],
         "keywords": ["помощь", "функции", "возможности", "help", "capabilities"],
         "answer_ru": "__WELCOME_MESSAGE__",
@@ -188,15 +191,24 @@ FAQ_DATA: List[FAQEntry] = [
         "category": "cashback",
         "questions_ru": [
             "как работает кешбэк",
+            "как работает кешбек",
+            "как пользоваться кешбэк",
+            "как пользоваться кешбек",
             "как добавить кешбэк",
+            "как добавить кешбек",
             "как учитывать кешбэк",
+            "как учитывать кешбек",
+            "что такое кешбэк",
+            "что такое кешбек",
         ],
         "questions_en": [
             "how cashback works",
+            "how to use cashback",
+            "what is cashback",
             "add cashback",
             "track cashback",
         ],
-        "keywords": ["кешбэк", "cashback", "cash back", "бонусы"],
+        "keywords": ["кешбэк", "кешбек", "cashback", "cash back", "бонусы"],
         "answer_ru": (
             "Добавьте кешбэк в меню \"Кешбэк\". После этого все записи с категорией, на которую добавлен кешбэк, "
             "будут отображаться с кешбэком. Также есть учёт кешбэка как дохода в отчётах. "
@@ -275,17 +287,15 @@ FAQ_DATA: List[FAQEntry] = [
         "keywords": ["подписка", "премиум", "premium", "subscription"],
         "answer_ru": (
             "Большинство функций доступны бесплатно! С подпиской (есть триал для новых): "
-            "AI-ассистент — вопросы по статистике естественным языком (\"сколько потратил на еду в ноябре?\", \"какая самая большая трата?\"); "
+            "AI-ассистент — вопросы по статистике естественным языком; "
             "учёт доходов; голосовой ввод; учёт кешбэка; семейный бюджет. "
-            "Отчёты: с подпиской — в любое время, без подписки — приходят 1-го числа за прошлый месяц. "
-            "/subscription — статус и оплата."
+            "Подробности и актуальные цены — команда /subscription."
         ),
         "answer_en": (
             "Most features are free! Subscription (trial for new users) adds: "
-            "AI assistant — ask about your stats naturally (\"how much did I spend on food in November?\", \"what's my biggest expense?\"); "
+            "AI assistant — ask about your stats naturally; "
             "income tracking; voice input; cashback tracking; family budget. "
-            "Reports: with subscription — anytime, without — sent on 1st of each month for previous month. "
-            "/subscription — status and payment."
+            "Details and current prices — /subscription command."
         ),
     },
     {

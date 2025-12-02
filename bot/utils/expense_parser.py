@@ -95,15 +95,43 @@ def keyword_matches_in_text(keyword: str, text: str) -> bool:
 def convert_words_to_numbers(text: str) -> str:
     """
     Конвертирует числа словами в цифры, поддерживая составные числа.
+    Также обрабатывает комбинации цифр + множитель (50 тыс -> 50000).
     Примеры:
     - "two hundred" -> "200"
     - "twenty five thousand" -> "25000"
     - "Apple minus two" -> "Apple -2"
     - "двести пятьдесят" -> "250"
+    - "50 тыс" -> "50000"
+    - "10к" -> "10000"
     """
     if not text:
         return text
-    
+
+    # Сначала обрабатываем комбинации "число + множитель" (50 тыс, 10к, 5 млн)
+    # Это нужно делать ДО разбиения на слова
+
+    # Паттерн: число (с возможной десятичной частью) + пробел? + множитель
+    # Примеры: "50 тыс", "10к", "5.5 млн", "100 тысяч"
+    for mult_word, mult_value in sorted(AMOUNT_MULTIPLIERS.items(), key=lambda x: -len(x[0])):
+        # Паттерн для числа с пробелом перед множителем: "50 тыс"
+        pattern_with_space = rf'(\d+(?:[.,]\d+)?)\s+{re.escape(mult_word)}\b'
+        match = re.search(pattern_with_space, text, re.IGNORECASE)
+        if match:
+            num = float(match.group(1).replace(',', '.'))
+            result = int(num * mult_value) if num * mult_value == int(num * mult_value) else num * mult_value
+            text = text[:match.start()] + str(result) + text[match.end():]
+            # Продолжаем искать другие комбинации
+            continue
+
+        # Паттерн для слитного написания: "10к", "5млн" (только для коротких множителей)
+        if len(mult_word) <= 3:  # к, k, м, m, тыс, млн
+            pattern_no_space = rf'(\d+(?:[.,]\d+)?){re.escape(mult_word)}\b'
+            match = re.search(pattern_no_space, text, re.IGNORECASE)
+            if match:
+                num = float(match.group(1).replace(',', '.'))
+                result = int(num * mult_value) if num * mult_value == int(num * mult_value) else num * mult_value
+                text = text[:match.start()] + str(result) + text[match.end():]
+
     processed_text = text.replace('-', ' ')
     words = processed_text.split()
     result_words = []
@@ -113,7 +141,7 @@ def convert_words_to_numbers(text: str) -> str:
     number_sequence_started = False
     last_was_hundred = False  # Track if last word was 'hundred' to prevent repeated multiplication
     trailing_punctuation = ""  # Store punctuation from the last number word
-    
+
     i = 0
     while i < len(words):
         original_word = words[i]
@@ -121,7 +149,7 @@ def convert_words_to_numbers(text: str) -> str:
         clean_word = original_word.rstrip('.,!?;:()')
         word_punctuation = original_word[len(clean_word):]
         clean_word = clean_word.lower()
-        
+
         # Skip 'and' within number sequences
         if clean_word == 'and' and number_sequence_started:
             if i + 1 < len(words):
@@ -129,7 +157,7 @@ def convert_words_to_numbers(text: str) -> str:
                 if next_word in WORD_TO_NUMBER or next_word in MULTIPLIERS:
                     i += 1
                     continue
-        
+
         # Handle negative words (minus/минус)
         if clean_word in NEGATIVE_WORDS:
             if i + 1 < len(words):
@@ -138,12 +166,12 @@ def convert_words_to_numbers(text: str) -> str:
                     is_negative = True
                     i += 1
                     continue
-        
+
         # Process number words
         if clean_word in WORD_TO_NUMBER:
             number_sequence_started = True
             val = WORD_TO_NUMBER[clean_word]
-            
+
             if val == 100:
                 # Validate: prevent repeated 'hundred' (e.g., "hundred hundred")
                 if last_was_hundred:
@@ -160,24 +188,24 @@ def convert_words_to_numbers(text: str) -> str:
             else:
                 current_number_chunk += val
                 last_was_hundred = False
-            
+
             # Save punctuation from this word
             trailing_punctuation = word_punctuation
-            
+
         elif clean_word in MULTIPLIERS:
             number_sequence_started = True
             multiplier = MULTIPLIERS[clean_word]
-            
+
             if current_number_chunk > 0:
                 current_total += current_number_chunk * multiplier
             else:
                 # Handle standalone multiplier (e.g., "thousand" -> 1000)
                 current_total += multiplier
-            
+
             current_number_chunk = 0
             last_was_hundred = False
             trailing_punctuation = word_punctuation
-            
+
         else:
             # Non-number word: emit accumulated number if any
             if number_sequence_started:
@@ -185,30 +213,30 @@ def convert_words_to_numbers(text: str) -> str:
                 if is_negative:
                     final_number = -final_number
                     is_negative = False
-                
+
                 result_words.append(str(final_number) + trailing_punctuation)
                 trailing_punctuation = ""
                 current_total = 0
                 current_number_chunk = 0
                 number_sequence_started = False
                 last_was_hundred = False
-            
+
             # Handle hanging negative
             if is_negative:
                 result_words.append("минус")
                 is_negative = False
-            
+
             result_words.append(original_word)
-        
+
         i += 1
-    
+
     # Emit final number if sequence ended with a number
     if number_sequence_started:
         final_number = current_total + current_number_chunk
         if is_negative:
             final_number = -final_number
         result_words.append(str(final_number) + trailing_punctuation)
-    
+
     return ' '.join(result_words)
 
 def make_sync_to_async(func):
