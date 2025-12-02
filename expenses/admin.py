@@ -391,8 +391,16 @@ class ExpenseCategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Expense)
 class ExpenseAdmin(admin.ModelAdmin):
-    list_display = ['profile', 'amount', 'display_category', 'expense_date', 
-                    'ai_categorized', 'created_at']
+    list_display = [
+        'profile',
+        'amount',
+        'display_category',
+        'expense_date',
+        'description_short',
+        'was_edited',
+        'ai_categorized',
+        'created_at'
+    ]
     list_filter = ['expense_date', 'ai_categorized', 'category', 'created_at']
     search_fields = ['description', 'profile__username', 'category__name']
     date_hierarchy = 'expense_date'
@@ -429,8 +437,20 @@ class ExpenseAdmin(admin.ModelAdmin):
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('profile', 'category')
+    
+    def description_short(self, obj):
+        """Short description for list display."""
+        text = (obj.description or '').strip()
+        return (text[:60] + '…') if len(text) > 60 else (text or '-')
+    description_short.short_description = 'Описание'
 
-
+    def was_edited(self, obj):
+        """Return True if income was updated after creation."""
+        return bool(obj.updated_at and obj.created_at and obj.updated_at != obj.created_at)
+    was_edited.short_description = 'Ред.'
+    was_edited.boolean = True
+    was_edited.admin_order_field = 'updated_at'
+    
 # Функционал бюджетов отключен (30.10.2025)
 # @admin.register(Budget)
 # class BudgetAdmin(admin.ModelAdmin):
@@ -680,9 +700,18 @@ class IncomeCategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Income)
 class IncomeAdmin(admin.ModelAdmin):
-    list_display = ['profile', 'display_amount', 'display_category', 'income_type', 
-                    'income_date', 'is_recurring', 'ai_categorized', 'created_at']
-    list_filter = ['income_date', 'income_type', 'is_recurring', 'ai_categorized', 
+    list_display = [
+        'profile',
+        'display_amount',
+        'display_category',
+        'income_date',
+        'description_short',
+        'was_edited',
+        'is_recurring',
+        'ai_categorized',
+        'created_at'
+    ]
+    list_filter = ['income_date', 'is_recurring', 'ai_categorized',
                    'category', 'created_at']
     search_fields = ['description', 'profile__telegram_id', 'category__name']
     date_hierarchy = 'income_date'
@@ -700,13 +729,23 @@ class IncomeAdmin(admin.ModelAdmin):
             return get_category_display_name(obj.category, 'ru')  # Админка всегда на русском
         return "—"
     display_category.short_description = 'Категория'
-    
+
+    def description_short(self, obj):
+        """Short description for list display."""
+        text = (obj.description or '').strip()
+        return (text[:60] + '…') if len(text) > 60 else (text or '-')
+    description_short.short_description = 'Описание'
+
+    def was_edited(self, obj):
+        """Return True if income was updated after creation."""
+        return bool(obj.updated_at and obj.created_at and obj.updated_at != obj.created_at)
+    was_edited.short_description = 'Ред.'
+    was_edited.boolean = True
+    was_edited.admin_order_field = 'updated_at'
+
     fieldsets = (
         ('Основная информация', {
             'fields': ('profile', 'amount', 'currency', 'category', 'description')
-        }),
-        ('Тип дохода', {
-            'fields': ('income_type',)
         }),
         ('Дата и время', {
             'fields': ('income_date', 'income_time')

@@ -190,8 +190,7 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
                     amount=payment.amount,
                     currency=payment.currency,
                     description=f"[Ежемесячный] {payment.description}",
-                    income_date=today,
-                    income_type='other'
+                    income_date=today
                 )
                 operation_type = 'income'
 

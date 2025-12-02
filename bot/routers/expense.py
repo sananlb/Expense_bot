@@ -1324,7 +1324,6 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     category_id=category.id if category else None,
                     description=parsed_income.get('description', get_text('income', lang)),
                     income_date=parsed_income.get('income_date'),
-                    income_type=parsed_income.get('income_type', 'other'),
                     ai_categorized=parsed_income.get('ai_enhanced', False),
                     ai_confidence=parsed_income.get('confidence', 0.5),
                     currency=parsed_income.get('currency', 'RUB')

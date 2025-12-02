@@ -13,56 +13,48 @@ INCOME_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
         'name_en': '💼 Salary',
         'keywords': ['зарплата', 'зп', 'salary', 'payroll', 'paycheck', 'wage', 'wages', 'salary payment'],
         'aliases': ['зарплата', 'salary', 'payroll', 'pay check', 'wage'],
-        'income_type': 'salary',
     },
     'bonus': {
         'name_ru': '🎁 Премии и бонусы',
         'name_en': '🎁 Bonuses',
         'keywords': ['премия', 'бонус', 'bonus', 'premia', 'award', 'надбавка', 'премиальные'],
         'aliases': ['премия', 'премии', 'bonus', 'bonuses', 'award'],
-        'income_type': 'bonus',
     },
     'freelance': {
         'name_ru': '💻 Фриланс',
         'name_en': '💻 Freelance',
         'keywords': ['фриланс', 'freelance', 'gig', 'contract', 'upwork', 'подработка', 'project', 'commission'],
         'aliases': ['фриланс', 'freelance', 'gig work', 'contract job'],
-        'income_type': 'freelance',
     },
     'investment': {
         'name_ru': '📈 Инвестиции',
         'name_en': '📈 Investments',
         'keywords': ['инвест', 'дивиденд', 'investment', 'investments', 'stock', 'shares', 'crypto', 'capital gain'],
         'aliases': ['инвестиции', 'investments', 'dividends', 'dividend', 'capital gains'],
-        'income_type': 'investment',
     },
     'interest': {
         'name_ru': '🏦 Проценты по вкладам',
         'name_en': '🏦 Bank Interest',
         'keywords': ['процент', 'проценты', 'interest', 'bank interest', 'deposit interest', 'savings interest'],
         'aliases': ['проценты', 'interest', 'deposit interest', 'bank interest'],
-        'income_type': 'interest',
     },
     'rent': {
         'name_ru': '🏠 Аренда недвижимости',
         'name_en': '🏠 Rent Income',
         'keywords': ['аренда', 'сдача', 'rent', 'rental', 'tenant', 'landlord', 'lease'],
         'aliases': ['аренда', 'rent', 'rental income', 'rent income'],
-        'income_type': 'other',
     },
     'refund': {
         'name_ru': '💸 Возвраты и компенсации',
         'name_en': '💸 Refunds',
         'keywords': ['возврат', 'компенсация', 'refund', 'reimbursement', 'compensation', 'кешбек', 'кешбэк', 'cashback', 'cash back', 'rebate'],
         'aliases': ['возврат', 'refund', 'reimbursement', 'compensation', 'cashback', 'cash back', 'кешбэк', 'кешбек'],
-        'income_type': 'refund',
     },
     'gift': {
         'name_ru': '🎉 Подарки',
         'name_en': '🎉 Gifts',
         'keywords': ['подарок', 'подарили', 'gift', 'present', 'donation'],
         'aliases': ['подарок', 'gift', 'present'],
-        'income_type': 'gift',
     },
     'other': {
         'name_ru': '💰 Прочие доходы',
@@ -70,7 +62,6 @@ INCOME_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
         'keywords': ['доход', 'получил', 'поступление', 'income', 'other income', 'received', 'plus',
                      'баланс', 'бюджет', 'лимит', 'balance', 'budget', 'limit'],
         'aliases': ['other', 'прочие доходы', 'other income', 'income'],
-        'income_type': 'other',
     },
 }
 
@@ -83,16 +74,6 @@ def get_income_category_display_name(category_key: str, language_code: str = 'ru
     if language_code.lower().startswith('en'):
         return data['name_en']  # type: ignore[index]
     return data['name_ru']  # type: ignore[index]
-
-
-def get_income_type(category_key: Optional[str]) -> str:
-    """Return the income type associated with the category key."""
-    if not category_key:
-        return INCOME_CATEGORY_DEFINITIONS[DEFAULT_INCOME_CATEGORY_KEY]['income_type']  # type: ignore[index]
-    data = INCOME_CATEGORY_DEFINITIONS.get(category_key)
-    if not data:
-        return INCOME_CATEGORY_DEFINITIONS[DEFAULT_INCOME_CATEGORY_KEY]['income_type']  # type: ignore[index]
-    return data['income_type']  # type: ignore[index]
 
 
 def normalize_income_category_key(label: Optional[str]) -> Optional[str]:

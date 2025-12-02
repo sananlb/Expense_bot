@@ -1020,23 +1020,7 @@ class Income(models.Model):
     # Дата и время
     income_date = models.DateField(default=date.today)
     income_time = models.TimeField(default=datetime.now)
-    
-    # Тип дохода
-    income_type = models.CharField(
-        max_length=20,
-        default='other',
-        choices=[
-            ('salary', 'Зарплата'),
-            ('bonus', 'Премия'),
-            ('freelance', 'Фриланс'),
-            ('investment', 'Инвестиции'),
-            ('gift', 'Подарок'),
-            ('refund', 'Возврат'),
-            ('cashback', 'Кешбэк'),
-            ('other', 'Прочее')
-        ]
-    )
-    
+
     # Регулярность
     is_recurring = models.BooleanField(default=False)  # Регулярный доход
     recurrence_day = models.IntegerField(

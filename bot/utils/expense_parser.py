@@ -359,7 +359,6 @@ from bot.utils.income_category_definitions import (
     DEFAULT_INCOME_CATEGORY_KEY,
     detect_income_category_key,
     get_income_category_display_name as get_income_category_display_for_key,
-    get_income_type,
     normalize_income_category_key,
 )
 
@@ -1270,7 +1269,6 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
                     'amount': float(amount),
                     'description': description,
                     'income_date': expense_date or date.today(),
-                    'income_type': last_income.income_type if hasattr(last_income, 'income_type') else 'other',
                     'currency': last_income.currency or 'RUB',
                     'is_income': True,
                     'similar_income': True,
@@ -1289,7 +1287,6 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     # Определяем категорию дохода
     category = None
     category_key = None
-    income_type = 'other'
     ai_categorized = False
     ai_confidence = None
 
@@ -1305,7 +1302,6 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     if detected_key:
         category_key = detected_key
         category = get_income_category_display_for_key(category_key, lang_code)
-        income_type = get_income_type(category_key)
 
     # Если текст содержит только число (без описания), пропускаем AI
     # и сразу назначаем "Прочие доходы"
@@ -1313,7 +1309,6 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
         logger.info(f"Number-only income detected: '{original_text}', skipping AI")
         category_key = DEFAULT_INCOME_CATEGORY_KEY
         category = get_income_category_display_for_key(category_key, lang_code)
-        income_type = get_income_type(category_key)
 
     # Если категорию не нашли, пытаемся определить через AI
     if not category and profile and use_ai:
@@ -1327,7 +1322,6 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
             if ai_category_key:
                 category_key = ai_category_key
                 category = get_income_category_display_for_key(ai_category_key, lang_code)
-                income_type = get_income_type(ai_category_key)
             elif ai_category_label:
                 category = ai_category_label
 
@@ -1368,7 +1362,6 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
                 normalized_key = normalize_income_category_key(category)
                 if normalized_key:
                     category_key = normalized_key
-                    income_type = get_income_type(category_key)
         except Exception as e:
             logger.warning(f"Error checking income keywords: {e}")
 
@@ -1389,7 +1382,6 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
                     if normalized_key:
                         category_key = normalized_key
                         category = get_income_category_display_for_key(category_key, lang_code)
-                        income_type = get_income_type(category_key)
                     break
 
     # Финальные сопряжения
@@ -1398,12 +1390,10 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
         if normalized_key:
             category_key = normalized_key
             category = get_income_category_display_for_key(category_key, lang_code)
-            income_type = get_income_type(category_key)
 
     if not category:
         category_key = category_key or DEFAULT_INCOME_CATEGORY_KEY
         category = get_income_category_display_for_key(category_key, lang_code)
-        income_type = get_income_type(category_key)
 
     # Формируем описание (используем текст без даты и без суммы)
     description = text_without_amount if text_without_amount else (text_without_date if text_without_date else get_text('income', lang_code))
@@ -1419,38 +1409,11 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     if description and len(description) > 0:
         description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
     
-    # Если описание пустое или слишком короткое, используем категорию или тип дохода
+    # Если описание пустое или слишком короткое, используем категорию
     if not description or len(description) < 2:
         if category:
             # Убираем эмодзи из категории для описания
             description = re.sub(r'[^\w\s]', '', category).strip()
-        elif income_type != 'other':
-            type_descriptions = {
-                'ru': {
-                    'salary': 'Зарплата',
-                    'bonus': 'Премия',
-                    'freelance': 'Фриланс',
-                    'investment': 'Инвестиции',
-                    'interest': 'Проценты',
-                    'refund': 'Возврат',
-                    'cashback': 'Кешбэк',
-                    'gift': 'Подарок',
-                    'other': get_text('income', 'ru'),
-                },
-                'en': {
-                    'salary': 'Salary',
-                    'bonus': 'Bonus',
-                    'freelance': 'Freelance',
-                    'investment': 'Investments',
-                    'interest': 'Interest',
-                    'refund': 'Refund',
-                    'cashback': 'Cashback',
-                    'gift': 'Gift',
-                    'other': 'Income',
-                },
-            }
-            localized_map = type_descriptions['en'] if lang_code == 'en' else type_descriptions['ru']
-            description = localized_map.get(income_type, localized_map['other'])
         else:
             description = get_text('income', lang_code)
     
@@ -1465,7 +1428,6 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
         'description': description,
         'category_key': category_key,
         'category': category,
-        'income_type': income_type,
         'currency': currency,
         'confidence': ai_confidence if ai_confidence else (0.8 if category else 0.5),
         'income_date': expense_date,

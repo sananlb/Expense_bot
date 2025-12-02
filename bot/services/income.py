@@ -35,25 +35,23 @@ def create_income(
     category_id: int = None,
     description: str = None,
     income_date: date = None,
-    income_type: str = 'other',
     ai_categorized: bool = False,
     ai_confidence: float = None,
     currency: str = 'RUB'
 ) -> Optional[Income]:
     """
     Создать новый доход
-    
+
     Args:
         user_id: ID пользователя в Telegram
         amount: Сумма дохода
         category_id: ID категории дохода
         description: Описание дохода
         income_date: Дата дохода (если None - текущая дата)
-        income_type: Тип дохода (salary, bonus, freelance, etc)
         ai_categorized: Был ли доход категоризирован AI
         ai_confidence: Уверенность AI в категоризации
         currency: Валюта дохода
-        
+
     Returns:
         Income объект или None при ошибке
     """
@@ -158,7 +156,6 @@ def create_income(
             description=description or '',
             income_date=income_date,
             income_time=income_time,
-            income_type=income_type,
             ai_categorized=ai_categorized,
             ai_confidence=ai_confidence,
             currency=currency.upper()
@@ -279,18 +276,16 @@ def get_incomes_summary(
                 'total': 0,
                 'count': 0,
                 'by_category': [],
-                'currency': profile.currency,
-                'by_type': []
+                'currency': profile.currency
             }
-        
+
         # Общая сумма и количество
         total_amount = incomes.aggregate(total=Sum('amount'))['total'] or 0
         total_count = incomes.count()
-        
+
         # Группировка по категориям
         category_stats = {}
-        type_stats = {}
-        
+
         # Определяем язык пользователя
         user_lang = profile.language_code or 'ru'
 
@@ -301,13 +296,6 @@ def get_incomes_summary(
                 category_stats[category_name] = {'amount': 0, 'count': 0}
             category_stats[category_name]['amount'] += float(income.amount)
             category_stats[category_name]['count'] += 1
-            
-            # По типам доходов
-            income_type = income.get_income_type_display()
-            if income_type not in type_stats:
-                type_stats[income_type] = {'amount': 0, 'count': 0}
-            type_stats[income_type]['amount'] += float(income.amount)
-            type_stats[income_type]['count'] += 1
         
         # Сортируем категории по сумме (убывание)
         by_category = [
@@ -323,27 +311,11 @@ def get_incomes_summary(
                 reverse=True
             )
         ]
-        
-        # Сортируем типы по сумме (убывание)
-        by_type = [
-            {
-                'type': type_name,
-                'amount': stats['amount'],
-                'count': stats['count'],
-                'percentage': round(stats['amount'] / float(total_amount) * 100, 1)
-            }
-            for type_name, stats in sorted(
-                type_stats.items(),
-                key=lambda x: x[1]['amount'],
-                reverse=True
-            )
-        ]
-        
+
         return {
             'total': float(total_amount),
             'count': total_count,
             'by_category': by_category,
-            'by_type': by_type,
             'currency': profile.currency
         }
         
@@ -353,7 +325,6 @@ def get_incomes_summary(
             'total': 0,
             'count': 0,
             'by_category': [],
-            'by_type': [],
             'currency': 'RUB'
         }
 
@@ -522,7 +493,6 @@ def get_incomes_by_period(
             'total': 0,
             'count': 0,
             'by_category': [],
-            'by_type': [],
             'currency': 'RUB'
         }
 
@@ -877,17 +847,15 @@ def get_month_incomes_summary(
             return {
                 'totals': {},
                 'categories': [],
-                'types': [],
                 'count': 0,
                 'month': month,
                 'year': year
             }
-        
+
         # Группируем по валютам
         user_lang = profile.language_code or 'ru'
         currency_totals = {}
         categories = {}
-        types = {}
 
         for income in incomes:
             currency = income.currency
@@ -902,13 +870,7 @@ def get_month_incomes_summary(
             if cat_name not in categories:
                 categories[cat_name] = 0
             categories[cat_name] += float(income.amount)
-            
-            # Суммируем по типам
-            income_type = income.get_income_type_display()
-            if income_type not in types:
-                types[income_type] = 0
-            types[income_type] += float(income.amount)
-        
+
         # Сортируем категории по сумме
         sorted_categories = [
             {'name': name, 'amount': amount}
@@ -918,21 +880,10 @@ def get_month_incomes_summary(
                 reverse=True
             )
         ]
-        
-        # Сортируем типы по сумме  
-        sorted_types = [
-            {'type': type_name, 'amount': amount}
-            for type_name, amount in sorted(
-                types.items(),
-                key=lambda x: x[1],
-                reverse=True
-            )
-        ]
-        
+
         return {
             'totals': currency_totals,
             'categories': sorted_categories,
-            'types': sorted_types,
             'count': incomes.count(),
             'month': month,
             'year': year
@@ -943,7 +894,6 @@ def get_month_incomes_summary(
         return {
             'totals': {},
             'categories': [],
-            'types': [],
             'count': 0,
             'month': month,
             'year': year
