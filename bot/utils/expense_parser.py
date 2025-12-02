@@ -464,14 +464,15 @@ def extract_amount_from_patterns(text: str) -> Tuple[Optional[Decimal], Optional
         # Удаляем пробелы и обрабатываем разделители
         amount_str = match.group(1).replace(' ', '')
 
-        # Проверяем, используются ли точки как разделители тысяч (формат 10.000.000)
-        # Если после каждой точки ровно 3 цифры - это разделитель тысяч, удаляем точки
-        if re.match(r'^\d{1,3}(\.\d{3})+$', amount_str):
+        # Определяем как обрабатывать точки:
+        # - 2+ точки = разделители тысяч (10.000.000 -> 10000000)
+        # - 1 точка = десятичный разделитель (500.50 -> 500.50)
+        dot_count = amount_str.count('.')
+        if dot_count >= 2:
             # Точки как разделители тысяч - удаляем их
             amount_str = amount_str.replace('.', '')
-        else:
-            # Обычный формат - заменяем запятые на точки для десятичной части
-            amount_str = amount_str.replace(',', '.')
+        # Заменяем запятые на точки для десятичной части
+        amount_str = amount_str.replace(',', '.')
 
         try:
             amount = Decimal(amount_str)
