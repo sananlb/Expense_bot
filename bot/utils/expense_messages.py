@@ -78,7 +78,7 @@ async def format_expense_added_message(
 
     # Добавляем метку регулярной операции (курсивом, перед разделительной чертой)
     if is_recurring:
-        recurring_label = "💡 Recurring operation" if lang == 'en' else "💡 Регулярная операция"
+        recurring_label = "💡 Monthly payment" if lang == 'en' else "💡 Ежемесячный платёж"
         message += f"\n\n<i>{recurring_label}</i>"
 
     # Получаем сводку за дату операции
@@ -87,7 +87,7 @@ async def format_expense_added_message(
         from datetime import date
         expense_date = expense.expense_date if hasattr(expense, 'expense_date') else date.today()
         today = date.today()
-        
+
         # Если операция за сегодня - используем get_today_summary
         if expense_date == today:
             today_summary = await get_today_summary(expense.profile.telegram_id)
@@ -102,9 +102,9 @@ async def format_expense_added_message(
             else:
                 spent_on = "Потрачено" if lang == 'ru' else "Spent on"
                 date_label = f"{spent_on} {expense_date.strftime('%d.%m.%Y')}"
-        
+
         if today_summary and today_summary.get('currency_totals'):
-            message += f"\n\n{get_separator_line(lang)}"
+            message += f"\n{get_separator_line(lang)}"
             message += f"\n💸 <b>{date_label}:</b>"
             
             # Показываем все валюты, в которых были траты
@@ -197,7 +197,7 @@ async def format_income_added_message(
 
     # Добавляем метку регулярной операции (курсивом, перед разделительной чертой)
     if is_recurring:
-        recurring_label = "💡 Recurring operation" if lang == 'en' else "💡 Регулярная операция"
+        recurring_label = "💡 Monthly income" if lang == 'en' else "💡 Ежемесячный доход"
         message += f"\n\n<i>{recurring_label}</i>"
 
     # Получаем сводку за дату операции (доходы)
@@ -206,7 +206,7 @@ async def format_income_added_message(
         from datetime import date
         income_date = income.income_date if hasattr(income, 'income_date') else date.today()
         today = date.today()
-        
+
         # Если операция за сегодня - используем get_today_income_summary
         if income_date == today:
             from ..services.income import get_today_income_summary
@@ -222,9 +222,9 @@ async def format_income_added_message(
             else:
                 received_on = "Получено" if lang == 'ru' else "Received on"
                 date_label = f"{received_on} {income_date.strftime('%d.%m.%Y')}"
-        
+
         if today_summary and today_summary.get('currency_totals'):
-            message += f"\n\n{get_separator_line(lang)}"
+            message += f"\n{get_separator_line(lang)}"
             message += f"\n💵 <b>{date_label}:</b>"
             
             # Показываем все валюты, в которых были доходы

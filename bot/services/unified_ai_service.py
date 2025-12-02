@@ -174,12 +174,13 @@ class UnifiedAIService(AIBaseService):
         """
         user_id = user_context.get('user_id') if user_context else None
         user_language = user_context.get('language', 'ru') if user_context else 'ru'
+        faq_context = user_context.get('faq_context') if user_context else None
 
         try:
             # Skip function calling if disabled
             if disable_functions:
                 # Direct chat without function calling
-                return await self._simple_chat(message, context, user_id)
+                return await self._simple_chat(message, context, user_id, faq_context=faq_context)
 
             # 1. Попытка определить функцию (Intent Recognition)
             from bot.services.prompt_builder import build_function_call_prompt
@@ -193,6 +194,8 @@ class UnifiedAIService(AIBaseService):
             # Первый запрос - определение интента
             # Используем более строгий промпт для DeepSeek/Qwen
             system_prompt = "Ты помощник финансового бота. Если пользователь просит аналитику, верни ТОЛЬКО строку формата: FUNCTION_CALL: function_name(arg1=value)."
+            if faq_context:
+                system_prompt += "\n\nFAQ (используй как источник фактов, не выдумывай функции вне списка):\n" + faq_context
             
             try:
                 intent_response = await asyncio.to_thread(
@@ -290,7 +293,8 @@ class UnifiedAIService(AIBaseService):
         self,
         message: str,
         context: List[Dict[str, str]],
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        faq_context: Optional[str] = None
     ) -> str:
         """
         Simple chat without function calling - just direct AI response
@@ -309,9 +313,11 @@ class UnifiedAIService(AIBaseService):
         start_time = time.time()
 
         # Build messages without Intent Recognition
-        messages = [
-            {"role": "system", "content": "Ты - умный помощник в боте для учета личных расходов и доходов."}
-        ]
+        system_prompt = "Ты - умный помощник в боте для учета личных расходов и доходов."
+        if faq_context:
+            system_prompt += "\n\nFAQ (используй как источник фактов, не выдумывай новые функции):\n" + faq_context
+
+        messages = [{"role": "system", "content": system_prompt}]
         if context:
             for msg in context[-10:]:
                 messages.append({"role": msg['role'], "content": msg['content']})

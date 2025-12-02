@@ -14,6 +14,7 @@ from ..services.ai_selector import get_service, get_fallback_chain, AISelector
 from ..services.subscription import check_subscription, subscription_required_message, get_subscription_button
 from ..decorators import require_subscription, rate_limit
 from ..routers.reports import show_expenses_summary
+from ..services.faq_service import find_faq_answer, get_faq_matcher
 from expenses.models import Profile
 from dateutil import parser
 from calendar import monthrange
@@ -218,12 +219,28 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
         skip_typing: Пропустить ли индикатор печатания (если уже запущен извне)
     """
     user_id = message.from_user.id
+    lang = await get_user_language(user_id)
 
     # Проверяем приветствия - отвечаем мгновенно без AI
     if is_greeting(text):
-        lang = await get_user_language(user_id)
         response = get_greeting_response(lang)
         await send_message_with_cleanup(message, state, response, parse_mode="HTML")
+        return
+
+    # FAQ (быстрый ответ без вызова AI)
+    faq_answer, faq_confidence, faq_id = await find_faq_answer(text, lang)
+    if faq_confidence >= get_faq_matcher().HIGH_CONFIDENCE_THRESHOLD:
+        logger.info(f"[Chat] FAQ high confidence ({faq_id}) for user {user_id}")
+        await send_message_with_cleanup(message, state, faq_answer, parse_mode="HTML")
+        return
+    if faq_confidence >= get_faq_matcher().MEDIUM_CONFIDENCE_THRESHOLD:
+        logger.info(f"[Chat] FAQ medium confidence ({faq_id}) for user {user_id}")
+        clarification = (
+            "\n\n💡 Если это не то, что нужно — уточните вопрос."
+            if lang == "ru"
+            else "\n\n💡 If that is not what you need — please clarify."
+        )
+        await send_message_with_cleanup(message, state, faq_answer + clarification, parse_mode="HTML")
         return
 
     # Основная логика обработки
@@ -276,11 +293,11 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
                         try:
                             from expenses.models import Profile
                             profile = await sync_to_async(Profile.objects.get)(telegram_id=user_id)
-                            lang = getattr(profile, 'language_code', 'ru') if profile else 'ru'
+                            cat_lang = getattr(profile, 'language_code', 'ru') if profile else 'ru'
                         except:
-                            lang = 'ru'
+                            cat_lang = 'ru'
 
-                        category_name = get_category_display_name(exp.category, lang) if exp.category else get_text('no_category', lang)
+                        category_name = get_category_display_name(exp.category, cat_lang) if exp.category else get_text('no_category', cat_lang)
                         recent_expenses.append({
                             'date': exp.expense_date.isoformat(),
                             'amount': float(exp.amount),
@@ -290,15 +307,14 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
                 except Exception as e:
                     logger.error(f"Error getting recent expenses: {e}")
                 
-                # Получаем язык пользователя
-                lang = await get_user_language(user_id)
                 logger.info(f"[Chat] User language detected: {lang}")
 
                 user_context = {
                     'total_today': today_summary.get('total', 0) if today_summary else 0,
                     'expenses_data': recent_expenses,
                     'user_id': user_id,  # Добавляем user_id для function calling
-                    'language': lang  # Добавляем язык пользователя для AI
+                    'language': lang,  # Добавляем язык пользователя для AI
+                    'faq_context': get_faq_matcher().get_faq_context_for_ai(),
                 }
 
                 # Получаем AI сервис и генерируем ответ

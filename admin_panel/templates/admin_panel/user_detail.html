@@ -1,4 +1,5 @@
 {% extends 'admin_panel/base.html' %}
+{% load category_filters %}
 
 {% block title %}{{ user.telegram_id }} - ExpenseBot Admin{% endblock %}
 
@@ -119,6 +120,7 @@
                                 <th>Дата</th>
                                 <th>Категория</th>
                                 <th>Сумма</th>
+                                <th>Ред.</th>
                                 <th>Описание</th>
                             </tr>
                         </thead>
@@ -127,19 +129,74 @@
                             <tr>
                                 <td>{{ expense.expense_date|date:"d.m" }}</td>
                                 <td>
-                                    {% load category_filters %}
                                     {% if expense.category %}
                                         {{ expense.category|category_display:'ru' }}
                                     {% else %}
-                                        —
+                                        -
                                     {% endif %}
                                 </td>
                                 <td>{{ expense.amount|floatformat:0 }}</td>
-                                <td>{{ expense.description|truncatewords:3 }}</td>
+                                <td>
+                                    {% if expense.updated_at and expense.updated_at != expense.created_at %}
+                                        <span class="badge bg-warning text-dark">Да</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Нет</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ expense.description|default:"-" }}</td>
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="4">Нет трат</td>
+                                <td colspan="5">Нет трат</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Последние доходы -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5>Последние доходы</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Категория</th>
+                                <th>Сумма</th>
+                                <th>Ред.</th>
+                                <th>Описание</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for income in recent_incomes %}
+                            <tr>
+                                <td>{{ income.income_date|date:"d.m" }}</td>
+                                <td>
+                                    {% if income.category %}
+                                        {{ income.category|category_display:'ru' }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>{{ income.amount|floatformat:0 }}</td>
+                                <td>
+                                    {% if income.updated_at and income.updated_at != income.created_at %}
+                                        <span class="badge bg-warning text-dark">Да</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Нет</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ income.description|default:"-" }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5">Нет доходов</td>
                             </tr>
                             {% endfor %}
                         </tbody>
