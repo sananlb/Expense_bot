@@ -445,8 +445,12 @@ class ExpenseAdmin(admin.ModelAdmin):
     description_short.short_description = 'Описание'
 
     def was_edited(self, obj):
-        """Return True if income was updated after creation."""
-        return bool(obj.updated_at and obj.created_at and obj.updated_at != obj.created_at)
+        """Return True if record was edited (time difference > 1 second)."""
+        if not obj.updated_at or not obj.created_at:
+            return False
+        # Считаем редактированием только если разница больше 1 секунды
+        time_diff = (obj.updated_at - obj.created_at).total_seconds()
+        return time_diff > 1.0
     was_edited.short_description = 'Ред.'
     was_edited.boolean = True
     was_edited.admin_order_field = 'updated_at'
@@ -737,8 +741,12 @@ class IncomeAdmin(admin.ModelAdmin):
     description_short.short_description = 'Описание'
 
     def was_edited(self, obj):
-        """Return True if income was updated after creation."""
-        return bool(obj.updated_at and obj.created_at and obj.updated_at != obj.created_at)
+        """Return True if record was edited (time difference > 1 second)."""
+        if not obj.updated_at or not obj.created_at:
+            return False
+        # Считаем редактированием только если разница больше 1 секунды
+        time_diff = (obj.updated_at - obj.created_at).total_seconds()
+        return time_diff > 1.0
     was_edited.short_description = 'Ред.'
     was_edited.boolean = True
     was_edited.admin_order_field = 'updated_at'
