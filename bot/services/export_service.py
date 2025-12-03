@@ -969,6 +969,19 @@ class ExportService:
         ws.cell(row=savings_row, column=1).border = thin_border
         ws.cell(row=savings_row, column=2).border = thin_border
 
+        # Добавляем подпись под таблицей (курсивом) о том что данные только в валюте пользователя
+        try:
+            profile = Profile.objects.get(id=profile_id)
+            user_currency = profile.currency or 'RUB'
+        except Profile.DoesNotExist:
+            user_currency = 'RUB'
+
+        caption_row = savings_row + 2
+        caption_text = f"(Анализ предоставлен только для операций в валюте по умолчанию ({user_currency}))" if lang == 'ru' else f"(Analysis provided only for transactions in default currency ({user_currency}))"
+        caption_cell = ws.cell(row=caption_row, column=1, value=caption_text)
+        caption_cell.font = Font(italic=True, size=9, color="666666")
+        caption_cell.alignment = Alignment(horizontal="left", vertical="center")
+
         # Подсветка отклонений от плана (>+50% вверх и <50% вниз, но не 0)
         high_fill = PatternFill(start_color="FFF8E0E6", end_color="FFF8E0E6", fill_type="solid")  # мягкий розовый
         low_fill = PatternFill(start_color="FFE7F6EC", end_color="FFE7F6EC", fill_type="solid")   # мягкий зелёный
@@ -1949,6 +1962,14 @@ class ExportService:
                 )
                 bar.anchor = OneCellAnchor(_from=bar_anchor, ext=bar_extent)
                 ws.add_chart(bar)
+
+            # Добавляем подпись под диаграммами расходов (курсивом)
+            chart_height_rows_exp = 23  # Высота диаграммы в строках
+            caption_row = charts_start_row + chart_height_rows_exp + 1
+            caption_text = f"(Анализ предоставлен только для операций в валюте по умолчанию ({primary_currency}))" if lang == 'ru' else f"(Analysis provided only for transactions in default currency ({primary_currency}))"
+            caption_cell = ws.cell(row=caption_row, column=summary_start_col, value=caption_text)
+            caption_cell.font = Font(italic=True, size=9, color="666666")
+            caption_cell.alignment = Alignment(horizontal="left", vertical="center")
 
         # ==================== СЕКЦИЯ ДОХОДОВ (ПОД РАСХОДАМИ) ====================
         # Подсчет статистики по категориям доходов

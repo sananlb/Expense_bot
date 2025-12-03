@@ -2125,7 +2125,7 @@ class ExpenseFunctions:
     
     @staticmethod
     @sync_to_async
-    def compare_income_periods(user_id: int) -> Dict[str, Any]:
+    def compare_income_periods(user_id: int, period1: str = 'this_month', period2: str = 'last_month') -> Dict[str, Any]:
         """
         Сравнение доходов за разные периоды
         """
@@ -2134,39 +2134,56 @@ class ExpenseFunctions:
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
-            today = date.today()
-            
-            # Текущий месяц
-            current_month_start = today.replace(day=1)
-            current_month_income = Income.objects.filter(
+
+            # Используем get_period_dates для обоих периодов
+            from bot.utils.date_utils import get_period_dates
+
+            # Определяем первый период
+            if period1 == 'this_week':
+                period1 = 'week'
+            elif period1 == 'this_month':
+                period1 = 'month'
+
+            p1_start, p1_end = get_period_dates(period1)
+
+            # Определяем второй период
+            p2_start, p2_end = get_period_dates(period2)
+
+            # Получаем суммы доходов
+            total1 = Income.objects.filter(
                 profile=profile,
-                income_date__gte=current_month_start,
-                income_date__lte=today
+                income_date__gte=p1_start,
+                income_date__lte=p1_end
             ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
-            
-            # Прошлый месяц
-            if today.month == 1:
-                prev_month_start = today.replace(year=today.year-1, month=12, day=1)
-                prev_month_end = today.replace(year=today.year-1, month=12, day=31)
+
+            total2 = Income.objects.filter(
+                profile=profile,
+                income_date__gte=p2_start,
+                income_date__lte=p2_end
+            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+
+            change = total1 - total2
+            if total2 > 0:
+                change_percent = ((total1 - total2) / total2) * 100
             else:
-                prev_month_start = today.replace(month=today.month-1, day=1)
-                prev_month_end = (current_month_start - timedelta(days=1))
-            
-            prev_month_income = Income.objects.filter(
-                profile=profile,
-                income_date__gte=prev_month_start,
-                income_date__lte=prev_month_end
-            ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
-            
-            change = current_month_income - prev_month_income
-            change_percent = ((change / prev_month_income) * 100) if prev_month_income > 0 else 0
-            
+                change_percent = 100 if total1 > 0 else 0
+
             return {
                 'success': True,
-                'current_month': float(current_month_income),
-                'previous_month': float(prev_month_income),
+                'period1': {
+                    'name': period1,
+                    'start': p1_start.isoformat(),
+                    'end': p1_end.isoformat(),
+                    'total': float(total1)
+                },
+                'period2': {
+                    'name': period2,
+                    'start': p2_start.isoformat(),
+                    'end': p2_end.isoformat(),
+                    'total': float(total2)
+                },
                 'change': float(change),
-                'change_percent': float(change_percent),
+                'change_percent': round(change_percent, 1),
                 'trend': 'увеличение' if change > 0 else 'уменьшение' if change < 0 else 'без изменений'
             }
         except Exception as e:
