@@ -105,27 +105,28 @@ FAQ_DATA: List[FAQEntry] = [
         "category": "reports",
         "questions_ru": [
             "как посмотреть статистику",
-            "как посмотреть расходы",
-            "покажи траты",
-            "отчет",
             "как получить отчет",
+            "где найти отчеты",
+            "как скачать отчет",
         ],
         "questions_en": [
             "how to view reports",
-            "show expenses",
-            "statistics",
-            "report",
+            "how to get report",
+            "where are reports",
+            "how to download report",
         ],
-        "keywords": ["отчет", "статистика", "траты", "expenses", "report", "analytics"],
+        "keywords": ["отчет", "report", "pdf", "excel", "скачать", "download"],
         "answer_ru": (
             "Статистика доступна в меню \"Бюджет\": траты за сегодня, по месяцам, дневник операций. "
             "Там же можно сгенерировать PDF/Excel отчёт с графиками. "
-            "Команда /report — быстрый доступ к отчётам."
+            "Команда /report — быстрый доступ к отчётам.\n\n"
+            "💡 Для анализа трат за конкретный период просто спросите: \"сколько я потратил в ноябре\" или \"покажи траты за октябрь\""
         ),
         "answer_en": (
             "Statistics available in \"Budget\" menu: today's expenses, monthly view, transaction diary. "
             "You can also generate PDF/Excel reports with charts there. "
-            "/report command — quick access to reports."
+            "/report command — quick access to reports.\n\n"
+            "💡 For expense analysis for a specific period just ask: \"how much did I spend in November\" or \"show expenses for October\""
         ),
     },
     {
