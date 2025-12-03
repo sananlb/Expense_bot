@@ -155,8 +155,19 @@ def _format_operations_list(result: Dict, title: str, subtitle: str, lang: str =
 def _format_category_stats(result: Dict) -> str:
     cats = result.get('categories', []) or []
     total = result.get('total', 0)
+    start = result.get('start_date', '')
+    end = result.get('end_date', '')
     parts: List[str] = []
-    parts.append(f"Статистика по категориям (всего: {total:,.0f} ₽)\n")
+
+    # Добавляем даты если они есть
+    if start and end:
+        if start == end:
+            parts.append(f"Статистика по категориям {start} (всего: {total:,.0f} ₽)\n")
+        else:
+            parts.append(f"Статистика по категориям {start} — {end} (всего: {total:,.0f} ₽)\n")
+    else:
+        parts.append(f"Статистика по категориям (всего: {total:,.0f} ₽)\n")
+
     for c in cats[:20]:
         name = c.get('name', '')
         cat_total = c.get('total', 0)
@@ -507,12 +518,61 @@ def format_function_result(func_name: str, result: Dict) -> str:
     if func_name == 'compare_periods':
         diff = result.get('difference', 0)
         pct = result.get('percent_change', 0)
-        p1 = result.get('period1', '')
-        p2 = result.get('period2', '')
-        return (
-            f"Сравнение периодов ({p1} vs {p2})\n"
-            f"Изменение: {diff:,.0f} ₽ ({pct:.1f}%)"
-        )
+        trend = result.get('trend', '')
+
+        # Периоды могут быть строками или словарями
+        p1 = result.get('period1', {})
+        p2 = result.get('period2', {})
+
+        # Если период - словарь, извлекаем данные
+        if isinstance(p1, dict):
+            p1_name = p1.get('name', '')
+            p1_start = p1.get('start', '')
+            p1_end = p1.get('end', '')
+            p1_total = p1.get('total', 0)
+        else:
+            p1_name = str(p1)
+            p1_start = p1_end = p1_total = ''
+
+        if isinstance(p2, dict):
+            p2_name = p2.get('name', '')
+            p2_start = p2.get('start', '')
+            p2_end = p2.get('end', '')
+            p2_total = p2.get('total', 0)
+        else:
+            p2_name = str(p2)
+            p2_start = p2_end = p2_total = ''
+
+        lines = ["📊 Сравнение периодов\n"]
+
+        # Период 1
+        if p1_name:
+            if p1_start and p1_end:
+                lines.append(f"<b>{p1_name.capitalize()}</b> ({p1_start} — {p1_end}): {p1_total:,.0f} ₽")
+            else:
+                lines.append(f"<b>{p1_name}</b>: {p1_total:,.0f} ₽")
+
+        # Период 2
+        if p2_name:
+            if p2_start and p2_end:
+                lines.append(f"<b>{p2_name.capitalize()}</b> ({p2_start} — {p2_end}): {p2_total:,.0f} ₽")
+            else:
+                lines.append(f"<b>{p2_name}</b>: {p2_total:,.0f} ₽")
+
+        # Разница
+        lines.append("")
+        if diff > 0:
+            lines.append(f"📈 <b>Изменение:</b> +{diff:,.0f} ₽ (+{pct:.1f}%)")
+        elif diff < 0:
+            lines.append(f"📉 <b>Изменение:</b> {diff:,.0f} ₽ ({pct:.1f}%)")
+        else:
+            lines.append(f"➡️ <b>Изменение:</b> без изменений")
+
+        if trend:
+            trend_emoji = "📈" if trend == "увеличение" else "📉" if trend == "уменьшение" else "➡️"
+            lines.append(f"{trend_emoji} <b>Тренд:</b> {trend}")
+
+        return "\n".join(lines)
 
     if func_name == 'compare_income_periods':
         change = result.get('change', 0)
