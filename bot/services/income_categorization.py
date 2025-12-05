@@ -2,6 +2,7 @@
 AI категоризация доходов - использует ai_selector для выбора провайдера
 """
 import logging
+import re
 from typing import Optional, Dict, Any, List
 from asgiref.sync import sync_to_async
 
@@ -13,6 +14,30 @@ from bot.utils.income_category_definitions import (
     normalize_income_category_key,
     strip_leading_emoji,
 )
+
+
+def _keyword_matches_in_text(keyword: str, text: str) -> bool:
+    """
+    Проверяет есть ли ключевое слово в тексте как ЦЕЛОЕ СЛОВО с учетом склонений.
+
+    Защита от ложных срабатываний:
+    - "95" НЕ совпадёт с "9500"
+    - "зп" НЕ совпадёт с "инвестзп"
+    - "зарплата" совпадёт с "зарплату", "зарплаты" (окончание <= 2 символа)
+    """
+    if not keyword or not text:
+        return False
+    keyword_lower = keyword.lower().strip()
+    text_lower = text.lower()
+    text_words = re.findall(r'[\wа-яёА-ЯЁ\-]+', text_lower)
+    for word in text_words:
+        if word == keyword_lower:
+            return True
+        if word.startswith(keyword_lower):
+            ending_length = len(word) - len(keyword_lower)
+            if ending_length <= 2:
+                return True
+    return False
 
 logger = logging.getLogger(__name__)
 
@@ -234,8 +259,6 @@ def find_category_by_keywords(text: str, profile: Profile) -> Optional[IncomeCat
     ВАЖНО: Использует строгую уникальность - одно слово = одна категория!
     Если нашли совпадение, сразу возвращаем (никаких весов!)
     """
-    text_lower = text.lower()
-
     # Получаем все ключевые слова для категорий пользователя
     keywords = IncomeCategoryKeyword.objects.filter(
         category__profile=profile,
@@ -245,7 +268,9 @@ def find_category_by_keywords(text: str, profile: Profile) -> Optional[IncomeCat
     # СТРОГАЯ УНИКАЛЬНОСТЬ: одно слово может быть только в одной категории
     # Поэтому если нашли совпадение - сразу возвращаем, без сравнения весов!
     for keyword_obj in keywords:
-        if keyword_obj.keyword.lower() in text_lower:
+        # ИСПРАВЛЕНО: Используем _keyword_matches_in_text для проверки целого слова
+        # вместо простого `in` (защита от "95" в "9500", "зп" в "инвестзп")
+        if _keyword_matches_in_text(keyword_obj.keyword, text):
             # Нашли совпадение! Благодаря строгой уникальности это единственная категория с этим словом
             # Обновляем статистику использования
             keyword_obj.usage_count += 1

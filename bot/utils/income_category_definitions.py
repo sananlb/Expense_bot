@@ -1,10 +1,36 @@
 """
 Shared definitions and helpers for income categories.
 """
+import re
 from typing import Optional, Dict
 
 # ВАЖНО: Импортируем из централизованного модуля (включает ZWJ для композитных эмодзи)
 from bot.utils.emoji_utils import strip_leading_emoji
+
+
+def _keyword_matches_in_text(keyword: str, text: str) -> bool:
+    """
+    Проверяет есть ли ключевое слово в тексте как ЦЕЛОЕ СЛОВО с учетом склонений.
+    Локальная копия функции для избежания циклического импорта.
+
+    Защита от ложных срабатываний:
+    - "95" НЕ совпадёт с "9500"
+    - "зп" НЕ совпадёт с "инвестзп"
+    - "зарплата" совпадёт с "зарплату", "зарплаты" (окончание <= 2 символа)
+    """
+    if not keyword or not text:
+        return False
+    keyword_lower = keyword.lower().strip()
+    text_lower = text.lower()
+    text_words = re.findall(r'[\wа-яёА-ЯЁ\-]+', text_lower)
+    for word in text_words:
+        if word == keyword_lower:
+            return True
+        if word.startswith(keyword_lower):
+            ending_length = len(word) - len(keyword_lower)
+            if ending_length <= 2:
+                return True
+    return False
 
 
 INCOME_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
@@ -107,12 +133,15 @@ def normalize_income_category_key(label: Optional[str]) -> Optional[str]:
 
 
 def detect_income_category_key(text: str) -> Optional[str]:
-    """Detect a category key by checking keywords against the text."""
-    text_lower = text.lower()
+    """Detect a category key by checking keywords against the text.
+
+    ВАЖНО: Используем проверку целого слова вместо подстроки,
+    чтобы "95" не совпадало с "9500" и т.п.
+    """
     for key, data in INCOME_CATEGORY_DEFINITIONS.items():
         if key == DEFAULT_INCOME_CATEGORY_KEY:
             continue
         for keyword in data.get('keywords', []):
-            if keyword in text_lower:
+            if _keyword_matches_in_text(keyword, text):
                 return key
     return None
