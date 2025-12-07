@@ -20,7 +20,7 @@ from dateutil import parser
 from calendar import monthrange
 import re
 from bot.utils.category_helpers import get_category_display_name
-from ..utils.language import get_user_language, format_amount, get_text
+from ..utils.language import get_user_language, get_text
 
 logger = logging.getLogger(__name__)
 
@@ -352,13 +352,9 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
                     # Крайний случай - все провайдеры недоступны
                     response = "AI сервис временно недоступен. Попробуйте позже."
         else:
-            # Простые ответы без AI для пользователей без подписки
-            response = await get_simple_response(text, user_id)
-        
-        # Если нет подписки и пробного периода, предлагаем оформить
-        if not has_subscription and use_ai:
-            response += "\n\n💡 Для доступа к AI-ассистенту оформите подписку /subscription"
-        
+            # Пользователи без подписки получают сообщение о необходимости оформить подписку
+            response = "💬 AI-ассистент доступен только по подписке.\n\n💡 Оформите подписку /subscription чтобы получить доступ к умному помощнику, который ответит на ваши вопросы о финансах."
+
         return response
     
     # Выполняем обработку с индикатором печатания или без него
@@ -384,111 +380,6 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
     await send_message_with_cleanup(message, state, response_html, parse_mode="HTML")
 
 
-async def get_simple_response(text: str, user_id: int) -> str:
-    """Получить простой ответ без использования AI"""
-    text_lower = text.lower()
-    
-    # Обработка запросов отчетов
-    if 'трат' in text_lower or 'расход' in text_lower or 'потратил' in text_lower:
-        if 'сегодня' in text_lower:
-            # Показать траты за сегодня
-            summary = await get_today_summary(user_id)
-            if not summary or summary['total'] == 0:
-                return "Сегодня трат пока нет."
-            else:
-                lang = await get_user_language(user_id)
-                main_currency = summary.get('currency', 'RUB')
-                total_formatted = format_amount(float(summary['total']), main_currency, lang)
-
-                # Собираем отображение по категориям с несколькими валютами
-                category_lines = []
-                for cat in summary.get('categories', []):
-                    icon = cat.get('icon', '')
-                    name = cat.get('name', '')
-                    amounts = cat.get('amounts', {})
-                    if amounts:
-                        amounts_str = " / ".join([
-                            format_amount(float(amt), cur, lang)
-                            for cur, amt in amounts.items()
-                        ])
-                    else:
-                        amounts_str = format_amount(0, main_currency, lang)
-                    category_lines.append(f"{icon} {name}: {amounts_str}")
-
-                # Проверяем, спрашивают ли о категориях
-                if 'категори' in text_lower:
-                    response = "Сегодня траты были в следующих категориях:\n\n"
-                    response += "\n".join(category_lines)
-                    response += f"\n\nОбщая сумма: {total_formatted}"
-                else:
-                    response = f"Траты за сегодня: {total_formatted}\n\n"
-                    response += "\n".join(category_lines)
-                return response
-        
-        elif 'вчера' in text_lower:
-            # Показать траты за вчера
-            return "Функция просмотра трат за вчера будет добавлена в следующей версии."
-        
-        elif 'месяц' in text_lower:
-            # Показать траты за месяц
-            from datetime import date
-            from ..services.expense import get_expenses_summary
-            today = date.today()
-            start_date = today.replace(day=1)
-
-            summary = await get_expenses_summary(
-                user_id=user_id,
-                start_date=start_date,
-                end_date=today
-            )
-
-            if not summary or summary.get('total', 0) == 0:
-                return "В этом месяце трат пока нет."
-            else:
-                # Get user language
-                lang = await get_user_language(user_id)
-
-                # Show total per currency
-                response = "Траты за текущий месяц:\n"
-                currency_totals = summary.get('currency_totals', {})
-                if currency_totals:
-                    for currency, amount in currency_totals.items():
-                        if amount:
-                            response += f"  {format_amount(float(amount), currency, lang)}\n"
-                else:
-                    # Fallback to основная валюта
-                    response += f"  {format_amount(float(summary.get('total', 0)), summary.get('currency', 'RUB'), lang)}\n"
-
-                response += "\n"
-
-                # Show top 5 categories with all currencies
-                for cat in summary.get('by_category', [])[:5]:
-                    icon = cat.get('icon', '')
-                    name = cat.get('name', '')
-                    # Format amounts for all currencies
-                    amounts = cat.get('amounts', {})
-                    if amounts:
-                        amounts_str = " / ".join([
-                            format_amount(float(amt), cur, lang)
-                            for cur, amt in amounts.items()
-                        ])
-                    else:
-                        amounts_str = format_amount(0, summary.get('currency', 'RUB'), lang)
-                    response += f"{icon} {name}: {amounts_str}\n"
-
-                # Добавим информацию о доходах если есть
-                if summary.get('income_total', 0) > 0:
-                    income_currency = summary.get('currency', 'RUB')
-                    response += f"\nДоходы: {format_amount(summary['income_total'], income_currency, lang)}"
-
-                return response
-        else:
-            return "Я могу показать траты за сегодня или за текущий месяц. Просто спросите!"
-    
-    else:
-        # Общий ответ
-        return ("Я помогу вам учитывать расходы. Просто отправьте мне сообщение с тратой, "
-               "например 'Кофе 200' или спросите о ваших тратах.")
 
 
 # ФУНКЦИЯ ОТКЛЮЧЕНА - весь чат идет через AI
