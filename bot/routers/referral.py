@@ -2,15 +2,13 @@
 Роутер для реферальной программы и шаринга бота
 """
 from aiogram import Router, F, types
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
-from aiogram.filters import Command
+from aiogram.types import CallbackQuery, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
 from urllib.parse import quote
 from expenses.models import Profile, AffiliateLink, AffiliateReferral
 from bot.utils.message_utils import send_message_with_cleanup
-from bot.services.subscription import check_subscription
 from bot.utils import get_user_language, get_text
 from bot.services.affiliate import (
     get_or_create_affiliate_link,
@@ -310,34 +308,3 @@ async def show_telegram_stars_info(callback: CallbackQuery, state: FSMContext):
         )
 
     await callback.answer()
-
-
-@router.message(Command("referral"))
-async def cmd_referral(message: Message, state: FSMContext):
-    """Команда для шаринга бота и реферальной программы"""
-    # Проверяем подписку
-    has_subscription = await check_subscription(message.from_user.id)
-    if not has_subscription:
-        lang = await get_user_language(message.from_user.id)
-        await message.answer(
-            get_text('referral_sub_required_full', lang),
-            parse_mode="HTML"
-        )
-        return
-
-    profile = await Profile.objects.aget(telegram_id=message.from_user.id)
-
-    # Получаем username бота
-    bot_info = await message.bot.get_me()
-    bot_username = bot_info.username
-
-    lang = await get_user_language(message.from_user.id)
-    text, _, share_text, share_url = await get_referral_info_text(profile, bot_username, lang)
-
-    await send_message_with_cleanup(
-        message,
-        state,
-        text,
-        reply_markup=get_referral_keyboard(lang, share_url, share_text),
-        parse_mode="HTML"
-    )

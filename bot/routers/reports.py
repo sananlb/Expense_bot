@@ -3,7 +3,6 @@ Router for expense reports and analytics
 """
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, BufferedInputFile
-from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from datetime import datetime, date, timedelta
 from calendar import monthrange
@@ -21,16 +20,6 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 logger = logging.getLogger(__name__)
 
 router = Router(name="reports")
-
-
-@router.message(Command("summary"))
-async def cmd_summary(message: Message, state: FSMContext, lang: str = 'ru'):
-    """Команда /summary - показать сводку за месяц"""
-    today = date.today()
-    start_date = today.replace(day=1)
-    end_date = today
-
-    await show_expenses_summary(message, start_date, end_date, lang, state=state)
 
 
 @router.callback_query(F.data == "expenses_today")
