@@ -9,7 +9,7 @@ from datetime import datetime, date, timedelta
 from calendar import monthrange
 import logging
 
-from bot.keyboards import expenses_summary_keyboard, month_selection_keyboard, back_close_keyboard
+from bot.keyboards import expenses_summary_keyboard
 from bot.utils import get_text, format_amount, get_month_name
 from bot.utils.category_helpers import get_category_display_name
 from bot.services.expense import get_expenses_summary, get_expenses_by_period, get_last_expenses
@@ -442,18 +442,6 @@ async def show_expenses_summary(
             await original_message.edit_text(error_text)
         else:
             await message.answer(error_text)
-
-
-@router.message(Command("report"))
-async def cmd_report(message: Message, lang: str = 'ru'):
-    """Команда /report - выбор периода для отчета"""
-    keyboard = month_selection_keyboard(lang)
-    
-    await send_message_with_cleanup(
-        message, state,
-        get_text('choose_month', lang),
-        reply_markup=keyboard
-    )
 
 
 @router.callback_query(F.data.in_(["show_diary", "toggle_view_scope_diary"]))

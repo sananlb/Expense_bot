@@ -850,7 +850,6 @@ TEXTS = {
         # • /start - главное меню
         # • /help - эта справка
         # • /cashback - настройка кешбэков
-        # • /report - запросить отчет
         # • /settings - настройки
         #
         # <b>💡 Советы:</b>
@@ -1735,7 +1734,6 @@ Thank you for participating in testing! Your feedback helps improve the bot.''',
         # • /start - bot information
         # • /help - this help
         # • /cashback - cashback setup
-        # • /report - request report
         # • /settings - settings
         #
         # <b>💡 Tips:</b>
