@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 @shared_task
 def send_monthly_reports():
     """Send monthly expense reports to all users on the 1st day of month at 10:00 for previous month"""
+    bot = None
+    loop = None
+
     try:
         from expenses.models import Profile, Expense
         from bot.services.notifications import NotificationService
@@ -76,15 +79,25 @@ def send_monthly_reports():
             except Exception as e:
                 logger.error(f"Error sending monthly report notification to user {profile.telegram_id}: {e}")
 
-        loop.close()
-
     except Exception as e:
         logger.error(f"Error in send_monthly_reports task: {e}")
+
+    finally:
+        if loop is not None:
+            if bot is not None:
+                try:
+                    loop.run_until_complete(bot.close())
+                except Exception as e:
+                    logger.error(f"Failed to close bot session in send_monthly_reports: {e}", exc_info=True)
+
+            asyncio.set_event_loop(None)
+            loop.close()
 
 
 @shared_task
 def generate_monthly_insights():
     """Generate AI insights for all active subscribers on the 1st day of month at 09:00 for previous month"""
+    loop = None
     try:
         from expenses.models import Profile, Expense
         from bot.services.monthly_insights import MonthlyInsightsService
@@ -164,12 +177,15 @@ def generate_monthly_insights():
                 fail_count += 1
                 logger.error(f"Error generating insight for user {profile.telegram_id}: {e}")
 
-        loop.close()
-
         logger.info(f"Insights generation completed: {success_count} successful, {fail_count} failed")
 
     except Exception as e:
         logger.error(f"Error in generate_monthly_insights task: {e}")
+
+    finally:
+        if loop is not None:
+            asyncio.set_event_loop(None)
+            loop.close()
 
 
 @shared_task
@@ -551,10 +567,11 @@ def send_daily_admin_report():
         # Отправляем отчет асинхронно
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-
-        loop.run_until_complete(send_admin_alert(report, disable_notification=True))
-
-        loop.close()
+        try:
+            loop.run_until_complete(send_admin_alert(report, disable_notification=True))
+        finally:
+            asyncio.set_event_loop(None)
+            loop.close()
 
         logger.info(f"Расширенный ежедневный отчет за {yesterday} отправлен администратору")
 
@@ -898,8 +915,11 @@ def system_health_check():
                 # Отправляем алерт асинхронно
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                loop.run_until_complete(send_admin_alert(alert_message))
-                loop.close()
+                try:
+                    loop.run_until_complete(send_admin_alert(alert_message))
+                finally:
+                    asyncio.set_event_loop(None)
+                    loop.close()
                 
                 logger.warning(f"System health alert sent: {overall_status} with {len(issues)} issues")
             
@@ -1131,6 +1151,8 @@ def collect_daily_analytics():
 @shared_task
 def process_recurring_payments():
     """Process recurring payments for today at 12:00"""
+    bot = None
+    loop = None
     try:
         from bot.services.recurring import process_recurring_payments_for_today
         from bot.utils.expense_messages import format_expense_added_message, format_income_added_message
@@ -1211,12 +1233,21 @@ def process_recurring_payments():
             except Exception as e:
                 logger.error(f"Error sending notification to user {payment_info.get('user_id')}: {e}")
         
-        loop.close()
-        
         logger.info(f"Processed {processed_count} recurring payments")
         
     except Exception as e:
         logger.error(f"Error in process_recurring_payments task: {e}")
+
+    finally:
+        if loop is not None:
+            if bot is not None:
+                try:
+                    loop.run_until_complete(bot.close())
+                except Exception as e:
+                    logger.error(f"Failed to close bot session in process_recurring_payments: {e}", exc_info=True)
+
+            asyncio.set_event_loop(None)
+            loop.close()
 
 
 @shared_task
@@ -1571,6 +1602,8 @@ def process_held_affiliate_commissions():
 @shared_task
 def update_top5_keyboards():
     """Ежедневно в 05:00 MSK: пересчитать Топ‑5 и обновить клавиатуры закреплённых сообщений."""
+    bot = None
+    loop = None
     try:
         from expenses.models import Profile, Top5Snapshot, Top5Pin
         from bot.services.top5 import (
@@ -1583,6 +1616,9 @@ def update_top5_keyboards():
         bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('MONITORING_BOT_TOKEN')
         bot = Bot(token=bot_token)
 
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
         # Окно: последние 90 дней включительно (rolling)
         today = date.today()
         from datetime import timedelta
@@ -1590,22 +1626,22 @@ def update_top5_keyboards():
         window_start = today - timedelta(days=89)
 
         # Пользователи с активностью
-        profiles = asyncio.get_event_loop().run_until_complete(get_profiles_with_activity(window_start, window_end))
+        profiles = loop.run_until_complete(get_profiles_with_activity(window_start, window_end))
 
         updated = 0
         for profile in profiles:
             try:
-                items, digest = asyncio.get_event_loop().run_until_complete(calculate_top5_sync(profile, window_start, window_end))
+                items, digest = loop.run_until_complete(calculate_top5_sync(profile, window_start, window_end))
                 snap = Top5Snapshot.objects.filter(profile=profile).first()
                 if not snap or snap.hash != digest or snap.window_start != window_start or snap.window_end != window_end:
-                    asyncio.get_event_loop().run_until_complete(
+                    loop.run_until_complete(
                         save_snapshot(profile, window_start, window_end, items, digest)
                     )
                 # Обновляем закреплённое сообщение, если знаем ids
                 pin = Top5Pin.objects.filter(profile=profile).first()
                 if pin:
                     kb: InlineKeyboardMarkup = build_top5_keyboard(items)
-                    asyncio.get_event_loop().run_until_complete(
+                    loop.run_until_complete(
                         bot.edit_message_reply_markup(chat_id=pin.chat_id, message_id=pin.message_id, reply_markup=kb)
                     )
                     updated += 1
@@ -1615,6 +1651,17 @@ def update_top5_keyboards():
         logger.info(f"Top-5 updated for {updated} pinned messages (profiles processed: {len(profiles)})")
     except Exception as e:
         logger.error(f"Error in update_top5_keyboards: {e}")
+
+    finally:
+        if loop is not None:
+            if bot is not None:
+                try:
+                    loop.run_until_complete(bot.close())
+                except Exception as e:
+                    logger.error(f"Failed to close bot session in update_top5_keyboards: {e}", exc_info=True)
+
+            asyncio.set_event_loop(None)
+            loop.close()
 
 
 # ==================== INCOME KEYWORDS LEARNING ====================
