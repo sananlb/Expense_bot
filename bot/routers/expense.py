@@ -1244,7 +1244,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
 Оформите подписку, чтобы вести полноценный учет финансов!"""
 
             # Создаем кнопку для оформления подписки
-            from ..keyboards.subscription import get_subscription_button
+            from bot.services.subscription import get_subscription_button
             keyboard = get_subscription_button()
 
             await message.answer(subscription_msg, reply_markup=keyboard, parse_mode="HTML")
