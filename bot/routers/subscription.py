@@ -104,11 +104,12 @@ def get_subscription_keyboard(is_beta_tester: bool = False, lang: str = 'ru'):
             text="🔗 Поделиться ботом" if lang == 'ru' else "🔗 Share the bot",
             callback_data="menu_referral"
         )
-        # Информация о программе Telegram Stars
-        builder.button(
-            text="⭐ Партнёрская программа" if lang == 'ru' else "⭐ Affiliate Program",
-            callback_data="telegram_stars_info"
-        )
+        # TODO: Временно отключена партнёрская программа Telegram Stars
+        # # Информация о программе Telegram Stars
+        # builder.button(
+        #     text="⭐ Партнёрская программа" if lang == 'ru' else "⭐ Affiliate Program",
+        #     callback_data="telegram_stars_info"
+        # )
 
     builder.button(
         text=get_text('close', lang),
