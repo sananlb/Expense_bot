@@ -322,6 +322,18 @@ for i in range(1, 10):
 if not OPENROUTER_API_KEYS and OPENROUTER_API_KEY:
     OPENROUTER_API_KEYS = [OPENROUTER_API_KEY]
 
+# OpenRouter Proxy Settings (для обхода блокировок)
+# AI_PROXY_URL - SOCKS5 прокси для OpenRouter запросов
+# Формат: socks5://user:password@host:port или socks5://host:port
+# Пример: AI_PROXY_URL=socks5://45.10.40.44:1080
+AI_PROXY_URL = os.getenv('AI_PROXY_URL')
+
+# OPENROUTER_CONNECTION_MODE - режим подключения к OpenRouter
+# Варианты:
+#   'proxy' (default) - все запросы через прокси (если AI_PROXY_URL задан)
+#   'direct' - прямое подключение (прокси отключен)
+OPENROUTER_CONNECTION_MODE = os.getenv('OPENROUTER_CONNECTION_MODE', 'proxy')
+
 # Yandex SpeechKit (для русского голосового распознавания)
 YANDEX_API_KEY = os.getenv('YANDEX_API_KEY', '')
 YANDEX_FOLDER_ID = os.getenv('YANDEX_FOLDER_ID', '')
@@ -339,6 +351,12 @@ if DEBUG:
     _settings_logger.debug(f"Loaded Qwen API keys: {len(DASHSCOPE_API_KEYS)}")
     _settings_logger.debug(f"Loaded OpenRouter API keys: {len(OPENROUTER_API_KEYS)}")
     _settings_logger.debug(f"Yandex SpeechKit configured: {bool(YANDEX_API_KEY and YANDEX_FOLDER_ID)}")
+    # Логируем настройки прокси (без пароля)
+    if AI_PROXY_URL:
+        proxy_display = AI_PROXY_URL.split('@')[1] if '@' in AI_PROXY_URL else AI_PROXY_URL.replace('socks5://', '')
+        _settings_logger.debug(f"OpenRouter proxy: {proxy_display} (mode: {OPENROUTER_CONNECTION_MODE})")
+    else:
+        _settings_logger.debug(f"OpenRouter proxy: not configured (direct connection)")
 
 # AI Fallback providers (comma-separated lists)
 def parse_fallback_providers(env_key: str, default: str = 'deepseek,qwen,openai') -> list:
