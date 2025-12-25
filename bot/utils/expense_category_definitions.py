@@ -182,9 +182,11 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
             'салон', 'парикмахерская', 'барбершоп', 'маникюр', 'педикюр', 'косметолог',
             'спа', 'spa', 'массаж', 'солярий', 'эпиляция', 'депиляция', 'стрижка',
             'окрашивание', 'укладка', 'косметика', 'beauty', 'красота', 'уход',
+            'парфюм', 'духи', 'туалетная вода', 'парфюмерия', 'аромат',
             # Английские
             'salon', 'hairdresser', 'barber', 'haircut', 'manicure', 'pedicure',
             'massage', 'cosmetics', 'makeup', 'grooming', 'styling', 'nails',
+            'perfume', 'fragrance', 'cologne', 'eau de toilette',
         ],
         'aliases': ['красота', 'beauty', 'салон', 'salon'],
     },
@@ -210,6 +212,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
             'одежда', 'обувь', 'магазин одежды',
             'бутик', 'джинсы', 'платье', 'костюм', 'кроссовки', 'туфли', 'сапоги',
             'куртка', 'пальто', 'рубашка', 'юбка', 'брюки', 'белье', 'носки',
+            'мастерка', 'кофта', 'свитер', 'толстовка', 'худи',
             # Английские
             'clothes', 'clothing', 'shoes', 'dress', 'jeans', 'shirt', 'pants',
             'jacket', 'coat', 'suit', 'sneakers', 'boots', 'fashion', 'apparel',
