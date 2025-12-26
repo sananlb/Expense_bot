@@ -223,6 +223,26 @@ logs/
 - Использование памяти и CPU
 - Количество активных пользователей
 
+### Webhook Keepalive (добавлено 26.12.2025)
+
+**Проблема:** Бот периодически переставал отвечать на сообщения. Telegram накапливал updates, но не мог их доставить. После ручного запроса `getWebhookInfo` - бот "просыпался".
+
+**Решение:** Cron job на PRIMARY сервере (176.124.218.53), который каждый час пингует Telegram API:
+
+```bash
+# Текущая настройка (crontab -l):
+0 * * * * curl -s "https://api.telegram.org/bot<TOKEN>/getWebhookInfo" > /dev/null 2>&1
+```
+
+**Управление:**
+```bash
+# Проверить crontab:
+ssh batman@176.124.218.53 "crontab -l"
+
+# Увеличить частоту до каждых 15 минут (если проблема повторяется):
+ssh batman@176.124.218.53 "echo '*/15 * * * * curl -s \"https://api.telegram.org/bot<TOKEN>/getWebhookInfo\" > /dev/null 2>&1' | crontab -"
+```
+
 ## Развертывание
 
 ### Development
