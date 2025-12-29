@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 @shared_task
 def send_monthly_reports():
-    """Send monthly expense reports to all users on the 1st day of month at 10:00 for previous month"""
+    """Send monthly expense reports to all users on the 1st day of month at 12:00 for previous month"""
     bot = None
     loop = None
 
@@ -96,7 +96,7 @@ def send_monthly_reports():
 
 @shared_task
 def generate_monthly_insights():
-    """Generate AI insights for all active subscribers on the 1st day of month at 09:00 for previous month"""
+    """Generate AI insights for all active subscribers on the 1st day of month at 11:00 for previous month"""
     loop = None
     try:
         from expenses.models import Profile, Expense

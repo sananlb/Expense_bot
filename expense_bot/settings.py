@@ -406,12 +406,12 @@ try:
     # },
     'generate-monthly-insights': {
         'task': 'expense_bot.celery_tasks.generate_monthly_insights',
-        'schedule': crontab(day_of_month=1, hour=9, minute=0),  # First day of month at 09:00
+        'schedule': crontab(day_of_month=1, hour=11, minute=0),  # First day of month at 11:00
         'options': {'queue': 'reports'}
     },
     'send-monthly-reports': {
         'task': 'expense_bot.celery_tasks.send_monthly_reports',
-        'schedule': crontab(day_of_month=1, hour=10, minute=0),  # First day of month at 10:00
+        'schedule': crontab(day_of_month=1, hour=12, minute=0),  # First day of month at 12:00
         'options': {'queue': 'reports'}
     },
     'cleanup-old-expenses': {

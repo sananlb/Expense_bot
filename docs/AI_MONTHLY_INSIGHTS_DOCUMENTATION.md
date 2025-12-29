@@ -858,10 +858,10 @@ async def generate_insight(profile, ...):
 # expense_bot/celery_tasks.py:95-182
 @shared_task
 def generate_monthly_insights():
-    """Generate AI insights for all active subscribers on the 1st day of month at 09:00"""
-    # Запускается за час до send_monthly_reports (в 09:00)
+    """Generate AI insights for all active subscribers on the 1st day of month at 11:00"""
+    # Запускается за час до send_monthly_reports (в 11:00)
     # Генерирует инсайты для всех пользователей с подпиской
-    # При отправке в 10:00 инсайты уже готовы (из кеша)
+    # При отправке в 12:00 инсайты уже готовы (из кеша)
 ```
 
 **Добавлен маршрут в Celery:**
@@ -879,14 +879,14 @@ def generate_monthly_insights():
 # expense_bot/settings.py:313-317
 'generate-monthly-insights': {
     'task': 'expense_bot.celery_tasks.generate_monthly_insights',
-    'schedule': crontab(day_of_month=1, hour=9, minute=0),
+    'schedule': crontab(day_of_month=1, hour=11, minute=0),
     'options': {'queue': 'reports'}
 }
 ```
 
 **Результат:**
-- 09:00 - генерация инсайтов для всех пользователей
-- 10:00 - отправка отчетов с уже готовыми инсайтами (из БД кеша)
+- 11:00 - генерация инсайтов для всех пользователей
+- 12:00 - отправка отчетов с уже готовыми инсайтами (из БД кеша)
 
 ---
 
