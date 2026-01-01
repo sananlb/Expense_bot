@@ -7,7 +7,7 @@ import os
 from typing import List
 
 from django.conf import settings
-from django.db.models import Count, Sum, Q, Avg, Case, When, FloatField
+from django.db.models import Count, Sum, Avg, Case, When, FloatField, Q
 from django.utils import timezone
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup
@@ -50,18 +50,16 @@ def send_monthly_reports():
         last_day_of_prev_month = monthrange(prev_year, prev_month)[1]
         month_end = today.replace(year=prev_year, month=prev_month, day=last_day_of_prev_month)
 
-        # Get all active profiles who have expenses in previous month AND active subscription
+        # Get all active profiles who have expenses in previous month
+        # Monthly reports are sent to ALL users with expenses (not just subscribers)
         profiles_with_expenses = Expense.objects.filter(
             expense_date__gte=month_start,
             expense_date__lte=month_end
         ).values_list('profile_id', flat=True).distinct()
 
-        # Filter profiles with active subscription (paid or trial)
+        # Get all profiles with expenses (no subscription filter)
         profiles = Profile.objects.filter(
             id__in=profiles_with_expenses
-        ).filter(
-            Q(subscriptions__is_active=True, subscriptions__end_date__gt=timezone.now()) |
-            Q(subscriptions__type='trial', subscriptions__is_active=True, subscriptions__end_date__gt=timezone.now())
         ).distinct()
 
         logger.info(f"Sending monthly reports to {profiles.count()} users with expenses")
@@ -122,21 +120,19 @@ def generate_monthly_insights():
         last_day_of_prev_month = monthrange(prev_year, prev_month)[1]
         month_end = today.replace(year=prev_year, month=prev_month, day=last_day_of_prev_month)
 
-        # Get profiles with expenses in previous month AND active subscription
+        # Get profiles with expenses in previous month
+        # Monthly insights are generated for ALL users with expenses (not just subscribers)
         profiles_with_expenses = Expense.objects.filter(
             expense_date__gte=month_start,
             expense_date__lte=month_end
         ).values_list('profile_id', flat=True).distinct()
 
-        # Filter profiles with active subscription (paid or trial)
+        # Get all profiles with expenses (no subscription filter)
         profiles = Profile.objects.filter(
             id__in=profiles_with_expenses
-        ).filter(
-            Q(subscriptions__is_active=True, subscriptions__end_date__gt=timezone.now()) |
-            Q(subscriptions__type='trial', subscriptions__is_active=True, subscriptions__end_date__gt=timezone.now())
         ).distinct()
 
-        logger.info(f"Generating AI insights for {profiles.count()} users with active subscriptions")
+        logger.info(f"Generating AI insights for {profiles.count()} users with expenses")
 
         # Initialize service
         service = MonthlyInsightsService()

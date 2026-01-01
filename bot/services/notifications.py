@@ -134,6 +134,9 @@ class NotificationService:
         Calculate category changes compared to previous month
         Called ONCE per user per month when sending notification
 
+        Data is fetched directly from DB (Expense table) for reliability,
+        not from cached MonthlyInsight which may have outdated format.
+
         Args:
             insight: Current month MonthlyInsight instance
             month: Current month (1-12)
@@ -143,36 +146,74 @@ class NotificationService:
             List of category changes sorted by absolute change (biggest first)
         """
         import asyncio
-        from expenses.models import MonthlyInsight
+        from calendar import monthrange
+        from django.db.models import Sum
+        from expenses.models import Expense
 
-        # Get previous month
+        # Get previous month dates
         prev_month = month - 1 if month > 1 else 12
         prev_year = year if month > 1 else year - 1
+        _, last_day = monthrange(prev_year, prev_month)
+        prev_start = datetime(prev_year, prev_month, 1).date()
+        prev_end = datetime(prev_year, prev_month, last_day).date()
 
-        # Get previous month insight (1 DB query - not critical for monthly task)
-        prev_insight = await asyncio.to_thread(
-            lambda: MonthlyInsight.objects.filter(
-                profile=insight.profile,
-                year=prev_year,
-                month=prev_month
-            ).first()
+        # Get previous month expenses grouped by category directly from DB
+        currency = insight.profile.currency or 'RUB'
+        prev_expenses = await asyncio.to_thread(
+            lambda: list(
+                Expense.objects.filter(
+                    profile=insight.profile,
+                    expense_date__gte=prev_start,
+                    expense_date__lte=prev_end,
+                    category__isnull=False,
+                    currency=currency
+                ).values(
+                    'category_id',
+                    'category__name',
+                    'category__name_ru',
+                    'category__name_en',
+                    'category__icon'
+                ).annotate(
+                    total=Sum('amount')
+                )
+            )
         )
 
-        if not prev_insight or not prev_insight.top_categories:
+        if not prev_expenses:
             return []  # No previous data to compare
 
-        # Build dict for fast lookup
+        # Build dicts for fast lookup by category_id and category name (legacy insights)
         prev_cats = {}
-        for cat in prev_insight.top_categories:
-            key = cat.get('category_id') or cat.get('category')
-            prev_cats[key] = cat.get('amount', 0)
+        prev_cats_by_name = {}
+        for exp in prev_expenses:
+            cat_id = exp['category_id']
+            prev_cats[cat_id] = float(exp['total'] or 0)
+            icon = (exp.get('category__icon') or '').strip()
+            name_variants = [
+                exp.get('category__name'),
+                exp.get('category__name_ru'),
+                exp.get('category__name_en'),
+            ]
+            for name in name_variants:
+                if not name:
+                    continue
+                normalized = str(name).strip()
+                if normalized:
+                    prev_cats_by_name[normalized] = prev_cats[cat_id]
+                    if icon and not normalized.startswith(icon):
+                        prev_cats_by_name[f"{icon} {normalized}"] = prev_cats[cat_id]
 
         changes = []
         for cat in insight.top_categories:
-            cat_key = cat.get('category_id') or cat.get('category')
+            cat_id = cat.get('category_id')
             cat_name = cat.get('category')
             current_amount = cat.get('amount', 0)
-            prev_amount = prev_cats.get(cat_key, 0)
+
+            # Look up previous amount by category_id; fallback to name for legacy insights
+            if cat_id:
+                prev_amount = prev_cats.get(cat_id, 0)
+            else:
+                prev_amount = prev_cats_by_name.get(str(cat_name).strip(), 0) if cat_name else 0
 
             # Calculate change (new categories have prev_amount = 0)
             change = current_amount - prev_amount
