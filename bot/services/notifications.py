@@ -303,8 +303,8 @@ class NotificationService:
                 change_amount = change['change']
                 trend = change['trend']
 
-                sign = '+' if change_amount > 0 else ''
-                text += f"{i}. {cat_name}: {sign}{format_amount(abs(change_amount), currency, lang)} ({sign}{change_pct:.0f}% {trend})\n"
+                sign = '+' if change_amount > 0 else '-' if change_amount < 0 else ''
+                text += f"{i}. {cat_name}: {sign}{format_amount(abs(change_amount), currency, lang)} ({sign}{abs(change_pct):.0f}% {trend})\n"
             text += "\n"
 
         # AI резюме
@@ -321,8 +321,8 @@ class NotificationService:
             if has_bullets:
                 # Russian format: берем только пункты со значком •
                 all_points = [line for line in analysis_lines if line.strip().startswith('•')]
-                # Пропускаем первый пункт (обычно дублирует топ категорию), берем следующие 3
-                key_points = all_points[1:4] if len(all_points) > 1 else []
+                # Берем все 3 пункта (крупные траты, регулярные расходы, совет)
+                key_points = all_points[:3]
 
                 if key_points:
                     key_points_label = get_text('monthly_report_key_points', lang) if lang == 'en' else 'Ключевые моменты:'
@@ -338,11 +338,7 @@ class NotificationService:
                 # English format: split by double newlines to get individual points
                 points = [p.strip() for p in insight.ai_analysis.split('\n\n') if p.strip()]
 
-                # Skip first point if it's about main categories (to avoid duplication with Top-5)
-                if points and 'main categories' in points[0].lower():
-                    points = points[1:]
-
-                # Take up to 3 points
+                # Take all 3 points (large expenses, regular expenses, advice)
                 key_points = points[:3]
 
                 if key_points:

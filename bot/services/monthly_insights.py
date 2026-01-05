@@ -429,29 +429,30 @@ class MonthlyInsightsService:
 {chr(10).join(expense_lines)}
 """
 
-        # Analyze unusual expenses (significantly above average)
-        unusual_expenses_section = ""
+        # Analyze large expenses (significantly above average)
+        large_expenses_section = ""
         if len(month_data['expenses']) >= 5:
             avg_expense = month_data['total_expenses'] / len(month_data['expenses'])
             # Find expenses significantly above average (2x or more)
-            unusual = [
+            large = [
                 exp for exp in month_data['expenses']
                 if exp.amount >= avg_expense * 2
             ]
 
-            if unusual:
-                unusual_lines = []
-                for exp in sorted(unusual, key=lambda x: x.amount, reverse=True)[:5]:
+            if large:
+                large_lines = []
+                for exp in sorted(large, key=lambda x: x.amount, reverse=True)[:5]:
                     exp_date = exp.expense_date.strftime('%d.%m')
                     exp_desc = exp.description[:30] if exp.description else '(без описания)'
                     exp_amount = format_amount(exp.amount)
-                    times_avg = exp.amount / avg_expense
-                    unusual_lines.append(f"  - {exp_date}: {exp_desc} - {exp_amount}₽ (в {times_avg:.1f}x больше среднего)")
+                    # Get category name
+                    cat_name = exp.category.get_display_name(user_lang) if exp.category else '(без категории)'
+                    large_lines.append(f"  - {exp_date}: {exp_desc} - {exp_amount}₽ [категория: {cat_name}]")
 
-                unusual_expenses_section = f"""
-НЕОБЫЧНЫЕ ТРАТЫ (значительно выше среднего):
+                large_expenses_section = f"""
+КРУПНЫЕ ТРАТЫ (выше среднего):
 Средняя трата: {format_amount(avg_expense)}₽
-{chr(10).join(unusual_lines)}
+{chr(10).join(large_lines)}
 """
 
         # Analyze regular expenses (by description frequency)
@@ -459,9 +460,10 @@ class MonthlyInsightsService:
         if len(month_data['expenses']) >= 3:
             from collections import Counter
 
-            # Count descriptions (normalized)
+            # Count descriptions (normalized) with category info
             desc_counter = Counter()
             desc_amounts = {}
+            desc_categories = {}  # Store category for each description
 
             for exp in month_data['expenses']:
                 if exp.description:
@@ -471,7 +473,11 @@ class MonthlyInsightsService:
 
                     if desc_norm not in desc_amounts:
                         desc_amounts[desc_norm] = []
+                        desc_categories[desc_norm] = None  # Will be set when we find a category
                     desc_amounts[desc_norm].append(float(exp.amount))
+                    # Update category if current expense has one and we don't have one yet
+                    if desc_categories[desc_norm] is None and exp.category:
+                        desc_categories[desc_norm] = exp.category.get_display_name(user_lang)
 
             # Find recurring expenses (2+ times)
             regular = [(desc, count) for desc, count in desc_counter.most_common(10) if count >= 2]
@@ -482,8 +488,9 @@ class MonthlyInsightsService:
                     amounts = desc_amounts[desc]
                     avg_amount = sum(amounts) / len(amounts)
                     total_amount = sum(amounts)
+                    cat_name = desc_categories.get(desc) or '(без категории)'
                     regular_lines.append(
-                        f"  - \"{desc[:30]}\": {count}x, средняя {format_amount(avg_amount)}₽, всего {format_amount(total_amount)}₽"
+                        f"  - \"{desc[:30]}\": {count}x, средняя {format_amount(avg_amount)}₽, всего {format_amount(total_amount)}₽ [категория: {cat_name}]"
                     )
 
                 regular_expenses_section = f"""
@@ -511,29 +518,29 @@ class MonthlyInsightsService:
 
 EXPENSES BY CATEGORY:
 {chr(10).join(category_details)}
-{comparison_section}{historical_section}{expense_details_section}{unusual_expenses_section}{regular_expenses_section}
+{comparison_section}{historical_section}{expense_details_section}{large_expenses_section}{regular_expenses_section}
 TASK:
 Create a deep financial analysis in JSON format with two sections:
 
-1. "summary" - brief monthly summary (2-3 sentences):
+1. "summary" - brief monthly summary (3-4 sentences):
    - Main figures{"and comparison with previous month" if prev_month_data else ""}
-   - {"Expense dynamics (growth/decline)" if prev_month_data else "Overall expense picture"}
+   - {"Expense dynamics (growth/decline) and main reasons for this dynamic" if prev_month_data else "Overall expense picture"}
    - {"Context relative to historical data" if valid_historical_data and len(valid_historical_data) >= 3 else ""}
 
-2. "analysis" - detailed analysis (4 points):
-   - **Main categories:** Largest category and its share{"with change" if prev_month_data else ""}
-   - **{"Unusual expenses" if unusual_expenses_section else "Large expenses"}:** Highlight unusually large purchases or expenses above average
-   - **{"Regular expenses" if regular_expenses_section else "Spending patterns"}:** Indicate recurring expenses or financial habits
+2. "analysis" - detailed analysis (3 points):
+   - **{"Large expenses" if large_expenses_section else "Spending patterns"}:** Highlight the largest purchases, use category info provided in brackets
+   - **{"Regular expenses" if regular_expenses_section else "Spending habits"}:** Indicate recurring expenses using category info provided in brackets
    - **Personal advice:** Specific recommendation on how to optimize expenses or what to pay attention to
 
 IMPORTANT:
 - Write in English, concisely and to the point
 - Use specific figures from data (amounts, percentages, dates)
+- Use category information provided in [категория: ...] brackets - do NOT invent categories
 - {"MUST compare with previous month where appropriate" if prev_month_data else ""}
 - {"DO NOT mention income and balance, focus only on expenses" if not has_income else ""}
 - Tone is friendly, motivating, but professional
 - Response format: JSON with "summary", "analysis" fields
-- In "analysis" field use array of 4 strings (each string is a separate point with bullet marker)"""
+- In "analysis" field use array of 3 strings (each string is a separate point with bullet marker)"""
         else:
             prompt = f"""Ты финансовый аналитик. Проанализируй траты пользователя за {month_name} {year} года.
 
@@ -541,29 +548,29 @@ IMPORTANT:
 
 РАСХОДЫ ПО КАТЕГОРИЯМ:
 {chr(10).join(category_details)}
-{comparison_section}{historical_section}{expense_details_section}{unusual_expenses_section}{regular_expenses_section}
+{comparison_section}{historical_section}{expense_details_section}{large_expenses_section}{regular_expenses_section}
 ЗАДАНИЕ:
 Создай глубокий анализ финансов в формате JSON с двумя разделами:
 
-1. "summary" - краткое резюме месяца (2-3 предложения):
+1. "summary" - краткое резюме месяца (3-4 предложения):
    - Основные цифры{"и сравнение с прошлым месяцем" if prev_month_data else ""}
-   - {"Динамика трат (рост/снижение)" if prev_month_data else "Общая картина расходов"}
+   - {"Динамика трат (рост/снижение) и основные причины такой динамики" if prev_month_data else "Общая картина расходов"}
    - {"Контекст относительно исторических данных" if valid_historical_data and len(valid_historical_data) >= 3 else ""}
 
-2. "analysis" - детальный анализ (4 пункта):
-   - **Основные категории:** Самая большая категория и её доля{"с изменением" if prev_month_data else ""}
-   - **{"Необычные траты" if unusual_expenses_section else "Крупные траты"}:** Выдели необычно большие покупки или траты выше среднего
-   - **{"Регулярные расходы" if regular_expenses_section else "Паттерны трат"}:** Укажи повторяющиеся траты или финансовые привычки
+2. "analysis" - детальный анализ (3 пункта):
+   - **{"Крупные траты" if large_expenses_section else "Паттерны трат"}:** Выдели самые большие покупки, используй категорию из скобок [категория: ...]
+   - **{"Регулярные расходы" if regular_expenses_section else "Финансовые привычки"}:** Укажи повторяющиеся траты, используй категорию из скобок [категория: ...]
    - **Персональный совет:** Конкретная рекомендация как оптимизировать расходы или на что обратить внимание
 
 ВАЖНО:
 - Пиши на русском языке, кратко и по делу
 - Используй конкретные цифры из данных (суммы, проценты, даты)
+- Используй информацию о категориях из скобок [категория: ...] — НЕ выдумывай категории
 - {"ОБЯЗАТЕЛЬНО сравнивай с предыдущим месяцем где уместно" if prev_month_data else ""}
 - {"НЕ упоминай доходы и баланс, фокусируйся только на расходах" if not has_income else ""}
 - Тон дружелюбный, мотивирующий, но профессиональный
 - Формат ответа: JSON с полями "summary", "analysis"
-- В поле "analysis" используй массив из 4 строк (каждая строка - отдельный пункт с маркером)"""
+- В поле "analysis" используй массив из 3 строк (каждая строка - отдельный пункт с маркером)"""
 
         return prompt
 
@@ -600,82 +607,110 @@ IMPORTANT:
 
         logger.info(f"Generating insights for user {profile.telegram_id} for {month}/{year}")
 
-        try:
-            # Call AI service with function calling disabled
-            # (insights generation requires JSON response, not function calls)
-            response = await self.ai_service.chat(
-                message=prompt,
-                context=[],
-                user_context={'user_id': profile.telegram_id},
-                disable_functions=True  # IMPORTANT: Skip function calling for JSON response
-            )
+        # Retry logic: try up to 2 times with same provider (different API keys)
+        # before falling back to another provider
+        max_retries = 2
 
-            # Parse JSON response
+        for attempt in range(max_retries):
             try:
-                # Try to extract JSON from response
-                if '```json' in response:
-                    # Extract JSON from markdown code block
-                    json_start = response.find('```json') + 7
-                    json_end = response.find('```', json_start)
-                    json_str = response[json_start:json_end].strip()
-                elif '```' in response:
-                    # Extract from generic code block
-                    json_start = response.find('```') + 3
-                    json_end = response.find('```', json_start)
-                    json_str = response[json_start:json_end].strip()
-                else:
-                    json_str = response
+                # Re-initialize AI service on retry (refresh instance and key rotation state)
+                if attempt > 0:
+                    logger.warning(f"Retrying {provider} (attempt {attempt + 1}/{max_retries}) for user {profile.telegram_id}")
+                    self.ai_service = None
+                    self._initialize_ai(provider)
 
-                result = json.loads(json_str)
+                # Call AI service with function calling disabled
+                # (insights generation requires JSON response, not function calls)
+                response = await self.ai_service.chat(
+                    message=prompt,
+                    context=[],
+                    user_context={'user_id': profile.telegram_id},
+                    disable_functions=True  # IMPORTANT: Skip function calling for JSON response
+                )
 
-                # Validate result structure (only summary and analysis now)
-                if not all(key in result for key in ['summary', 'analysis']):
-                    raise ValueError("Missing required fields in AI response")
-
-                # Convert lists to formatted strings if needed
-                if isinstance(result['analysis'], list):
-                    result['analysis'] = '\n\n'.join(result['analysis'])
-
-                return {
-                    'summary': result['summary'],
-                    'analysis': result['analysis'],
-                    'recommendations': ''  # Empty string for backwards compatibility
-                }
-
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.error(f"Failed to parse AI response as JSON: {e}")
-                logger.error(f"Response was: {response[:500]}")
-
-                # Check if response contains error message from AI service
+                # Check if response is an error message
                 error_phrases = [
                     'извините',
                     'временно недоступен',
                     'service unavailable',
-                    'error',
-                    'failed'
+                    'error occurred',
+                    'request timed out'
                 ]
-
                 if any(phrase in response.lower() for phrase in error_phrases):
-                    # AI service returned error - re-raise to trigger fallback provider
-                    logger.error("AI service returned error response, triggering provider fallback")
-                    raise Exception(f"AI provider returned error: {response[:200]}")
+                    raise Exception(f"AI returned error response: {response[:100]}")
 
-                # Otherwise try to parse response as text (non-JSON format)
-                try:
-                    parsed = self._fallback_parse_response(response)
-                    if parsed and parsed.get('summary') and parsed.get('analysis'):
-                        return parsed
-                    else:
-                        raise ValueError("Fallback parsing returned empty result")
-                except Exception as parse_error:
-                    # If parsing completely fails, re-raise to trigger provider fallback
-                    logger.error(f"Fallback parsing failed: {parse_error}")
-                    raise Exception(f"Failed to parse AI response: {e}")
+                # If we got here, the call succeeded - break retry loop
+                break
 
-        except Exception as e:
-            logger.error(f"Error generating AI insights: {e}")
-            # Re-raise exception to allow provider fallback in generate_insight()
-            raise
+            except Exception as e:
+                logger.error(f"Attempt {attempt + 1}/{max_retries} failed for {provider}: {e}")
+                if attempt < max_retries - 1:
+                    continue  # Try again with next API key
+                else:
+                    # All retries exhausted, re-raise to trigger provider fallback
+                    raise
+
+        # Parse JSON response
+        try:
+            # Try to extract JSON from response
+            if '```json' in response:
+                # Extract JSON from markdown code block
+                json_start = response.find('```json') + 7
+                json_end = response.find('```', json_start)
+                json_str = response[json_start:json_end].strip()
+            elif '```' in response:
+                # Extract from generic code block
+                json_start = response.find('```') + 3
+                json_end = response.find('```', json_start)
+                json_str = response[json_start:json_end].strip()
+            else:
+                json_str = response
+
+            result = json.loads(json_str)
+
+            # Validate result structure (only summary and analysis now)
+            if not all(key in result for key in ['summary', 'analysis']):
+                raise ValueError("Missing required fields in AI response")
+
+            # Convert lists to formatted strings if needed
+            if isinstance(result['analysis'], list):
+                result['analysis'] = '\n\n'.join(result['analysis'])
+
+            return {
+                'summary': result['summary'],
+                'analysis': result['analysis'],
+                'recommendations': ''  # Empty string for backwards compatibility
+            }
+
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.error(f"Failed to parse AI response as JSON: {e}")
+            logger.error(f"Response was: {response[:500]}")
+
+            # Check if response contains error message from AI service
+            error_phrases = [
+                'извините',
+                'временно недоступен',
+                'service unavailable',
+                'error',
+                'failed'
+            ]
+
+            if any(phrase in response.lower() for phrase in error_phrases):
+                # AI service returned error - re-raise to trigger fallback provider
+                logger.error("AI service returned error response, triggering provider fallback")
+                raise Exception(f"AI provider returned error: {response[:200]}")
+
+            # Otherwise try to parse response as text (non-JSON format)
+            try:
+                parsed = self._fallback_parse_response(response)
+                if parsed and parsed.get('summary') and parsed.get('analysis'):
+                    return parsed
+                else:
+                    raise ValueError("Fallback parsing returned empty result")
+            except Exception as parse_error:
+                # If parsing completely fails, re-raise to trigger provider fallback
+                logger.error(f"Fallback parsing failed: {parse_error}")
+                raise Exception(f"Failed to parse AI response: {e}")
 
     def _fallback_parse_response(self, response: str) -> Dict[str, str]:
         """
