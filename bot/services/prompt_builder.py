@@ -36,7 +36,7 @@ IMPORTANT: The user's interface language is {lang_names.get(user_language, 'Russ
 
 AVAILABLE EXPENSE FUNCTIONS:
 1. get_max_expense_day(period='last_week'|'last_month'|'week'|'month') - for "What day did I spend the most last week?"
-2. get_period_total(period='today'|'yesterday'|'day_before_yesterday'|'week'|'last_week'|'month'|'last_month'|'year'|'январь'|...|'декабрь'|'january'|...|'december'|'зима'|'весна'|'лето'|'осень'|'winter'|'spring'|'summer'|'fall') - for "How much did I spend today/yesterday/day before yesterday/last week/in August/in summer?"
+2. get_period_total(period='today'|'yesterday'|'day_before_yesterday'|'week'|'last_week'|'month'|'last_month'|'year'|'январь'|...|'декабрь'|'january'|...|'december'|'зима'|'весна'|'лето'|'осень'|'winter'|'spring'|'summer'|'fall') - ONLY for "How much/Сколько" questions: "How much did I spend today?", "Сколько потратил вчера?". Returns TOTAL + categories breakdown.
 3. get_max_single_expense(period='last_week'|'last_month'|'day_before_yesterday'|'week'|'month'|'январь'|'февраль'|...|'декабрь'|'january'|'august'|'зима'|'весна'|'лето'|'осень') - for "What's my biggest expense day before yesterday/last week/last month/in August/in summer?"
 4. get_min_single_expense(period='last_week'|'last_month'|'week'|'month') - for "What's my smallest/cheapest expense last week/last month?"
 5. get_category_statistics() - for "What do I spend the most on?"
@@ -49,7 +49,7 @@ AVAILABLE EXPENSE FUNCTIONS:
 12. get_expense_trend() - for "Show expense trend"
 13. get_expenses_by_amount_range(min_amount=1000) - for "Show expenses over 1000"
 14. get_category_total(category='groceries', period='month'|'week'|'январь'|...|'декабрь'|'january'|...|'december'|'зима'|'лето'|'winter'|'summer') - for CATEGORIES: "How much did I spend on groceries this month/in August/in summer?"
-15. get_expenses_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - for "Show expenses for period/from date to date", "Expense diary/journal", "Show expenses on specific day", "List all expenses"
+15. get_expenses_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - for "Show/Покажи expenses", "List expenses", "Expense diary/journal", "What did I spend on yesterday?", "Покажи траты вчера/сегодня". Returns LIST of individual expenses with descriptions. Use for 'today'/'yesterday' by calculating correct dates.
 
 AVAILABLE INCOME FUNCTIONS:
 18. get_max_income_day() - for "What day did I earn the most?"
@@ -118,6 +118,15 @@ SPECIAL CASES:
   get_max_single_income(period='last_month')
 - Use get_category_statistics when statistics for ALL categories needed (not specific one)
 - Use get_category_total only for current periods (this month, this week) without specifying dates
+
+CRITICAL DISTINCTION - "Show/Покажи" vs "How much/Сколько":
+- "Покажи траты вчера", "Show expenses today", "What did I buy yesterday?" → get_expenses_list (returns LIST of items)
+- "Сколько потратил вчера?", "How much did I spend today?" → get_period_total (returns TOTAL sum)
+
+For get_expenses_list with relative dates, calculate actual dates:
+- "today" → start_date=end_date=today's date
+- "yesterday" → start_date=end_date=yesterday's date
+- "last week" → calculate start_date and end_date for last 7 days
 
 REMINDER: Respond in {lang_names.get(user_language, 'Russian')} language!
 

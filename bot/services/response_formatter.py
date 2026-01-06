@@ -40,6 +40,45 @@ def _get_user_language(result: Dict) -> str:
         return 'ru'
 
 
+def _localize_period(period: str, lang: str) -> str:
+    """Localize period name (yesterday -> вчера, etc.)"""
+    period_translations = {
+        'ru': {
+            'today': 'сегодня',
+            'yesterday': 'вчера',
+            'day_before_yesterday': 'позавчера',
+            'week': 'неделя',
+            'last_week': 'прошлая неделя',
+            'month': 'месяц',
+            'last_month': 'прошлый месяц',
+            'year': 'год',
+            'winter': 'зима',
+            'spring': 'весна',
+            'summer': 'лето',
+            'fall': 'осень',
+            'autumn': 'осень',
+        },
+        'en': {
+            'today': 'today',
+            'yesterday': 'yesterday',
+            'day_before_yesterday': 'day before yesterday',
+            'week': 'week',
+            'last_week': 'last week',
+            'month': 'month',
+            'last_month': 'last month',
+            'year': 'year',
+            'winter': 'winter',
+            'spring': 'spring',
+            'summer': 'summer',
+            'fall': 'fall',
+            'autumn': 'autumn',
+        }
+    }
+
+    translations = period_translations.get(lang, period_translations['ru'])
+    return translations.get(period.lower(), period)
+
+
 def _format_expenses_list(result: Dict, title: str, subtitle: str) -> str:
     from bot.utils.expense_formatter import format_expenses_from_dict_list
     expenses = result.get('expenses', [])
@@ -401,7 +440,8 @@ def format_function_result(func_name: str, result: Dict) -> str:
         total_text = get_text('total', lang)
         logger.info(f"[get_period_total] Got total='{total_text}'")
 
-        lines = [f"{expense_summary_text} {start}{(' — ' + end) if end and end != start else ''} ({period})"]
+        localized_period = _localize_period(period, lang)
+        lines = [f"{expense_summary_text} {start}{(' — ' + end) if end and end != start else ''} ({localized_period})"]
         lines.append(f"{total_text}: {total:,.0f} ₽")
         if cats:
             lines.append("")
@@ -422,7 +462,8 @@ def format_function_result(func_name: str, result: Dict) -> str:
         start = result.get('start_date', '')
         end = result.get('end_date', '')
         cats = result.get('categories', []) or []
-        lines = [f"{get_text('income_summary', lang)} {start}{(' — ' + end) if end and end != start else ''} ({period})"]
+        localized_period = _localize_period(period, lang)
+        lines = [f"{get_text('income_summary', lang)} {start}{(' — ' + end) if end and end != start else ''} ({localized_period})"]
         lines.append(f"{get_text('total', lang)}: {total:,.0f} ₽")
         if cats:
             lines.append("")
