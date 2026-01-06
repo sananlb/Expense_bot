@@ -530,7 +530,7 @@ Create a deep financial analysis in JSON format with two sections:
 2. "analysis" - detailed analysis (3 points):
    - **{"Large expenses" if large_expenses_section else "Spending patterns"}:** Highlight the largest purchases, use category info provided in brackets
    - **{"Regular expenses" if regular_expenses_section else "Spending habits"}:** Indicate recurring expenses using category info provided in brackets
-   - **Personal advice:** Specific recommendation on how to optimize expenses or what to pay attention to
+   - Specific recommendation on how to optimize expenses or what to pay attention to (WITHOUT title/header, just the advice text)
 
 IMPORTANT:
 - Write in English, concisely and to the point
@@ -560,7 +560,7 @@ IMPORTANT:
 2. "analysis" - детальный анализ (3 пункта):
    - **{"Крупные траты" if large_expenses_section else "Паттерны трат"}:** Выдели самые большие покупки, используй категорию из скобок [категория: ...]
    - **{"Регулярные расходы" if regular_expenses_section else "Финансовые привычки"}:** Укажи повторяющиеся траты, используй категорию из скобок [категория: ...]
-   - **Персональный совет:** Конкретная рекомендация как оптимизировать расходы или на что обратить внимание
+   - Конкретная рекомендация как оптимизировать расходы или на что обратить внимание (БЕЗ заголовка "Персональный совет:", только текст совета)
 
 ВАЖНО:
 - Пиши на русском языке, кратко и по делу

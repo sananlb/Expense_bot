@@ -265,7 +265,7 @@ class NotificationService:
         # Баланс показываем всегда
         balance = insight.balance
         balance_emoji = "📈" if balance >= 0 else "📉"
-        balance_sign = "+" if balance >= 0 else ""
+        balance_sign = "+" if balance >= 0 else "-"
         balance_label = get_text('monthly_report_balance', lang)
         text += f"⚖️ {balance_label}: {balance_emoji} {balance_sign}{format_amount(abs(float(balance)), currency, lang)}\n"
 
@@ -329,9 +329,15 @@ class NotificationService:
                     text += f"🔍 <b>{key_points_label}</b>\n"
                     # Remove bullets and add blank lines between points
                     formatted_points = []
+                    import re
                     for point in key_points:
                         # Remove bullet marker and strip whitespace
                         clean_point = point.strip().lstrip('•').strip()
+                        # Convert markdown **bold** to HTML <b>bold</b>
+                        clean_point = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', clean_point)
+                        # Remove "Персональный совет:" prefix if present
+                        clean_point = re.sub(r'^Персональный совет:\s*', '', clean_point, flags=re.IGNORECASE)
+                        clean_point = re.sub(r'^Personal advice:\s*', '', clean_point, flags=re.IGNORECASE)
                         formatted_points.append(clean_point)
                     text += '\n\n'.join(formatted_points) + "\n"
             else:
