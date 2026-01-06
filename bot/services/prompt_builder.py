@@ -39,7 +39,7 @@ AVAILABLE EXPENSE FUNCTIONS:
 2. get_period_total(period='today'|'yesterday'|'day_before_yesterday'|'week'|'last_week'|'month'|'last_month'|'year'|'январь'|...|'декабрь'|'january'|...|'december'|'зима'|'весна'|'лето'|'осень'|'winter'|'spring'|'summer'|'fall') - ONLY for "How much/Сколько" questions: "How much did I spend today?", "Сколько потратил вчера?". Returns TOTAL + categories breakdown.
 3. get_max_single_expense(period='last_week'|'last_month'|'day_before_yesterday'|'week'|'month'|'январь'|'февраль'|...|'декабрь'|'january'|'august'|'зима'|'весна'|'лето'|'осень') - for "What's my biggest expense day before yesterday/last week/last month/in August/in summer?"
 4. get_min_single_expense(period='last_week'|'last_month'|'week'|'month') - for "What's my smallest/cheapest expense last week/last month?"
-5. get_category_statistics() - for "What do I spend the most on?"
+5. get_category_statistics(period='month'|'last_month'|'декабрь'|'january'|'зима'|'summer') - for "What do I spend the most on?", "What categories in December?", "На что тратил в ноябре?"
 6. get_average_expenses() - for "How much do I spend on average?"
 7. get_recent_expenses(limit=10) - for "Show recent expenses"
 8. search_expenses(query='text', period='last_week'|'last_month') - UNIVERSAL SEARCH in categories AND descriptions: "How much did I spend on groceries last week?", "Coffee expenses last month"
@@ -55,7 +55,7 @@ AVAILABLE INCOME FUNCTIONS:
 18. get_max_income_day() - for "What day did I earn the most?"
 19. get_income_period_total(period='today'|'yesterday'|'week'|'month'|'year') - for "How much did I earn today/yesterday/this week?"
 20. get_max_single_income(period='last_week'|'last_month'|'week'|'month'|'январь'|'февраль'|...|'декабрь'|'january'|'august'|'зима'|'весна'|'лето'|'осень') - for "What's my biggest income last week/last month/in August/in summer?"
-21. get_income_category_statistics() - for "Where does most income come from?"
+21. get_income_category_statistics(period='month'|'last_month'|'декабрь'|'january'|'зима'|'summer') - for "Where does most income come from?", "Income categories in December", "Откуда доходы в ноябре?"
 22. get_average_incomes() - for "How much do I earn on average?"
 23. get_recent_incomes(limit=10) - for "Show recent income"
 24. search_incomes(query='text') - for "When did I receive..."
@@ -99,9 +99,15 @@ ADDITIONAL FUNCTION SELECTION RULES:
   - "Income journal last week" → get_incomes_list with last week dates
   - "All operations in October" → get_all_operations(start_date='2025-10-01', end_date='2025-10-31')
 - If asking about DATE RANGE, use get_expenses_list/get_incomes_list/get_all_operations with specified dates.
-- If asking about CATEGORIES for a month ("what categories did I spend most in August"), use get_category_statistics and set period_days for the month.
+- If asking about CATEGORIES for a month ("what categories did I spend most in August"), use get_category_statistics with period parameter.
 
 SPECIAL CASES:
+- For questions about CATEGORY BREAKDOWN for a specific period (month name, season):
+  "На что я больше всего тратил в декабре?" → get_category_statistics(period='декабрь')
+  "What did I spend most on in November?" → get_category_statistics(period='november')
+  "Category statistics for summer" → get_category_statistics(period='лето')
+  "Откуда были доходы в октябре?" → get_income_category_statistics(period='октябрь')
+  "Income breakdown in December" → get_income_category_statistics(period='december')
 - For searches with period "last week", "last month", "day before yesterday" use search_expenses with period:
   "how much did I spend on groceries last week" → search_expenses(query='groceries', period='last_week')
   "coffee expenses last month" → search_expenses(query='coffee', period='last_month')
@@ -116,7 +122,7 @@ SPECIAL CASES:
   get_max_single_expense(period='лето') or get_max_single_expense(period='summer')
 - For questions "biggest income last month" use:
   get_max_single_income(period='last_month')
-- Use get_category_statistics when statistics for ALL categories needed (not specific one)
+- Use get_category_statistics(period=...) when statistics for ALL categories needed (not specific one). Pass month name or period.
 - Use get_category_total only for current periods (this month, this week) without specifying dates
 
 CRITICAL DISTINCTION - "Show/Покажи" vs "How much/Сколько":

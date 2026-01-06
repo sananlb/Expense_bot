@@ -412,21 +412,35 @@ class ExpenseFunctions:
         period_days: int = 30,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
+        period: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Получить статистику по категориям
-        
+
         Args:
             user_id: ID пользователя
-            period_days: Период в днях
+            period_days: Период в днях (используется как fallback)
+            start_date: Начальная дата в формате ISO (YYYY-MM-DD)
+            end_date: Конечная дата в формате ISO (YYYY-MM-DD)
+            period: Название периода ('декабрь', 'last_month', 'week', etc.)
+                    Имеет приоритет над period_days
         """
         try:
             profile, _ = Profile.objects.get_or_create(
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
-            # Определяем период: явные даты имеют приоритет
-            if start_date and end_date:
+            # Определяем период: приоритет period > start_date/end_date > period_days
+            if period:
+                # Используем get_period_dates для парсинга периода
+                from bot.utils.date_utils import get_period_dates
+                try:
+                    start_dt, end_dt = get_period_dates(period)
+                except Exception:
+                    # Если period не распознан, fallback на period_days
+                    end_dt = date.today()
+                    start_dt = end_dt - timedelta(days=period_days)
+            elif start_date and end_date:
                 try:
                     from datetime import datetime as _dt
                     start_dt = _dt.fromisoformat(str(start_date)).date()
@@ -1873,21 +1887,53 @@ class ExpenseFunctions:
 
     @staticmethod
     @sync_to_async
-    def get_income_category_statistics(user_id: int) -> Dict[str, Any]:
+    def get_income_category_statistics(
+        user_id: int,
+        period: Optional[str] = None,
+        period_days: int = 30,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Статистика доходов по категориям (аналог get_category_statistics)
+
+        Args:
+            user_id: ID пользователя
+            period: Название периода ('декабрь', 'last_month', 'week', etc.)
+                    Имеет приоритет над period_days
+            period_days: Период в днях (используется как fallback)
+            start_date: Начальная дата в формате ISO (YYYY-MM-DD)
+            end_date: Конечная дата в формате ISO (YYYY-MM-DD)
         """
         try:
             profile, _ = Profile.objects.get_or_create(
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
-            today = date.today()
-            month_ago = today - timedelta(days=30)
-            
+            # Определяем период: приоритет period > start_date/end_date > period_days
+            if period:
+                from bot.utils.date_utils import get_period_dates
+                try:
+                    start_dt, end_dt = get_period_dates(period)
+                except Exception:
+                    end_dt = date.today()
+                    start_dt = end_dt - timedelta(days=period_days)
+            elif start_date and end_date:
+                try:
+                    from datetime import datetime as _dt
+                    start_dt = _dt.fromisoformat(str(start_date)).date()
+                    end_dt = _dt.fromisoformat(str(end_date)).date()
+                except Exception:
+                    end_dt = date.today()
+                    start_dt = end_dt - timedelta(days=period_days)
+            else:
+                end_dt = date.today()
+                start_dt = end_dt - timedelta(days=period_days)
+
             stats = Income.objects.filter(
                 profile=profile,
-                income_date__gte=month_ago
+                income_date__gte=start_dt,
+                income_date__lte=end_dt
             ).values('category__name').annotate(
                 total=Sum('amount'),
                 count=Count('id')
@@ -1914,7 +1960,9 @@ class ExpenseFunctions:
                 'success': True,
                 'categories': categories,
                 'total': float(total_income),
-                'period_days': 30
+                'start_date': start_dt.isoformat(),
+                'end_date': end_dt.isoformat(),
+                'currency': 'RUB'
             }
         except Exception as e:
             logger.error(f"Error in get_income_category_statistics: {e}")
@@ -2722,7 +2770,7 @@ expense_functions = [
     },
     {
         "name": "get_category_statistics",
-        "description": "Get expenses statistics by categories",
+        "description": "Get expenses statistics by categories for a specific period (month name, season, etc.)",
         "parameters": {
             "type": "object",
             "properties": {
@@ -2730,9 +2778,21 @@ expense_functions = [
                     "type": "integer",
                     "description": "Telegram user ID"
                 },
+                "period": {
+                    "type": "string",
+                    "description": "Period name: 'month', 'last_month', 'декабрь', 'november', 'зима', 'summer', etc."
+                },
+                "start_date": {
+                    "type": "string",
+                    "description": "Start date in ISO format (YYYY-MM-DD)"
+                },
+                "end_date": {
+                    "type": "string",
+                    "description": "End date in ISO format (YYYY-MM-DD)"
+                },
                 "period_days": {
                     "type": "integer",
-                    "description": "Number of days to analyze (default: 30)"
+                    "description": "Number of days to analyze (fallback if period not specified, default: 30)"
                 }
             },
             "required": ["user_id"]
@@ -2817,8 +2877,8 @@ expense_functions = [
         }
     },
     {
-        "name": "get_income_by_category",
-        "description": "Get income statistics by categories",
+        "name": "get_income_category_statistics",
+        "description": "Get income statistics by categories for a specific period (month name, season, etc.)",
         "parameters": {
             "type": "object",
             "properties": {
@@ -2826,9 +2886,21 @@ expense_functions = [
                     "type": "integer",
                     "description": "Telegram user ID"
                 },
+                "period": {
+                    "type": "string",
+                    "description": "Period name: 'month', 'last_month', 'декабрь', 'november', 'зима', 'summer', etc."
+                },
+                "start_date": {
+                    "type": "string",
+                    "description": "Start date in ISO format (YYYY-MM-DD)"
+                },
+                "end_date": {
+                    "type": "string",
+                    "description": "End date in ISO format (YYYY-MM-DD)"
+                },
                 "period_days": {
                     "type": "integer",
-                    "description": "Number of days to analyze (default: 30)"
+                    "description": "Number of days to analyze (fallback if period not specified, default: 30)"
                 }
             },
             "required": ["user_id"]

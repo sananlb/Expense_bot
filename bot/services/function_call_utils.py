@@ -16,7 +16,7 @@ ALLOWED_PARAMS: Dict[str, set] = {
     'get_max_expense_day': {'user_id', 'period_days'},
     'get_period_total': {'user_id', 'period'},
     'get_max_single_expense': {'user_id', 'period', 'period_days'},
-    'get_category_statistics': {'user_id', 'period_days', 'start_date', 'end_date'},
+    'get_category_statistics': {'user_id', 'period_days', 'start_date', 'end_date', 'period'},
     'get_average_expenses': {'user_id', 'period_days'},
     'get_recent_expenses': {'user_id', 'limit'},
     'get_daily_totals': {'user_id', 'days'},
@@ -33,7 +33,7 @@ ALLOWED_PARAMS: Dict[str, set] = {
     'get_max_income_day': {'user_id'},
     'get_income_period_total': {'user_id', 'period'},
     'get_max_single_income': {'user_id', 'period', 'period_days'},
-    'get_income_category_statistics': {'user_id'},
+    'get_income_category_statistics': {'user_id', 'period', 'period_days', 'start_date', 'end_date'},
     'get_average_incomes': {'user_id'},
     'get_recent_incomes': {'user_id', 'limit'},
     'search_incomes': {'user_id', 'query', 'limit'},
@@ -64,6 +64,8 @@ def sanitize_func_name(message: str, func_name: str) -> str:
             ('больше' in low or 'максим' in low) and
             ('потрат' in low or 'траты' in low)):
             return 'get_max_expense_day'
+        if ('статистик' in low or 'категор' in low) and ('доход' in low):
+            return 'get_income_category_statistics'
         if ('статистик' in low or 'категор' in low) and ('трат' in low or 'расход' in low):
             return 'get_category_statistics'
     return func_name
@@ -163,7 +165,10 @@ def normalize_function_call(
             'spec_json': params.get('spec_json', '{}')
         }
 
-    # Map deprecated function to supported one with explicit dates
+    # Map deprecated function names to current ones
+    if func_name == 'get_income_by_category':
+        func_name = 'get_income_category_statistics'
+
     if func_name == 'get_category_total_by_dates':
         func_name = 'get_category_statistics'
         ps = {}
@@ -179,8 +184,11 @@ def normalize_function_call(
         return func_name, ps
 
     if func_name == 'get_category_statistics':
-        # Prefer explicit start/end dates when provided
-        if 'start_date' in params and 'end_date' in params:
+        # Priority: period > start/end dates > period_days
+        if 'period' in params:
+            # Передаем period напрямую - функция сама распарсит его через get_period_dates
+            params = {'user_id': user_id, 'period': params['period']}
+        elif 'start_date' in params and 'end_date' in params:
             params = _sanitize_keys(params, ALLOWED_PARAMS[func_name])
             params['user_id'] = user_id
         else:
@@ -247,6 +255,18 @@ def normalize_function_call(
             pass
         ps['user_id'] = user_id
         params = ps
+
+    elif func_name == 'get_income_category_statistics':
+        # Priority: period > start/end dates > period_days
+        if 'period' in params:
+            # Передаем period напрямую - функция сама распарсит его через get_period_dates
+            params = {'user_id': user_id, 'period': params['period']}
+        elif 'start_date' in params and 'end_date' in params:
+            params = _sanitize_keys(params, ALLOWED_PARAMS[func_name])
+            params['user_id'] = user_id
+        else:
+            params = _sanitize_keys(params, ALLOWED_PARAMS[func_name])
+            params['user_id'] = user_id
 
     else:
         allowed = ALLOWED_PARAMS.get(func_name, {'user_id'})
