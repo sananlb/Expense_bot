@@ -138,7 +138,8 @@ class UnifiedAIService(AIBaseService):
         error_str = str(error).lower()
         proxy_keywords = [
             'socks', 'proxy', 'connection refused', 'connection reset',
-            'tunnel', 'handshake', 'connect timeout', 'proxyerror'
+            'tunnel', 'handshake', 'connect timeout', 'proxyerror',
+            'connection error'  # Generic connection errors when proxy is enabled
         ]
         return any(keyword in error_str for keyword in proxy_keywords)
 
