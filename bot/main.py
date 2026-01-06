@@ -5,6 +5,8 @@ ExpenseBot - главный файл бота на aiogram 3.x
 import asyncio
 import logging
 import sys
+import os
+import django
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -13,8 +15,11 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from datetime import timedelta
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
-import os
 from dotenv import load_dotenv
+
+# Инициализация Django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'expense_bot.settings')
+django.setup()
 
 # Импорт роутеров
 from .routers import (
