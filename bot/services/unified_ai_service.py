@@ -112,9 +112,6 @@ class UnifiedAIService(AIBaseService):
 
         api_key, key_index = key_result
 
-        # Единый timeout 15 секунд для всех провайдеров
-        timeout = 15.0
-
         # Используем прокси только для OpenRouter
         http_client = None
         connection_mode = os.getenv('OPENROUTER_CONNECTION_MODE', 'proxy').lower()
@@ -127,10 +124,22 @@ class UnifiedAIService(AIBaseService):
         if should_use_proxy:
             http_client = self._http_client_with_proxy
 
+        # Для прокси-запросов: отключаем retry (мы сами делаем fallback)
+        # и используем granular timeout (быстрый connect, дольше на read)
+        if should_use_proxy:
+            # Прокси: connect=5s (быстро понять что прокси недоступен), read=15s
+            timeout = httpx.Timeout(15.0, connect=5.0)
+            max_retries = 0  # Не retry - у нас свой fallback механизм
+        else:
+            # Прямое соединение: стандартный timeout, 1 retry
+            timeout = 15.0
+            max_retries = 1
+
         return AsyncOpenAI(
             api_key=api_key,
             base_url=self.base_url,
             timeout=timeout,
+            max_retries=max_retries,
             http_client=http_client
         ), key_index
 
