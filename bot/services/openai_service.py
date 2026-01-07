@@ -8,13 +8,14 @@ import asyncio
 import threading
 import time
 import re
+import inspect
 from datetime import datetime
 from typing import Dict, List, Optional, Any
-import openai
-from openai import OpenAI
+from openai import AsyncOpenAI
 from django.conf import settings
 from .ai_base_service import AIBaseService
 from .ai_selector import get_provider_settings, get_model
+from .key_rotation_mixin import OpenAIKeyRotationMixin
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +25,29 @@ OPENAI_CLIENTS = []
 # Проверяем наличие OPENAI_API_KEYS в settings
 if hasattr(settings, 'OPENAI_API_KEYS') and settings.OPENAI_API_KEYS:
     for api_key in settings.OPENAI_API_KEYS:
-        OPENAI_CLIENTS.append(OpenAI(api_key=api_key))
+        OPENAI_CLIENTS.append(AsyncOpenAI(api_key=api_key))
     logger.info(f"Инициализировано {len(OPENAI_CLIENTS)} OpenAI клиентов")
 else:
     logger.info("Не найдены OPENAI_API_KEYS в настройках, используем единичный ключ")
     OPENAI_CLIENTS = []
+
+
+async def _aclose_openai_client(client: Optional[AsyncOpenAI]):
+    if not client:
+        return
+    close = getattr(client, "close", None)
+    if close:
+        if inspect.iscoroutinefunction(close):
+            await close()
+        else:
+            close()
+        return
+    aclose = getattr(client, "aclose", None)
+    if aclose:
+        if inspect.iscoroutinefunction(aclose):
+            await aclose()
+        else:
+            aclose()
 
 
 class OpenAIService(AIBaseService):
@@ -40,7 +59,9 @@ class OpenAIService(AIBaseService):
     def __init__(self):
         """Инициализация сервиса"""
         super().__init__()
-        self.use_rotation = False  # Добавляем атрибут
+        self.api_key_mixin = OpenAIKeyRotationMixin
+        self.use_rotation = bool(self.api_key_mixin.get_api_keys())
+        self._last_key_index = None
         # Если нет пула клиентов, создаем единичный клиент из Django settings/ENV
         if not OPENAI_CLIENTS:
             try:
@@ -49,7 +70,7 @@ class OpenAIService(AIBaseService):
             except Exception:
                 api_key = os.getenv('OPENAI_API_KEY')
             if api_key:
-                self.fallback_client = OpenAI(api_key=api_key)
+                self.fallback_client = AsyncOpenAI(api_key=api_key)
             else:
                 self.fallback_client = None
         else:
@@ -67,15 +88,40 @@ class OpenAIService(AIBaseService):
             cls._client_index = (cls._client_index + 1) % len(OPENAI_CLIENTS)
             return OPENAI_CLIENTS[current_index]
     
-    def _get_client(self) -> OpenAI:
+    def _get_client(self) -> AsyncOpenAI:
         """Получить клиент для текущего запроса"""
+        if self.use_rotation:
+            key_result = self.api_key_mixin.get_next_key()
+            if not key_result:
+                raise ValueError("No OpenAI API keys available")
+            api_key, key_index = key_result
+            self._last_key_index = key_index
+            return AsyncOpenAI(api_key=api_key)
+
         client = self.get_client()
         if client:
+            self._last_key_index = None
             return client
         elif self.fallback_client:
+            self._last_key_index = None
             return self.fallback_client
         else:
             raise ValueError("No OpenAI API keys available")
+
+    def _mark_key_success(self):
+        if self.use_rotation and self._last_key_index is not None:
+            self.api_key_mixin.mark_key_success(self._last_key_index)
+
+    def _mark_key_failure(self, error: Exception):
+        if self.use_rotation and self._last_key_index is not None:
+            self.api_key_mixin.mark_key_failure(self._last_key_index, error)
+
+    async def aclose(self):
+        """Закрывает async клиентов OpenAI."""
+        if self.fallback_client:
+            await _aclose_openai_client(self.fallback_client)
+        for client in OPENAI_CLIENTS:
+            await _aclose_openai_client(client)
         
     async def categorize_expense(
         self, 
@@ -134,10 +180,8 @@ class OpenAIService(AIBaseService):
                 completion_params["max_tokens"] = 1000
                 completion_params["temperature"] = 0.1
 
-            response = await asyncio.to_thread(
-                client.chat.completions.create,
-                **completion_params
-            )
+            response = await client.chat.completions.create(**completion_params)
+            self._mark_key_success()
             
             # Вычисляем время ответа
             response_time = time.time() - start_time
@@ -186,6 +230,7 @@ class OpenAIService(AIBaseService):
                 return None
                 
         except Exception as e:
+            self._mark_key_failure(e)
             logger.error(f"OpenAI categorization error: {e}")
             
             # Логируем неудачную попытку в метрики
@@ -227,8 +272,7 @@ class OpenAIService(AIBaseService):
                 client_fc = self._get_client()
                 sel_t0 = time.time()
                 logger.info(f"[OpenAI] START function selection at {datetime.now().isoformat()}")
-                sel_resp = await asyncio.to_thread(
-                    client_fc.chat.completions.create,
+                sel_resp = await client_fc.chat.completions.create(
                     model=model_name_fc,
                     messages=[
                         {"role": "system", "content": "Ты помощник бота учета финансов. При анализе данных отвечай только в виде FUNCTION_CALL: ..."},
@@ -237,6 +281,7 @@ class OpenAIService(AIBaseService):
                     max_tokens=300,
                     temperature=0.3,
                 )
+                self._mark_key_success()
                 sel_elapsed = time.time() - sel_t0
                 logger.info(f"[OpenAI] END function selection took {sel_elapsed:.2f}s")
                 sel_text = sel_resp.choices[0].message.content.strip() if sel_resp and sel_resp.choices else ""
@@ -348,7 +393,8 @@ class OpenAIService(AIBaseService):
                                     return str(result)[:1000]
                         else:
                             return f"Ошибка: {result.get('message','Не удалось получить данные')}"
-            except Exception:
+            except Exception as e:
+                self._mark_key_failure(e)
                 pass
 
             # Обычный чат если функция не выбрана
@@ -370,14 +416,14 @@ class OpenAIService(AIBaseService):
             model_name = get_model('chat', 'openai')
             client = self._get_client()
             start_time = time.time()
-            response = await asyncio.to_thread(
-                client.chat.completions.create,
+            response = await client.chat.completions.create(
                 model=model_name,
                 messages=messages,
                 max_tokens=500,
                 temperature=0.7,
                 top_p=0.9
             )
+            self._mark_key_success()
             response_time = time.time() - start_time
             try:
                 from expenses.models import AIServiceMetrics
@@ -396,11 +442,9 @@ class OpenAIService(AIBaseService):
                 logger.warning(f"Failed to log AI metrics: {e}")
             logger.info(f"OpenAI chat took {response_time:.2f}s for message length {len(message)}")
             result = response.choices[0].message.content.strip()
-            if self.use_rotation:
-                api_key = client.api_key
-                self.api_key_manager.report_success(api_key)
             return result
         except Exception as e:
+            self._mark_key_failure(e)
             logger.error(f"OpenAI chat error: {e}")
             try:
                 from expenses.models import AIServiceMetrics
@@ -416,7 +460,4 @@ class OpenAIService(AIBaseService):
                 )
             except Exception as log_error:
                 logger.warning(f"Failed to log AI error metrics: {log_error}")
-            if self.use_rotation and 'client' in locals():
-                api_key = client.api_key
-                self.api_key_manager.report_error(api_key, e)
             return "Извините, произошла ошибка при обработке вашего сообщения. Попробуйте еще раз."

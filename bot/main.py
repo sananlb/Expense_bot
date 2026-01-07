@@ -6,6 +6,7 @@ import asyncio
 import logging
 import sys
 import os
+import inspect
 import django
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -100,8 +101,20 @@ async def on_shutdown(bot: Bot):
     try:
         from bot.services.ai_selector import AISelector
         for provider_type, service in AISelector._instances.items():
-            if hasattr(service, 'close'):
-                service.close()
+            close_method = getattr(service, 'aclose', None)
+            if close_method:
+                if inspect.iscoroutinefunction(close_method):
+                    await close_method()
+                else:
+                    close_method()
+                logger.info(f"Closed {provider_type} AI service")
+                continue
+            close_method = getattr(service, 'close', None)
+            if close_method:
+                if inspect.iscoroutinefunction(close_method):
+                    await close_method()
+                else:
+                    close_method()
                 logger.info(f"Closed {provider_type} AI service")
     except Exception as e:
         logger.warning(f"Error closing AI services: {e}")

@@ -10,10 +10,11 @@ import re
 import base64
 import tempfile
 import os
-from typing import Dict, List, Optional, Any, Type, Callable
+from typing import Dict, List, Optional, Any, Type, Callable, Awaitable
 
 import httpx
-from openai import OpenAI
+from httpx_socks import AsyncProxyTransport
+from openai import AsyncOpenAI
 from django.conf import settings
 from .ai_base_service import AIBaseService
 from .ai_selector import get_model
@@ -38,7 +39,7 @@ class UnifiedAIService(AIBaseService):
         self.provider_name = provider_name
         self.base_url = None
         self.api_key_mixin: Optional[Type[KeyRotationMixin]] = None
-        self._http_client_with_proxy: Optional[httpx.Client] = None
+        self._http_client_with_proxy: Optional[httpx.AsyncClient] = None
 
         # Настройка параметров провайдера
         if provider_name == 'deepseek':
@@ -70,9 +71,9 @@ class UnifiedAIService(AIBaseService):
             return
 
         try:
-            # httpx 0.27+ использует 'proxies' (словарь с протоколами)
-            self._http_client_with_proxy = httpx.Client(
-                proxies=proxy_url,
+            transport = AsyncProxyTransport.from_url(proxy_url)
+            self._http_client_with_proxy = httpx.AsyncClient(
+                transport=transport,
                 timeout=15.0  # Единый timeout 15 секунд
             )
             proxy_display = proxy_url.split('@')[1] if '@' in proxy_url else proxy_url.replace('socks5://', '')
@@ -84,15 +85,15 @@ class UnifiedAIService(AIBaseService):
             logger.warning(f"[{self.provider_name}] Не удалось инициализировать прокси ({e}), работаем напрямую")
             self._http_client_with_proxy = None
 
-    def __del__(self):
-        """Закрываем httpx клиент при удалении объекта"""
+    async def aclose(self):
+        """Закрываем httpx async клиент при завершении приложения."""
         if self._http_client_with_proxy:
             try:
-                self._http_client_with_proxy.close()
+                await self._http_client_with_proxy.aclose()
             except Exception:
                 pass
 
-    def _get_client(self, use_proxy: bool = True) -> tuple[OpenAI, int]:
+    def _get_client(self, use_proxy: bool = True) -> tuple[AsyncOpenAI, int]:
         """
         Создает клиент OpenAI с актуальным ключом из ротации
 
@@ -126,7 +127,7 @@ class UnifiedAIService(AIBaseService):
         if should_use_proxy:
             http_client = self._http_client_with_proxy
 
-        return OpenAI(
+        return AsyncOpenAI(
             api_key=api_key,
             base_url=self.base_url,
             timeout=timeout,
@@ -156,7 +157,7 @@ class UnifiedAIService(AIBaseService):
 
     async def _make_api_call_with_proxy_fallback(
         self,
-        create_call: Callable,
+        create_call: Callable[[AsyncOpenAI], Awaitable[Any]],
         operation: str,
     ):
         """
@@ -182,7 +183,7 @@ class UnifiedAIService(AIBaseService):
         )
 
         try:
-            response = await asyncio.to_thread(create_call, client)
+            response = await create_call(client)
 
             # Успех - помечаем ключ как рабочий
             if self.api_key_mixin:
@@ -214,7 +215,7 @@ class UnifiedAIService(AIBaseService):
                 try:
                     direct_start = time.time()
                     client_direct, key_index_direct = self._get_client(use_proxy=False)
-                    response = await asyncio.to_thread(create_call, client_direct)
+                    response = await create_call(client_direct)
 
                     if self.api_key_mixin:
                         self.api_key_mixin.mark_key_success(key_index_direct)
@@ -258,8 +259,8 @@ class UnifiedAIService(AIBaseService):
             model_name = get_model('categorization', self.provider_name)
 
             # Создаем функцию для API вызова
-            def create_call(client):
-                return client.chat.completions.create(
+            async def create_call(client):
+                return await client.chat.completions.create(
                     model=model_name,
                     messages=[
                         {"role": "system", "content": "You are a helpful assistant. Always respond with valid JSON."},
@@ -362,8 +363,8 @@ class UnifiedAIService(AIBaseService):
                 system_prompt += "\n\nFAQ (используй как источник фактов, не выдумывай функции вне списка):\n" + faq_context
 
             # Создаем функцию для первого API вызова (Intent Recognition)
-            def create_intent_call(client):
-                return client.chat.completions.create(
+            async def create_intent_call(client):
+                return await client.chat.completions.create(
                     model=model_name,
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -416,8 +417,8 @@ class UnifiedAIService(AIBaseService):
             chat_messages.append({"role": "user", "content": message})
 
             # Создаем функцию для второго API вызова (Chat)
-            def create_chat_call(client):
-                return client.chat.completions.create(
+            async def create_chat_call(client):
+                return await client.chat.completions.create(
                     model=model_name,
                     messages=chat_messages,
                     temperature=0.7,
@@ -496,8 +497,8 @@ class UnifiedAIService(AIBaseService):
         messages.append({"role": "user", "content": message})
 
         # Создаем функцию для API вызова
-        def create_call(client):
-            return client.chat.completions.create(
+        async def create_call(client):
+            return await client.chat.completions.create(
                 model=model_name,
                 messages=messages,
                 temperature=0.7,
@@ -678,8 +679,8 @@ class UnifiedAIService(AIBaseService):
             ]
 
             # Создаем функцию для API вызова
-            def create_call(client):
-                return client.chat.completions.create(
+            async def create_call(client):
+                return await client.chat.completions.create(
                     model=model_name,
                     messages=messages,  # type: ignore
                     max_tokens=500,
