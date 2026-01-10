@@ -721,13 +721,13 @@ def match_keyword_in_text(keyword: str, text: str) -> Tuple[bool, str]:
             return True, "prefix"
 
     # УРОВЕНЬ 3: Inflection match (только для одиночных keywords)
-    # Проверяем склонение с ЛЮБЫМ словом текста >= 4 символов
-    if len(keyword_words) == 1 and len(normalized_keyword) >= 4:
+    # Проверяем склонение с ЛЮБЫМ словом текста >= 3 символов
+    if len(keyword_words) == 1 and len(normalized_keyword) >= 3:
         for text_word in text_words:
-            if len(text_word) >= 4:
+            if len(text_word) >= 3:
                 # Проверяем основу слова (stem)
                 min_len = min(len(normalized_keyword), len(text_word))
-                stem_len = max(4, min_len - 2)
+                stem_len = max(2, min_len - 2)
 
                 if normalized_keyword[:stem_len] == text_word[:stem_len]:
                     diff = abs(len(normalized_keyword) - len(text_word))
@@ -757,7 +757,7 @@ def match_keyword_in_text(keyword: str, text: str) -> Tuple[bool, str]:
 1. **Минимум 3 символа** — "в", "на", "от" автоматически игнорируются
 2. **Inflection с ЛЮБЫМ словом текста** — "зарплата" матчит "мне перевели зарплату" (декабрь 2025)
 3. **Prefix match требует >= 2 слов** — одиночные слова не используют prefix
-4. **Основа слова >= 4 символов** — для inflection match
+4. **Слова >= 3 символов** — для inflection match (включая keyword и text_word)
 5. **Разница в длине <= 2 символов** — для inflection match (предотвращает "кофе" → "кофейня")
 
 ### Уникальность keywords
@@ -797,13 +797,13 @@ def ensure_unique_keyword(profile, category, word, is_income=False):
 
 **БАГ #2 (декабрь 2025):** "зарплата" НЕ матчила "мне перевели зарплату" (inflection regression)
 - **Причина:** Inflection проверялся только с ПЕРВЫМ словом текста
-- **Решение:** Изменена логика — inflection проверяется с ЛЮБЫМ словом текста
+- **Решение:** Изменена логика — inflection проверяется с ЛЮБЫМ словом текста >= 3 символов
 - **Побочный эффект:** "тест" теперь матчит "в тесте" (морфологически корректно)
 
 **Результат эволюции:**
 - ✅ Склонения работают с ЛЮБЫМ словом ("зарплата" → "мне перевели зарплату")
 - ✅ Умный prefix matching для фраз (первые 2-3 слова)
-- ⚠️ Минимальные ложные срабатывания (stem-based matching, >= 4 символа, diff <= 2)
+- ⚠️ Минимальные ложные срабатывания (stem-based matching, >= 3 символа, diff <= 2)
 
 ### Лимиты и очистка
 
