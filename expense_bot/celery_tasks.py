@@ -1380,88 +1380,64 @@ def cleanup_old_keywords(profile_id: int, is_income: bool = False):
 def learn_keywords_on_create(expense_id: int, category_id: int):
     """
     Обучение системы при создании новой траты с AI-категоризацией.
-    Запускается при ЛЮБОЙ AI-категоризации для автоматического сохранения слов.
+    ИСПОЛЬЗУЕТ УНИВЕРСАЛЬНЫЙ КОД из keyword_service.py
+
+    Сохраняет ПОЛНУЮ ФРАЗУ description как единый keyword (не отдельные слова!)
+    Это решает проблему ложных срабатываний типа "тест" в "сосиска в тесте".
     """
     try:
-        from expenses.models import Expense, ExpenseCategory, CategoryKeyword
+        from expenses.models import Expense, ExpenseCategory
+        from bot.utils.keyword_service import normalize_keyword_text, ensure_unique_keyword
 
-        # Попробуем импортировать spellchecker, если не получится - используем без проверки
-        try:
-            from bot.utils.spellchecker import check_and_correct_text
-        except ImportError:
-            def check_and_correct_text(text):
-                return text  # Возвращаем текст без изменений
-
-        # Получаем объекты
-        expense = Expense.objects.get(id=expense_id)
+        expense = Expense.objects.select_related('profile', 'category').get(id=expense_id)
         category = ExpenseCategory.objects.get(id=category_id)
 
-        # Извлекаем и очищаем слова из описания
-        words = extract_words_from_description(expense.description)
-
-        # Проверяем правописание
-        corrected_words = []
-        for word in words:
-            corrected = check_and_correct_text(word)
-            if corrected and len(corrected) >= 3:  # Минимум 3 буквы
-                corrected_words.append(corrected.lower())
-
-        words = corrected_words
-
-        # Применяем фильтрацию по правилам сохранения (максимум 3 слова, исключаем глаголы при необходимости)
-        words = filter_keywords_for_saving(words)
-
-        # Если после фильтрации не осталось слов - выходим
-        if not words:
-            logger.info(f"No keywords to save after filtering for expense {expense_id}")
+        if not category:
             return
 
-        # ВАЖНО: Ключевые слова должны быть уникальными!
-        # Удаляем эти слова из ВСЕХ категорий пользователя перед добавлением
-        removed_count = 0
-        for word in words:
-            # Удаляем слово из всех категорий этого пользователя
-            deleted = CategoryKeyword.objects.filter(
-                category__profile=expense.profile,
-                keyword=word
-            ).delete()
-            if deleted[0] > 0:
-                removed_count += deleted[0]
-                logger.debug(f"Removed keyword '{word}' from {deleted[0]} categories before adding to new category")
+        # Нормализуем description как ЦЕЛУЮ ФРАЗУ (не разбиваем на слова!)
+        keyword = normalize_keyword_text(expense.description)
 
-        # Добавляем ключевые слова для категории
-        any_created = False  # Флаг что хотя бы одно новое слово создано
-        for word in words:
-            keyword, created = CategoryKeyword.objects.get_or_create(
-                category=category,
-                keyword=word,
-                defaults={'usage_count': 1}
-            )
+        if not keyword or len(keyword) < 3:
+            logger.info(f"Keyword too short for expense {expense_id}, skipping")
+            return
 
-            if created:
-                any_created = True
-            else:
-                # Увеличиваем счетчик использований
-                # last_used обновляется автоматически (auto_now=True)
-                keyword.usage_count += 1
-                keyword.save()
+        # УНИВЕРСАЛЬНАЯ функция для уникальности (БЕЗ языка - не используется)
+        kw_obj, created, removed = ensure_unique_keyword(
+            profile=expense.profile,
+            category=category,
+            word=keyword,
+            is_income=False  # ← расходы
+        )
 
-            logger.info(f"Learned keyword '{word}' for category '{category.name}' from AI (user {expense.profile.telegram_id})")
+        if not kw_obj:
+            return
 
-        if removed_count > 0:
-            logger.info(f"Removed {removed_count} duplicate keywords from other categories")
+        # Увеличиваем счетчик
+        if created:
+            kw_obj.usage_count = 1
+        else:
+            kw_obj.usage_count += 1
 
-        # Очистка старых ключевых слов только если добавили новые
-        if any_created:
+        kw_obj.save()
+
+        # Получаем имя категории для логов
+        cat_name = category.name or category.name_ru or category.name_en or f'ID:{category.id}'
+
+        logger.info(
+            f"Learned keyword '{keyword}' for expense category '{cat_name}' "
+            f"(user {expense.profile.telegram_id}, removed {removed} duplicates)"
+        )
+
+        # Очистка старых ключевых слов только если создали новый
+        if created:
             cleanup_old_keywords(profile_id=expense.profile.id, is_income=False)
 
         # Проверяем лимит 50 слов на категорию
         check_category_keywords_limit(category)
 
-        logger.info(f"Successfully learned keywords from AI for expense {expense_id}")
-
     except Exception as e:
-        logger.error(f"Error in learn_keywords_on_create task: {e}")
+        logger.error(f"Error in learn_keywords_on_create: {e}")
 
 
 def extract_words_from_description(description: str) -> List[str]:
@@ -1733,74 +1709,62 @@ def update_income_keywords(income_id: int, old_category_id: int, new_category_id
 def learn_income_keywords_on_create(income_id: int):
     """
     Обучение системы при создании нового дохода с AI-категоризацией.
-    Запускается при ЛЮБОЙ AI-категоризации для автоматического сохранения слов.
+    ИСПОЛЬЗУЕТ УНИВЕРСАЛЬНЫЙ КОД из keyword_service.py
 
-    ВАЖНО: Использует строгую уникальность - одно слово только в одной категории!
+    Сохраняет ПОЛНУЮ ФРАЗУ description как единый keyword (не отдельные слова!)
+    Это решает проблему ложных срабатываний типа "тест" в "сосиска в тесте".
     """
     try:
-        from expenses.models import Income, IncomeCategory, IncomeCategoryKeyword
-        from bot.services.income_categorization import ensure_unique_income_keyword
+        from expenses.models import Income
+        from bot.utils.keyword_service import normalize_keyword_text, ensure_unique_keyword
 
-        # Получаем объекты
         income = Income.objects.select_related('profile', 'category').get(id=income_id)
 
-        # Только если была AI-категоризация
         if not income.ai_categorized or not income.category:
-            logger.info(f"Income {income_id} was not AI-categorized, skipping keyword learning")
             return
 
         category = income.category
 
-        # Извлекаем и очищаем слова из описания
-        words = extract_words_from_description(income.description)
+        # Нормализуем description как ЦЕЛУЮ ФРАЗУ (не разбиваем на слова!)
+        keyword = normalize_keyword_text(income.description)
 
-        # Применяем фильтрацию по правилам сохранения (максимум 3 слова, исключаем глаголы при необходимости)
-        words = filter_keywords_for_saving(words)
-
-        # Если после фильтрации не осталось слов - выходим
-        if not words:
-            logger.info(f"No keywords to save after filtering for income {income_id}")
+        if not keyword or len(keyword) < 3:
+            logger.info(f"Keyword too short for income {income_id}, skipping")
             return
 
-        # Добавляем ключевые слова с гарантией строгой уникальности
-        any_created = False  # Флаг что хотя бы одно новое слово создано
-        total_removed = 0
+        # УНИВЕРСАЛЬНАЯ функция для уникальности (БЕЗ языка - не используется)
+        kw_obj, created, removed = ensure_unique_keyword(
+            profile=income.profile,
+            category=category,
+            word=keyword,
+            is_income=True  # ← доходы
+        )
 
-        for word in words:
-            # ПАТТЕРН СТРОГОЙ УНИКАЛЬНОСТИ через helper функцию
-            keyword, created, removed = ensure_unique_income_keyword(
-                profile=income.profile,
-                category=category,
-                word=word
-            )
-            total_removed += removed
+        if not kw_obj:
+            return
 
-            if created:
-                any_created = True
-                keyword.usage_count = 1  # Первое использование
-            else:
-                keyword.usage_count += 1  # Увеличиваем счетчик
+        # Увеличиваем счетчик
+        if created:
+            kw_obj.usage_count = 1
+        else:
+            kw_obj.usage_count += 1
 
-            keyword.save()
+        kw_obj.save()
 
-        # Логируем итоги
+        # Получаем имя категории для логов
         cat_name = category.name or category.name_ru or category.name_en or f'ID:{category.id}'
 
         logger.info(
-            f"[CELERY] Income keywords learned from AI for income {income_id}: "
-            f"added {len(words)} words to '{cat_name}' "
-            f"({sum(1 for w in words if len(w) >= 3)} valid, "
-            f"removed {total_removed} duplicates, user {income.profile.telegram_id})"
+            f"Learned keyword '{keyword}' for income category '{cat_name}' "
+            f"(user {income.profile.telegram_id}, removed {removed} duplicates)"
         )
 
-        # Очистка старых ключевых слов только если добавили новые
-        if any_created:
+        # Очистка старых ключевых слов только если создали новый
+        if created:
             cleanup_old_keywords(profile_id=income.profile.id, is_income=True)
 
         # Проверяем лимит 50 слов на категорию
         check_category_keywords_limit(category)
 
-        logger.info(f"Successfully learned income keywords from AI for income {income_id}")
-
     except Exception as e:
-        logger.error(f"Error in learn_income_keywords_on_create task: {e}")
+        logger.error(f"Error in learn_income_keywords_on_create: {e}")

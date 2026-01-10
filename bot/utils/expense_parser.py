@@ -11,6 +11,7 @@ from dateutil import parser as date_parser
 from asgiref.sync import sync_to_async
 from bot.utils.language import get_text
 from bot.utils.emoji_utils import strip_leading_emoji
+from bot.utils.keyword_service import match_keyword_in_text
 
 logger = logging.getLogger(__name__)
 
@@ -795,13 +796,14 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             # Проверяем прямое вхождение названия категории в текст (ЦЕЛЫМ СЛОВОМ)
             category_matched = False
             for cat_name in category_names_to_check:
-                if keyword_matches_in_text(cat_name, text_for_keywords):
+                matched, match_type = match_keyword_in_text(cat_name, text_for_keywords)
+                if matched:
                     # Используем язык пользователя для отображения категории
                     lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
                     category = get_category_display_name(user_cat, lang_code)
                     max_score = 100  # Максимальный приоритет для пользовательских категорий
                     category_matched = True
-                    logger.info(f"Category matched by name: '{cat_name}' in text '{text_for_keywords}' → {category}")
+                    logger.info(f"[KEYWORD MATCH] {match_type}: Category matched by name '{cat_name}' in text '{text_for_keywords}' → {category}")
                     break
 
             if category_matched:
@@ -814,9 +816,10 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
 
             keywords = await get_keywords()
             for kw in keywords:
-                # ИЗМЕНЕНО: Используем keyword_matches_in_text вместо `in` для точного совпадения целых слов
+                # ИЗМЕНЕНО: Используем match_keyword_in_text вместо `in` для точного совпадения целых слов
                 # Используем text_for_keywords (текст без суммы) для поиска
-                if keyword_matches_in_text(kw.keyword.lower(), text_for_keywords):
+                matched, match_type = match_keyword_in_text(kw.keyword, text_for_keywords)
+                if matched:
                     # Обновляем last_used и usage_count при использовании ключевого слова
                     @sync_to_async
                     def update_keyword_usage():
@@ -830,6 +833,8 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                     # Используем язык пользователя для отображения категории
                     lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
                     category = get_category_display_name(user_cat, lang_code)
+                    logger.info(f"[KEYWORD MATCH] {match_type}: Expense keyword '{kw.keyword}' matched '{text_for_keywords}'")
+
                     max_score = 100
                     break
             
@@ -1265,9 +1270,11 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
             best_match = None
 
             for keyword_obj in keywords:
-                # ИСПРАВЛЕНО: Используем keyword_matches_in_text для проверки целого слова
-                # вместо простого `in` (защита от "95" в "9500")
-                if keyword_matches_in_text(keyword_obj.keyword.lower(), text_for_keywords):
+                # Используем новую централизованную функцию match_keyword_in_text
+                # с улучшенной обработкой emoji и ZWJ (Zero Width Joiner)
+                matched, match_type = match_keyword_in_text(keyword_obj.keyword, text_for_keywords)
+                if matched:
+                    logger.info(f"[INCOME KEYWORD] {match_type}: '{keyword_obj.keyword}' matched '{text_for_keywords}'")
                     best_match = keyword_obj.category
                     break  # При строгой уникальности достаточно первого совпадения
 
@@ -1289,12 +1296,11 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
             user_income_categories = await get_income_category_names()
 
             for user_cat in user_income_categories:
-                # ИСПРАВЛЕНО: Используем keyword_matches_in_text для безопасного поиска
-                # Старая логика `lowered in text_lower or any(word in lowered ...)` была опасна:
-                # - "на" in "аренда недвижимости" = True (ложное срабатывание!)
-                # - "с" in "фриланс" = True (ложное срабатывание!)
-                cat_name_clean = strip_leading_emoji(user_cat).lower().strip()
-                if cat_name_clean and keyword_matches_in_text(cat_name_clean, text_for_keywords):
+                # Используем новую централизованную функцию match_keyword_in_text
+                # для безопасного поиска с улучшенной обработкой emoji
+                cat_name_clean = strip_leading_emoji(user_cat).strip()
+                matched, _ = match_keyword_in_text(cat_name_clean, text_for_keywords)
+                if cat_name_clean and matched:
                     category = user_cat
                     normalized_key = normalize_income_category_key(user_cat)
                     if normalized_key:
