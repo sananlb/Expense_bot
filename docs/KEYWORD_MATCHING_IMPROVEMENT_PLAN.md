@@ -34,14 +34,24 @@
    - **Решение:** Inflection теперь проверяется с **ЛЮБЫМ** словом текста >= 3 символов
    - **Результат:** "зарплата" матчит "мне перевели зарплату" ✅
 
-4. **✅ Полное покрытие тестами**:
-   - Создан файл `test_keyword_matching_v2.py` с 40 тестами
+4. **✅ Исправлены ложные срабатывания** (январь 2026):
+   - **Проблема:** "кофе" ложно срабатывало на "косой козырек" через inflection matching
+   - **Причина:** Использование stem-based сравнения давало совпадения коротких основ ("ко" == "ко")
+   - **Решение:** Полностью переписана логика inflection matching - вместо stem используется **посимвольное сравнение ВСЕГО слова**
+   - **Новая логика:**
+     - Сравниваем ВСЁ слово целиком (не только основу)
+     - Максимум 1 буква разницы (считаем все несовпадающие позиции)
+     - Минимум 3 символа для слова (защита от предлогов)
+   - **Результат:** "кофе" ≠ "косой" ✅, "зарплата" → "зарплату" работает ✅, "костюм" ≠ "косой" ✅
+
+5. **✅ Полное покрытие тестами**:
+   - Создан файл `test_keyword_matching_v2.py` с 43 тестами
    - Все тесты проходят успешно ✅
    - Покрытие: нормализация, exact, prefix, inflection, защита от коротких слов, реальные сценарии
 
-5. **✅ Обновлена документация**:
+6. **✅ Обновлена документация**:
    - Файл `docs/HABR_TECHNICAL_INFO.md` - раздел "Keyword Matching — эволюция подхода"
-   - Описание БАГ #2 (inflection regression) и его исправления
+   - Описание БАГ #2 (inflection regression), БАГ #3 (false positives) и их исправления
 
 ### Как работает обучение (БЕЗ изменений UX):
 
@@ -744,23 +754,49 @@ def match_keyword_in_text(
             return True, "prefix"
 
     # УРОВЕНЬ 3: Совпадение со склонениями (только для одиночных keywords)
+    # Применяется ТОЛЬКО если keyword = одно слово >= 3 символов
     # Проверяем склонение с ЛЮБЫМ словом текста >= 3 символов
     # Это позволяет "зарплата" матчить "перевели зарплату" или "зарплата от компании"
     if len(keyword_words) == 1 and len(normalized_keyword) >= 3:
         for text_word in text_words:
-            if len(text_word) >= 3:
-                # Берем ОСНОВУ слова (без окончания)
-                min_len = min(len(normalized_keyword), len(text_word))
-                stem_len = max(2, min_len - 2)
+            if len(text_word) >= 3:  # Минимум 3 символа для слов
+                # ПРОСТАЯ ЛОГИКА: сравниваем ВСЁ слово, разница не более 1 буквы
+                diff = abs(len(normalized_keyword) - len(text_word))
 
-                # Проверяем что основы совпадают
-                keyword_stem = normalized_keyword[:stem_len]
-                text_stem = text_word[:stem_len]
+                # Если разница в длине > 1 символа - сразу пропускаем
+                if diff > 1:
+                    continue
 
-                if keyword_stem == text_stem:
-                    # Разница в длине не больше 2 символов (окончание)
-                    diff = abs(len(normalized_keyword) - len(text_word))
-                    if diff <= 2:
+                # Если точное совпадение - это inflection (склонение)
+                if normalized_keyword == text_word:
+                    return True, "inflection"
+
+                # Если разница ровно 1 символ - подсчитываем количество отличающихся букв
+                if diff == 1:
+                    # Определяем более короткое и более длинное слово
+                    shorter = normalized_keyword if len(normalized_keyword) < len(text_word) else text_word
+                    longer = text_word if len(normalized_keyword) < len(text_word) else normalized_keyword
+
+                    # Подсчитываем количество несовпадающих букв на одинаковых позициях
+                    mismatches = 0
+                    for i in range(len(shorter)):
+                        if shorter[i] != longer[i]:
+                            mismatches += 1
+
+                    # Плюс 1 символ который есть в длинном слове но нет в коротком
+                    mismatches += 1
+
+                    # Если отличается не более 1 буквы - это склонение
+                    if mismatches <= 1:
+                        return True, "inflection"
+
+                # Если длина одинаковая (diff == 0) - проверяем что отличается только 1 буква
+                if diff == 0:
+                    # Подсчитываем количество отличающихся букв
+                    mismatches = sum(1 for i in range(len(normalized_keyword)) if normalized_keyword[i] != text_word[i])
+
+                    # Если отличается ровно 1 буква - это склонение
+                    if mismatches == 1:
                         return True, "inflection"
 
     return False, "none"

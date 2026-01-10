@@ -725,13 +725,35 @@ def match_keyword_in_text(keyword: str, text: str) -> Tuple[bool, str]:
     if len(keyword_words) == 1 and len(normalized_keyword) >= 3:
         for text_word in text_words:
             if len(text_word) >= 3:
-                # Проверяем основу слова (stem)
-                min_len = min(len(normalized_keyword), len(text_word))
-                stem_len = max(2, min_len - 2)
+                # ПРОСТАЯ ЛОГИКА: сравниваем ВСЁ слово, разница не более 1 буквы
+                diff = abs(len(normalized_keyword) - len(text_word))
 
-                if normalized_keyword[:stem_len] == text_word[:stem_len]:
-                    diff = abs(len(normalized_keyword) - len(text_word))
-                    if diff <= 2:
+                # Если разница в длине > 1 символа - сразу пропускаем
+                if diff > 1:
+                    continue
+
+                # Если точное совпадение - это inflection (склонение)
+                if normalized_keyword == text_word:
+                    return True, "inflection"
+
+                # Если разница ровно 1 символ - подсчитываем количество отличающихся букв
+                if diff == 1:
+                    shorter = normalized_keyword if len(normalized_keyword) < len(text_word) else text_word
+                    longer = text_word if len(normalized_keyword) < len(text_word) else normalized_keyword
+
+                    # Подсчитываем количество несовпадающих букв на одинаковых позициях
+                    mismatches = sum(1 for i in range(len(shorter)) if shorter[i] != longer[i])
+                    # Плюс 1 символ который есть в длинном слове но нет в коротком
+                    mismatches += 1
+
+                    # Если отличается не более 1 буквы - это склонение
+                    if mismatches <= 1:
+                        return True, "inflection"
+
+                # Если длина одинаковая (diff == 0) - проверяем что отличается только 1 буква
+                if diff == 0:
+                    mismatches = sum(1 for i in range(len(normalized_keyword)) if normalized_keyword[i] != text_word[i])
+                    if mismatches == 1:
                         return True, "inflection"
 
     return False, "none"
@@ -758,7 +780,8 @@ def match_keyword_in_text(keyword: str, text: str) -> Tuple[bool, str]:
 2. **Inflection с ЛЮБЫМ словом текста** — "зарплата" матчит "мне перевели зарплату" (декабрь 2025)
 3. **Prefix match требует >= 2 слов** — одиночные слова не используют prefix
 4. **Слова >= 3 символов** — для inflection match (включая keyword и text_word)
-5. **Разница в длине <= 2 символов** — для inflection match (предотвращает "кофе" → "кофейня")
+5. **Посимвольное сравнение ВСЕГО слова** — не используем stem/основу, сравниваем целиком (январь 2026)
+6. **Максимум 1 буква разницы** — для inflection match считаем ВСЕ несовпадающие позиции ("зарплата"→"зарплату" ✅, "фриланс"→"фрилансом" ❌, "кофе"→"косой" ❌)
 
 ### Уникальность keywords
 
@@ -800,10 +823,18 @@ def ensure_unique_keyword(profile, category, word, is_income=False):
 - **Решение:** Изменена логика — inflection проверяется с ЛЮБЫМ словом текста >= 3 символов
 - **Побочный эффект:** "тест" теперь матчит "в тесте" (морфологически корректно)
 
+**БАГ #3 (январь 2026):** Ложные срабатывания "кофе" → "косой козырек"
+- **Причина:** Использование stem-based сравнения давало совпадения коротких основ: "ко" == "ко"
+- **Решение:** Полностью переписана логика inflection matching - вместо stem используется **посимвольное сравнение ВСЕГО слова**
+- **Новая логика:** Сравниваем всё слово целиком, максимум 1 буква разницы (считаем все несовпадающие позиции)
+- **Проверено в production:** "косой козырек 200" → AI вызван (keyword не найден) → правильная категория "Одежда и обувь" ✅
+
 **Результат эволюции:**
 - ✅ Склонения работают с ЛЮБЫМ словом ("зарплата" → "мне перевели зарплату")
 - ✅ Умный prefix matching для фраз (первые 2-3 слова)
-- ⚠️ Минимальные ложные срабатывания (stem-based matching, >= 3 символа, diff <= 2)
+- ✅ Посимвольное сравнение слов (максимум 1 буква разницы)
+- ✅ Защита от коротких совпадений ("кофе" ≠ "косой", "костюм" ≠ "косой")
+- ✅ Полная валидация в production ("косой козырек" НЕ совпадает с "кофе")
 
 ### Лимиты и очистка
 

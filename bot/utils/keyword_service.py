@@ -189,7 +189,7 @@ def match_keyword_in_text(
 
     Уровни проверки:
     1. Точное совпадение полной фразы
-    2. Совпадение начала фразы (первые 2-3 слова, если >= 2 слов)
+    2. Совпадение фразы в ЛЮБОМ месте текста (для multi-word keywords >= 2 слов)
     3. Совпадение со склонениями (для одиночных keywords >= 3 символов с ЛЮБЫМ словом текста)
 
     Args:
@@ -205,15 +205,13 @@ def match_keyword_in_text(
 
     Examples:
         >>> match_keyword_in_text("сосиска в тесте и чай", "Сосиска в тесте и чай 390")
-        (True, "prefix")  # текст содержит "390" в конце, поэтому это prefix совпадение
-        >>> match_keyword_in_text("сосиска в тесте и чай", "сосиска в тесте и чай")
-        (True, "exact")  # полное совпадение без дополнительных слов
-        >>> match_keyword_in_text("зарплата", "Зарплату перевели")
-        (True, "inflection")  # склонение одиночного keyword с первым словом текста
-        >>> match_keyword_in_text("зарплата", "Зарплата от компании")
-        (True, "inflection")  # одиночный keyword матчит первое слово фразы
+        (True, "prefix")  # первые 3 слова совпадают
+        >>> match_keyword_in_text("трухлявые консервы", "я вчера купил трухлявые консервы зачем-то")
+        (True, "prefix")  # фраза найдена в середине текста
+        >>> match_keyword_in_text("зарплата", "мне перевели зарплату")
+        (True, "inflection")  # склонение с ЛЮБЫМ словом текста
         >>> match_keyword_in_text("долг за тест", "Тест 500")
-        (False, "none")  # начало НЕ совпадает
+        (False, "none")  # фраза не найдена
     """
     # Нормализуем оба текста
     normalized_keyword = normalize_keyword_text(keyword)
@@ -233,17 +231,23 @@ def match_keyword_in_text(
     text_words = normalized_text.split()
     keyword_words = normalized_keyword.split()
 
-    # УРОВЕНЬ 2: Совпадение начала фразы (первые 2-3 слова)
-    # Проверяем только если в тексте >= min_words слов
-    if len(text_words) >= min_words and len(keyword_words) >= min_words:
-        # Берем первые N слов (2-3)
-        prefix_length = min(max_prefix_words, len(text_words), len(keyword_words))
-        text_prefix = ' '.join(text_words[:prefix_length])
-        keyword_prefix = ' '.join(keyword_words[:prefix_length])
+    # УРОВЕНЬ 2: Поиск фразы в ЛЮБОМ месте текста (для multi-word keywords)
+    # Применяется для keywords >= 2 слов
+    # Используем sliding window для поиска последовательности слов keyword в любом месте text
+    if len(keyword_words) >= min_words:
+        # Длина окна для сравнения - первые 2-3 слова keyword (или меньше если keyword короче)
+        window_length = min(max_prefix_words, len(keyword_words))
+        keyword_prefix = ' '.join(keyword_words[:window_length])
 
-        # Защита от коротких слов (< 3 символа)
-        if len(text_prefix) >= 3 and text_prefix == keyword_prefix:
-            return True, "prefix"
+        # Проходим по всем возможным позициям в тексте
+        # Нужно чтобы в тексте было хотя бы window_length слов начиная с позиции i
+        for i in range(len(text_words) - window_length + 1):
+            # Берем окно из window_length слов начиная с позиции i
+            text_window = ' '.join(text_words[i:i+window_length])
+
+            # Защита от коротких слов (< 3 символа)
+            if len(text_window) >= 3 and text_window == keyword_prefix:
+                return True, "prefix"
 
     # УРОВЕНЬ 3: Совпадение со склонениями (для одиночных keywords)
     # Применяется ТОЛЬКО если keyword = одно слово >= 3 символов
@@ -251,22 +255,44 @@ def match_keyword_in_text(
     # Это позволяет "зарплата" матчить "перевели зарплату" или "зарплата от компании"
     if len(keyword_words) == 1 and len(normalized_keyword) >= 3:
         for text_word in text_words:
-            if len(text_word) >= 3:
-                # Берем ОСНОВУ слова (без окончания) - убираем последние 2 символа от меньшего слова
-                min_len = min(len(normalized_keyword), len(text_word))
-                # Основа = минимум минус 2 символа (окончание), но не меньше 2
-                # Для 3-символьных слов: stem = 1 символ (3 - 2 = 1)
-                # Для 4-символьных слов: stem = 2 символа (4 - 2 = 2)
-                stem_len = max(2, min_len - 2)
+            if len(text_word) >= 3:  # Минимум 3 символа для слов
+                # ПРОСТАЯ ЛОГИКА: сравниваем ВСЁ слово, разница не более 1 буквы
+                diff = abs(len(normalized_keyword) - len(text_word))
 
-                # Проверяем что основы совпадают
-                keyword_stem = normalized_keyword[:stem_len]
-                text_stem = text_word[:stem_len]
+                # Если разница в длине > 1 символа - сразу пропускаем
+                if diff > 1:
+                    continue
 
-                if keyword_stem == text_stem:
-                    # Разница в длине не больше 2 символов (окончание)
-                    diff = abs(len(normalized_keyword) - len(text_word))
-                    if diff <= 2:
+                # Если точное совпадение - это inflection (склонение)
+                if normalized_keyword == text_word:
+                    return True, "inflection"
+
+                # Если разница ровно 1 символ - подсчитываем количество отличающихся букв
+                if diff == 1:
+                    # Определяем более короткое и более длинное слово
+                    shorter = normalized_keyword if len(normalized_keyword) < len(text_word) else text_word
+                    longer = text_word if len(normalized_keyword) < len(text_word) else normalized_keyword
+
+                    # Подсчитываем количество несовпадающих букв на одинаковых позициях
+                    mismatches = 0
+                    for i in range(len(shorter)):
+                        if shorter[i] != longer[i]:
+                            mismatches += 1
+
+                    # Плюс 1 символ который есть в длинном слове но нет в коротком
+                    mismatches += 1
+
+                    # Если отличается не более 1 буквы - это склонение
+                    if mismatches <= 1:
+                        return True, "inflection"
+
+                # Если длина одинаковая (diff == 0) - проверяем что отличается только 1 буква
+                if diff == 0:
+                    # Подсчитываем количество отличающихся букв
+                    mismatches = sum(1 for i in range(len(normalized_keyword)) if normalized_keyword[i] != text_word[i])
+
+                    # Если отличается ровно 1 буква - это склонение
+                    if mismatches == 1:
                         return True, "inflection"
 
     return False, "none"
