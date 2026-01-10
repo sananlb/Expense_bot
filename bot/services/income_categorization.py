@@ -13,7 +13,7 @@ from bot.utils.income_category_definitions import (
     normalize_income_category_key,
     strip_leading_emoji,
 )
-from bot.utils.keyword_service import match_keyword_in_text
+from bot.utils.keyword_service import match_keyword_in_text, ensure_unique_keyword
 
 # УДАЛЕНО: _keyword_matches_in_text() - мертвый код, заменен на match_keyword_in_text() из keyword_service.py
 
@@ -27,6 +27,11 @@ def ensure_unique_income_keyword(
     defaults: Optional[Dict[str, Any]] = None
 ) -> tuple[IncomeCategoryKeyword, bool, int]:
     """
+    DEPRECATED: Используйте ensure_unique_keyword(..., is_income=True) из bot.utils.keyword_service
+
+    Эта функция не применяет полную нормализацию (emoji, пунктуация, stop words).
+    Оставлена для обратной совместимости.
+
     Гарантирует строгую уникальность ключевого слова дохода.
 
     ВАЖНО: Одно слово может быть только в ОДНОЙ категории дохода пользователя!
@@ -426,16 +431,17 @@ def learn_from_income_category_change_sync(
 
         # ПАТТЕРН СТРОГОЙ УНИКАЛЬНОСТИ:
         # Удаляет из ВСЕХ категорий → создает в целевой
-        keyword, created, removed = ensure_unique_income_keyword(
+        keyword, created, removed = ensure_unique_keyword(
             profile=income.profile,
             category=new_category,
-            word=word
+            word=word,
+            is_income=True
         )
 
         total_removed += removed
 
         # Увеличиваем счетчик использований
-        if not created:
+        if keyword and not created:
             keyword.usage_count += 1
             keyword.save()
 
@@ -489,10 +495,11 @@ def generate_keywords_for_income_category_sync(
     for keyword in keywords:
         # ПАТТЕРН СТРОГОЙ УНИКАЛЬНОСТИ:
         # Удаляет из ВСЕХ категорий → создает в целевой
-        _, _, removed = ensure_unique_income_keyword(
+        _, _, removed = ensure_unique_keyword(
             profile=category.profile,
             category=category,
-            word=keyword
+            word=keyword,
+            is_income=True
         )
         total_removed += removed
 
@@ -532,10 +539,11 @@ def save_income_category_keywords(category: IncomeCategory, keywords: List[str])
     for keyword in keywords:
         # ПАТТЕРН СТРОГОЙ УНИКАЛЬНОСТИ:
         # Удаляет из ВСЕХ категорий → создает в целевой
-        _, _, removed = ensure_unique_income_keyword(
+        _, _, removed = ensure_unique_keyword(
             profile=category.profile,
             category=category,
-            word=keyword
+            word=keyword,
+            is_income=True
         )
         total_removed += removed
 

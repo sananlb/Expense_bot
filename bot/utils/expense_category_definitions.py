@@ -367,8 +367,8 @@ def detect_expense_category_key(text: str) -> Optional[str]:
 
         score = 0
         for keyword in data.get('keywords', []):
-            # НОВАЯ СИСТЕМА: Используем 3-уровневую проверку (exact, prefix, inflection)
-            # Защищает от ложных срабатываний ("95" не совпадет с "9500", "тест" не совпадет с "в тесте")
+            # 2-уровневая проверка: exact (фраза целиком ±1 буква) + word (одиночное слово ±1 буква)
+            # Stop-words удаляются из keyword и text перед сравнением
             matched, match_type = match_keyword_in_text(keyword, text)
             if matched:
                 score += 1

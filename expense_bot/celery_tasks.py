@@ -1366,12 +1366,16 @@ def learn_keywords_on_create(expense_id: int, category_id: int):
     Обучение системы при создании новой траты с AI-категоризацией.
     ИСПОЛЬЗУЕТ УНИВЕРСАЛЬНЫЙ КОД из keyword_service.py
 
-    Сохраняет ПОЛНУЮ ФРАЗУ description как единый keyword (не отдельные слова!)
-    Это решает проблему ложных срабатываний типа "тест" в "сосиска в тесте".
+    Сохраняет ОЧИЩЕННУЮ ФРАЗУ description как единый keyword:
+    - Удаляет stop words (предлоги, глаголы, валюты)
+    - Нормализует (lowercase, убирает emoji/пунктуацию)
+    - Если фраза слишком длинная (>4 слов) — не сохраняет
+
+    Пример: "Вчера купил кофе в старбаксе 350р" → "кофе старбаксе"
     """
     try:
         from expenses.models import Expense, ExpenseCategory
-        from bot.utils.keyword_service import normalize_keyword_text, ensure_unique_keyword
+        from bot.utils.keyword_service import ensure_unique_keyword
 
         expense = Expense.objects.select_related('profile', 'category').get(id=expense_id)
         category = ExpenseCategory.objects.get(id=category_id)
@@ -1379,19 +1383,13 @@ def learn_keywords_on_create(expense_id: int, category_id: int):
         if not category:
             return
 
-        # Нормализуем description как ЦЕЛУЮ ФРАЗУ (не разбиваем на слова!)
-        keyword = normalize_keyword_text(expense.description)
-
-        if not keyword or len(keyword) < 3:
-            logger.info(f"Keyword too short for expense {expense_id}, skipping")
-            return
-
-        # УНИВЕРСАЛЬНАЯ функция для уникальности (БЕЗ языка - не используется)
+        # ensure_unique_keyword сам нормализует и удаляет stop words через prepare_keyword_for_save()
+        # Передаём оригинальный description — вся очистка происходит внутри
         kw_obj, created, removed = ensure_unique_keyword(
             profile=expense.profile,
             category=category,
-            word=keyword,
-            is_income=False  # ← расходы
+            word=expense.description,  # ← оригинальный текст, очистка внутри
+            is_income=False
         )
 
         if not kw_obj:
@@ -1409,8 +1407,8 @@ def learn_keywords_on_create(expense_id: int, category_id: int):
         cat_name = category.name or category.name_ru or category.name_en or f'ID:{category.id}'
 
         logger.info(
-            f"Learned keyword '{keyword}' for expense category '{cat_name}' "
-            f"(user {expense.profile.telegram_id}, removed {removed} duplicates)"
+            f"Learned keyword '{kw_obj.keyword}' for expense category '{cat_name}' "
+            f"(user {expense.profile.telegram_id}, original: '{expense.description}', removed {removed} duplicates)"
         )
 
         # Очистка старых ключевых слов только если создали новый
@@ -1630,31 +1628,28 @@ def update_income_keywords(income_id: int, old_category_id: int, new_category_id
     Обновление ключевых слов после ручного изменения категории дохода.
     ИСПОЛЬЗУЕТ УНИВЕРСАЛЬНЫЙ КОД из keyword_service.py
 
-    Сохраняет ПОЛНУЮ ФРАЗУ как keyword (не отдельные слова!)
-    Это решает проблему ложных срабатываний типа "тест" в "сосиска в тесте".
+    Сохраняет ОЧИЩЕННУЮ ФРАЗУ description как единый keyword:
+    - Удаляет stop words (предлоги, глаголы, валюты)
+    - Нормализует (lowercase, убирает emoji/пунктуацию)
+    - Если фраза слишком длинная (>4 слов) — не сохраняет
+
+    Пример: "Получил зарплату за декабрь 50000р" → "зарплату декабрь"
     """
     try:
         from expenses.models import Income, IncomeCategory
-        from bot.utils.keyword_service import normalize_keyword_text, ensure_unique_keyword
+        from bot.utils.keyword_service import ensure_unique_keyword
 
         # Получаем объекты
         income = Income.objects.select_related('profile').get(id=income_id)
         new_category = IncomeCategory.objects.select_related('profile').get(id=new_category_id)
         old_category = IncomeCategory.objects.get(id=old_category_id) if old_category_id else None
 
-        # Нормализуем description как ЦЕЛУЮ ФРАЗУ (не разбиваем на слова!)
-        keyword = normalize_keyword_text(income.description)
-
-        if not keyword or len(keyword) < 3:
-            logger.info(f"Keyword too short for income {income_id}, skipping")
-            return
-
-        # УНИВЕРСАЛЬНАЯ функция для уникальности
+        # ensure_unique_keyword сам нормализует и удаляет stop words через prepare_keyword_for_save()
         kw_obj, created, removed = ensure_unique_keyword(
             profile=income.profile,
             category=new_category,
-            word=keyword,
-            is_income=True  # ← доходы!
+            word=income.description,  # ← оригинальный текст, очистка внутри
+            is_income=True
         )
 
         if not kw_obj:
@@ -1669,8 +1664,10 @@ def update_income_keywords(income_id: int, old_category_id: int, new_category_id
         old_cat_name = old_category.name if old_category else 'None'
         new_cat_name = new_category.name or new_category.name_ru or new_category.name_en or f'ID:{new_category.id}'
 
+        # kw_obj содержит очищенную фразу
+        saved_keyword = getattr(kw_obj, 'keyword', income.description)
         logger.info(
-            f"[CELERY] Updated income keyword '{keyword}' from '{old_cat_name}' to '{new_cat_name}' "
+            f"[CELERY] Updated income keyword '{saved_keyword}' from '{old_cat_name}' to '{new_cat_name}' "
             f"(removed {removed} duplicates, user {income.profile.telegram_id})"
         )
 
@@ -1691,12 +1688,16 @@ def learn_income_keywords_on_create(income_id: int):
     Обучение системы при создании нового дохода с AI-категоризацией.
     ИСПОЛЬЗУЕТ УНИВЕРСАЛЬНЫЙ КОД из keyword_service.py
 
-    Сохраняет ПОЛНУЮ ФРАЗУ description как единый keyword (не отдельные слова!)
-    Это решает проблему ложных срабатываний типа "тест" в "сосиска в тесте".
+    Сохраняет ОЧИЩЕННУЮ ФРАЗУ description как единый keyword:
+    - Удаляет stop words (предлоги, глаголы, валюты)
+    - Нормализует (lowercase, убирает emoji/пунктуацию)
+    - Если фраза слишком длинная (>4 слов) — не сохраняет
+
+    Пример: "Получил зарплату за декабрь 50000р" → "зарплату декабрь"
     """
     try:
         from expenses.models import Income
-        from bot.utils.keyword_service import normalize_keyword_text, ensure_unique_keyword
+        from bot.utils.keyword_service import ensure_unique_keyword
 
         income = Income.objects.select_related('profile', 'category').get(id=income_id)
 
@@ -1705,19 +1706,12 @@ def learn_income_keywords_on_create(income_id: int):
 
         category = income.category
 
-        # Нормализуем description как ЦЕЛУЮ ФРАЗУ (не разбиваем на слова!)
-        keyword = normalize_keyword_text(income.description)
-
-        if not keyword or len(keyword) < 3:
-            logger.info(f"Keyword too short for income {income_id}, skipping")
-            return
-
-        # УНИВЕРСАЛЬНАЯ функция для уникальности (БЕЗ языка - не используется)
+        # ensure_unique_keyword сам нормализует и удаляет stop words через prepare_keyword_for_save()
         kw_obj, created, removed = ensure_unique_keyword(
             profile=income.profile,
             category=category,
-            word=keyword,
-            is_income=True  # ← доходы
+            word=income.description,  # ← оригинальный текст, очистка внутри
+            is_income=True
         )
 
         if not kw_obj:
@@ -1734,8 +1728,10 @@ def learn_income_keywords_on_create(income_id: int):
         # Получаем имя категории для логов
         cat_name = category.name or category.name_ru or category.name_en or f'ID:{category.id}'
 
+        # kw_obj — это IncomeKeyword, атрибут keyword содержит очищенную фразу
+        saved_keyword = getattr(kw_obj, 'keyword', income.description)
         logger.info(
-            f"Learned keyword '{keyword}' for income category '{cat_name}' "
+            f"Learned keyword '{saved_keyword}' for income category '{cat_name}' "
             f"(user {income.profile.telegram_id}, removed {removed} duplicates)"
         )
 

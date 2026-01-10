@@ -111,8 +111,8 @@ def normalize_income_category_key(label: Optional[str]) -> Optional[str]:
 def detect_income_category_key(text: str) -> Optional[str]:
     """Detect a category key by checking keywords against the text.
 
-    НОВАЯ СИСТЕМА: Используем 3-уровневую проверку (exact, prefix, inflection)
-    Защищает от ложных срабатываний ("95" не совпадет с "9500", "зп" не совпадет с "инвестзп").
+    2-уровневая проверка: exact (фраза целиком ±1 буква) + word (одиночное слово ±1 буква).
+    Stop-words удаляются из keyword и text перед сравнением.
     Поддерживает склонения ("зарплата" совпадет с "зарплату", "зарплаты").
     """
     for key, data in INCOME_CATEGORY_DEFINITIONS.items():

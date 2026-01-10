@@ -2,22 +2,134 @@
 Универсальный модуль для работы с keywords расходов и доходов.
 Единый код для обучения, поиска и нормализации keywords.
 
-Этот модуль решает проблему ложных срабатываний при keyword matching:
-- Вместо поиска отдельных слов ("тест" в "в тесте") используется сопоставление полных фраз
-- Поддерживается 2 уровня проверки: точное совпадение + совпадение начала фразы
-- Единая нормализация для расходов и доходов
+Логика поиска:
+- Уровень 1 (Exact): Точное совпадение полной фразы (±1 буква на всю фразу)
+- Уровень 2 (Word): Поиск каждого слова текста в keywords (±1 буква на слово)
+
+При сохранении и поиске из текста удаляются мусорные слова (STOP_WORDS).
 """
 import re
 import logging
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Set
 
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# STOP_WORDS - мусорные слова, удаляемые при сохранении и поиске keywords
+# =============================================================================
+
+STOP_WORDS: Set[str] = {
+    # === Предлоги и союзы (RU) ===
+    'и', 'в', 'на', 'с', 'за', 'по', 'для', 'от', 'до', 'из',
+    'или', 'но', 'а', 'к', 'у', 'о', 'об', 'под', 'над',
+    'при', 'без', 'между', 'через', 'около', 'ради', 'вместо',
+
+    # === Предлоги и союзы (EN) ===
+    'and', 'or', 'to', 'for', 'from', 'with', 'at', 'by', 'in', 'on',
+    'the', 'a', 'an', 'of', 'as', 'is', 'it', 'if', 'so',
+
+    # === Глаголы действия (RU) ===
+    'купил', 'купила', 'купили', 'купить',
+    'взял', 'взяла', 'взяли', 'взять',
+    'потратил', 'потратила', 'потратили', 'потратить',
+    'оплатил', 'оплатила', 'оплатили', 'оплатить',
+    'заплатил', 'заплатила', 'заплатили', 'заплатить',
+    'заказал', 'заказала', 'заказали', 'заказать',
+    'приобрел', 'приобрела', 'приобрели', 'приобрести',
+    'съел', 'съела', 'съели', 'съесть',
+    'выпил', 'выпила', 'выпили', 'выпить',
+    'сходил', 'сходила', 'сходили', 'сходить',
+    'отдал', 'отдала', 'отдали', 'отдать',
+    'внес', 'внесла', 'внесли', 'внести',
+    'перевел', 'перевела', 'перевели', 'перевести',
+    'отправил', 'отправила', 'отправили', 'отправить',
+    'положил', 'положила', 'положили', 'положить',
+    'снял', 'сняла', 'сняли', 'снять',
+    'получил', 'получила', 'получили', 'получить',
+
+    # === Глаголы действия (EN) ===
+    'bought', 'buy', 'paid', 'pay', 'spent', 'spend',
+    'got', 'get', 'took', 'take', 'ordered', 'order',
+    'had', 'have', 'made', 'make',
+
+    # === Временные слова (RU) ===
+    'вчера', 'сегодня', 'завтра', 'утром', 'вечером', 'днем', 'ночью',
+    'позавчера', 'послезавтра', 'недавно', 'давно', 'после', 'перед', 'до',
+
+    # === Временные слова (EN) ===
+    'yesterday', 'today', 'tomorrow', 'morning', 'evening', 'night',
+    'recently', 'ago',
+
+    # === Местоимения (RU) ===
+    'я', 'мне', 'мной', 'мой', 'моя', 'мое', 'мои',
+    'себе', 'себя', 'собой',
+    'он', 'она', 'оно', 'они', 'ему', 'ей', 'им',
+    'мы', 'нам', 'нас', 'наш', 'наша', 'наши',
+
+    # === Местоимения (EN) ===
+    'i', 'me', 'my', 'myself', 'mine',
+    'you', 'your', 'yourself', 'yours',
+    'he', 'she', 'it', 'they', 'we', 'us', 'our',
+
+    # === Валюты - коды (все доступные в боте) ===
+    'rub', 'usd', 'eur', 'gbp', 'cny', 'chf', 'inr', 'try',
+    'ars', 'cop', 'pen', 'clp', 'mxn', 'brl',
+    'kzt', 'uah', 'byn', 'uzs', 'amd', 'azn', 'kgs', 'tjs', 'tmt', 'mdl', 'gel',
+
+    # === Валюты - названия (RU) ===
+    'рубль', 'рубля', 'рублей', 'руб',
+    'доллар', 'доллара', 'долларов', 'долл',
+    'евро',
+    'фунт', 'фунта', 'фунтов',
+    'юань', 'юаня', 'юаней',
+    'франк', 'франка', 'франков',
+    'рупия', 'рупии', 'рупий',
+    'лира', 'лиры', 'лир',
+    'тенге', 'теньге', 'тнг',
+    'гривна', 'гривны', 'гривен', 'грн',
+    'сум', 'сума', 'сумов',
+    'драм', 'драма', 'драмов',
+    'манат', 'маната', 'манатов',
+    # 'сом' убран — конфликт с рыбой "сом"
+    'сомони',
+    'лей', 'лея', 'леев',
+    'лари',
+    'реал', 'реала', 'реалов',
+    'песо',
+    # 'соль' убран — конфликт с продуктом "соль"
+
+    # === Валюты - названия (EN) ===
+    'dollar', 'dollars', 'buck', 'bucks',
+    'euro', 'euros',
+    'pound', 'pounds', 'sterling',
+    'yuan', 'renminbi', 'rmb',
+    'franc', 'francs',
+    'rupee', 'rupees',
+    'lira', 'liras',
+    'peso', 'pesos',
+    'real', 'reals',
+    'tenge',
+    'hryvnia', 'hryvnya',
+    # 'som', 'soum' убраны — конфликт с рыбой
+    'somoni',
+    'manat',
+    'dram',
+    'lari',
+    'lei',
+
+    # === Числительные и единицы ===
+    'тыс', 'тысяч', 'тысячи', 'тысячу',
+    'млн', 'миллион', 'миллиона', 'миллионов',
+    'thousand', 'million', 'billion',
+    'шт', 'штук', 'штуки',
+}
+
+
 def normalize_keyword_text(text: str) -> str:
     """
-    Единая нормализация текста для keywords.
-    Используется при сохранении И при поиске.
+    Базовая нормализация текста для keywords.
+    НЕ удаляет stop words - это делает отдельная функция.
 
     Args:
         text: Исходный текст (description или поисковый запрос)
@@ -39,43 +151,28 @@ def normalize_keyword_text(text: str) -> str:
     # 1. Lowercase
     normalized = text.lower()
 
-    # 2. Удаляем эмодзи (используем готовую утилиту из проекта)
-    try:
-        from bot.utils.emoji_utils import EMOJI_PREFIX_RE
-        # EMOJI_PREFIX_RE только для начала строки, поэтому удаляем все эмодзи универсально
-        emoji_pattern = re.compile(
-            r'[\U0001F000-\U0001F9FF'  # Emoticons, symbols, pictographs
-            r'\U00002600-\U000027BF'    # Miscellaneous Symbols
-            r'\U0001F300-\U0001F64F'    # Miscellaneous Symbols and Pictographs
-            r'\U0001F680-\U0001F6FF'    # Transport and Map Symbols
-            r'\u2600-\u27BF'            # Miscellaneous Symbols (compact)
-            r'\u2300-\u23FF'            # Miscellaneous Technical
-            r'\u2B00-\u2BFF'            # Miscellaneous Symbols and Arrows
-            r'\u26A0-\u26FF'            # Miscellaneous Symbols
-            r'\uFE00-\uFE0F'            # Variation Selectors
-            r'\U000E0100-\U000E01EF'    # Variation Selectors Supplement
-            r'\u200d'                   # Zero-Width Joiner (ZWJ)
-            r'\ufe0f'                   # Variation Selector-16
-            r']+',
-            flags=re.UNICODE
-        )
-        normalized = emoji_pattern.sub('', normalized)
-    except ImportError:
-        # Fallback: простое удаление эмодзи через базовый regex
-        emoji_pattern = re.compile(
-            "["
-            "\U0001F600-\U0001F64F"  # эмоции
-            "\U0001F300-\U0001F5FF"  # символы
-            "\U0001F680-\U0001F6FF"  # транспорт
-            "\U0001F1E0-\U0001F1FF"  # флаги
-            "\U00002700-\U000027BF"  # разное
-            "]+",
-            flags=re.UNICODE
-        )
-        normalized = emoji_pattern.sub('', normalized)
+    # 2. Удаляем эмодзи
+    emoji_pattern = re.compile(
+        r'[\U0001F000-\U0001F9FF'  # Emoticons, symbols, pictographs
+        r'\U00002600-\U000027BF'    # Miscellaneous Symbols
+        r'\U0001F300-\U0001F64F'    # Miscellaneous Symbols and Pictographs
+        r'\U0001F680-\U0001F6FF'    # Transport and Map Symbols
+        r'\u2600-\u27BF'            # Miscellaneous Symbols (compact)
+        r'\u2300-\u23FF'            # Miscellaneous Technical
+        r'\u2B00-\u2BFF'            # Miscellaneous Symbols and Arrows
+        r'\u26A0-\u26FF'            # Miscellaneous Symbols
+        r'\uFE00-\uFE0F'            # Variation Selectors
+        r'\U000E0100-\U000E01EF'    # Variation Selectors Supplement
+        r'\u200d'                   # Zero-Width Joiner (ZWJ)
+        r'\ufe0f'                   # Variation Selector-16
+        r']+',
+        flags=re.UNICODE
+    )
+    normalized = emoji_pattern.sub('', normalized)
 
-    # 3. Удаляем пунктуацию (кроме дефиса внутри слов)
-    # Оставляем буквы (кириллица + латиница), цифры, пробелы, дефис
+    # 3. Удаляем пунктуацию и валютные символы
+    # Оставляем буквы (кириллица + латиница), цифры, пробелы, дефис внутри слов
+    # Числа НЕ удаляем — они могут быть частью названия ("бензин 95", "iPhone 15")
     normalized = re.sub(r'[^\w\s\-]', ' ', normalized, flags=re.UNICODE)
     # Удаляем дефисы на границах слов (оставляем только внутри)
     normalized = re.sub(r'(?<!\w)-|-(?!\w)', ' ', normalized)
@@ -84,6 +181,198 @@ def normalize_keyword_text(text: str) -> str:
     normalized = ' '.join(normalized.split())
 
     return normalized
+
+
+def remove_stop_words(text: str) -> str:
+    """
+    Удаляет мусорные слова из текста.
+
+    Args:
+        text: Нормализованный текст (lowercase)
+
+    Returns:
+        Текст без stop words
+
+    Examples:
+        >>> remove_stop_words("купил трухлявые консервы вчера")
+        "трухлявые консервы"
+        >>> remove_stop_words("я взял кофе за 200 рублей")
+        "кофе 200"
+    """
+    if not text:
+        return ""
+
+    words = text.split()
+    filtered = [w for w in words if w not in STOP_WORDS and len(w) >= 2]
+    return ' '.join(filtered)
+
+
+def prepare_keyword_for_save(text: str) -> str:
+    """
+    Подготавливает текст для сохранения как keyword.
+    Нормализует, удаляет stop words, возвращает ФРАЗУ ЦЕЛИКОМ.
+
+    Args:
+        text: Исходный текст (description)
+
+    Returns:
+        Очищенный keyword для сохранения в БД.
+        Пустая строка если фраза слишком длинная (>4 слов после очистки).
+
+    Examples:
+        >>> prepare_keyword_for_save("Вчера купил трухлявые консервы")
+        "трухлявые консервы"
+        >>> prepare_keyword_for_save("купил кофе в старбаксе")
+        "кофе старбаксе"
+        >>> prepare_keyword_for_save("играл с друзьями в КС после школы 300 рублей")
+        ""  # Слишком длинная фраза — игнорируем
+    """
+    normalized = normalize_keyword_text(text)
+    cleaned = remove_stop_words(normalized)
+
+    # Длинные фразы (>4 слов) игнорируем — они слишком специфичны
+    # и случайные слова ("друзьями", "школы") сломают логику
+    words = cleaned.split()
+    if len(words) > 4:
+        return ""
+
+    return cleaned
+
+
+def words_match_with_inflection(word1: str, word2: str) -> bool:
+    """
+    Проверяет совпадение двух слов с учётом склонений (±1 буква).
+
+    Args:
+        word1: Первое слово
+        word2: Второе слово
+
+    Returns:
+        True если слова совпадают или отличаются на 1 букву
+
+    Examples:
+        >>> words_match_with_inflection("зарплата", "зарплату")
+        True
+        >>> words_match_with_inflection("кофе", "кофе")
+        True
+        >>> words_match_with_inflection("кофе", "косой")
+        False
+        >>> words_match_with_inflection("кб", "кб")
+        True  # 2-буквенные: только exact match
+        >>> words_match_with_inflection("кб", "кв")
+        False  # 2-буквенные: ±1 буква НЕ допускается
+    """
+    if word1 == word2:
+        return True
+
+    # Минимум 2 символа для сравнения
+    if len(word1) < 2 or len(word2) < 2:
+        return False
+
+    # Для 2-буквенных слов — только exact match, без ±1 буквы
+    # Это защита от ложных срабатываний: "кб" не должен матчить "ка", "кв" и т.д.
+    if len(word1) == 2 or len(word2) == 2:
+        return False  # Уже проверили exact match выше
+
+    diff = abs(len(word1) - len(word2))
+
+    # Если разница в длине > 1 символа - не совпадение
+    if diff > 1:
+        return False
+
+    # Если длина одинаковая - считаем отличающиеся буквы
+    if diff == 0:
+        mismatches = sum(1 for a, b in zip(word1, word2) if a != b)
+        return mismatches <= 1
+
+    # Если разница ровно 1 символ
+    shorter = word1 if len(word1) < len(word2) else word2
+    longer = word2 if len(word1) < len(word2) else word1
+
+    # Подсчитываем несовпадения на одинаковых позициях + 1 за лишний символ
+    mismatches = sum(1 for i, c in enumerate(shorter) if c != longer[i]) + 1
+    return mismatches <= 1
+
+
+def match_keyword_in_text(
+    keyword: str,
+    text: str,
+) -> Tuple[bool, str]:
+    """
+    Проверяет совпадение keyword с текстом (2 уровня).
+
+    ВАЖНО: Keyword из БД сравнивается как есть (уже очищен при сохранении).
+           Text очищается от stop words перед сравнением.
+
+    Уровни проверки:
+    1. Exact: Точное совпадение очищенной фразы (±1 буква на всю фразу)
+    2. Word: Каждое слово очищенного текста ищем в keywords как отдельное слово (±1 буква)
+
+    Args:
+        keyword: Сохраненный keyword из БД (уже нормализованный и очищенный)
+        text: Текст для проверки (будет нормализован и очищен от stop words)
+
+    Returns:
+        (matched, match_type):
+            - matched: True если есть совпадение, False иначе
+            - match_type: "exact", "word", или "none"
+
+    Examples:
+        >>> match_keyword_in_text("трухлявые консервы", "Купил трухлявые консервы вчера")
+        (True, "exact")  # после очистки: "трухлявые консервы" == "трухлявые консервы"
+
+        >>> match_keyword_in_text("консервы", "Купил трухлявые консервы вчера")
+        (True, "word")  # keyword "консервы" найден как отдельное слово
+
+        >>> match_keyword_in_text("зарплата", "Мне перевели зарплату")
+        (True, "word")  # "зарплата" ~= "зарплату" (±1 буква)
+
+        >>> match_keyword_in_text("трухлявые консервы", "Трухлявые просроченные консервы")
+        (False, "none")  # фраза не совпадает, а "трухлявые консервы" != одному слову
+    """
+    # Нормализуем и очищаем keyword от stop words
+    # (на случай если передан не из БД, например название категории "Кафе и рестораны")
+    normalized_keyword = normalize_keyword_text(keyword)
+    cleaned_keyword = remove_stop_words(normalized_keyword)
+
+    # Нормализуем и очищаем текст от stop words
+    normalized_text = normalize_keyword_text(text)
+    cleaned_text = remove_stop_words(normalized_text)
+
+    if not cleaned_keyword or not cleaned_text:
+        return False, "none"
+
+    # ЗАЩИТА: Минимум 2 символа для keyword (для кб, вв, зп и т.д.)
+    # 2-буквенные keywords матчатся только exact, без ±1 буквы
+    if len(cleaned_keyword) < 2:
+        return False, "none"
+
+    # =================================================================
+    # УРОВЕНЬ 1: Exact - точное совпадение фразы (±1 буква на всю фразу)
+    # =================================================================
+    if cleaned_text == cleaned_keyword:
+        return True, "exact"
+
+    # Проверяем ±1 букву для всей фразы (для коротких фраз)
+    if len(cleaned_keyword) <= 15:  # Для фраз до 15 символов
+        if words_match_with_inflection(cleaned_text, cleaned_keyword):
+            return True, "exact"
+
+    # =================================================================
+    # УРОВЕНЬ 2: Word - поиск keyword как отдельного слова в тексте
+    # =================================================================
+    # Применяется только для одиночных keywords (не фраз)
+    keyword_words = cleaned_keyword.split()
+
+    if len(keyword_words) == 1:
+        # Keyword - одно слово, ищем его в любом месте текста
+        text_words = cleaned_text.split()
+
+        for text_word in text_words:
+            if words_match_with_inflection(cleaned_keyword, text_word):
+                return True, "word"
+
+    return False, "none"
 
 
 def ensure_unique_keyword(
@@ -99,7 +388,7 @@ def ensure_unique_keyword(
     ВАЖНО: Одно слово может быть только в ОДНОЙ категории!
 
     Алгоритм:
-    1. Нормализует слово
+    1. Нормализует и очищает слово от stop words
     2. УДАЛЯЕТ слово из ВСЕХ категорий пользователя (расходов или доходов)
     3. Создает/получает слово в целевой категории
     4. Возвращает (keyword, created, removed_count)
@@ -107,7 +396,7 @@ def ensure_unique_keyword(
     Args:
         profile: Профиль пользователя
         category: Целевая категория (ExpenseCategory или IncomeCategory)
-        word: Ключевое слово
+        word: Ключевое слово или фраза
         is_income: True для доходов, False для расходов
 
     Returns:
@@ -126,44 +415,44 @@ def ensure_unique_keyword(
     # Выбираем модель в зависимости от типа
     KeywordModel = IncomeCategoryKeyword if is_income else CategoryKeyword
 
-    # Нормализуем слово
-    normalized_word = normalize_keyword_text(word)
+    # Нормализуем и очищаем от stop words
+    cleaned_word = prepare_keyword_for_save(word)
 
-    if not normalized_word or len(normalized_word) < 3:
-        # Создаем пустой объект для совместимости (не сохраняем в БД)
-        logger.debug(f"Keyword too short: '{normalized_word}', skipping")
+    if not cleaned_word or len(cleaned_word) < 3:
+        # Слово слишком короткое после очистки
+        logger.debug(f"Keyword too short after cleaning: '{word}' -> '{cleaned_word}', skipping")
         return None, False, 0
 
     # ОГРАНИЧЕНИЕ max_length=100 (CategoryKeyword.keyword / IncomeCategoryKeyword.keyword)
     # Обрезаем по словам, чтобы не разрывать слова посередине
-    if len(normalized_word) > 100:
+    if len(cleaned_word) > 100:
         # Обрезаем до 100 символов
-        truncated = normalized_word[:100]
+        truncated = cleaned_word[:100]
         # Находим последний пробел, чтобы не разрывать слово
         last_space = truncated.rfind(' ')
         if last_space > 0:
-            normalized_word = truncated[:last_space].strip()
+            cleaned_word = truncated[:last_space].strip()
         else:
             # Если нет пробелов - обрезаем жестко
-            normalized_word = truncated.strip()
+            cleaned_word = truncated.strip()
 
         logger.debug(
-            f"Keyword truncated from {len(word)} to {len(normalized_word)} chars: "
-            f"'{normalized_word}...'"
+            f"Keyword truncated from {len(word)} to {len(cleaned_word)} chars: "
+            f"'{cleaned_word}...'"
         )
 
     # СТРОГАЯ УНИКАЛЬНОСТЬ: удаляем слово из ВСЕХ категорий пользователя
     # БЕЗ фильтрации по языку - т.к. поле не используется в production коде
     deleted = KeywordModel.objects.filter(
         category__profile=profile,
-        keyword=normalized_word
+        keyword=cleaned_word
     ).delete()
 
     removed_count = deleted[0] if deleted else 0
 
     if removed_count > 0:
         logger.debug(
-            f"Removed keyword '{normalized_word}' from {removed_count} "
+            f"Removed keyword '{cleaned_word}' from {removed_count} "
             f"{'income' if is_income else 'expense'} categories to maintain uniqueness"
         )
 
@@ -171,128 +460,8 @@ def ensure_unique_keyword(
     # БЕЗ указания языка - поле не используется
     keyword, created = KeywordModel.objects.get_or_create(
         category=category,
-        keyword=normalized_word,
+        keyword=cleaned_word,
         defaults={'usage_count': 0}
     )
 
     return keyword, created, removed_count
-
-
-def match_keyword_in_text(
-    keyword: str,
-    text: str,
-    min_words: int = 2,
-    max_prefix_words: int = 3
-) -> Tuple[bool, str]:
-    """
-    Проверяет совпадение keyword с текстом (3 уровня).
-
-    Уровни проверки:
-    1. Точное совпадение полной фразы
-    2. Совпадение фразы в ЛЮБОМ месте текста (для multi-word keywords >= 2 слов)
-    3. Совпадение со склонениями (для одиночных keywords >= 3 символов с ЛЮБЫМ словом текста)
-
-    Args:
-        keyword: Сохраненный keyword (нормализованный)
-        text: Текст для проверки (будет нормализован)
-        min_words: Минимум слов для prefix matching (по умолчанию 2)
-        max_prefix_words: Максимум слов для prefix (по умолчанию 3)
-
-    Returns:
-        (matched, match_type):
-            - matched: True если есть совпадение, False иначе
-            - match_type: "exact", "prefix", "inflection", или "none"
-
-    Examples:
-        >>> match_keyword_in_text("сосиска в тесте и чай", "Сосиска в тесте и чай 390")
-        (True, "prefix")  # первые 3 слова совпадают
-        >>> match_keyword_in_text("трухлявые консервы", "я вчера купил трухлявые консервы зачем-то")
-        (True, "prefix")  # фраза найдена в середине текста
-        >>> match_keyword_in_text("зарплата", "мне перевели зарплату")
-        (True, "inflection")  # склонение с ЛЮБЫМ словом текста
-        >>> match_keyword_in_text("долг за тест", "Тест 500")
-        (False, "none")  # фраза не найдена
-    """
-    # Нормализуем оба текста
-    normalized_keyword = normalize_keyword_text(keyword)
-    normalized_text = normalize_keyword_text(text)
-
-    if not normalized_keyword or not normalized_text:
-        return False, "none"
-
-    # ЗАЩИТА: Минимум 3 символа для keyword (предотвращает "в", "на")
-    if len(normalized_keyword) < 3:
-        return False, "none"
-
-    # УРОВЕНЬ 1: Точное совпадение полной фразы
-    if normalized_text == normalized_keyword:
-        return True, "exact"
-
-    text_words = normalized_text.split()
-    keyword_words = normalized_keyword.split()
-
-    # УРОВЕНЬ 2: Поиск фразы в ЛЮБОМ месте текста (для multi-word keywords)
-    # Применяется для keywords >= 2 слов
-    # Используем sliding window для поиска последовательности слов keyword в любом месте text
-    if len(keyword_words) >= min_words:
-        # Длина окна для сравнения - первые 2-3 слова keyword (или меньше если keyword короче)
-        window_length = min(max_prefix_words, len(keyword_words))
-        keyword_prefix = ' '.join(keyword_words[:window_length])
-
-        # Проходим по всем возможным позициям в тексте
-        # Нужно чтобы в тексте было хотя бы window_length слов начиная с позиции i
-        for i in range(len(text_words) - window_length + 1):
-            # Берем окно из window_length слов начиная с позиции i
-            text_window = ' '.join(text_words[i:i+window_length])
-
-            # Защита от коротких слов (< 3 символа)
-            if len(text_window) >= 3 and text_window == keyword_prefix:
-                return True, "prefix"
-
-    # УРОВЕНЬ 3: Совпадение со склонениями (для одиночных keywords)
-    # Применяется ТОЛЬКО если keyword = одно слово >= 3 символов
-    # Проверяем склонение с ЛЮБЫМ словом текста >= 3 символов
-    # Это позволяет "зарплата" матчить "перевели зарплату" или "зарплата от компании"
-    if len(keyword_words) == 1 and len(normalized_keyword) >= 3:
-        for text_word in text_words:
-            if len(text_word) >= 3:  # Минимум 3 символа для слов
-                # ПРОСТАЯ ЛОГИКА: сравниваем ВСЁ слово, разница не более 1 буквы
-                diff = abs(len(normalized_keyword) - len(text_word))
-
-                # Если разница в длине > 1 символа - сразу пропускаем
-                if diff > 1:
-                    continue
-
-                # Если точное совпадение - это inflection (склонение)
-                if normalized_keyword == text_word:
-                    return True, "inflection"
-
-                # Если разница ровно 1 символ - подсчитываем количество отличающихся букв
-                if diff == 1:
-                    # Определяем более короткое и более длинное слово
-                    shorter = normalized_keyword if len(normalized_keyword) < len(text_word) else text_word
-                    longer = text_word if len(normalized_keyword) < len(text_word) else normalized_keyword
-
-                    # Подсчитываем количество несовпадающих букв на одинаковых позициях
-                    mismatches = 0
-                    for i in range(len(shorter)):
-                        if shorter[i] != longer[i]:
-                            mismatches += 1
-
-                    # Плюс 1 символ который есть в длинном слове но нет в коротком
-                    mismatches += 1
-
-                    # Если отличается не более 1 буквы - это склонение
-                    if mismatches <= 1:
-                        return True, "inflection"
-
-                # Если длина одинаковая (diff == 0) - проверяем что отличается только 1 буква
-                if diff == 0:
-                    # Подсчитываем количество отличающихся букв
-                    mismatches = sum(1 for i in range(len(normalized_keyword)) if normalized_keyword[i] != text_word[i])
-
-                    # Если отличается ровно 1 буква - это склонение
-                    if mismatches == 1:
-                        return True, "inflection"
-
-    return False, "none"
