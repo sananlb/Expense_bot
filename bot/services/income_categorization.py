@@ -14,6 +14,7 @@ from bot.utils.income_category_definitions import (
     normalize_income_category_key,
     strip_leading_emoji,
 )
+from bot.utils.keyword_service import match_keyword_in_text
 
 
 def _keyword_matches_in_text(keyword: str, text: str) -> bool:
@@ -268,14 +269,16 @@ def find_category_by_keywords(text: str, profile: Profile) -> Optional[IncomeCat
     # СТРОГАЯ УНИКАЛЬНОСТЬ: одно слово может быть только в одной категории
     # Поэтому если нашли совпадение - сразу возвращаем, без сравнения весов!
     for keyword_obj in keywords:
-        # ИСПРАВЛЕНО: Используем _keyword_matches_in_text для проверки целого слова
-        # вместо простого `in` (защита от "95" в "9500", "зп" в "инвестзп")
-        if _keyword_matches_in_text(keyword_obj.keyword, text):
+        # Используем централизованную функцию match_keyword_in_text
+        # с улучшенной обработкой emoji и двухуровневым matching (exact + prefix)
+        matched, match_type = match_keyword_in_text(keyword_obj.keyword, text)
+        if matched:
             # Нашли совпадение! Благодаря строгой уникальности это единственная категория с этим словом
             # Обновляем статистику использования
             keyword_obj.usage_count += 1
             keyword_obj.save(update_fields=['usage_count', 'last_used'])  # last_used обновится auto_now
 
+            logger.info(f"[INCOME KEYWORD MATCH] {match_type}: '{keyword_obj.keyword}' matched '{text}'")
             return keyword_obj.category
 
     # Ничего не найдено

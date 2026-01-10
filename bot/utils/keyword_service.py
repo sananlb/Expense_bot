@@ -204,11 +204,13 @@ def match_keyword_in_text(
 
     Examples:
         >>> match_keyword_in_text("сосиска в тесте и чай", "Сосиска в тесте и чай 390")
-        (True, "exact")
+        (True, "prefix")  # текст содержит "390" в конце, поэтому это prefix совпадение
+        >>> match_keyword_in_text("сосиска в тесте и чай", "сосиска в тесте и чай")
+        (True, "exact")  # полное совпадение без дополнительных слов
         >>> match_keyword_in_text("сосиска в тесте и чай", "Сосиска в тесте 390")
-        (True, "prefix")
+        (True, "prefix")  # первые 3 слова совпадают
         >>> match_keyword_in_text("долг за тест", "Тест 500")
-        (False, "none")
+        (False, "none")  # начало НЕ совпадает
     """
     # Нормализуем оба текста
     normalized_keyword = normalize_keyword_text(keyword)

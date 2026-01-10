@@ -1249,75 +1249,59 @@ def process_recurring_payments():
 @shared_task
 def update_keywords_weights(expense_id: int, old_category_id: int, new_category_id: int):
     """
-    Обновление весов ключевых слов после изменения категории пользователем.
-    Запускается в фоне после редактирования.
+    Обновление ключевых слов после ручного изменения категории.
+    ИСПОЛЬЗУЕТ УНИВЕРСАЛЬНЫЙ КОД из keyword_service.py
+
+    Сохраняет ПОЛНУЮ ФРАЗУ как keyword (не отдельные слова!)
 
     ВАЖНО: Ключевые слова должны быть уникальными - одно слово может быть только в одной категории!
     Если слово уже существует в другой категории, оно будет удалено оттуда.
     """
     try:
-        from expenses.models import Expense, ExpenseCategory, CategoryKeyword
-
-        # Попробуем импортировать spellchecker, если не получится - используем без проверки
-        try:
-            from bot.utils.spellchecker import check_and_correct_text
-        except ImportError:
-            def check_and_correct_text(text):
-                return text  # Возвращаем текст без изменений
+        from expenses.models import Expense, ExpenseCategory
+        from bot.utils.keyword_service import normalize_keyword_text, ensure_unique_keyword
 
         # Получаем объекты
         expense = Expense.objects.select_related('profile').get(id=expense_id)
         new_category = ExpenseCategory.objects.select_related('profile').get(id=new_category_id)
         old_category = ExpenseCategory.objects.get(id=old_category_id) if old_category_id else None
 
-        # Извлекаем и очищаем слова из описания
-        words = extract_words_from_description(expense.description)
+        # Нормализуем description как ЦЕЛУЮ ФРАЗУ
+        keyword = normalize_keyword_text(expense.description)
 
-        # Проверяем правописание
-        corrected_words = []
-        for word in words:
-            corrected = check_and_correct_text(word)
-            if corrected and len(corrected) >= 3:  # Минимум 3 буквы
-                corrected_words.append(corrected.lower())
-
-        words = corrected_words
-
-        # Применяем фильтрацию по правилам сохранения (максимум 3 слова, исключаем глаголы при необходимости)
-        words = filter_keywords_for_saving(words)
-
-        # Если после фильтрации не осталось слов - выходим
-        if not words:
-            logger.info(f"No keywords to update after filtering for expense {expense_id}")
+        if not keyword or len(keyword) < 3:
+            logger.info(f"Keyword too short after normalization, skipping for expense {expense_id}")
             return
 
-        # Обновляем ключевые слова для НОВОЙ категории с гарантией уникальности
-        removed_count = 0
-        for word in words:
-            # ШАБЛОН УНИКАЛЬНОСТИ: Удаляем это слово из ВСЕХ категорий пользователя
-            deleted = CategoryKeyword.objects.filter(
-                category__profile=expense.profile,
-                keyword=word
-            ).delete()
+        # Обеспечиваем уникальность и создаем/обновляем keyword
+        kw_obj, created, removed = ensure_unique_keyword(
+            profile=expense.profile,
+            category=new_category,
+            word=keyword,
+            is_income=False
+        )
 
-            if deleted[0] > 0:
-                removed_count += deleted[0]
-                logger.debug(f"Removed keyword '{word}' from {deleted[0]} other categories to maintain uniqueness")
+        if not kw_obj:
+            logger.warning(f"Failed to create/update keyword '{keyword}' for expense {expense_id}")
+            return
 
-            # Добавляем слово в целевую категорию
-            keyword, created = CategoryKeyword.objects.get_or_create(
-                category=new_category,
-                keyword=word,
-                defaults={'usage_count': 0}
-            )
+        # Увеличиваем счетчик использований (ручное исправление = сильный сигнал)
+        kw_obj.usage_count += 1
+        kw_obj.save()
 
-            # Увеличиваем счетчик использований
-            keyword.usage_count += 1
-            keyword.save()
+        # Логирование
+        old_cat_name = old_category.name if old_category else 'None'
+        new_cat_name = new_category.name or new_category.name_ru or new_category.name_en or f'ID:{new_category.id}'
 
-            logger.info(f"Updated keyword '{word}' for category '{new_category.name}' (user {expense.profile.telegram_id})")
+        action = "Created" if created else "Updated"
+        logger.info(
+            f"{action} keyword '{keyword}' for expense {expense_id}: "
+            f"'{old_cat_name}' -> '{new_cat_name}' "
+            f"(removed {removed} duplicates, user {expense.profile.telegram_id})"
+        )
 
-        if removed_count > 0:
-            logger.info(f"Removed {removed_count} duplicate keywords to maintain uniqueness")
+        # Очистка старых keywords если их слишком много
+        cleanup_old_keywords(profile_id=expense.profile.id, is_income=False)
 
         # Проверяем лимит 50 слов на категорию
         check_category_keywords_limit(new_category)
@@ -1327,7 +1311,7 @@ def update_keywords_weights(expense_id: int, old_category_id: int, new_category_
         logger.info(f"Successfully updated keywords weights for expense {expense_id}")
 
     except Exception as e:
-        logger.error(f"Error in update_keywords_weights task: {e}")
+        logger.error(f"Error in update_keywords_weights task: {e}", exc_info=True)
 
 
 def cleanup_old_keywords(profile_id: int, is_income: bool = False):
@@ -1643,55 +1627,51 @@ def update_top5_keyboards():
 @shared_task
 def update_income_keywords(income_id: int, old_category_id: int, new_category_id: int):
     """
-    Обновление ключевых слов после изменения категории дохода пользователем.
-    Запускается в фоне после редактирования.
+    Обновление ключевых слов после ручного изменения категории дохода.
+    ИСПОЛЬЗУЕТ УНИВЕРСАЛЬНЫЙ КОД из keyword_service.py
 
-    ВАЖНО: Использует строгую уникальность - одно слово только в одной категории!
-    Никаких normalized_weights - только строгое удаление дубликатов.
+    Сохраняет ПОЛНУЮ ФРАЗУ как keyword (не отдельные слова!)
+    Это решает проблему ложных срабатываний типа "тест" в "сосиска в тесте".
     """
     try:
-        from expenses.models import Income, IncomeCategory, IncomeCategoryKeyword
-        from bot.services.income_categorization import ensure_unique_income_keyword
+        from expenses.models import Income, IncomeCategory
+        from bot.utils.keyword_service import normalize_keyword_text, ensure_unique_keyword
 
         # Получаем объекты
         income = Income.objects.select_related('profile').get(id=income_id)
         new_category = IncomeCategory.objects.select_related('profile').get(id=new_category_id)
         old_category = IncomeCategory.objects.get(id=old_category_id) if old_category_id else None
 
-        # Извлекаем и очищаем слова из описания
-        words = extract_words_from_description(income.description)
+        # Нормализуем description как ЦЕЛУЮ ФРАЗУ (не разбиваем на слова!)
+        keyword = normalize_keyword_text(income.description)
 
-        # Применяем фильтрацию по правилам сохранения (максимум 3 слова, исключаем глаголы при необходимости)
-        words = filter_keywords_for_saving(words)
-
-        # Если после фильтрации не осталось слов - выходим
-        if not words:
-            logger.info(f"No keywords to update after filtering for income {income_id}")
+        if not keyword or len(keyword) < 3:
+            logger.info(f"Keyword too short for income {income_id}, skipping")
             return
 
-        # Обновляем ключевые слова для НОВОЙ категории с гарантией строгой уникальности
-        total_removed = 0
-        for word in words:
-            # ПАТТЕРН СТРОГОЙ УНИКАЛЬНОСТИ через helper функцию
-            keyword, created, removed = ensure_unique_income_keyword(
-                profile=income.profile,
-                category=new_category,
-                word=word
-            )
-            total_removed += removed
+        # УНИВЕРСАЛЬНАЯ функция для уникальности
+        kw_obj, created, removed = ensure_unique_keyword(
+            profile=income.profile,
+            category=new_category,
+            word=keyword,
+            is_income=True  # ← доходы!
+        )
 
-            # Увеличиваем счетчик использований
-            keyword.usage_count += 1
-            keyword.save()
+        if not kw_obj:
+            logger.info(f"Could not create/find keyword for income {income_id}")
+            return
+
+        # Увеличиваем счетчик использований
+        kw_obj.usage_count += 1
+        kw_obj.save()
 
         # Логируем итоги
         old_cat_name = old_category.name if old_category else 'None'
         new_cat_name = new_category.name or new_category.name_ru or new_category.name_en or f'ID:{new_category.id}'
 
         logger.info(
-            f"[CELERY] Income keywords update completed for income {income_id}: "
-            f"moved {len(words)} words from '{old_cat_name}' to '{new_cat_name}' "
-            f"(removed {total_removed} duplicates, user {income.profile.telegram_id})"
+            f"[CELERY] Updated income keyword '{keyword}' from '{old_cat_name}' to '{new_cat_name}' "
+            f"(removed {removed} duplicates, user {income.profile.telegram_id})"
         )
 
         # Проверяем лимит 50 слов на категорию (используем универсальную функцию)
