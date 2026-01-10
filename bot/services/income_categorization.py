@@ -2,7 +2,6 @@
 AI категоризация доходов - использует ai_selector для выбора провайдера
 """
 import logging
-import re
 from typing import Optional, Dict, Any, List
 from asgiref.sync import sync_to_async
 
@@ -16,29 +15,7 @@ from bot.utils.income_category_definitions import (
 )
 from bot.utils.keyword_service import match_keyword_in_text
 
-
-def _keyword_matches_in_text(keyword: str, text: str) -> bool:
-    """
-    Проверяет есть ли ключевое слово в тексте как ЦЕЛОЕ СЛОВО с учетом склонений.
-
-    Защита от ложных срабатываний:
-    - "95" НЕ совпадёт с "9500"
-    - "зп" НЕ совпадёт с "инвестзп"
-    - "зарплата" совпадёт с "зарплату", "зарплаты" (окончание <= 2 символа)
-    """
-    if not keyword or not text:
-        return False
-    keyword_lower = keyword.lower().strip()
-    text_lower = text.lower()
-    text_words = re.findall(r'[\wа-яёА-ЯЁ\-]+', text_lower)
-    for word in text_words:
-        if word == keyword_lower:
-            return True
-        if word.startswith(keyword_lower):
-            ending_length = len(word) - len(keyword_lower)
-            if ending_length <= 2:
-                return True
-    return False
+# УДАЛЕНО: _keyword_matches_in_text() - мертвый код, заменен на match_keyword_in_text() из keyword_service.py
 
 logger = logging.getLogger(__name__)
 

@@ -2,31 +2,12 @@
 Shared definitions and helpers for expense categories.
 Объединенные ключевые слова для категорий расходов (русские + английские).
 """
-import re
 from typing import Optional, Dict
 
 # ВАЖНО: Импортируем из централизованного модуля (включает ZWJ для композитных эмодзи)
 from bot.utils.emoji_utils import strip_leading_emoji
-
-
-def _keyword_matches_in_text(keyword: str, text: str) -> bool:
-    """
-    Проверяет есть ли ключевое слово в тексте как ЦЕЛОЕ СЛОВО с учетом склонений.
-    Локальная копия функции из expense_parser.py для избежания циклического импорта.
-    """
-    if not keyword or not text:
-        return False
-    keyword_lower = keyword.lower().strip()
-    text_lower = text.lower()
-    text_words = re.findall(r'[\wа-яёА-ЯЁ\-]+', text_lower)
-    for word in text_words:
-        if word == keyword_lower:
-            return True
-        if word.startswith(keyword_lower):
-            ending_length = len(word) - len(keyword_lower)
-            if ending_length <= 2:
-                return True
-    return False
+# НОВАЯ СИСТЕМА: Импортируем централизованную функцию матчинга
+from bot.utils.keyword_service import match_keyword_in_text
 
 
 EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
@@ -386,9 +367,10 @@ def detect_expense_category_key(text: str) -> Optional[str]:
 
         score = 0
         for keyword in data.get('keywords', []):
-            # Используем проверку целого слова вместо простого `in`
-            # чтобы "95" не совпадало с "9500" и т.п.
-            if _keyword_matches_in_text(keyword, text):
+            # НОВАЯ СИСТЕМА: Используем 3-уровневую проверку (exact, prefix, inflection)
+            # Защищает от ложных срабатываний ("95" не совпадет с "9500", "тест" не совпадет с "в тесте")
+            matched, match_type = match_keyword_in_text(keyword, text)
+            if matched:
                 score += 1
 
         if score > best_score:
