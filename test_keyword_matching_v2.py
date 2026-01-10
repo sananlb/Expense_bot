@@ -178,9 +178,46 @@ def test_short_word_protection():
     return failed == 0
 
 
+def test_inflections():
+    """Тест совпадения со склонениями"""
+    print("\n=== TEST 6: Совпадение со склонениями ===")
+
+    test_cases = [
+        # (keyword, text, should_match, expected_type)
+        # ВАЖНО: склонения работают ТОЛЬКО для одиночных слов (keyword + text = по 1 слову)
+        ("зарплата", "Зарплату", True, "inflection"),
+        ("зарплата", "Зарплаты", True, "inflection"),
+        ("зарплата", "Зарплате", True, "inflection"),
+        ("фриланс", "Фрилансом", True, "inflection"),
+        ("кофе", "Кофейня", False, "none"),  # разница > 2 символов
+        ("95", "9500", False, "none"),  # НЕ склонение, защита от подстроки
+        ("тест", "тестирование", False, "none"),  # разница > 2 символов
+        # НЕ должны срабатывать если текст - несколько слов
+        ("зарплата", "Зарплату перевели", False, "none"),
+        ("водица", "Водица на тренировку", False, "none"),
+    ]
+
+    passed = 0
+    failed = 0
+
+    for keyword, text, should_match, expected_type in test_cases:
+        matched, match_type = match_keyword_in_text(keyword, text)
+
+        if matched == should_match and (not should_match or match_type == expected_type):
+            print(f"✅ PASS: '{keyword}' vs '{text}' → matched={matched}, type={match_type}")
+            passed += 1
+        else:
+            print(f"❌ FAIL: '{keyword}' vs '{text}' → matched={matched}, type={match_type} "
+                  f"(expected: matched={should_match}, type={expected_type})")
+            failed += 1
+
+    print(f"\nРезультат: {passed} passed, {failed} failed")
+    return failed == 0
+
+
 def test_real_world_scenarios():
     """Тест реальных сценариев из production"""
-    print("\n=== TEST 6: Реальные сценарии ===")
+    print("\n=== TEST 7: Реальные сценарии ===")
 
     # Реальные проблемы из плана
     test_cases = [
@@ -232,6 +269,7 @@ def main():
     all_passed &= test_prefix_match()
     all_passed &= test_no_false_positives()
     all_passed &= test_short_word_protection()
+    all_passed &= test_inflections()  # НОВЫЙ ТЕСТ для склонений
     all_passed &= test_real_world_scenarios()
 
     # Итоговый результат

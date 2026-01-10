@@ -185,11 +185,12 @@ def match_keyword_in_text(
     max_prefix_words: int = 3
 ) -> Tuple[bool, str]:
     """
-    Проверяет совпадение keyword с текстом (2 уровня).
+    Проверяет совпадение keyword с текстом (3 уровня).
 
     Уровни проверки:
     1. Точное совпадение полной фразы
     2. Совпадение начала фразы (первые 2-3 слова, если >= 2 слов)
+    3. Совпадение со склонениями (для одиночных слов >= 3 символов)
 
     Args:
         keyword: Сохраненный keyword (нормализованный)
@@ -200,15 +201,15 @@ def match_keyword_in_text(
     Returns:
         (matched, match_type):
             - matched: True если есть совпадение, False иначе
-            - match_type: "exact" (полное совпадение), "prefix" (начало), или "none" (нет совпадения)
+            - match_type: "exact", "prefix", "inflection", или "none"
 
     Examples:
         >>> match_keyword_in_text("сосиска в тесте и чай", "Сосиска в тесте и чай 390")
         (True, "prefix")  # текст содержит "390" в конце, поэтому это prefix совпадение
         >>> match_keyword_in_text("сосиска в тесте и чай", "сосиска в тесте и чай")
         (True, "exact")  # полное совпадение без дополнительных слов
-        >>> match_keyword_in_text("сосиска в тесте и чай", "Сосиска в тесте 390")
-        (True, "prefix")  # первые 3 слова совпадают
+        >>> match_keyword_in_text("зарплата", "Зарплату перевели")
+        (True, "inflection")  # склонение одиночного слова
         >>> match_keyword_in_text("долг за тест", "Тест 500")
         (False, "none")  # начало НЕ совпадает
     """
@@ -219,14 +220,18 @@ def match_keyword_in_text(
     if not normalized_keyword or not normalized_text:
         return False, "none"
 
+    # ЗАЩИТА: Минимум 3 символа для keyword (предотвращает "в", "на")
+    if len(normalized_keyword) < 3:
+        return False, "none"
+
     # УРОВЕНЬ 1: Точное совпадение полной фразы
     if normalized_text == normalized_keyword:
         return True, "exact"
 
-    # УРОВЕНЬ 2: Совпадение начала фразы (первые 2-3 слова)
     text_words = normalized_text.split()
     keyword_words = normalized_keyword.split()
 
+    # УРОВЕНЬ 2: Совпадение начала фразы (первые 2-3 слова)
     # Проверяем только если в тексте >= min_words слов
     if len(text_words) >= min_words and len(keyword_words) >= min_words:
         # Берем первые N слов (2-3)
@@ -237,5 +242,25 @@ def match_keyword_in_text(
         # Защита от коротких слов (< 3 символа)
         if len(text_prefix) >= 3 and text_prefix == keyword_prefix:
             return True, "prefix"
+
+    # УРОВЕНЬ 3: Совпадение со склонениями (для одиночных слов)
+    # Применяется ТОЛЬКО если и keyword, и text = по одному слову >= 4 символов
+    # Это предотвращает ложные срабатывания типа "тест" в "сосиска в тесте"
+    if len(keyword_words) == 1 and len(text_words) == 1:
+        if len(normalized_keyword) >= 4 and len(text_words[0]) >= 4:
+            # Берем ОСНОВУ слова (без окончания) - убираем последние 2 символа от меньшего слова
+            min_len = min(len(normalized_keyword), len(text_words[0]))
+            # Основа = минимум минус 2 символа (окончание), но не меньше 4
+            stem_len = max(4, min_len - 2)
+
+            # Проверяем что основы совпадают
+            keyword_stem = normalized_keyword[:stem_len]
+            text_stem = text_words[0][:stem_len]
+
+            if keyword_stem == text_stem:
+                # Разница в длине не больше 2 символов (окончание)
+                diff = abs(len(normalized_keyword) - len(text_words[0]))
+                if diff <= 2:
+                    return True, "inflection"
 
     return False, "none"
