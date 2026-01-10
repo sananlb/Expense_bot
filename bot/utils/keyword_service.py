@@ -247,24 +247,24 @@ def match_keyword_in_text(
 
     # УРОВЕНЬ 3: Совпадение со склонениями (для одиночных keywords)
     # Применяется ТОЛЬКО если keyword = одно слово >= 4 символов
-    # Проверяем склонение с ПЕРВЫМ словом текста (независимо от длины текста)
-    # Это позволяет "зарплата" матчить "зарплата от компании" или "зарплату перевели"
-    # Но предотвращает "тест" в "сосиска в тесте" (т.к. "тест" != первое слово)
-    if len(keyword_words) == 1 and len(text_words) >= 1:
-        if len(normalized_keyword) >= 4 and len(text_words[0]) >= 4:
-            # Берем ОСНОВУ слова (без окончания) - убираем последние 2 символа от меньшего слова
-            min_len = min(len(normalized_keyword), len(text_words[0]))
-            # Основа = минимум минус 2 символа (окончание), но не меньше 4
-            stem_len = max(4, min_len - 2)
+    # Проверяем склонение с ЛЮБЫМ словом текста >= 4 символов
+    # Это позволяет "зарплата" матчить "перевели зарплату" или "зарплата от компании"
+    if len(keyword_words) == 1 and len(normalized_keyword) >= 4:
+        for text_word in text_words:
+            if len(text_word) >= 4:
+                # Берем ОСНОВУ слова (без окончания) - убираем последние 2 символа от меньшего слова
+                min_len = min(len(normalized_keyword), len(text_word))
+                # Основа = минимум минус 2 символа (окончание), но не меньше 4
+                stem_len = max(4, min_len - 2)
 
-            # Проверяем что основы совпадают
-            keyword_stem = normalized_keyword[:stem_len]
-            text_stem = text_words[0][:stem_len]
+                # Проверяем что основы совпадают
+                keyword_stem = normalized_keyword[:stem_len]
+                text_stem = text_word[:stem_len]
 
-            if keyword_stem == text_stem:
-                # Разница в длине не больше 2 символов (окончание)
-                diff = abs(len(normalized_keyword) - len(text_words[0]))
-                if diff <= 2:
-                    return True, "inflection"
+                if keyword_stem == text_stem:
+                    # Разница в длине не больше 2 символов (окончание)
+                    diff = abs(len(normalized_keyword) - len(text_word))
+                    if diff <= 2:
+                        return True, "inflection"
 
     return False, "none"
