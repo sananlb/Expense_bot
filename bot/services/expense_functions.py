@@ -772,6 +772,10 @@ class ExpenseFunctions:
                 result['start_date'] = start_date
                 result['end_date'] = end_date
 
+            # Добавляем период если указан
+            if period:
+                result['period'] = period
+
             return result
 
         except Profile.DoesNotExist:
