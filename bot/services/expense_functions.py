@@ -707,8 +707,10 @@ class ExpenseFunctions:
 
             # Вычисляем сравнение с предыдущим периодом (только если указан period)
             previous_comparison = None
+            logger.info(f"search_expenses: period='{period}', start_date='{start_date}', end_date='{end_date}'")
             if period and start_date and end_date:
                 try:
+                    logger.info(f"search_expenses: calculating comparison for period='{period}'")
                     current_start = datetime.fromisoformat(start_date).date()
                     current_end = datetime.fromisoformat(end_date).date()
 
