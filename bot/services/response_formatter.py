@@ -209,7 +209,7 @@ def _format_category_stats(result: Dict) -> str:
 
     for c in cats[:20]:
         name = c.get('name', '')
-        cat_total = c.get('total', 0)
+        cat_total = c.get('total', c.get('amount', 0))
         count = c.get('count', 0)
         percent = c.get('percentage', 0)
         parts.append(f"• {name}: {cat_total:,.0f} ₽ ({count} шт., {percent:.1f}%)")
@@ -327,6 +327,7 @@ def format_function_result(func_name: str, result: Dict) -> str:
         total = result.get('total', 0)
         count = result.get('count', 0)
         period = result.get('period', '')
+        previous_comparison = result.get('previous_comparison')
 
         if count == 0:
             return f"За указанный период трат в категории \"{category}\" не найдено."
@@ -338,12 +339,42 @@ def format_function_result(func_name: str, result: Dict) -> str:
             'all': 'за все время'
         }.get(period, f'за {period}')
 
-        return (
-            f"📦 Категория: {category}\n"
-            f"Период: {period_text}\n"
-            f"Трат: {count}\n"
+        lines = [
+            f"📦 Категория: {category}",
+            f"Период: {period_text}",
+            f"Трат: {count}",
             f"Сумма: {total:,.0f} ₽"
-        )
+        ]
+
+        # Добавляем сравнение с предыдущим периодом если оно есть
+        if previous_comparison:
+            prev_total = previous_comparison.get('previous_total', 0)
+            percent_change = previous_comparison.get('percent_change', 0)
+            trend = previous_comparison.get('trend', '')
+
+            # Определяем эмодзи и текст в зависимости от тренда
+            if trend == 'увеличение':
+                trend_emoji = '📈'
+                trend_text = 'больше'
+            elif trend == 'уменьшение':
+                trend_emoji = '📉'
+                trend_text = 'меньше'
+            else:
+                trend_emoji = '➡️'
+                trend_text = 'без изменений'
+
+            # Форматируем процент изменения
+            abs_percent = abs(percent_change)
+
+            lines.append('')  # Пустая строка для разделения
+            lines.append(f"{trend_emoji} Сравнение с предыдущим периодом:")
+
+            if trend == 'без изменений':
+                lines.append(f"Сумма не изменилась ({prev_total:,.0f} ₽)")
+            else:
+                lines.append(f"На {abs_percent}% {trend_text} (было {prev_total:,.0f} ₽)")
+
+        return "\n".join(lines)
 
     if func_name == 'get_category_total_by_dates':
         lang = _get_user_language(result)

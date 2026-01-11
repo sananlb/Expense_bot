@@ -184,6 +184,64 @@ def _format_search_results(expenses, lang: str) -> tuple:
     return results, total_amount
 
 
+def _get_previous_period(start_date: date, end_date: date, period: str) -> tuple[date, date]:
+    """
+    Определяет предыдущий период на основе текущего периода.
+
+    Для месяцев возвращает предыдущий календарный месяц (полный).
+    Для других периодов - период такой же длины перед текущим.
+
+    Args:
+        start_date: Начало текущего периода
+        end_date: Конец текущего периода
+        period: Название периода (для определения типа)
+
+    Returns:
+        Tuple (prev_start_date, prev_end_date)
+    """
+    period_lower = period.lower() if period else ''
+
+    # Список названий месяцев на разных языках
+    month_names = {
+        'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+        'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
+        'january', 'february', 'march', 'april', 'may', 'june',
+        'july', 'august', 'september', 'october', 'november', 'december',
+        'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
+        'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+        'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+    }
+
+    # Проверяем, является ли период месяцем
+    is_month_period = (
+        # Явно указан месяц по названию
+        period_lower in month_names or
+        # Период типа "month" или "last_month"
+        period_lower in ('month', 'this_month', 'last_month') or
+        # Начинается с 1-го числа месяца И это не год/сезон/числовой период
+        (start_date.day == 1 and
+         period_lower not in ('year', 'this_year', 'last_year',
+                              'зима', 'весна', 'лето', 'осень',
+                              'winter', 'spring', 'summer', 'autumn', 'fall',
+                              'зимой', 'весной', 'летом', 'осенью') and
+         not period_lower.isdigit())  # И это не числовой период типа "30"
+    )
+
+    if is_month_period:
+        # Для месяцев используем календарную логику
+        # Последний день предыдущего месяца
+        prev_end_date = start_date - timedelta(days=1)
+        # Первый день предыдущего месяца
+        prev_start_date = prev_end_date.replace(day=1)
+        return prev_start_date, prev_end_date
+    else:
+        # Для других периодов (год, сезон, неделя, кастомные даты) - берем период такой же длины
+        period_days = (end_date - start_date).days + 1
+        prev_start_date = start_date - timedelta(days=period_days)
+        prev_end_date = end_date - timedelta(days=period_days)
+        return prev_start_date, prev_end_date
+
+
 class ExpenseFunctions:
     """Класс с функциями для анализа трат, вызываемыми через AI function calling"""
     
@@ -918,7 +976,7 @@ class ExpenseFunctions:
     @sync_to_async
     def get_category_total(user_id: int, category: str, period: str = 'month') -> Dict[str, Any]:
         """
-        Получить траты по конкретной категории
+        Получить траты по конкретной категории с сравнением с предыдущим периодом
         """
         try:
             profile, _ = Profile.objects.get_or_create(
@@ -977,12 +1035,6 @@ class ExpenseFunctions:
                 for cat in all_cats[:10]:  # Первые 10 для отладки
                     logger.info(f"  - Category: name='{cat.name}', name_ru='{cat.name_ru}', name_en='{cat.name_en}'")
 
-            qs = Expense.objects.filter(
-                profile=profile,
-                expense_date__gte=start_date,
-                expense_date__lte=end_date
-            )
-
             # Универсальное правило: ищем как по категории, так и по описанию
             q_filter = Q()
 
@@ -998,7 +1050,12 @@ class ExpenseFunctions:
             # И ищем упоминание категории в описании траты
             q_filter |= Q(description__icontains=category)
 
-            qs = qs.filter(q_filter)
+            # Получаем траты за текущий период
+            qs = Expense.objects.filter(
+                profile=profile,
+                expense_date__gte=start_date,
+                expense_date__lte=end_date
+            ).filter(q_filter)
 
             logger.info(f"get_category_total: filtered queryset, found {qs.count()} expenses")
 
@@ -1013,15 +1070,64 @@ class ExpenseFunctions:
                 for exp in qs[:3]:
                     logger.info(f"  - Expense: amount={exp.amount}, date={exp.expense_date}, category='{exp.category.name if exp.category else 'None'}', desc='{exp.description}'")
 
-            return {
+            # Вычисляем сравнение с предыдущим периодом
+            previous_comparison = None
+
+            # Определяем предыдущий период (для месяцев - календарный предыдущий месяц)
+            prev_start_date, prev_end_date = _get_previous_period(start_date, end_date, period)
+
+            logger.info(f"get_category_total: comparing with previous period {prev_start_date} to {prev_end_date}")
+
+            # Получаем траты за предыдущий период с теми же фильтрами категории
+            prev_qs = Expense.objects.filter(
+                profile=profile,
+                expense_date__gte=prev_start_date,
+                expense_date__lte=prev_end_date
+            ).filter(q_filter)
+
+            prev_total = prev_qs.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            prev_count = prev_qs.count()
+
+            logger.info(f"get_category_total: previous period - total={prev_total}, count={prev_count}")
+
+            # Если в предыдущем периоде были траты, вычисляем изменение
+            if prev_total > 0:
+                difference = total - prev_total
+                percent_change = ((total - prev_total) / prev_total) * 100
+
+                previous_comparison = {
+                    'previous_total': float(prev_total),
+                    'previous_count': prev_count,
+                    'difference': float(difference),
+                    'percent_change': round(float(percent_change), 1),
+                    'trend': 'увеличение' if difference > 0 else 'уменьшение' if difference < 0 else 'без изменений',
+                    'previous_period': {
+                        'start': prev_start_date.isoformat(),
+                        'end': prev_end_date.isoformat()
+                    }
+                }
+                logger.info(f"get_category_total: comparison - difference={difference}, percent_change={percent_change}%")
+            else:
+                logger.info(f"get_category_total: no expenses in previous period, skipping comparison")
+
+            result = {
                 'success': True,
                 'category': category,
                 'period': period,
                 'total': float(total),
                 'count': count,
                 'average': float(total / count) if count > 0 else 0,
-                'currency': 'RUB'
+                'currency': 'RUB',
+                'start_date': start_date.isoformat(),
+                'end_date': end_date.isoformat()
             }
+
+            # Добавляем сравнение только если оно есть
+            if previous_comparison:
+                result['previous_comparison'] = previous_comparison
+
+            return result
+
         except Exception as e:
             logger.error(f"Error in get_category_total: {e}")
             return {'success': False, 'message': str(e)}
