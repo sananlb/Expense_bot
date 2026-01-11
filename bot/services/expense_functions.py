@@ -2200,21 +2200,41 @@ class ExpenseFunctions:
     
     @staticmethod
     @sync_to_async
-    def search_incomes(user_id: int, query: str) -> Dict[str, Any]:
+    def search_incomes(user_id: int, query: str, period: Optional[str] = None) -> Dict[str, Any]:
         """
-        Поиск доходов по описанию
+        Поиск доходов по описанию с опциональным периодом и сравнением
         """
         try:
             profile, _ = Profile.objects.get_or_create(
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
-            
-            incomes = Income.objects.filter(
+
+            # Если указан период, используем его для фильтрации
+            start_date = None
+            end_date = None
+            if period:
+                from bot.utils.date_utils import get_period_dates
+                start_date, end_date = get_period_dates(period)
+
+            # Базовый фильтр
+            incomes_qs = Income.objects.filter(
                 profile=profile,
                 description__icontains=query
-            ).order_by('-income_date')[:20]
-            
+            )
+
+            # Добавляем фильтр по датам если указан период
+            if start_date and end_date:
+                incomes_qs = incomes_qs.filter(
+                    income_date__gte=start_date,
+                    income_date__lte=end_date
+                )
+
+            incomes = incomes_qs.order_by('-income_date')[:20]
+
+            # Подсчёт общей суммы
+            total_amount = sum(inc.amount for inc in incomes)
+
             results = []
             for inc in incomes:
                 results.append({
@@ -2223,13 +2243,86 @@ class ExpenseFunctions:
                     'description': inc.description or get_text('income', profile.language_code or 'ru'),
                     'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru')
                 })
-            
-            return {
+
+            # Вычисляем сравнение с предыдущим периодом (только если указан period)
+            previous_comparison = None
+            if period and start_date and end_date:
+                try:
+                    current_start = start_date
+                    current_end = end_date
+
+                    # Определяем предыдущий период
+                    prev_start_date, prev_end_date = _get_previous_period(current_start, current_end, period)
+
+                    logger.info(f"search_incomes: comparing with previous period {prev_start_date} to {prev_end_date}")
+
+                    # Получаем доходы за предыдущий период с тем же фильтром
+                    prev_incomes = Income.objects.filter(
+                        profile=profile,
+                        description__icontains=query,
+                        income_date__gte=prev_start_date,
+                        income_date__lte=prev_end_date
+                    )
+
+                    prev_total = sum(inc.amount for inc in prev_incomes)
+                    prev_count = prev_incomes.count()
+
+                    logger.info(f"search_incomes: previous period - total={prev_total}, count={prev_count}")
+
+                    # Добавляем сравнение только если в предыдущем периоде были доходы
+                    if prev_total > 0:
+                        difference = Decimal(str(total_amount)) - prev_total
+                        percent_change = ((Decimal(str(total_amount)) - prev_total) / prev_total) * 100
+
+                        # Определяем тренд
+                        if difference > 0:
+                            trend = 'увеличение'
+                        elif difference < 0:
+                            trend = 'уменьшение'
+                        else:
+                            trend = 'без изменений'
+
+                        previous_comparison = {
+                            'previous_period': {
+                                'start': prev_start_date.isoformat(),
+                                'end': prev_end_date.isoformat()
+                            },
+                            'previous_count': prev_count,
+                            'previous_total': float(prev_total),
+                            'difference': float(difference),
+                            'percent_change': float(percent_change),
+                            'trend': trend
+                        }
+
+                        logger.info(f"search_incomes: comparison - difference={difference}, percent_change={percent_change}%")
+                    else:
+                        logger.info(f"search_incomes: no incomes in previous period, skipping comparison")
+
+                except Exception as e:
+                    logger.warning(f"search_incomes: failed to calculate comparison: {e}")
+
+            result = {
                 'success': True,
                 'query': query,
                 'count': len(results),
+                'total': float(total_amount),
                 'incomes': results
             }
+
+            # Добавляем сравнение только если оно есть
+            if previous_comparison:
+                result['previous_comparison'] = previous_comparison
+
+            # Добавляем даты периода для отображения
+            if start_date and end_date:
+                result['start_date'] = start_date.isoformat()
+                result['end_date'] = end_date.isoformat()
+
+            # Добавляем период если указан
+            if period:
+                result['period'] = period
+
+            return result
         except Exception as e:
             logger.error(f"Error in search_incomes: {e}")
             return {'success': False, 'message': str(e)}
@@ -2564,11 +2657,64 @@ class ExpenseFunctions:
                 income_date__gte=start_date,
                 income_date__lte=end_date
             )
-            
+
             total = incomes.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
             count = incomes.count()
-            
-            return {
+
+            # Вычисляем сравнение с предыдущим периодом
+            previous_comparison = None
+            try:
+                # Определяем предыдущий период
+                prev_start_date, prev_end_date = _get_previous_period(start_date, end_date, period)
+
+                logger.info(f"get_income_category_total: comparing with previous period {prev_start_date} to {prev_end_date}")
+
+                # Получаем доходы за предыдущий период
+                prev_incomes = Income.objects.filter(
+                    profile=profile,
+                    category__in=categories,
+                    income_date__gte=prev_start_date,
+                    income_date__lte=prev_end_date
+                )
+
+                prev_total = prev_incomes.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+                prev_count = prev_incomes.count()
+
+                logger.info(f"get_income_category_total: previous period - total={prev_total}, count={prev_count}")
+
+                # Добавляем сравнение только если в предыдущем периоде были доходы
+                if prev_total > 0:
+                    difference = Decimal(str(total)) - prev_total
+                    percent_change = ((Decimal(str(total)) - prev_total) / prev_total) * 100
+
+                    # Определяем тренд
+                    if difference > 0:
+                        trend = 'увеличение'
+                    elif difference < 0:
+                        trend = 'уменьшение'
+                    else:
+                        trend = 'без изменений'
+
+                    previous_comparison = {
+                        'previous_period': {
+                            'start': prev_start_date.isoformat(),
+                            'end': prev_end_date.isoformat()
+                        },
+                        'previous_count': prev_count,
+                        'previous_total': float(prev_total),
+                        'difference': float(difference),
+                        'percent_change': float(percent_change),
+                        'trend': trend
+                    }
+
+                    logger.info(f"get_income_category_total: comparison - difference={difference}, percent_change={percent_change}%")
+                else:
+                    logger.info(f"get_income_category_total: no incomes in previous period, skipping comparison")
+
+            except Exception as e:
+                logger.warning(f"get_income_category_total: failed to calculate comparison: {e}")
+
+            result = {
                 'success': True,
                 'category': categories[0].name,
                 'period': period,
@@ -2576,8 +2722,15 @@ class ExpenseFunctions:
                 'end_date': end_date.isoformat(),
                 'total': float(total),
                 'count': count,
-                'average': float(total / count) if count > 0 else 0
+                'average': float(total / count) if count > 0 else 0,
+                'currency': profile.currency or 'RUB'
             }
+
+            # Добавляем сравнение только если оно есть
+            if previous_comparison:
+                result['previous_comparison'] = previous_comparison
+
+            return result
         except Exception as e:
             logger.error(f"Error in get_income_category_total: {e}")
             return {'success': False, 'message': str(e)}

@@ -798,8 +798,92 @@ def format_function_result(func_name: str, result: Dict) -> str:
 
     if func_name == 'search_incomes':
         results = result.get('incomes', [])
+        total = result.get('total', 0)
         count = result.get('count', len(results))
-        return _format_incomes_list({'incomes': results}, "🔍 Результаты поиска по доходам", f"Найдено: {count}")
+        query = result.get('query', '')
+        period = result.get('period', '')
+        start_date = result.get('start_date', '')
+        previous_comparison = result.get('previous_comparison')
+
+        # Форматируем числа правильно
+        if count == 1:
+            count_text = "1 доход"
+        elif 2 <= count <= 4:
+            count_text = f"{count} дохода"
+        else:
+            count_text = f"{count} доходов"
+
+        # Формируем подзаголовок с указанием запроса
+        if query:
+            subtitle = f"Найдено: {count_text} на сумму {total:,.0f} ₽ по запросу \"{query}\""
+        else:
+            subtitle = f"Найдено: {count_text} на сумму {total:,.0f} ₽"
+
+        # Форматируем основной список
+        formatted_list = _format_incomes_list(
+            {'incomes': results},
+            title="🔍 Результаты поиска по доходам",
+            subtitle=subtitle,
+        )
+
+        # Добавляем сравнение с предыдущим периодом если оно есть
+        if previous_comparison:
+            from datetime import datetime
+
+            prev_total = previous_comparison.get('previous_total', 0)
+            percent_change = previous_comparison.get('percent_change', 0)
+            trend = previous_comparison.get('trend', '')
+            prev_period = previous_comparison.get('previous_period', {})
+            prev_start = prev_period.get('start', '')
+
+            # Определяем эмодзи в зависимости от тренда
+            if trend == 'увеличение':
+                trend_emoji = '📈'
+            elif trend == 'уменьшение':
+                trend_emoji = '📉'
+            else:
+                trend_emoji = '➡️'
+
+            # Форматируем процент изменения
+            abs_percent = abs(percent_change)
+
+            # Определяем название текущего и предыдущего периода
+            month_names_ru = {
+                1: 'январе', 2: 'феврале', 3: 'марте', 4: 'апреле', 5: 'мае', 6: 'июне',
+                7: 'июле', 8: 'августе', 9: 'сентябре', 10: 'октябре', 11: 'ноябре', 12: 'декабре'
+            }
+
+            current_period_name = 'в этом периоде'
+            prev_period_name = 'предыдущем периоде'
+
+            if start_date:
+                try:
+                    date_obj = datetime.fromisoformat(start_date)
+                    month_num = date_obj.month
+                    if period and (period.lower() in ('month', 'this_month', 'last_month') or any(m in period.lower() for m in ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'])):
+                        current_period_name = f'в {month_names_ru[month_num]}'
+                except:
+                    pass
+
+            if prev_start:
+                try:
+                    prev_date_obj = datetime.fromisoformat(prev_start)
+                    prev_month_num = prev_date_obj.month
+                    prev_period_name = month_names_ru[prev_month_num]
+                except:
+                    pass
+
+            # Формируем человечное сообщение о сравнении
+            if trend == 'без изменений':
+                comparison_text = f"\n\n{trend_emoji} {current_period_name.capitalize()} вы получили столько же, сколько было в {prev_period_name}."
+            elif trend == 'увеличение':
+                comparison_text = f"\n\n{trend_emoji} {current_period_name.capitalize()} вы получили на {abs_percent:.1f}% больше, чем в {prev_period_name} (было {prev_total:,.0f} ₽)."
+            else:  # уменьшение
+                comparison_text = f"\n\n{trend_emoji} {current_period_name.capitalize()} вы получили на {abs_percent:.1f}% меньше, чем в {prev_period_name} (было {prev_total:,.0f} ₽)."
+
+            formatted_list += comparison_text
+
+        return formatted_list
 
     if func_name == 'get_incomes_by_amount_range':
         incomes = result.get('incomes', [])
@@ -813,6 +897,88 @@ def format_function_result(func_name: str, result: Dict) -> str:
     if func_name == 'get_income_category_statistics':
         # Reuse category stats heading for incomes
         return _format_category_stats(result)
+
+    if func_name == 'get_income_category_total':
+        category = result.get('category', '')
+        total = result.get('total', 0)
+        count = result.get('count', 0)
+        period = result.get('period', '')
+        start_date = result.get('start_date', '')
+        end_date = result.get('end_date', '')
+        previous_comparison = result.get('previous_comparison')
+
+        if count == 0:
+            return f"За указанный период доходов в категории \"{category}\" не найдено."
+
+        # Формируем описание периода
+        period_text = {
+            'week': 'на этой неделе',
+            'month': 'в этом месяце',
+            'year': 'в этом году',
+            'all': 'за все время'
+        }.get(period, f'за период {period}')
+
+        # Пытаемся определить название месяца из периода
+        from datetime import datetime
+
+        month_names_ru = {
+            1: 'январе', 2: 'феврале', 3: 'марте', 4: 'апреле', 5: 'мае', 6: 'июне',
+            7: 'июле', 8: 'августе', 9: 'сентябре', 10: 'октябре', 11: 'ноябре', 12: 'декабре'
+        }
+
+        # Если есть start_date, пытаемся определить месяц
+        if start_date:
+            try:
+                date_obj = datetime.fromisoformat(start_date)
+                month_num = date_obj.month
+                if period.lower() in ('month', 'this_month', 'last_month') or any(m in period.lower() for m in ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']):
+                    period_text = f'в {month_names_ru[month_num]}'
+            except:
+                pass
+
+        # Формируем основное сообщение
+        if count == 1:
+            message = f"В категории \"{category}\" {period_text} вы получили {total:,.0f} ₽ (1 доход)."
+        else:
+            message = f"В категории \"{category}\" {period_text} вы получили {total:,.0f} ₽ ({count} доходов)."
+
+        # Добавляем сравнение с предыдущим периодом если оно есть
+        if previous_comparison:
+            prev_total = previous_comparison.get('previous_total', 0)
+            percent_change = previous_comparison.get('percent_change', 0)
+            trend = previous_comparison.get('trend', '')
+            prev_period = previous_comparison.get('previous_period', {})
+            prev_start = prev_period.get('start', '')
+
+            # Определяем эмодзи и текст в зависимости от тренда
+            if trend == 'увеличение':
+                trend_emoji = '📈'
+            elif trend == 'уменьшение':
+                trend_emoji = '📉'
+            else:
+                trend_emoji = '➡️'
+
+            # Форматируем процент изменения
+            abs_percent = abs(percent_change)
+
+            # Определяем название предыдущего периода
+            prev_period_name = 'предыдущем периоде'
+            if prev_start:
+                try:
+                    prev_date_obj = datetime.fromisoformat(prev_start)
+                    prev_month_num = prev_date_obj.month
+                    prev_period_name = month_names_ru[prev_month_num]
+                except:
+                    pass
+
+            if trend == 'без изменений':
+                message += f" {trend_emoji} Это столько же, сколько было в {prev_period_name}."
+            elif trend == 'увеличение':
+                message += f" {trend_emoji} Это на {abs_percent:.1f}% больше, чем в {prev_period_name} (было {prev_total:,.0f} ₽)."
+            else:  # уменьшение
+                message += f" {trend_emoji} Это на {abs_percent:.1f}% меньше, чем в {prev_period_name} (было {prev_total:,.0f} ₽)."
+
+        return message
 
     if func_name == 'get_daily_income_totals':
         lang = _get_user_language(result)
