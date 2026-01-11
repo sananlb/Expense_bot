@@ -343,8 +343,8 @@ def format_function_result(func_name: str, result: Dict) -> str:
                 try:
                     date_obj = datetime.fromisoformat(start_date)
                     month_num = date_obj.month
-                    if period and (period.lower() in ('month', 'this_month', 'last_month') or any(m in period.lower() for m in ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'])):
-                        current_period_name = f'в {month_names_ru[month_num]}'
+                    # Всегда используем название месяца если есть дата
+                    current_period_name = f'в {month_names_ru[month_num]}'
                 except:
                     pass
 
@@ -866,8 +866,8 @@ def format_function_result(func_name: str, result: Dict) -> str:
                 try:
                     date_obj = datetime.fromisoformat(start_date)
                     month_num = date_obj.month
-                    if period and (period.lower() in ('month', 'this_month', 'last_month') or any(m in period.lower() for m in ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'])):
-                        current_period_name = f'в {month_names_ru[month_num]}'
+                    # Всегда используем название месяца если есть дата
+                    current_period_name = f'в {month_names_ru[month_num]}'
                 except:
                     pass
 
