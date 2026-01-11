@@ -24,13 +24,36 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
     tz = getattr(settings, 'TIME_ZONE', 'UTC')
 
     def crontab(minute: str, hour: str, day_of_week: str = '*', day_of_month: str = '*', month_of_year: str = '*'):
-        return CrontabSchedule.objects.get_or_create(
-            minute=minute, hour=hour,
-            day_of_week=day_of_week,
-            day_of_month=day_of_month,
-            month_of_year=month_of_year,
-            timezone=tz,
-        )[0]
+        """Get or create a CrontabSchedule. Thread-safe with UNIQUE constraint.
+
+        After migration 0003_add_crontabschedule_unique_constraint, the DB has a UNIQUE
+        constraint preventing duplicates. get_or_create will now properly handle
+        concurrent creation attempts without creating duplicates.
+        """
+        try:
+            return CrontabSchedule.objects.get_or_create(
+                minute=minute,
+                hour=hour,
+                day_of_week=day_of_week,
+                day_of_month=day_of_month,
+                month_of_year=month_of_year,
+                timezone=tz,
+            )[0]
+        except CrontabSchedule.MultipleObjectsReturned:
+            # Should not happen after cleanup + UNIQUE constraint,
+            # but handle gracefully: return first and log warning
+            logger.warning(
+                "[crontab] Multiple CrontabSchedule found for %s %s %s %s %s %s - using first",
+                minute, hour, day_of_week, day_of_month, month_of_year, tz
+            )
+            return CrontabSchedule.objects.filter(
+                minute=minute,
+                hour=hour,
+                day_of_week=day_of_week,
+                day_of_month=day_of_month,
+                month_of_year=month_of_year,
+                timezone=tz,
+            ).first()
 
     created_or_updated = []
 
