@@ -3165,7 +3165,7 @@ expense_functions = [
     },
     {
         "name": "search_expenses",
-        "description": "Search expenses by text in description or category",
+        "description": "Search expenses by text in description or category. Use this for text-based queries like 'coffee', 'groceries', 'restaurant'.",
         "parameters": {
             "type": "object",
             "properties": {
@@ -3175,11 +3175,23 @@ expense_functions = [
                 },
                 "query": {
                     "type": "string",
-                    "description": "Search query"
+                    "description": "Search query (what to search for)"
                 },
                 "limit": {
                     "type": "integer",
                     "description": "Maximum number of results (default: 20)"
+                },
+                "period": {
+                    "type": "string",
+                    "description": "Period to analyze: 'december', 'november', 'october', 'декабрь', 'ноябрь', 'октябрь', 'last_month', 'month', etc. Use this for named periods like month names."
+                },
+                "start_date": {
+                    "type": "string",
+                    "description": "Start date in ISO format (YYYY-MM-DD). Use when period is not specified."
+                },
+                "end_date": {
+                    "type": "string",
+                    "description": "End date in ISO format (YYYY-MM-DD). Use when period is not specified."
                 }
             },
             "required": ["user_id", "query"]
