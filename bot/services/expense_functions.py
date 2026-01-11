@@ -2258,15 +2258,16 @@ class ExpenseFunctions:
                     'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru')
                 })
 
-            # Вычисляем сравнение с предыдущим периодом (только если указан period)
+            # Вычисляем сравнение с предыдущим периодом (если указаны даты)
             previous_comparison = None
-            if period and start_date and end_date:
+            if start_date and end_date:
                 try:
                     current_start = start_date
                     current_end = end_date
 
                     # Определяем предыдущий период
-                    prev_start_date, prev_end_date = _get_previous_period(current_start, current_end, period)
+                    # Используем period если есть, иначе определяем по датам
+                    prev_start_date, prev_end_date = _get_previous_period(current_start, current_end, period or '')
 
                     logger.info(f"search_incomes: comparing with previous period {prev_start_date} to {prev_end_date}")
 
