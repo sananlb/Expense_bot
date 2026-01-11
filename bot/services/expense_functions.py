@@ -695,13 +695,84 @@ class ExpenseFunctions:
             lang = profile.language_code or 'ru'
             results, total_amount = _format_search_results(expenses, lang)
 
-            return {
+            # Вычисляем сравнение с предыдущим периодом (только если указан period)
+            previous_comparison = None
+            if period and start_date and end_date:
+                try:
+                    current_start = datetime.fromisoformat(start_date).date()
+                    current_end = datetime.fromisoformat(end_date).date()
+
+                    # Определяем предыдущий период
+                    prev_start_date, prev_end_date = _get_previous_period(current_start, current_end, period)
+
+                    logger.info(f"search_expenses: comparing with previous period {prev_start_date} to {prev_end_date}")
+
+                    # Получаем траты за предыдущий период с теми же фильтрами
+                    prev_queryset = Expense.objects.filter(
+                        profile=profile,
+                        expense_date__gte=prev_start_date,
+                        expense_date__lte=prev_end_date
+                    )
+
+                    if search_filter:
+                        prev_expenses = list(
+                            prev_queryset.filter(search_filter)
+                            .select_related('category')
+                            .order_by('-expense_date', '-expense_time')
+                        )
+                    else:
+                        prev_expenses = []
+
+                    # Если не нашли - пробуем fuzzy поиск
+                    if not prev_expenses and query_parts:
+                        prev_expenses = _fuzzy_search_expenses(prev_queryset, query_parts, limit=1000)
+
+                    prev_count = len(prev_expenses)
+                    prev_total = sum(exp.amount for exp in prev_expenses) if prev_expenses else Decimal('0')
+
+                    logger.info(f"search_expenses: previous period - total={prev_total}, count={prev_count}")
+
+                    # Если в предыдущем периоде были траты, вычисляем изменение
+                    if prev_total > 0:
+                        difference = Decimal(str(total_amount)) - prev_total
+                        percent_change = ((Decimal(str(total_amount)) - prev_total) / prev_total) * 100
+
+                        previous_comparison = {
+                            'previous_total': float(prev_total),
+                            'previous_count': prev_count,
+                            'difference': float(difference),
+                            'percent_change': round(float(percent_change), 1),
+                            'trend': 'увеличение' if difference > 0 else 'уменьшение' if difference < 0 else 'без изменений',
+                            'previous_period': {
+                                'start': prev_start_date.isoformat(),
+                                'end': prev_end_date.isoformat()
+                            }
+                        }
+                        logger.info(f"search_expenses: comparison - difference={difference}, percent_change={percent_change}%")
+                    else:
+                        logger.info(f"search_expenses: no expenses in previous period, skipping comparison")
+
+                except Exception as e:
+                    logger.warning(f"search_expenses: failed to calculate comparison: {e}")
+
+            result = {
                 'success': True,
                 'query': query,
                 'count': len(results),
                 'total': total_amount,
                 'results': results
             }
+
+            # Добавляем сравнение только если оно есть
+            if previous_comparison:
+                result['previous_comparison'] = previous_comparison
+
+            # Добавляем даты периода для отображения
+            if start_date and end_date:
+                result['start_date'] = start_date
+                result['end_date'] = end_date
+
+            return result
 
         except Profile.DoesNotExist:
             return {

@@ -281,6 +281,7 @@ def format_function_result(func_name: str, result: Dict) -> str:
         total = result.get('total', 0)
         count = result.get('count', len(results))
         query = result.get('query', '')
+        previous_comparison = result.get('previous_comparison')
 
         # Форматируем числа правильно
         if count == 1:
@@ -296,11 +297,42 @@ def format_function_result(func_name: str, result: Dict) -> str:
         else:
             subtitle = f"Найдено: {count_text} на сумму {total:,.0f} ₽"
 
-        return _format_expenses_list(
+        # Форматируем основной список
+        formatted_list = _format_expenses_list(
             {'expenses': results},
             title="🔍 Результаты поиска",
             subtitle=subtitle,
         )
+
+        # Добавляем сравнение с предыдущим периодом если оно есть
+        if previous_comparison:
+            prev_total = previous_comparison.get('previous_total', 0)
+            percent_change = previous_comparison.get('percent_change', 0)
+            trend = previous_comparison.get('trend', '')
+
+            # Определяем эмодзи и текст в зависимости от тренда
+            if trend == 'увеличение':
+                trend_emoji = '📈'
+                trend_text = 'больше'
+            elif trend == 'уменьшение':
+                trend_emoji = '📉'
+                trend_text = 'меньше'
+            else:
+                trend_emoji = '➡️'
+                trend_text = 'без изменений'
+
+            # Форматируем процент изменения
+            abs_percent = abs(percent_change)
+
+            comparison_text = f"\n\n{trend_emoji} <b>Сравнение с предыдущим периодом:</b>\n"
+            if trend == 'без изменений':
+                comparison_text += f"Сумма не изменилась ({prev_total:,.0f} ₽)"
+            else:
+                comparison_text += f"На {abs_percent}% {trend_text} (было {prev_total:,.0f} ₽)"
+
+            formatted_list += comparison_text
+
+        return formatted_list
 
     if func_name == 'get_expenses_by_amount_range':
         expenses = result.get('expenses', [])
