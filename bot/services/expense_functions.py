@@ -675,10 +675,15 @@ class ExpenseFunctions:
 
             # Try standard SQL search first
             search_filter = _build_search_filter(query_parts)
+            total_count = 0
+            total_amount = Decimal('0')
+            used_fuzzy = False
             if search_filter:
+                matching_qs = queryset.filter(search_filter)
+                total_count = matching_qs.count()
+                total_amount = matching_qs.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
                 expenses = list(
-                    queryset.filter(search_filter)
-                    .select_related('category')
+                    matching_qs.select_related('category')
                     .order_by('-expense_date', '-expense_time')[:limit]
                 )
             else:
@@ -688,12 +693,17 @@ class ExpenseFunctions:
             if not expenses:
                 expenses = _fuzzy_search_expenses(queryset, query_parts, limit)
                 logger.info(f"search_expenses: extended search found {len(expenses)} expenses")
+                if expenses:
+                    used_fuzzy = True
+                    if total_count == 0:
+                        total_count = len(expenses)
+                        total_amount = sum((exp.amount for exp in expenses), Decimal('0'))
 
             logger.info(f"search_expenses: found {len(expenses)} expenses for query '{query}'")
 
             # Format results
             lang = profile.language_code or 'ru'
-            results, total_amount = _format_search_results(expenses, lang)
+            results, _ = _format_search_results(expenses, lang)
 
             # Вычисляем сравнение с предыдущим периодом (только если указан period)
             previous_comparison = None
@@ -714,28 +724,24 @@ class ExpenseFunctions:
                         expense_date__lte=prev_end_date
                     )
 
-                    if search_filter:
-                        prev_expenses = list(
-                            prev_queryset.filter(search_filter)
-                            .select_related('category')
-                            .order_by('-expense_date', '-expense_time')
-                        )
-                    else:
-                        prev_expenses = []
-
-                    # Если не нашли - пробуем fuzzy поиск
-                    if not prev_expenses and query_parts:
+                    if used_fuzzy and query_parts:
                         prev_expenses = _fuzzy_search_expenses(prev_queryset, query_parts, limit=1000)
-
-                    prev_count = len(prev_expenses)
-                    prev_total = sum(exp.amount for exp in prev_expenses) if prev_expenses else Decimal('0')
+                        prev_count = len(prev_expenses)
+                        prev_total = sum((exp.amount for exp in prev_expenses), Decimal('0'))
+                    elif search_filter:
+                        prev_matching_qs = prev_queryset.filter(search_filter)
+                        prev_count = prev_matching_qs.count()
+                        prev_total = prev_matching_qs.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+                    else:
+                        prev_count = 0
+                        prev_total = Decimal('0')
 
                     logger.info(f"search_expenses: previous period - total={prev_total}, count={prev_count}")
 
                     # Если в предыдущем периоде были траты, вычисляем изменение
                     if prev_total > 0:
-                        difference = Decimal(str(total_amount)) - prev_total
-                        percent_change = ((Decimal(str(total_amount)) - prev_total) / prev_total) * 100
+                        difference = total_amount - prev_total
+                        percent_change = ((total_amount - prev_total) / prev_total) * 100
 
                         previous_comparison = {
                             'previous_total': float(prev_total),
@@ -758,8 +764,8 @@ class ExpenseFunctions:
             result = {
                 'success': True,
                 'query': query,
-                'count': len(results),
-                'total': total_amount,
+                'count': total_count,
+                'total': float(total_amount),
                 'results': results
             }
 
@@ -2200,9 +2206,15 @@ class ExpenseFunctions:
     
     @staticmethod
     @sync_to_async
-    def search_incomes(user_id: int, query: str, period: Optional[str] = None) -> Dict[str, Any]:
+    def search_incomes(user_id: int, query: str, period: Optional[str] = None, limit: int = 20) -> Dict[str, Any]:
         """
         Поиск доходов по описанию с опциональным периодом и сравнением
+
+        Args:
+            user_id: User ID
+            query: Search query
+            period: Period ('last_week', 'last_month', 'month', 'ноябрь', etc.)
+            limit: Maximum number of results to show in the list
         """
         try:
             profile, _ = Profile.objects.get_or_create(
@@ -2230,10 +2242,11 @@ class ExpenseFunctions:
                     income_date__lte=end_date
                 )
 
-            incomes = incomes_qs.order_by('-income_date')[:20]
+            incomes = incomes_qs.order_by('-income_date')[:limit]
 
-            # Подсчёт общей суммы
-            total_amount = sum(inc.amount for inc in incomes)
+            # Подсчёт общей суммы и количества без лимита
+            total_amount = incomes_qs.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
+            total_count = incomes_qs.count()
 
             results = []
             for inc in incomes:
@@ -2264,15 +2277,15 @@ class ExpenseFunctions:
                         income_date__lte=prev_end_date
                     )
 
-                    prev_total = sum(inc.amount for inc in prev_incomes)
+                    prev_total = prev_incomes.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
                     prev_count = prev_incomes.count()
 
                     logger.info(f"search_incomes: previous period - total={prev_total}, count={prev_count}")
 
                     # Добавляем сравнение только если в предыдущем периоде были доходы
                     if prev_total > 0:
-                        difference = Decimal(str(total_amount)) - prev_total
-                        percent_change = ((Decimal(str(total_amount)) - prev_total) / prev_total) * 100
+                        difference = total_amount - prev_total
+                        percent_change = ((total_amount - prev_total) / prev_total) * 100
 
                         # Определяем тренд
                         if difference > 0:
@@ -2290,7 +2303,7 @@ class ExpenseFunctions:
                             'previous_count': prev_count,
                             'previous_total': float(prev_total),
                             'difference': float(difference),
-                            'percent_change': float(percent_change),
+                            'percent_change': round(float(percent_change), 1),
                             'trend': trend
                         }
 
@@ -2304,7 +2317,7 @@ class ExpenseFunctions:
             result = {
                 'success': True,
                 'query': query,
-                'count': len(results),
+                'count': total_count,
                 'total': float(total_amount),
                 'incomes': results
             }

@@ -36,7 +36,7 @@ ALLOWED_PARAMS: Dict[str, set] = {
     'get_income_category_statistics': {'user_id', 'period', 'period_days', 'start_date', 'end_date'},
     'get_average_incomes': {'user_id'},
     'get_recent_incomes': {'user_id', 'limit'},
-    'search_incomes': {'user_id', 'query', 'limit'},
+    'search_incomes': {'user_id', 'query', 'limit', 'period'},
     'get_income_weekday_statistics': {'user_id'},
     'predict_month_income': {'user_id'},
     'check_income_target': {'user_id', 'target_amount'},

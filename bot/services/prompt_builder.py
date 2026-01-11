@@ -58,7 +58,7 @@ AVAILABLE INCOME FUNCTIONS:
 21. get_income_category_statistics(period='month'|'last_month'|'декабрь'|'january'|'зима'|'summer') - for "Where does most income come from?", "Income categories in December", "Откуда доходы в ноябре?"
 22. get_average_incomes() - for "How much do I earn on average?"
 23. get_recent_incomes(limit=10) - for "Show recent income"
-24. search_incomes(query='text') - for "When did I receive..."
+24. search_incomes(query='text', period='last_week'|'last_month'|'month'|'ноябрь'|...|'december') - for "When did I receive..."
 25. get_income_weekday_statistics() - for "What days of the week have more income?"
 26. predict_month_income() - for "How much will I earn this month?"
 27. check_income_target(target_amount=100000) - for "Will I reach my income goal?"

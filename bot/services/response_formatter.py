@@ -298,6 +298,9 @@ def format_function_result(func_name: str, result: Dict) -> str:
             subtitle = f"Найдено: {count_text} на сумму {total:,.0f} ₽ по запросу \"{query}\""
         else:
             subtitle = f"Найдено: {count_text} на сумму {total:,.0f} ₽"
+        shown_count = len(results)
+        if shown_count and count and shown_count < count:
+            subtitle += f" (показано {shown_count})"
 
         # Форматируем основной список
         formatted_list = _format_expenses_list(
@@ -818,6 +821,9 @@ def format_function_result(func_name: str, result: Dict) -> str:
             subtitle = f"Найдено: {count_text} на сумму {total:,.0f} ₽ по запросу \"{query}\""
         else:
             subtitle = f"Найдено: {count_text} на сумму {total:,.0f} ₽"
+        shown_count = len(results)
+        if shown_count and count and shown_count < count:
+            subtitle += f" (показано {shown_count})"
 
         # Форматируем основной список
         formatted_list = _format_incomes_list(
