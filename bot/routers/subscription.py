@@ -17,7 +17,7 @@ import logging
 from expenses.models import Profile, Subscription, PromoCode, PromoCodeUsage
 from bot.constants import get_offer_url_for
 from django.core.exceptions import ObjectDoesNotExist
-from bot.utils.message_utils import send_message_with_cleanup
+from bot.utils.message_utils import send_message_with_cleanup, safe_delete_message
 from bot.utils import get_text
 from bot.services.affiliate import reward_referrer_subscription_extension
 
@@ -195,13 +195,11 @@ async def show_subscription_menu(callback: CallbackQuery, state: FSMContext, lan
 
     # Удаляем сообщение с инвойсом ПОСЛЕ показа нового, если оно есть
     if invoice_msg_id:
-        try:
-            await callback.bot.delete_message(
-                chat_id=callback.from_user.id,
-                message_id=invoice_msg_id
-            )
-        except (TelegramBadRequest, TelegramNotFound):
-            pass  # Сообщение уже удалено или не найдено
+        await safe_delete_message(
+            bot=callback.bot,
+            chat_id=callback.from_user.id,
+            message_id=invoice_msg_id
+        )
 
     await callback.answer()
 
@@ -259,10 +257,11 @@ async def send_stars_invoice(callback: CallbackQuery, state: FSMContext, sub_typ
     await state.update_data(invoice_msg_id=invoice_msg.message_id)
 
     # Потом удаляем старое сообщение
-    try:
-        await callback.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
-    except (TelegramBadRequest, TelegramNotFound):
-        pass
+    await safe_delete_message(
+        bot=callback.bot,
+        chat_id=chat_id,
+        message_id=old_message_id
+    )
 
     await callback.answer()
 
@@ -381,10 +380,11 @@ async def ask_promocode(callback: CallbackQuery, state: FSMContext):
     await state.update_data(last_menu_message_id=promo_msg.message_id)
 
     # Потом удаляем СТАРОЕ сообщение
-    try:
-        await callback.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
-    except (TelegramBadRequest, TelegramNotFound):
-        pass  # Сообщение уже удалено или не найдено
+    await safe_delete_message(
+        bot=callback.bot,
+        chat_id=chat_id,
+        message_id=old_message_id
+    )
 
     await state.set_state(PromoCodeStates.waiting_for_promo)
     await callback.answer()
@@ -806,10 +806,11 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
             parse_mode="HTML"
         )
         # Потом удаляем старое сообщение
-        try:
-            await callback.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
-        except (TelegramBadRequest, TelegramNotFound):
-            pass
+        await safe_delete_message(
+            bot=callback.bot,
+            chat_id=chat_id,
+            message_id=old_message_id
+        )
         return
 
     # Обычный случай - создаем инвойс для оплаты со скидкой
@@ -844,10 +845,11 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
     await state.update_data(invoice_msg_id=invoice_msg.message_id)
 
     # Потом удаляем старое сообщение
-    try:
-        await callback.bot.delete_message(chat_id=chat_id, message_id=old_message_id)
-    except (TelegramBadRequest, TelegramNotFound):
-        pass
+    await safe_delete_message(
+        bot=callback.bot,
+        chat_id=chat_id,
+        message_id=old_message_id
+    )
 
 
 # Обновляем обработчик pre_checkout для поддержки промокодов

@@ -9,7 +9,7 @@ from decimal import Decimal
 import logging
 
 from bot.utils import get_text
-from bot.utils.message_utils import send_message_with_cleanup
+from bot.utils.message_utils import send_message_with_cleanup, safe_delete_message
 from bot.services.top5 import (
     calculate_top5_sync, build_top5_keyboard, save_snapshot,
 )
@@ -236,7 +236,7 @@ async def close_top5_menu(callback: CallbackQuery, state: FSMContext):
 
     # Удаляем само сообщение
     try:
-        await callback.message.delete()
+        await safe_delete_message(message=callback.message)
     except Exception as e:
         logger.error(f"Error deleting Top-5 menu: {e}")
 

@@ -4,6 +4,7 @@
 from typing import Optional, Dict, Any, TYPE_CHECKING
 from aiogram import Bot
 from aiogram.types import Message, InlineKeyboardMarkup, ReplyKeyboardMarkup, CallbackQuery
+from aiogram.exceptions import TelegramBadRequest, TelegramNotFound
 import asyncio
 import logging
 
@@ -11,6 +12,39 @@ if TYPE_CHECKING:
     from aiogram.fsm.context import FSMContext
 
 logger = logging.getLogger(__name__)
+
+
+async def safe_delete_message(
+    message: Message | None = None,
+    bot: Bot | None = None,
+    chat_id: int | None = None,
+    message_id: int | None = None
+) -> bool:
+    """
+    Безопасное удаление сообщения с обработкой типовых ошибок.
+
+    Usage:
+        await safe_delete_message(message=message)
+        await safe_delete_message(bot=bot, chat_id=123, message_id=456)
+    """
+    try:
+        if message is not None:
+            await message.delete()
+            return True
+        if bot and chat_id and message_id:
+            await bot.delete_message(chat_id=chat_id, message_id=message_id)
+            return True
+        logger.warning("safe_delete_message called without message or bot/chat_id/message_id")
+        return False
+    except (TelegramBadRequest, TelegramNotFound) as exc:
+        if "message to delete not found" in str(exc).lower() or "message can't be deleted" in str(exc).lower():
+            logger.debug(f"Message already deleted or not found: {exc}")
+        else:
+            logger.warning(f"Error deleting message: {exc}")
+        return False
+    except Exception as exc:
+        logger.error(f"Unexpected error deleting message: {exc}")
+        return False
 
 
 async def delete_message_with_effect(bot: Bot, chat_id: int, message_id: int, delay: float = 0.3) -> bool:

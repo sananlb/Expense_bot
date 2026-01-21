@@ -21,7 +21,7 @@ from ..services.recurring import (
 )
 from ..services.category import get_user_categories
 from ..services.income import get_user_income_categories
-from ..utils.message_utils import send_message_with_cleanup
+from ..utils.message_utils import send_message_with_cleanup, safe_delete_message
 from ..utils import get_text
 from ..utils.category_helpers import get_category_display_name
 from ..utils.validators import validate_amount, parse_description_amount
@@ -331,7 +331,7 @@ async def process_day_button(callback: types.CallbackQuery, state: FSMContext, l
         
         # Удаляем старое сообщение с выбором даты
         try:
-            await callback.message.delete()
+            await safe_delete_message(message=callback.message)
         except:
             pass
         
@@ -382,7 +382,7 @@ async def process_day_text(
         if day < 1 or day > 30:
             # Просто удаляем сообщение пользователя, меню с кнопками остается
             try:
-                await message.delete()
+                await safe_delete_message(message=message)
             except Exception:
                 pass
             return
@@ -403,7 +403,7 @@ async def process_day_text(
     except ValueError:
         # Просто удаляем сообщение пользователя, меню с кнопками остается
         try:
-            await message.delete()
+            await safe_delete_message(message=message)
         except Exception:
             pass
 
@@ -716,7 +716,11 @@ async def process_edit_amount(message: types.Message, state: FSMContext, lang: s
     # Удаляем промежуточное сообщение ПОСЛЕ показа нового
     if prompt_message_id:
         try:
-            await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_message_id)
+            await safe_delete_message(
+                bot=message.bot,
+                chat_id=message.chat.id,
+                message_id=prompt_message_id
+            )
         except Exception:
             pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
 
@@ -768,7 +772,11 @@ async def process_edit_description(message: types.Message, state: FSMContext, la
     # Удаляем промежуточное сообщение ПОСЛЕ показа нового
     if prompt_message_id:
         try:
-            await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_message_id)
+            await safe_delete_message(
+                bot=message.bot,
+                chat_id=message.chat.id,
+                message_id=prompt_message_id
+            )
         except Exception:
             pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
 
@@ -830,7 +838,7 @@ async def process_edit_data(message: types.Message, state: FSMContext, lang: str
     """
     # Просто удаляем сообщение пользователя, меню редактирования остается
     try:
-        await message.delete()
+        await safe_delete_message(message=message)
     except Exception:
         pass  # Игнорируем ошибки удаления
 

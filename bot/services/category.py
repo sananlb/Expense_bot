@@ -9,6 +9,7 @@ from bot.utils.db_utils import get_or_create_user_profile_sync
 from bot.utils.category_helpers import get_category_display_name, get_category_name_without_emoji
 from difflib import get_close_matches
 import logging
+from bot.utils.input_sanitizer import InputSanitizer
 
 # ВАЖНО: Импортируем из централизованного модуля (включает ZWJ для композитных эмодзи)
 from bot.utils.emoji_utils import EMOJI_PREFIX_RE, normalize_category_for_matching, strip_leading_emoji
@@ -26,7 +27,7 @@ CATEGORY_MAPPING = {
     'транспорт': ['транспорт', 'такси', 'метро', 'автобус', 'транспорт', 'transport', 'taxi', 'bus', 'metro'],
     'автомобиль': ['автомобиль', 'машина', 'авто', 'бензин', 'дизель', 'заправка', 'азс', 'топливо', 'car', 'gas station', 'fuel', 'petrol'],
     'жилье': ['жилье', 'квартира', 'дом', 'аренда', 'housing', 'rent', 'apartment'],
-    'аптеки': ['аптека', 'аптеки', 'лекарства', 'таблетки', 'витамины', 'pharmacy', 'pharmacies', 'medicine'],
+    'аптеки': ['аптека', 'аптеки', 'лекарства', 'таблетки', 'витамины', 'зубная паста', 'зубная', 'toothpaste', 'pharmacy', 'pharmacies', 'medicine'],
     'медицина': ['медицина', 'врач', 'доктор', 'больница', 'клиника', 'medicine', 'doctor', 'hospital', 'clinic'],
     'красота': ['красота', 'салон', 'парикмахерская', 'косметика', 'маникюр', 'beauty', 'salon', 'cosmetics'],
     'спорт и фитнес': ['спорт', 'фитнес', 'тренажерный зал', 'йога', 'бассейн', 'sports', 'fitness', 'gym', 'yoga'],
@@ -333,7 +334,17 @@ async def create_category(user_id: int, name: str, icon: str = '💰') -> Expens
             if categories_count >= 50:
                 logger.warning(f"User {user_id} reached categories limit (50)")
                 raise ValueError("Достигнут лимит категорий (максимум 50)")
-            
+
+            raw_name = (name or '').strip()
+            if len(raw_name) > InputSanitizer.MAX_CATEGORY_LENGTH:
+                raise ValueError(f"Название категории слишком длинное (максимум {InputSanitizer.MAX_CATEGORY_LENGTH} символов)")
+
+            name_sanitized = InputSanitizer.sanitize_category_name(raw_name).strip()
+            if not name_sanitized:
+                raise ValueError("Название категории не может быть пустым")
+
+            name = name_sanitized
+
             # Определяем язык категории
             import re
 
@@ -380,12 +391,6 @@ async def create_category(user_id: int, name: str, icon: str = '💰') -> Expens
     
     category, is_new = await _create_category()
     
-    # Если создана новая категория, запускаем асинхронную оптимизацию ключевых слов
-    if is_new:
-        # Запускаем в фоне, не ждём завершения
-        import asyncio
-        asyncio.create_task(optimize_keywords_for_new_category(user_id, category.id))
-    
     return category
 
 
@@ -424,6 +429,22 @@ async def update_category_name(user_id: int, category_id: int, new_name: str) ->
     else:
         icon = ''
         name_without_icon = new_name.strip()
+
+    if len(name_without_icon) > InputSanitizer.MAX_CATEGORY_LENGTH:
+        logger.warning(
+            "Category name too long (len=%s, max=%s) for user %s",
+            len(name_without_icon),
+            InputSanitizer.MAX_CATEGORY_LENGTH,
+            user_id
+        )
+        return False
+
+    name_sanitized = InputSanitizer.sanitize_category_name(name_without_icon).strip()
+    if not name_sanitized:
+        logger.warning("Empty category name after sanitization for user %s", user_id)
+        return False
+
+    name_without_icon = name_sanitized
     
     # Определяем язык нового названия
     has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', name_without_icon))

@@ -17,7 +17,7 @@ from ..services.cashback import (
 )
 from ..services.category import get_user_categories
 from expenses.models import Cashback
-from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect
+from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect, safe_delete_message
 from ..utils import get_text, get_user_language
 from ..utils.category_helpers import get_category_display_name
 from ..utils.formatters import format_currency
@@ -344,7 +344,7 @@ async def close_cashback_menu(callback: types.CallbackQuery, state: FSMContext):
         cashback_menu_ids.remove(message_id)
 
     # Удаляем само сообщение
-    await callback.message.delete()
+    await safe_delete_message(message=callback.message)
 
     # Если это было последнее меню кешбека, очищаем все флаги И состояние FSM
     if not cashback_menu_ids:

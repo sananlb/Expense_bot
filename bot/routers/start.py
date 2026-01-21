@@ -14,7 +14,7 @@ from bot.constants import get_privacy_url_for
 from bot.services.profile import get_or_create_profile, get_user_settings
 from bot.keyboards import back_close_keyboard
 from bot.services.category import create_default_categories, create_default_income_categories
-from bot.utils.message_utils import send_message_with_cleanup, delete_message_with_effect
+from bot.utils.message_utils import send_message_with_cleanup, delete_message_with_effect, safe_delete_message
 from bot.utils.commands import update_user_commands
 from bot.services.affiliate import process_referral_link  # Новая реферальная система Telegram Stars
 from bot.services.utm_tracking import parse_utm_source, save_utm_data  # UTM-метки
@@ -396,7 +396,7 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
 
         await callback.answer('Согласие принято')
         try:
-            await callback.message.delete()
+            await safe_delete_message(message=callback.message)
         except Exception:
             pass
 
@@ -578,7 +578,7 @@ async def callback_start(callback: types.CallbackQuery, state: FSMContext, lang:
 @router.callback_query(F.data == "close")
 async def close_message(callback: types.CallbackQuery, state: FSMContext):
     """Закрытие сообщения"""
-    await callback.message.delete()
+    await safe_delete_message(message=callback.message)
     # Полностью очищаем состояние FSM при закрытии меню
     await state.clear()
 
@@ -586,7 +586,7 @@ async def close_message(callback: types.CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "close_menu")
 async def close_menu_compat(callback: types.CallbackQuery, state: FSMContext):
     """Совместимость: обработка старого callback 'close_menu' как обычного закрытия"""
-    await callback.message.delete()
+    await safe_delete_message(message=callback.message)
     # Полностью очищаем состояние FSM при закрытии меню
     await state.clear()
 
@@ -628,7 +628,7 @@ async def help_main_handler(callback: types.CallbackQuery, state: FSMContext, la
 
     # Удаляем предыдущее сообщение (со списком команд /start)
     try:
-        await callback.message.delete()
+        await safe_delete_message(message=callback.message)
     except:
         pass  # Игнорируем ошибки удаления
 
@@ -674,7 +674,7 @@ async def help_close_handler(callback: types.CallbackQuery, state: FSMContext):
 
     # Удаляем сообщение справки
     try:
-        await callback.message.delete()
+        await safe_delete_message(message=callback.message)
     except:
         pass
 

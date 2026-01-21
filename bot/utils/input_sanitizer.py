@@ -48,7 +48,7 @@ class InputSanitizer:
     
     # Максимальные длины для разных типов данных
     MAX_TEXT_LENGTH = 1000
-    MAX_CATEGORY_LENGTH = 100
+    MAX_CATEGORY_LENGTH = 50
     MAX_DESCRIPTION_LENGTH = 200
     
     @staticmethod

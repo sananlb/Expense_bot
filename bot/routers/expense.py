@@ -22,7 +22,7 @@ from bot.utils.income_category_definitions import (
     strip_leading_emoji,
 )
 from ..services.subscription import check_subscription
-from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect
+from ..utils.message_utils import send_message_with_cleanup, delete_message_with_effect, safe_delete_message
 from ..utils import get_text, get_user_language
 from ..utils.expense_parser import parse_expense_message
 from ..utils.formatters import format_currency, format_expenses_summary, format_date
@@ -550,7 +550,7 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
         
         # Удаляем предыдущее сообщение со сводкой
         try:
-            await callback.message.delete()
+            await safe_delete_message(message=callback.message)
         except (TelegramBadRequest, TelegramNotFound):
             pass  # Игнорируем ошибки если сообщение уже удалено
         
@@ -704,10 +704,11 @@ async def process_edit_amount(
 
         # Удаляем промежуточное сообщение ПОСЛЕ показа нового
         if prompt_message_id:
-            try:
-                await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_message_id)
-            except Exception:
-                pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
+            await safe_delete_message(
+                bot=message.bot,
+                chat_id=message.chat.id,
+                message_id=prompt_message_id
+            )
     else:
         error_msg = "❌ Не удалось обновить сумму дохода" if is_income else "❌ Не удалось обновить сумму"
         await message.answer(error_msg)
@@ -768,10 +769,11 @@ async def process_edit_description(message: types.Message, state: FSMContext, la
 
         # Удаляем промежуточное сообщение ПОСЛЕ показа нового
         if prompt_message_id:
-            try:
-                await message.bot.delete_message(chat_id=message.chat.id, message_id=prompt_message_id)
-            except Exception:
-                pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
+            await safe_delete_message(
+                bot=message.bot,
+                chat_id=message.chat.id,
+                message_id=prompt_message_id
+            )
     else:
         error_msg = "❌ Не удалось обновить описание дохода" if is_income else "❌ Не удалось обновить описание"
         await message.answer(error_msg)
@@ -937,13 +939,11 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
 
     # Удаляем сообщение с запросом суммы ПОСЛЕ отправки нового
     if clarification_message_id:
-        try:
-            await message.bot.delete_message(
-                chat_id=user_id,
-                message_id=clarification_message_id
-            )
-        except Exception as e:
-            logger.debug(f"Could not delete clarification message: {e}")
+        await safe_delete_message(
+            bot=message.bot,
+            chat_id=user_id,
+            message_id=clarification_message_id
+        )
 
 
 # Обработчик кнопки отмены ввода траты
@@ -959,14 +959,12 @@ async def cancel_expense_input(callback: types.CallbackQuery, state: FSMContext)
     await clear_state_keep_cashback(state)
     
     # Удаляем сообщение с запросом суммы
-    try:
-        if clarification_message_id:
-            await callback.bot.delete_message(
-                chat_id=callback.from_user.id,
-                message_id=clarification_message_id
-            )
-    except Exception as e:
-        logger.error(f"Error deleting clarification message: {e}")
+    if clarification_message_id:
+        await safe_delete_message(
+            bot=callback.bot,
+            chat_id=callback.from_user.id,
+            message_id=clarification_message_id
+        )
     
     # Просто подтверждаем нажатие кнопки без текста
     await callback.answer()
@@ -1084,13 +1082,11 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
 
         # Пытаемся удалить последнее меню если это не меню кешбека
         if last_menu_id and last_menu_id not in cashback_menu_ids:
-            try:
-                await message.bot.delete_message(
-                    chat_id=message.chat.id,
-                    message_id=last_menu_id
-                )
-            except:
-                pass
+            await safe_delete_message(
+                bot=message.bot,
+                chat_id=message.chat.id,
+                message_id=last_menu_id
+            )
 
         logger.info(f"Cleared state {current_state} for user {message.from_user.id} on expense input")
         current_state = None  # Сбрасываем для продолжения обработки
@@ -2344,7 +2340,7 @@ async def edit_cancel(callback: types.CallbackQuery, state: FSMContext):
         await show_edit_menu_callback(callback, state, expense_id, lang, item_type=item_type)
     else:
         # Если это было управление категориями, просто удаляем сообщение
-        await callback.message.delete()
+        await safe_delete_message(message=callback.message)
         from bot.utils.state_utils import clear_state_keep_cashback
         await clear_state_keep_cashback(state)
     await callback.answer()

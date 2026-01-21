@@ -15,11 +15,12 @@ from ..services.category import (
     delete_category, get_icon_for_category, get_category_by_id,
     add_category_keyword, remove_category_keyword, get_category_keywords
 )
-from ..utils.message_utils import send_message_with_cleanup
+from ..utils.message_utils import send_message_with_cleanup, safe_delete_message
 from ..utils import get_text, get_user_language
 from ..utils.category_helpers import get_category_display_name
 from ..utils.category_ui import build_icon_keyboard
 from ..utils.emoji_utils import EMOJI_PREFIX_RE, strip_leading_emoji
+from ..utils.input_sanitizer import InputSanitizer
 from datetime import date
 
 router = Router(name="categories")
@@ -188,10 +189,11 @@ async def cmd_categories(message: types.Message, state: FSMContext):
 
     # Удаляем предыдущее меню ПОСЛЕ показа нового (ТОЛЬКО если это НЕ меню кешбека)
     if old_menu_id and old_menu_id not in cashback_menu_ids:
-        try:
-            await message.bot.delete_message(chat_id=message.chat.id, message_id=old_menu_id)
-        except (TelegramBadRequest, TelegramNotFound):
-            pass  # Сообщение уже удалено
+        await safe_delete_message(
+            bot=message.bot,
+            chat_id=message.chat.id,
+            message_id=old_menu_id
+        )
 
 
 async def show_categories_menu(message: types.Message | types.CallbackQuery, state: FSMContext = None):
@@ -404,7 +406,7 @@ async def callback_categories_menu(callback: types.CallbackQuery, state: FSMCont
     if current_state and not current_state.startswith("EditExpenseForm"):
         await state.clear()
     
-    await callback.message.delete()
+    await safe_delete_message(message=callback.message)
     # Показываем сразу категории трат вместо меню выбора
     await show_expense_categories_menu(callback, state)
     await callback.answer()
@@ -486,18 +488,25 @@ async def process_category_name(message: types.Message, state: FSMContext, voice
     # Получаем язык пользователя
     lang = await get_user_language(message.from_user.id)
     
-    if len(name) > 50:
-        await send_message_with_cleanup(message, state, "❌ Название слишком длинное. Максимум 50 символов.")
+    raw_name = name.strip()
+    if len(raw_name) > InputSanitizer.MAX_CATEGORY_LENGTH:
+        await send_message_with_cleanup(
+            message,
+            state,
+            f"❌ Название слишком длинное. Максимум {InputSanitizer.MAX_CATEGORY_LENGTH} символов."
+        )
+        return
+
+    name = InputSanitizer.sanitize_category_name(raw_name).strip()
+    if not name:
+        await send_message_with_cleanup(message, state, "❌ Название категории не может быть пустым.")
         return
     
     # Проверяем, есть ли уже эмодзи в начале названия (включая композитные с ZWJ)
     has_emoji = bool(EMOJI_PREFIX_RE.match(name))
     
     # Удаляем сообщение пользователя
-    try:
-        await message.delete()
-    except Exception:
-        pass  # Сообщение уже удалено
+    await safe_delete_message(message=message)
 
     if has_emoji:
         # Если эмодзи уже есть, сразу создаем категорию
@@ -584,10 +593,7 @@ async def process_custom_icon(message: types.Message, state: FSMContext, voice_t
         return
 
     # Удаляем сообщение пользователя
-    try:
-        await message.delete()
-    except Exception:
-        pass  # Сообщение уже удалено
+    await safe_delete_message(message=message)
 
     # Применяем иконку через общий обработчик
     await _apply_icon_and_finalize(message, state, custom_icon)
@@ -889,6 +895,18 @@ async def process_edit_category_name(
     else:
         # Неподдерживаемый тип сообщения
         return
+    raw_new_name = new_name.strip()
+    if len(raw_new_name) > InputSanitizer.MAX_CATEGORY_LENGTH:
+        await message.answer(
+            f"❌ Название слишком длинное. Максимум {InputSanitizer.MAX_CATEGORY_LENGTH} символов."
+        )
+        return
+
+    new_name = InputSanitizer.sanitize_category_name(raw_new_name).strip()
+    if not new_name:
+        await message.answer("❌ Название категории не может быть пустым.")
+        return
+
     user_id = message.from_user.id
     
     # Получаем данные из состояния
@@ -935,10 +953,7 @@ async def process_edit_category_name(
         logger.info(f"Category {cat_id} updated successfully with name: {final_name}")
         
         # Удаляем сообщение пользователя
-        try:
-            await message.delete()
-        except (TelegramBadRequest, TelegramNotFound):
-            pass  # Сообщение уже удалено
+        await safe_delete_message(message=message)
         
         # Очищаем состояние
         await state.clear()
@@ -960,7 +975,7 @@ async def process_edit_category_name(
 async def cancel_category(callback: types.CallbackQuery, state: FSMContext):
     """Отмена операции с категорией"""
     await callback.answer()
-    await callback.message.delete()
+    await safe_delete_message(message=callback.message)
     # Передаем callback вместо callback.message после удаления
     await show_expense_categories_menu(callback, state)
 
@@ -1035,18 +1050,25 @@ async def process_income_category_name(
     if current_state != IncomeCategoryForm.waiting_for_name.state:
         return
     
-    if len(name) > 50:
-        await send_message_with_cleanup(message, state, "❌ Название слишком длинное. Максимум 50 символов.")
+    raw_name = name.strip()
+    if len(raw_name) > InputSanitizer.MAX_CATEGORY_LENGTH:
+        await send_message_with_cleanup(
+            message,
+            state,
+            f"❌ Название слишком длинное. Максимум {InputSanitizer.MAX_CATEGORY_LENGTH} символов."
+        )
+        return
+
+    name = InputSanitizer.sanitize_category_name(raw_name).strip()
+    if not name:
+        await send_message_with_cleanup(message, state, "❌ Название категории не может быть пустым.")
         return
     
     # Проверяем, есть ли уже эмодзи в начале названия (включая композитные с ZWJ)
     has_emoji = bool(EMOJI_PREFIX_RE.match(name))
 
     # Удаляем сообщение пользователя
-    try:
-        await message.delete()
-    except Exception:
-        pass  # Сообщение уже удалено
+    await safe_delete_message(message=message)
 
     if has_emoji:
         # Если эмодзи уже есть, сразу создаем категорию
@@ -1158,10 +1180,7 @@ async def process_custom_income_icon(message: types.Message, state: FSMContext):
         return
 
     # Удаляем сообщение пользователя
-    try:
-        await message.delete()
-    except Exception:
-        pass  # Сообщение уже удалено
+    await safe_delete_message(message=message)
 
     await state.update_data(name=name, operation='create', cat_type='income')
     await _apply_icon_and_finalize(message, state, custom_icon)
@@ -1403,8 +1422,18 @@ async def process_new_income_category_name(
         # Неподдерживаемый тип сообщения
         return
 
-    if len(new_name) > 50:
-        await send_message_with_cleanup(message, state, "❌ Название слишком длинное. Максимум 50 символов.")
+    raw_new_name = new_name.strip()
+    if len(raw_new_name) > InputSanitizer.MAX_CATEGORY_LENGTH:
+        await send_message_with_cleanup(
+            message,
+            state,
+            f"❌ Название слишком длинное. Максимум {InputSanitizer.MAX_CATEGORY_LENGTH} символов."
+        )
+        return
+
+    new_name = InputSanitizer.sanitize_category_name(raw_new_name).strip()
+    if not new_name:
+        await send_message_with_cleanup(message, state, "❌ Название категории не может быть пустым.")
         return
     
     data = await state.get_data()
@@ -1444,10 +1473,7 @@ async def process_new_income_category_name(
         final_name = new_name.strip()
 
     # Удаляем сообщение пользователя
-    try:
-        await message.delete()
-    except Exception:
-        pass  # Сообщение уже удалено
+    await safe_delete_message(message=message)
 
     try:
         from bot.services.income import update_income_category
