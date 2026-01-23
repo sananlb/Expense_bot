@@ -343,14 +343,14 @@ async def create_category(user_id: int, name: str, icon: str = '💰') -> Expens
             if not name_sanitized:
                 raise ValueError("Название категории не может быть пустым")
 
-            name = name_sanitized
+            clean_name = name_sanitized
 
             # Определяем язык категории
             import re
 
             # Определяем, на каком языке название
-            has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', name))
-            has_latin = bool(re.search(r'[a-zA-Z]', name))
+            has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', clean_name))
+            has_latin = bool(re.search(r'[a-zA-Z]', clean_name))
 
             # Получаем язык пользователя напрямую из профиля (он уже загружен)
             user_lang = getattr(profile, 'language_code', None) or 'ru'
@@ -368,25 +368,25 @@ async def create_category(user_id: int, name: str, icon: str = '💰') -> Expens
             existing = ExpenseCategory.objects.filter(
                 profile=profile
             ).filter(
-                Q(name_ru=name) | Q(name_en=name)
+                Q(name_ru=clean_name) | Q(name_en=clean_name)
             ).first()
-            
+
             if existing:
-                logger.warning(f"Category '{name}' already exists for user {user_id}")
+                logger.warning(f"Category '{clean_name}' already exists for user {user_id}")
                 return existing, False
-            
+
             # Создаем категорию с правильными мультиязычными полями
             category = ExpenseCategory.objects.create(
                 profile=profile,
                 icon=icon if icon and icon.strip() else '',
-                name_ru=name if original_language == 'ru' else None,
-                name_en=name if original_language == 'en' else None,
+                name_ru=clean_name if original_language == 'ru' else None,
+                name_en=clean_name if original_language == 'en' else None,
                 original_language=original_language,
                 # Пользовательские категории не переводим автоматически
                 is_translatable=False
             )
-            
-            logger.info(f"Created category '{name}' (id: {category.id}) for user {user_id}")
+
+            logger.info(f"Created category '{clean_name}' (id: {category.id}) for user {user_id}")
             return category, True
     
     category, is_new = await _create_category()
