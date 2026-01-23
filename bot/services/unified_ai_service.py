@@ -704,6 +704,39 @@ class UnifiedAIService(AIBaseService):
             content = response.choices[0].message.content
             transcribed_text = content.strip() if content else ""
 
+            # Проверяем, не является ли ответ отказом AI вместо транскрипции
+            if transcribed_text:
+                AI_REFUSAL_PATTERNS = [
+                    "i'm sorry",
+                    "i cannot",
+                    "i'm unable",
+                    "sorry, but",
+                    "cannot transcribe",
+                    "no audio",
+                    "unable to process",
+                    "unable to transcribe",
+                    "no speech detected",
+                    "could not transcribe",
+                    "there is no audio",
+                ]
+
+                transcribed_lower = transcribed_text.lower()
+                for pattern in AI_REFUSAL_PATTERNS:
+                    if pattern in transcribed_lower:
+                        logger.warning(f"[OpenRouter] AI returned refusal instead of transcription: {transcribed_text[:100]}...")
+                        # Логируем метрики для отказа AI (важно для мониторинга)
+                        self._log_metrics(
+                            operation='transcribe_voice',
+                            response_time=response_time,
+                            success=False,
+                            model=model_name,
+                            input_len=len(audio_bytes),
+                            tokens=response.usage.total_tokens if hasattr(response, 'usage') and response.usage else None,
+                            user_id=user_id,
+                            error=ValueError(f'AI refusal detected: {pattern}')
+                        )
+                        return None
+
             # Логируем метрики
             self._log_metrics(
                 operation='transcribe_voice',

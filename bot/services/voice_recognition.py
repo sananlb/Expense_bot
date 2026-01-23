@@ -45,6 +45,15 @@ class VoiceRecognitionService:
         """
         start_time = time.time()
 
+        # Минимальный размер аудио для распознавания
+        # Нормальное аудио: 5000-8500 байт/сек, пустое/тишина: ~1000 байт/сек
+        MIN_AUDIO_BYTES = 3000
+
+        # Проверяем что аудио не "пустое" (случайное нажатие кнопки записи)
+        if len(audio_bytes) < MIN_AUDIO_BYTES:
+            logger.warning(f"[VoiceRecognition] User {user_id} | Audio too small: {len(audio_bytes)} bytes, skipping recognition")
+            return None
+
         if user_language == 'ru':
             # RU: Yandex → OpenRouter
             text = await cls._transcribe_with_fallback(
