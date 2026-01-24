@@ -27,18 +27,47 @@ logger = logging.getLogger(__name__)
 
 class PDFReportService:
     """Сервис для генерации PDF отчетов"""
-    
+
     TEMPLATE_PATH = Path(__file__).parent.parent.parent / "reports" / "templates" / "report_modern.html"
     LOGO_PATH = Path(__file__).parent.parent.parent / "reports" / "templates" / "logo.png"
-    
+    CHARTJS_PATH = Path(__file__).parent.parent.parent / "reports" / "templates" / "static" / "chart.min.js"
+
     def __init__(self):
         self.template = self._load_template()
-    
+        self.chart_js_code = self._load_chartjs()
+
     def _load_template(self) -> Template:
         """Загрузить HTML шаблон"""
         with open(self.TEMPLATE_PATH, 'r', encoding='utf-8') as f:
             content = f.read()
         return Template(content)
+
+    def _load_chartjs(self) -> str:
+        """
+        Загрузить Chart.js код из локального файла.
+
+        Raises:
+            FileNotFoundError: Если файл Chart.js не найден
+            RuntimeError: Если произошла ошибка при чтении файла
+
+        Returns:
+            str: Код Chart.js библиотеки
+        """
+        try:
+            with open(self.CHARTJS_PATH, 'r', encoding='utf-8') as f:
+                chart_code = f.read()
+                if not chart_code:
+                    raise ValueError("Chart.js file is empty")
+                return chart_code
+        except FileNotFoundError:
+            logger.error(f"Chart.js file not found at {self.CHARTJS_PATH}")
+            raise FileNotFoundError(
+                f"Chart.js library not found at {self.CHARTJS_PATH}. "
+                "Cannot generate PDF with charts."
+            )
+        except Exception as e:
+            logger.error(f"Error loading Chart.js: {e}")
+            raise RuntimeError(f"Failed to load Chart.js library: {e}")
     
     async def generate_monthly_report(self, user_id: int, year: int, month: int, lang: str = 'ru') -> Optional[bytes]:
         """
@@ -731,6 +760,8 @@ class PDFReportService:
             # Режим отчета
             household_mode=household_mode,
             household_name=household_name,
+            # Chart.js код для встраивания
+            chart_js_code=self.chart_js_code,
             # Переводы
             **translations,
             prev_summaries=report_data.get('prev_summaries', [])
@@ -740,29 +771,62 @@ class PDFReportService:
     
     
     async def _html_to_pdf(self, html_content: str) -> bytes:
-        """Конвертация HTML в PDF используя Playwright"""
+        """
+        Конвертация HTML в PDF используя Playwright.
+
+        Chart.js встроен локально, нет зависимости от CDN:
+        - try/finally для гарантированного закрытия браузера
+        - set_default_timeout на странице
+        - domcontentloaded для быстрой загрузки (Chart.js уже в HTML)
+        - Явный timeout на все операции
+        """
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            # Создаем страницу с высоким разрешением для лучшей четкости
-            page = await browser.new_page(
-                viewport={'width': 1920, 'height': 1080},
-                device_scale_factor=2  # Удваиваем разрешение для четкости
-            )
-            
-            # Загружаем HTML
-            await page.set_content(html_content, wait_until='networkidle')
-            
-            # Ждем загрузки графиков
-            await page.wait_for_timeout(2000)
-            
-            # Генерируем PDF с оптимизацией для одной страницы
-            pdf_bytes = await page.pdf(
-                format='A4',
-                print_background=True,
-                margin={'top': '10px', 'bottom': '10px', 'left': '15px', 'right': '15px'},
-                scale=0.95  # Немного уменьшаем масштаб для лучшего размещения на странице
-            )
-            
-            await browser.close()
-            
-            return pdf_bytes
+            browser = None
+            try:
+                browser = await p.chromium.launch(headless=True)
+
+                # Создаем страницу с высоким разрешением для лучшей четкости
+                page = await browser.new_page(
+                    viewport={'width': 1920, 'height': 1080},
+                    device_scale_factor=2  # Удваиваем разрешение для четкости
+                )
+
+                # Устанавливаем глобальный таймаут для всех операций страницы
+                page.set_default_timeout(15000)  # 15 секунд максимум
+
+                # Загружаем HTML (Chart.js уже встроен в HTML, не ждем внешние ресурсы)
+                await page.set_content(
+                    html_content,
+                    wait_until='domcontentloaded',
+                    timeout=10000  # Явный timeout 10 секунд
+                )
+
+                # Проверяем что Chart.js загружен (должен быть мгновенно, т.к. inline)
+                await page.wait_for_function(
+                    "typeof Chart !== 'undefined'",
+                    timeout=2000  # 2 секунды достаточно для inline скрипта
+                )
+                logger.debug("Chart.js loaded successfully from inline code")
+
+                # Ждем отрисовки графиков
+                await page.wait_for_timeout(2000)
+
+                # Генерируем PDF с timeout
+                pdf_bytes = await page.pdf(
+                    format='A4',
+                    print_background=True,
+                    margin={'top': '10px', 'bottom': '10px', 'left': '15px', 'right': '15px'},
+                    scale=0.95,
+                    timeout=10000  # Явный timeout на генерацию PDF
+                )
+
+                return pdf_bytes
+
+            finally:
+                # КРИТИЧНО: Всегда закрываем браузер, даже при ошибке
+                if browser:
+                    try:
+                        await browser.close()
+                        logger.debug("Browser closed successfully")
+                    except Exception as e:
+                        logger.error(f"Error closing browser: {e}")

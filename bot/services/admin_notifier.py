@@ -4,6 +4,7 @@
 import aiohttp
 import logging
 import asyncio
+import html
 from typing import Optional, Dict, List
 from django.conf import settings
 from datetime import datetime, timedelta
@@ -56,12 +57,12 @@ class TelegramNotifier:
             logger.error(f"Ошибка при отправке в Telegram: {e}")
             raise
     
-    async def send_message(self, 
-                          chat_id: int, 
-                          text: str, 
-                          parse_mode: str = 'MarkdownV2',
+    async def send_message(self,
+                          chat_id: int,
+                          text: str,
+                          parse_mode: Optional[str] = None,
                           disable_notification: bool = False,
-                          reply_markup: Dict = None) -> int:
+                          reply_markup: Optional[Dict] = None) -> Optional[int]:
         """
         Отправить текстовое сообщение
         
@@ -78,9 +79,11 @@ class TelegramNotifier:
         data = {
             'chat_id': chat_id,
             'text': text,
-            'parse_mode': parse_mode,
             'disable_notification': disable_notification
         }
+
+        if parse_mode is not None:
+            data['parse_mode'] = parse_mode
         
         if reply_markup:
             data['reply_markup'] = reply_markup
@@ -103,38 +106,93 @@ admin_notifier = TelegramNotifier(
 )
 
 
-async def send_admin_alert(message: str, disable_notification: bool = False) -> bool:
+async def send_admin_alert(
+    message: str,
+    disable_notification: bool = False,
+    parse_mode: Optional[str] = None,
+    allow_html_tags: bool = False
+) -> bool:
     """
-    Отправить алерт администратору через отдельного бота
-    
+    Отправить алерт администратору через отдельного бота.
+
+    ВАЖНО: По умолчанию отправляет plain text (parse_mode=None) и экранирует
+    HTML-символы, если явно выбран parse_mode='HTML' и allow_html_tags=False.
+
     Args:
-        message: Текст сообщения (уже должен быть экранирован для MarkdownV2)
+        message: Текст сообщения
         disable_notification: Отправить без звука
-        
+        parse_mode: Режим парсинга ('HTML', 'MarkdownV2', или None)
+        allow_html_tags: Если False, экранирует все HTML символы (безопасно для ненадежных данных)
+
     Returns:
         True если сообщение отправлено успешно
+
+    Example:
+        # С HTML тегами (явно)
+        await send_admin_alert(
+            "🔴 <b>Error</b>\n"
+            "User: 123 - Status: failed"
+            ,
+            parse_mode='HTML',
+            allow_html_tags=True
+        )
+
+        # Для ненадежных данных - экранировать все
+        await send_admin_alert(
+            user_input_data,
+            parse_mode='HTML',
+            allow_html_tags=False
+        )
     """
     admin_id = os.getenv('ADMIN_TELEGRAM_ID')
-    
+
     if not admin_id:
         logger.warning("ADMIN_TELEGRAM_ID не настроен")
         return False
-    
+
     logger.info(f"Попытка отправки админского уведомления. ADMIN_TELEGRAM_ID: {admin_id}")
     logger.info(f"Используется токен бота: {'MONITORING_BOT_TOKEN' if os.getenv('MONITORING_BOT_TOKEN') else 'TELEGRAM_BOT_TOKEN'}")
-    
+
     try:
+        # Экранируем только если явно запрошено (для ненадежных данных)
+        if parse_mode == 'HTML' and not allow_html_tags:
+            # Полное экранирование для ненадежных данных
+            escaped_message = html.escape(message)
+        elif parse_mode == 'MarkdownV2':
+            # Если кто-то передаст MarkdownV2, используем старую функцию
+            escaped_message = escape_markdown_v2(message)
+        else:
+            # HTML с тегами или None - без экранирования
+            escaped_message = message
+
         await admin_notifier.send_message(
             chat_id=int(admin_id),
-            text=message,
-            parse_mode='MarkdownV2',
+            text=escaped_message,
+            parse_mode=parse_mode,
             disable_notification=disable_notification
         )
         logger.info("Админское уведомление отправлено успешно")
         return True
+
     except Exception as e:
         logger.error(f"Ошибка отправки админского алерта: {e}")
-        logger.error(f"Детали ошибки: chat_id={admin_id}, message_length={len(message)}")
+        logger.error(f"Детали ошибки: chat_id={admin_id}, message_length={len(message)}, parse_mode={parse_mode}")
+
+        # Fallback: пробуем отправить без форматирования
+        if parse_mode is not None:
+            try:
+                logger.info("Пробую отправить без форматирования (fallback)...")
+                await admin_notifier.send_message(
+                    chat_id=int(admin_id),
+                    text=message,  # Оригинальный текст без экранирования
+                    parse_mode=None,
+                    disable_notification=disable_notification
+                )
+                logger.info("Админское уведомление отправлено без форматирования (fallback)")
+                return True
+            except Exception as fallback_error:
+                logger.error(f"Fallback тоже упал: {fallback_error}")
+
         return False
 
 
@@ -184,32 +242,32 @@ async def send_daily_report():
     )()
     
     categories_text = "\n".join([
-        f"  • {escape_markdown_v2(cat['category__name'] or get_text('no_category', 'ru'))}: "
-        f"{escape_markdown_v2(str(round(cat['total'], 2)))} \\({cat['count']} записей\\)"
+        f"  • {cat['category__name'] or get_text('no_category', 'ru')}: "
+        f"{round(cat['total'], 2)} ({cat['count']} записей)"
         for cat in top_categories
     ])
-    
-    # Формируем отчет
+
+    # Формируем отчет (HTML, без экранирования - будет автоматически)
     report = (
-        f"📊 *\\[Coins\\] Ежедневный отчет за {escape_markdown_v2(yesterday.strftime('%d.%m.%Y'))}*\n\n"
-        f"👥 *Пользователи:*\n"
+        f"📊 <b>[Coins] Ежедневный отчет за {yesterday.strftime('%d.%m.%Y')}</b>\n\n"
+        f"👥 <b>Пользователи:</b>\n"
         f"  • Всего: {total_users}\n"
         f"  • Активных вчера: {active_users}\n"
         f"  • Новых вчера: {new_users}\n\n"
-        f"💰 *Расходы:*\n"
+        f"💰 <b>Расходы:</b>\n"
         f"  • Количество: {expenses_stats['count'] or 0}\n"
-        f"  • Сумма: {escape_markdown_v2(str(round(expenses_stats['total'] or 0, 2)))}\n\n"
+        f"  • Сумма: {round(expenses_stats['total'] or 0, 2)}\n\n"
     )
-    
+
     if categories_text:
-        report += f"📂 *Топ категорий:*\n{categories_text}\n\n"
-    
+        report += f"📂 <b>Топ категорий:</b>\n{categories_text}\n\n"
+
     # Проверяем ошибки
     error_count = cache.get('daily_errors_count', 0)
     if error_count > 0:
-        report += f"⚠️ *Ошибок за день:* {error_count}\n\n"
-    
-    report += f"🕐 Отчет сформирован: {escape_markdown_v2(datetime.now().strftime('%H:%M:%S'))}"
+        report += f"⚠️ <b>Ошибок за день:</b> {error_count}\n\n"
+
+    report += f"🕐 Отчет сформирован: {datetime.now().strftime('%H:%M:%S')}"
     
     try:
         logger.info(f"Отправляем ежедневный отчет за {yesterday}")
@@ -228,7 +286,7 @@ async def send_daily_report():
 async def notify_critical_error(error_type: str, details: str, user_id: Optional[int] = None):
     """
     Отправка уведомления о критической ошибке
-    
+
     Args:
         error_type: Тип ошибки
         details: Детали ошибки
@@ -236,33 +294,33 @@ async def notify_critical_error(error_type: str, details: str, user_id: Optional
     """
     # Используем cache для предотвращения спама
     alert_key = f"critical_error:{error_type}"
-    
+
     if cache.get(alert_key):
         # Уже отправляли недавно
         return
-    
+
     message = (
-        f"🚨 *\\[Coins\\] КРИТИЧЕСКАЯ ОШИБКА*\n\n"
-        f"Тип: {escape_markdown_v2(error_type)}\n"
+        f"🚨 <b>[Coins] КРИТИЧЕСКАЯ ОШИБКА</b>\n\n"
+        f"Тип: {error_type}\n"
     )
-    
+
     if user_id:
-        message += f"Пользователь: `{user_id}`\n"
-    
+        message += f"Пользователь: {user_id}\n"
+
     message += (
-        f"Детали: {escape_markdown_v2(details[:200])}\n"  # Ограничиваем длину
-        f"Время: {escape_markdown_v2(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}\n\n"
-        f"Требуется немедленная проверка\\!"
+        f"Детали: {details[:200]}\n"  # Ограничиваем длину
+        f"Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        f"Требуется немедленная проверка!"
     )
-    
+
     try:
         await send_admin_alert(message)
         cache.set(alert_key, True, 1800)  # Не отправляем повторно 30 минут
-        
+
         # Увеличиваем счетчик ошибок дня
         daily_errors = cache.get('daily_errors_count', 0)
         cache.set('daily_errors_count', daily_errors + 1, 86400)
-        
+
     except Exception as e:
         logger.error(f"Не удалось отправить критическое уведомление: {e}")
 
@@ -279,11 +337,11 @@ async def notify_payment_received(user_id: int, amount: float, payment_type: str
     # Форматируем сумму без лишних нулей
     amount_str = f"{int(amount)}" if amount == int(amount) else f"{amount:.2f}"
     message = (
-        f"💳 *Получен платеж\\!*\n\n"
-        f"Пользователь: `{user_id}`\n"
-        f"Сумма: {escape_markdown_v2(amount_str)} руб\\.\n"
-        f"Тип: {escape_markdown_v2(payment_type)}\n"
-        f"Время: {escape_markdown_v2(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}"
+        f"💳 <b>Получен платеж!</b>\n\n"
+        f"Пользователь: {user_id}\n"
+        f"Сумма: {amount_str} руб.\n"
+        f"Тип: {payment_type}\n"
+        f"Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )
 
     try:
@@ -295,12 +353,12 @@ async def notify_payment_received(user_id: int, amount: float, payment_type: str
 async def notify_bot_started():
     """Уведомление о запуске бота"""
     message = (
-        f"✅ *\\[Coins\\] Бот запущен*\n\n"
-        f"Время: {escape_markdown_v2(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}\n"
-        f"Версия: {escape_markdown_v2('1.0.0')}\n"
-        f"Окружение: {escape_markdown_v2('Development' if settings.DEBUG else 'Production')}"
+        f"✅ <b>[Coins] Бот запущен</b>\n\n"
+        f"Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"Версия: 1.0.0\n"
+        f"Окружение: {'Development' if settings.DEBUG else 'Production'}"
     )
-    
+
     try:
         await send_admin_alert(message, disable_notification=True)
     except Exception as e:
@@ -310,10 +368,10 @@ async def notify_bot_started():
 async def notify_bot_stopped():
     """Уведомление об остановке бота"""
     message = (
-        f"🛑 *\\[Coins\\] Бот остановлен*\n\n"
-        f"Время: {escape_markdown_v2(datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}"
+        f"🛑 <b>[Coins] Бот остановлен</b>\n\n"
+        f"Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     )
-    
+
     try:
         await send_admin_alert(message, disable_notification=True)
     except Exception as e:

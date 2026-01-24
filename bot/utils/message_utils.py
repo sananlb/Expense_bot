@@ -47,6 +47,59 @@ async def safe_delete_message(
         return False
 
 
+async def safe_edit_message(
+    message: Message,
+    text: str,
+    **kwargs
+) -> Optional[Message]:
+    """
+    Безопасное редактирование сообщения с обработкой 'not modified'.
+
+    Обрабатывает типичные ошибки:
+    - "message is not modified" - возвращает оригинальное сообщение
+    - "message to edit not found" - возвращает None
+    - Другие ошибки - пробрасываются
+
+    Args:
+        message: Сообщение для редактирования
+        text: Новый текст
+        **kwargs: Дополнительные параметры (parse_mode, reply_markup, etc.)
+
+    Returns:
+        Отредактированное сообщение или оригинальное если не изменилось, None если не найдено
+
+    Example:
+        # Вместо message.edit_text():
+        await safe_edit_message(message, "New text", parse_mode="HTML")
+
+        # С клавиатурой:
+        await safe_edit_message(
+            message,
+            "Updated",
+            reply_markup=keyboard,
+            parse_mode="HTML"
+        )
+    """
+    try:
+        return await message.edit_text(text, **kwargs)
+    except TelegramBadRequest as e:
+        error_text = str(e).lower()
+        if "message is not modified" in error_text:
+            # Текст уже такой же - не ошибка, просто не нужно обновлять
+            logger.debug(f"Message not modified (ignored): {text[:50]}...")
+            return message  # Возвращаем оригинальное сообщение
+        elif "message to edit not found" in error_text:
+            # Сообщение уже удалено
+            logger.warning(f"Message to edit not found: {message.message_id}")
+            return None
+        else:
+            # Другие ошибки пробрасываем
+            raise
+    except Exception as e:
+        logger.error(f"Unexpected error editing message: {e}")
+        raise
+
+
 async def delete_message_with_effect(bot: Bot, chat_id: int, message_id: int, delay: float = 0.3) -> bool:
     """
     Удалить сообщение с эффектом плавного исчезновения

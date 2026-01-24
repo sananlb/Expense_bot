@@ -12,6 +12,10 @@ from decimal import Decimal
 from typing import Optional
 import asyncio
 import logging
+import time
+import os
+from django.core.cache import cache
+from aiogram import Bot
 
 from ..services.expense import add_expense
 from ..services.cashback import calculate_potential_cashback, calculate_expense_cashback
@@ -442,55 +446,88 @@ async def show_today_expenses(callback: types.CallbackQuery, state: FSMContext, 
     await callback.answer()
 
 
-@router.callback_query(lambda c: c.data == "pdf_generate_current")
-async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Генерация PDF отчета за текущий выбранный месяц"""
-    if not await check_subscription(callback.from_user.id):
-        await callback.answer(get_text('subscription_required', lang), show_alert=True)
-        return
+async def _generate_and_send_pdf_for_current_month(
+    user_id: int,
+    chat_id: int,
+    year: int,
+    month: int,
+    lang: str,
+    progress_msg_id: int,
+    lock_key: str
+):
+    """
+    Фоновая генерация и отправка PDF отчета за текущий месяц.
+    Не блокирует handler, выполняется асинхронно.
 
-    await callback.answer()
+    Args:
+        user_id: ID пользователя
+        chat_id: ID чата для отправки
+        year: Год отчета
+        month: Месяц отчета
+        lang: Язык пользователя
+        progress_msg_id: ID сообщения с прогрессом
+        lock_key: Ключ lock в Redis для снятия после завершения
+    """
+    start_time = time.time()
+    bot = None
 
-    # Получаем текущий период из состояния
-    data = await state.get_data()
-    month = data.get('current_month', date.today().month)
-    year = data.get('current_year', date.today().year)
-    
-    import asyncio
-    
-    # Создаем задачу для периодической отправки индикатора "отправляет файл"
-    async def keep_sending_action():
-        for _ in range(15):  # Отправляем 15 раз (каждые 1 сек = 15 секунд)
-            try:
-                await callback.bot.send_chat_action(callback.message.chat.id, "upload_document")
-                await asyncio.sleep(1)
-            except (TelegramForbiddenError, TelegramBadRequest):
-                break  # Пользователь заблокировал бота или некорректный chat_id
-    
-    # Запускаем задачу отправки индикатора
-    action_task = asyncio.create_task(keep_sending_action())
-    
     try:
-        # Импортируем сервис генерации PDF
+        # Логируем начало генерации
+        logger.info(f"[PDF_START] user={user_id}, period={year}/{month}, source=expense.py")
+
+        # Создаем экземпляр бота для фоновой отправки
+        bot = Bot(token=os.getenv('BOT_TOKEN'))
+
+        # Генерируем PDF
         from ..services.pdf_report import PDFReportService
         pdf_service = PDFReportService()
-        
         pdf_bytes = await pdf_service.generate_monthly_report(
-            user_id=callback.from_user.id,
+            user_id=user_id,
             year=year,
             month=month,
             lang=lang
         )
-        
+
+        duration = time.time() - start_time
+
         if not pdf_bytes:
-            await callback.message.answer(
+            # Нет данных для отчета
+            logger.warning(f"[PDF_NO_DATA] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
+            error_msg = (
+                "❌ <b>No data for report</b>\n\n"
+                "No expenses found for selected month."
+                if lang == 'en' else
                 "❌ <b>Нет данных для отчета</b>\n\n"
-                "За выбранный месяц не найдено расходов.",
-                parse_mode="HTML"
+                "За выбранный месяц не найдено расходов."
+            )
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=progress_msg_id,
+                text=error_msg,
+                parse_mode='HTML'
             )
             return
-        
-        # Определяем режим (личный/семейный) для пометки в заголовке PDF
+
+        # Логируем успешную генерацию
+        logger.info(
+            f"[PDF_SUCCESS] user={user_id}, period={year}/{month}, "
+            f"duration={duration:.2f}s, size={len(pdf_bytes)}"
+        )
+
+        # Алерт если генерация заняла > 30 секунд
+        if duration > 30:
+            from bot.services.admin_notifier import send_admin_alert
+            await send_admin_alert(
+                f"⚠️ Slow PDF generation\n"
+                f"User: {user_id}\n"
+                f"Period: {year}/{month}\n"
+                f"Duration: {duration:.2f}s\n"
+                f"Size: {len(pdf_bytes)} bytes\n"
+                f"Source: expense.py",
+                disable_notification=True
+            )
+
+        # Определяем режим (личный/семейный) для caption
         from asgiref.sync import sync_to_async
         @sync_to_async
         def is_household(uid):
@@ -501,7 +538,7 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
                 return bool(profile.household_id) and getattr(settings, 'view_scope', 'personal') == 'household'
             except Exception:
                 return False
-        household_mode = await is_household(callback.from_user.id)
+        household_mode = await is_household(user_id)
 
         # Формируем имя файла
         if lang == 'en':
@@ -512,12 +549,12 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
             months = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
                       'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
             filename = f"Отчет_Coins_{months[month-1]}_{year}.pdf"
-        
+
         # Создаем файл для отправки
         from aiogram.types import BufferedInputFile
         pdf_file = BufferedInputFile(pdf_bytes, filename=filename)
-        
-        # Отправляем PDF
+
+        # Формируем caption
         if lang == 'en':
             mode = " – 🏠 Household" if household_mode else ""
             caption = (
@@ -543,41 +580,156 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
                 "✨ Сгенерировано в Coins ✨\n"
                 "✨ @showmecoinbot ✨"
             )
-        await callback.message.answer_document(
+
+        # Отправляем PDF
+        await bot.send_document(
+            chat_id=chat_id,
             document=pdf_file,
-            caption=caption
+            caption=caption,
+            parse_mode='HTML'
         )
-        
-        # Удаляем предыдущее сообщение со сводкой
+
+        # Удаляем сообщение о прогрессе
         try:
-            await safe_delete_message(message=callback.message)
-        except (TelegramBadRequest, TelegramNotFound):
-            pass  # Игнорируем ошибки если сообщение уже удалено
-        
-        
+            await bot.delete_message(chat_id=chat_id, message_id=progress_msg_id)
+        except Exception as e:
+            logger.debug(f"Could not delete progress message: {e}")
+
+    except asyncio.TimeoutError:
+        duration = time.time() - start_time
+        logger.error(f"[PDF_TIMEOUT] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
+
+        # Уведомляем пользователя
+        if bot:
+            try:
+                error_msg = (
+                    "❌ <b>Error generating report</b>\n\n"
+                    "Please try again later or contact support."
+                    if lang == 'en' else
+                    "❌ <b>Ошибка при генерации отчета</b>\n\n"
+                    "Попробуйте позже или обратитесь в поддержку."
+                )
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=progress_msg_id,
+                    text=error_msg,
+                    parse_mode='HTML'
+                )
+            except Exception:
+                pass
+
+        # Критический алерт админу
+        from bot.services.admin_notifier import send_admin_alert
+        await send_admin_alert(
+            f"🔴 PDF Timeout\n"
+            f"User: {user_id}\n"
+            f"Period: {year}/{month}\n"
+            f"Duration: {duration:.2f}s\n"
+            f"Source: expense.py"
+        )
+
     except Exception as e:
-        logger.error(f"Error generating report: {e}")
-        if lang == 'en':
-            error_text = (
-                "❌ <b>Error generating report</b>\n\n"
-                "Please try again later or contact support."
-            )
-        else:
-            error_text = (
-                "❌ <b>Ошибка при генерации отчета</b>\n\n"
-                "Попробуйте позже или обратитесь в поддержку."
-            )
-        await callback.message.answer(
-            error_text,
-            parse_mode="HTML"
+        duration = time.time() - start_time
+        logger.error(
+            f"[PDF_ERROR] user={user_id}, period={year}/{month}, "
+            f"duration={duration:.2f}s, error={str(e)}"
         )
+
+        # Уведомляем пользователя
+        if bot:
+            try:
+                error_msg = (
+                    "❌ <b>Error generating report</b>\n\n"
+                    "Please try again later or contact support."
+                    if lang == 'en' else
+                    "❌ <b>Ошибка при генерации отчета</b>\n\n"
+                    "Попробуйте позже или обратитесь в поддержку."
+                )
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=progress_msg_id,
+                    text=error_msg,
+                    parse_mode='HTML'
+                )
+            except Exception:
+                pass
+
     finally:
-        # Останавливаем задачу отправки индикатора
-        action_task.cancel()
-        try:
-            await action_task
-        except asyncio.CancelledError:
-            pass
+        # Всегда снимаем lock
+        cache.delete(lock_key)
+        logger.info(f"Released PDF lock for user {user_id}, {year}/{month}")
+
+        # Закрываем сессию бота
+        if bot:
+            await bot.session.close()
+
+
+@router.callback_query(lambda c: c.data == "pdf_generate_current")
+async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Генерация PDF отчета за текущий выбранный месяц"""
+    if not await check_subscription(callback.from_user.id):
+        await callback.answer(get_text('subscription_required', lang), show_alert=True)
+        return
+
+    await callback.answer()
+
+    # Получаем текущий период из состояния
+    data = await state.get_data()
+    month = data.get('current_month', date.today().month)
+    year = data.get('current_year', date.today().year)
+
+    user_id = callback.from_user.id
+
+    # Создаем ключ lock для предотвращения дубликатов
+    lock_key = f"pdf_generation:{user_id}:{year}:{month}"
+
+    # Проверяем существующий lock
+    if cache.get(lock_key):
+        await callback.answer(
+            "⏳ PDF уже генерируется для этого периода. Пожалуйста, подождите..."
+            if lang == 'ru' else
+            "⏳ PDF is already being generated for this period. Please wait...",
+            show_alert=True
+        )
+        return
+
+    # Устанавливаем lock на 10 минут (с запасом)
+    cache.set(lock_key, True, timeout=600)
+
+    try:
+        # Отправляем сообщение о начале генерации
+        progress_msg = await callback.message.edit_text(
+            "⏳ " + (
+                "Generating report..."
+                if lang == 'en' else
+                "Генерирую отчет..."
+            ) + "\n\n" + (
+                "This may take 1-2 minutes. I'll send the PDF when it's ready."
+                if lang == 'en' else
+                "Это может занять 1-2 минуты. Я пришлю PDF когда он будет готов."
+            )
+        )
+
+        # Запускаем фоновую задачу (НЕ блокирует handler!)
+        asyncio.create_task(
+            _generate_and_send_pdf_for_current_month(
+                user_id=user_id,
+                chat_id=callback.message.chat.id,
+                year=year,
+                month=month,
+                lang=lang,
+                progress_msg_id=progress_msg.message_id,
+                lock_key=lock_key
+            )
+        )
+
+        # Handler завершается НЕМЕДЛЕННО - другие запросы пользователя обрабатываются!
+
+    except Exception as e:
+        # Снимаем lock при ошибке создания задачи
+        cache.delete(lock_key)
+        logger.error(f"Error creating PDF background task: {e}")
+        raise
 
 
 # Обработчики ввода новых значений

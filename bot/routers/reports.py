@@ -7,6 +7,11 @@ from aiogram.fsm.context import FSMContext
 from datetime import datetime, date, timedelta
 from calendar import monthrange
 import logging
+import asyncio
+import time
+import os
+from django.core.cache import cache
+from aiogram import Bot
 
 from bot.keyboards import expenses_summary_keyboard
 from bot.utils import get_text, format_amount, get_month_name
@@ -899,12 +904,24 @@ async def callback_export_month_csv(callback: CallbackQuery, state: FSMContext, 
             )
             return
 
-        # Генерация CSV
+        # Генерация CSV с timeout защитой
         @sync_to_async
         def generate_csv_file():
             return ExportService.generate_csv(expenses, incomes, year, month, lang, user_id, household_mode)
 
-        csv_bytes = await generate_csv_file()
+        try:
+            csv_bytes = await asyncio.wait_for(
+                generate_csv_file(),
+                timeout=10.0  # 10 секунд максимум для CSV
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"CSV generation timeout for user {user_id}, {year}/{month}")
+            await callback.message.answer(
+                "❌ Превышено время ожидания при генерации отчета. Попробуйте позже." if lang == 'ru'
+                else "❌ Report generation timeout. Please try again later.",
+                parse_mode="HTML"
+            )
+            return
 
         # Формируем имя файла с названием месяца
         month_names_ru = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
@@ -1036,12 +1053,24 @@ async def callback_export_month_excel(callback: CallbackQuery, state: FSMContext
             )
             return
 
-        # Генерация XLSX
+        # Генерация XLSX с timeout защитой
         @sync_to_async
         def generate_xlsx_file():
             return ExportService.generate_xlsx_with_charts(expenses, incomes, year, month, user_id, lang, household_mode)
 
-        xlsx_buffer = await generate_xlsx_file()
+        try:
+            xlsx_buffer = await asyncio.wait_for(
+                generate_xlsx_file(),
+                timeout=30.0  # 30 секунд для XLSX (графики требуют больше времени)
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"XLSX generation timeout for user {user_id}, {year}/{month}")
+            await callback.message.answer(
+                "❌ Превышено время ожидания при генерации отчета. Попробуйте позже." if lang == 'ru'
+                else "❌ Report generation timeout. Please try again later.",
+                parse_mode="HTML"
+            )
+            return
 
         # Формируем имя файла с названием месяца
         month_names_ru = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
@@ -1143,12 +1172,24 @@ async def callback_monthly_report_csv(callback: CallbackQuery, state: FSMContext
             )
             return
 
-        # Генерация CSV
+        # Генерация CSV с timeout защитой
         @sync_to_async
         def generate_csv_file():
             return ExportService.generate_csv(expenses, incomes, year, month, lang, user_id, household_mode)
 
-        csv_bytes = await generate_csv_file()
+        try:
+            csv_bytes = await asyncio.wait_for(
+                generate_csv_file(),
+                timeout=10.0  # 10 секунд максимум для CSV
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"CSV generation timeout for user {user_id}, {year}/{month}")
+            await callback.message.answer(
+                "❌ Превышено время ожидания при генерации отчета. Попробуйте позже." if lang == 'ru'
+                else "❌ Report generation timeout. Please try again later.",
+                parse_mode="HTML"
+            )
+            return
 
         # Формируем имя файла
         month_names_ru = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
@@ -1250,12 +1291,24 @@ async def callback_monthly_report_xlsx(callback: CallbackQuery, state: FSMContex
             )
             return
 
-        # Генерация XLSX
+        # Генерация XLSX с timeout защитой
         @sync_to_async
         def generate_xlsx_file():
             return ExportService.generate_xlsx_with_charts(expenses, incomes, year, month, user_id, lang, household_mode)
 
-        xlsx_buffer = await generate_xlsx_file()
+        try:
+            xlsx_buffer = await asyncio.wait_for(
+                generate_xlsx_file(),
+                timeout=30.0  # 30 секунд для XLSX (графики требуют больше времени)
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"XLSX generation timeout for user {user_id}, {year}/{month}")
+            await callback.message.answer(
+                "❌ Превышено время ожидания при генерации отчета. Попробуйте позже." if lang == 'ru'
+                else "❌ Report generation timeout. Please try again later.",
+                parse_mode="HTML"
+            )
+            return
 
         # Формируем имя файла
         month_names_ru = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
@@ -1289,22 +1342,40 @@ async def callback_monthly_report_xlsx(callback: CallbackQuery, state: FSMContex
         )
 
 
-@router.callback_query(F.data.startswith("monthly_report_pdf_"))
-async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Генерация PDF отчета из ежемесячного уведомления"""
+async def _generate_and_send_pdf_from_monthly_notification(
+    user_id: int,
+    chat_id: int,
+    year: int,
+    month: int,
+    lang: str,
+    progress_msg_id: int,
+    lock_key: str
+):
+    """
+    Фоновая генерация и отправка PDF отчета из ежемесячного уведомления.
+    Не блокирует handler, выполняется асинхронно.
+
+    Args:
+        user_id: ID пользователя
+        chat_id: ID чата для отправки
+        year: Год отчета
+        month: Месяц отчета
+        lang: Язык пользователя
+        progress_msg_id: ID сообщения с прогрессом
+        lock_key: Ключ lock в Redis для снятия после завершения
+    """
+    start_time = time.time()
+    bot = None
+
     try:
-        from bot.services.pdf_report import PDFReportService
+        # Логируем начало генерации
+        logger.info(f"[PDF_START] user={user_id}, period={year}/{month}, source=reports.py")
 
-        user_id = callback.from_user.id
-
-        # Парсим callback_data (формат: monthly_report_pdf_2025_10)
-        parts = callback.data.split('_')
-        year = int(parts[3])
-        month = int(parts[4])
-
-        await callback.answer(get_text('generating_report', lang), show_alert=False)
+        # Создаем экземпляр бота для фоновой отправки
+        bot = Bot(token=os.getenv('BOT_TOKEN'))
 
         # Генерируем PDF
+        from bot.services.pdf_report import PDFReportService
         pdf_service = PDFReportService()
         pdf_bytes = await pdf_service.generate_monthly_report(
             user_id=user_id,
@@ -1313,12 +1384,37 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
             lang=lang
         )
 
+        duration = time.time() - start_time
+
         if not pdf_bytes:
-            await callback.message.answer(
-                get_text('no_data_for_report', lang),
-                parse_mode="HTML"
+            # Нет данных для отчета
+            logger.warning(f"[PDF_NO_DATA] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
+            await bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=progress_msg_id,
+                text=get_text('no_data_for_report', lang),
+                parse_mode='HTML'
             )
             return
+
+        # Логируем успешную генерацию
+        logger.info(
+            f"[PDF_SUCCESS] user={user_id}, period={year}/{month}, "
+            f"duration={duration:.2f}s, size={len(pdf_bytes)}"
+        )
+
+        # Алерт если генерация заняла > 30 секунд
+        if duration > 30:
+            from bot.services.admin_notifier import send_admin_alert
+            await send_admin_alert(
+                f"⚠️ Slow PDF generation\n"
+                f"User: {user_id}\n"
+                f"Period: {year}/{month}\n"
+                f"Duration: {duration:.2f}s\n"
+                f"Size: {len(pdf_bytes)} bytes\n"
+                f"Source: reports.py",
+                disable_notification=True
+            )
 
         # Формируем имя файла
         month_names_ru = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
@@ -1330,7 +1426,7 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
         filename = f"Report_Coins_{month_name}_{year}.pdf"
         pdf_file = BufferedInputFile(pdf_bytes, filename=filename)
 
-        # Добавляем рекламный текст в caption
+        # Caption
         caption = (
             f"{get_text('export_success', lang).format(month=f'{month_name} {year}')}\n\n"
             f"✨ Сгенерировано в Coins ✨\n"
@@ -1338,18 +1434,136 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
         )
 
         # Отправляем PDF
-        await callback.message.answer_document(
+        await bot.send_document(
+            chat_id=chat_id,
             document=pdf_file,
             caption=caption,
-            parse_mode="HTML"
+            parse_mode='HTML'
+        )
+
+        # Удаляем сообщение о прогрессе
+        try:
+            await bot.delete_message(chat_id=chat_id, message_id=progress_msg_id)
+        except Exception as e:
+            logger.debug(f"Could not delete progress message: {e}")
+
+    except asyncio.TimeoutError:
+        duration = time.time() - start_time
+        logger.error(f"[PDF_TIMEOUT] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
+
+        # Уведомляем пользователя
+        if bot:
+            try:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=progress_msg_id,
+                    text=get_text('export_error', lang),
+                    parse_mode='HTML'
+                )
+            except Exception:
+                pass
+
+        # Критический алерт админу
+        from bot.services.admin_notifier import send_admin_alert
+        await send_admin_alert(
+            f"🔴 PDF Timeout\n"
+            f"User: {user_id}\n"
+            f"Period: {year}/{month}\n"
+            f"Duration: {duration:.2f}s\n"
+            f"Source: reports.py"
         )
 
     except Exception as e:
-        logger.error(f"Error generating monthly PDF report: {e}", exc_info=True)
-        await callback.message.answer(
-            get_text('export_error', lang),
-            parse_mode="HTML"
+        duration = time.time() - start_time
+        logger.error(
+            f"[PDF_ERROR] user={user_id}, period={year}/{month}, "
+            f"duration={duration:.2f}s, error={str(e)}"
         )
+
+        # Уведомляем пользователя
+        if bot:
+            try:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=progress_msg_id,
+                    text=get_text('export_error', lang),
+                    parse_mode='HTML'
+                )
+            except Exception:
+                pass
+
+    finally:
+        # Всегда снимаем lock
+        cache.delete(lock_key)
+        logger.info(f"Released PDF lock for user {user_id}, {year}/{month}")
+
+        # Закрываем сессию бота
+        if bot:
+            await bot.session.close()
+
+
+@router.callback_query(F.data.startswith("monthly_report_pdf_"))
+async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """
+    Генерация PDF отчета из ежемесячного уведомления.
+    Handler завершается немедленно, PDF генерируется в фоне.
+    """
+    await callback.answer()
+
+    user_id = callback.from_user.id
+
+    # Парсим callback_data (формат: monthly_report_pdf_2025_10)
+    parts = callback.data.split('_')
+    year = int(parts[3])
+    month = int(parts[4])
+
+    # Создаем ключ lock для предотвращения дубликатов
+    lock_key = f"pdf_generation:{user_id}:{year}:{month}"
+
+    # Проверяем существующий lock
+    if cache.get(lock_key):
+        await callback.answer(
+            "⏳ PDF уже генерируется для этого периода. Пожалуйста, подождите..."
+            if lang == 'ru' else
+            "⏳ PDF is already being generated for this period. Please wait...",
+            show_alert=True
+        )
+        return
+
+    # Устанавливаем lock на 10 минут (с запасом)
+    cache.set(lock_key, True, timeout=600)
+
+    try:
+        # Отправляем сообщение о начале генерации
+        progress_msg = await callback.message.answer(
+            "⏳ " + get_text('generating_report', lang) +
+            "\n\n" + (
+                "This may take 1-2 minutes. I'll send the PDF when it's ready."
+                if lang == 'en' else
+                "Это может занять 1-2 минуты. Я пришлю PDF когда он будет готов."
+            )
+        )
+
+        # Запускаем фоновую задачу (НЕ блокирует handler!)
+        asyncio.create_task(
+            _generate_and_send_pdf_from_monthly_notification(
+                user_id=user_id,
+                chat_id=callback.message.chat.id,
+                year=year,
+                month=month,
+                lang=lang,
+                progress_msg_id=progress_msg.message_id,
+                lock_key=lock_key
+            )
+        )
+
+        # Handler завершается НЕМЕДЛЕННО - другие запросы пользователя обрабатываются!
+
+    except Exception as e:
+        # Снимаем lock при ошибке создания задачи
+        cache.delete(lock_key)
+        logger.error(f"Error creating PDF background task: {e}")
+        raise
 
 
 @router.callback_query(F.data == "back_to_summary")
