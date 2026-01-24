@@ -40,7 +40,6 @@ from .routers import (
     household_router,
     blogger_stats_router,
     inline_router,
-    # pdf_report_router  # Временно отключено
 )
 from .middlewares import (
     DatabaseMiddleware,
@@ -238,7 +237,6 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(top5_router)
     dp.include_router(blogger_stats_router)  # Статистика для блогеров
     dp.include_router(settings_router)
-    # dp.include_router(pdf_report_router)   # PDF отчеты - временно отключено из-за проблем с playwright
     dp.include_router(info_router)
     dp.include_router(chat_router)     # Низкий приоритет для обработки чата
     
