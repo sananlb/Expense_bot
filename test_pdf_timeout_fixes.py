@@ -194,6 +194,12 @@ async def test_5_pdf_background_task():
         else:
             results.add_fail("PDF фоновая генерация", "pdf_report.py: нет background task")
 
+        # НОВАЯ ПРОВЕРКА: callback.answer() ДО cache операций
+        if 'КРИТИЧНО: Отвечаем на callback СРАЗУ' in source_pdf:
+            results.add_pass("pdf_report.py: callback.answer() перед Redis операциями")
+        else:
+            results.add_fail("PDF callback timing", "pdf_report.py: нет защиты от медленного Redis")
+
         # Проверяем expense.py
         with open('bot/routers/expense.py', 'r', encoding='utf-8') as f:
             source_expense = f.read()
@@ -203,6 +209,11 @@ async def test_5_pdf_background_task():
         else:
             results.add_fail("PDF фоновая генерация", "expense.py: нет background task")
 
+        if 'КРИТИЧНО: Отвечаем на callback СРАЗУ' in source_expense:
+            results.add_pass("expense.py: callback.answer() перед Redis операциями")
+        else:
+            results.add_fail("PDF callback timing", "expense.py: нет защиты от медленного Redis")
+
         # Проверяем reports.py
         with open('bot/routers/reports.py', 'r', encoding='utf-8') as f:
             source_reports = f.read()
@@ -211,6 +222,11 @@ async def test_5_pdf_background_task():
             results.add_pass("reports.py использует фоновую генерацию")
         else:
             results.add_fail("PDF фоновая генерация", "reports.py: нет background task")
+
+        if 'КРИТИЧНО: Отвечаем на callback СРАЗУ' in source_reports:
+            results.add_pass("reports.py: callback.answer() перед Redis операциями")
+        else:
+            results.add_fail("PDF callback timing", "reports.py: нет защиты от медленного Redis")
 
     except Exception as e:
         results.add_fail("PDF фоновая генерация", str(e))

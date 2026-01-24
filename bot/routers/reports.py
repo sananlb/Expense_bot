@@ -1504,25 +1504,26 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
     year = int(parts[3])
     month = int(parts[4])
 
-    # Создаем ключ lock для предотвращения дубликатов
-    lock_key = f"pdf_generation:{user_id}:{year}:{month}"
-
-    # Проверяем существующий lock
-    if cache.get(lock_key):
-        await callback.answer(
-            "⏳ PDF уже генерируется для этого периода. Пожалуйста, подождите..."
-            if lang == 'ru' else
-            "⏳ PDF is already being generated for this period. Please wait...",
-            show_alert=True
-        )
-        return
-
-    # Устанавливаем lock на 10 минут (с запасом)
-    cache.set(lock_key, True, timeout=600)
-
     try:
-        # Показываем всплывающее уведомление (как для CSV/XLSX)
+        # КРИТИЧНО: Отвечаем на callback СРАЗУ, до любых операций с Redis!
+        # Это гарантирует что Telegram получит ответ даже если Redis медленный/недоступен
         await callback.answer(get_text('export_generating', lang), show_alert=False)
+
+        # Создаем ключ lock для предотвращения дубликатов
+        lock_key = f"pdf_generation:{user_id}:{year}:{month}"
+
+        # Проверяем существующий lock (теперь безопасно - callback уже отвечен)
+        if cache.get(lock_key):
+            # Toast уже показан, отправляем дополнительное сообщение с объяснением
+            await callback.message.answer(
+                "⏳ PDF уже генерируется для этого периода. Пожалуйста, подождите..."
+                if lang == 'ru' else
+                "⏳ PDF is already being generated for this period. Please wait..."
+            )
+            return
+
+        # Устанавливаем lock на 10 минут (с запасом)
+        cache.set(lock_key, True, timeout=600)
 
         # Запускаем фоновую задачу (НЕ блокирует handler!)
         asyncio.create_task(
@@ -1539,8 +1540,12 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
         # Handler завершается НЕМЕДЛЕННО - другие запросы пользователя обрабатываются!
 
     except Exception as e:
-        # Снимаем lock при ошибке создания задачи
-        cache.delete(lock_key)
+        # Снимаем lock при ошибке (если успели установить)
+        try:
+            lock_key = f"pdf_generation:{user_id}:{year}:{month}"
+            cache.delete(lock_key)
+        except:
+            pass
         logger.error(f"Error creating PDF background task: {e}")
         raise
 
