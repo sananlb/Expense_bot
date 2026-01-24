@@ -1348,7 +1348,6 @@ async def _generate_and_send_pdf_from_monthly_notification(
     year: int,
     month: int,
     lang: str,
-    progress_msg_id: int,
     lock_key: str
 ):
     """
@@ -1361,7 +1360,6 @@ async def _generate_and_send_pdf_from_monthly_notification(
         year: Год отчета
         month: Месяц отчета
         lang: Язык пользователя
-        progress_msg_id: ID сообщения с прогрессом
         lock_key: Ключ lock в Redis для снятия после завершения
     """
     start_time = time.time()
@@ -1389,9 +1387,8 @@ async def _generate_and_send_pdf_from_monthly_notification(
         if not pdf_bytes:
             # Нет данных для отчета
             logger.warning(f"[PDF_NO_DATA] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
-            await bot.edit_message_text(
+            await bot.send_message(
                 chat_id=chat_id,
-                message_id=progress_msg_id,
                 text=get_text('no_data_for_report', lang),
                 parse_mode='HTML'
             )
@@ -1441,12 +1438,6 @@ async def _generate_and_send_pdf_from_monthly_notification(
             parse_mode='HTML'
         )
 
-        # Удаляем сообщение о прогрессе
-        try:
-            await bot.delete_message(chat_id=chat_id, message_id=progress_msg_id)
-        except Exception as e:
-            logger.debug(f"Could not delete progress message: {e}")
-
     except asyncio.TimeoutError:
         duration = time.time() - start_time
         logger.error(f"[PDF_TIMEOUT] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
@@ -1454,9 +1445,8 @@ async def _generate_and_send_pdf_from_monthly_notification(
         # Уведомляем пользователя
         if bot:
             try:
-                await bot.edit_message_text(
+                await bot.send_message(
                     chat_id=chat_id,
-                    message_id=progress_msg_id,
                     text=get_text('export_error', lang),
                     parse_mode='HTML'
                 )
@@ -1483,9 +1473,8 @@ async def _generate_and_send_pdf_from_monthly_notification(
         # Уведомляем пользователя
         if bot:
             try:
-                await bot.edit_message_text(
+                await bot.send_message(
                     chat_id=chat_id,
-                    message_id=progress_msg_id,
                     text=get_text('export_error', lang),
                     parse_mode='HTML'
                 )
@@ -1508,8 +1497,6 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
     Генерация PDF отчета из ежемесячного уведомления.
     Handler завершается немедленно, PDF генерируется в фоне.
     """
-    await callback.answer()
-
     user_id = callback.from_user.id
 
     # Парсим callback_data (формат: monthly_report_pdf_2025_10)
@@ -1534,15 +1521,8 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
     cache.set(lock_key, True, timeout=600)
 
     try:
-        # Отправляем сообщение о начале генерации
-        progress_msg = await callback.message.answer(
-            "⏳ " + get_text('generating_report', lang) +
-            "\n\n" + (
-                "This may take 1-2 minutes. I'll send the PDF when it's ready."
-                if lang == 'en' else
-                "Это может занять 1-2 минуты. Я пришлю PDF когда он будет готов."
-            )
-        )
+        # Показываем всплывающее уведомление (как для CSV/XLSX)
+        await callback.answer(get_text('export_generating', lang), show_alert=False)
 
         # Запускаем фоновую задачу (НЕ блокирует handler!)
         asyncio.create_task(
@@ -1552,7 +1532,6 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
                 year=year,
                 month=month,
                 lang=lang,
-                progress_msg_id=progress_msg.message_id,
                 lock_key=lock_key
             )
         )

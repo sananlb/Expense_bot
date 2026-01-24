@@ -452,7 +452,6 @@ async def _generate_and_send_pdf_for_current_month(
     year: int,
     month: int,
     lang: str,
-    progress_msg_id: int,
     lock_key: str
 ):
     """
@@ -465,7 +464,6 @@ async def _generate_and_send_pdf_for_current_month(
         year: Год отчета
         month: Месяц отчета
         lang: Язык пользователя
-        progress_msg_id: ID сообщения с прогрессом
         lock_key: Ключ lock в Redis для снятия после завершения
     """
     start_time = time.time()
@@ -500,9 +498,8 @@ async def _generate_and_send_pdf_for_current_month(
                 "❌ <b>Нет данных для отчета</b>\n\n"
                 "За выбранный месяц не найдено расходов."
             )
-            await bot.edit_message_text(
+            await bot.send_message(
                 chat_id=chat_id,
-                message_id=progress_msg_id,
                 text=error_msg,
                 parse_mode='HTML'
             )
@@ -589,12 +586,6 @@ async def _generate_and_send_pdf_for_current_month(
             parse_mode='HTML'
         )
 
-        # Удаляем сообщение о прогрессе
-        try:
-            await bot.delete_message(chat_id=chat_id, message_id=progress_msg_id)
-        except Exception as e:
-            logger.debug(f"Could not delete progress message: {e}")
-
     except asyncio.TimeoutError:
         duration = time.time() - start_time
         logger.error(f"[PDF_TIMEOUT] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
@@ -609,9 +600,8 @@ async def _generate_and_send_pdf_for_current_month(
                     "❌ <b>Ошибка при генерации отчета</b>\n\n"
                     "Попробуйте позже или обратитесь в поддержку."
                 )
-                await bot.edit_message_text(
+                await bot.send_message(
                     chat_id=chat_id,
-                    message_id=progress_msg_id,
                     text=error_msg,
                     parse_mode='HTML'
                 )
@@ -645,9 +635,8 @@ async def _generate_and_send_pdf_for_current_month(
                     "❌ <b>Ошибка при генерации отчета</b>\n\n"
                     "Попробуйте позже или обратитесь в поддержку."
                 )
-                await bot.edit_message_text(
+                await bot.send_message(
                     chat_id=chat_id,
-                    message_id=progress_msg_id,
                     text=error_msg,
                     parse_mode='HTML'
                 )
@@ -670,8 +659,6 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
     if not await check_subscription(callback.from_user.id):
         await callback.answer(get_text('subscription_required', lang), show_alert=True)
         return
-
-    await callback.answer()
 
     # Получаем текущий период из состояния
     data = await state.get_data()
@@ -697,18 +684,8 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
     cache.set(lock_key, True, timeout=600)
 
     try:
-        # Отправляем сообщение о начале генерации
-        progress_msg = await callback.message.edit_text(
-            "⏳ " + (
-                "Generating report..."
-                if lang == 'en' else
-                "Генерирую отчет..."
-            ) + "\n\n" + (
-                "This may take 1-2 minutes. I'll send the PDF when it's ready."
-                if lang == 'en' else
-                "Это может занять 1-2 минуты. Я пришлю PDF когда он будет готов."
-            )
-        )
+        # Показываем всплывающее уведомление (как для CSV/XLSX)
+        await callback.answer(get_text('export_generating', lang), show_alert=False)
 
         # Запускаем фоновую задачу (НЕ блокирует handler!)
         asyncio.create_task(
@@ -718,7 +695,6 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
                 year=year,
                 month=month,
                 lang=lang,
-                progress_msg_id=progress_msg.message_id,
                 lock_key=lock_key
             )
         )

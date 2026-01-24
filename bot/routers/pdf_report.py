@@ -81,7 +81,6 @@ async def _generate_and_send_pdf_background(
     year: int,
     month: int,
     lang: str,
-    progress_msg_id: int,
     lock_key: str
 ):
     """
@@ -94,7 +93,6 @@ async def _generate_and_send_pdf_background(
         year: Год отчета
         month: Месяц отчета
         lang: Язык пользователя
-        progress_msg_id: ID сообщения с прогрессом
         lock_key: Ключ lock в Redis для снятия после завершения
     """
     start_time = time.time()
@@ -121,9 +119,8 @@ async def _generate_and_send_pdf_background(
         if not pdf_bytes:
             # Нет данных для отчета
             logger.warning(f"[PDF_NO_DATA] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
-            await bot.edit_message_text(
+            await bot.send_message(
                 chat_id=chat_id,
-                message_id=progress_msg_id,
                 text=get_text('no_data_for_report', lang),
                 parse_mode='HTML'
             )
@@ -171,12 +168,6 @@ async def _generate_and_send_pdf_background(
             parse_mode='HTML'
         )
 
-        # Удаляем сообщение о прогрессе
-        try:
-            await bot.delete_message(chat_id=chat_id, message_id=progress_msg_id)
-        except Exception as e:
-            logger.debug(f"Could not delete progress message: {e}")
-
     except asyncio.TimeoutError:
         duration = time.time() - start_time
         logger.error(f"[PDF_TIMEOUT] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
@@ -184,9 +175,8 @@ async def _generate_and_send_pdf_background(
         # Уведомляем пользователя
         if bot:
             try:
-                await bot.edit_message_text(
+                await bot.send_message(
                     chat_id=chat_id,
-                    message_id=progress_msg_id,
                     text=get_text('report_generation_error', lang),
                     parse_mode='HTML'
                 )
@@ -212,9 +202,8 @@ async def _generate_and_send_pdf_background(
         # Уведомляем пользователя
         if bot:
             try:
-                await bot.edit_message_text(
+                await bot.send_message(
                     chat_id=chat_id,
-                    message_id=progress_msg_id,
                     text=get_text('report_generation_error', lang),
                     parse_mode='HTML'
                 )
@@ -237,8 +226,6 @@ async def process_pdf_report_request(callback: types.CallbackQuery, state: FSMCo
     Обработка запроса на генерацию отчета.
     Handler завершается немедленно, PDF генерируется в фоне.
     """
-    await callback.answer()
-
     # Парсим год и месяц
     parts = callback.data.split("_")
     year = int(parts[2])
@@ -264,15 +251,8 @@ async def process_pdf_report_request(callback: types.CallbackQuery, state: FSMCo
     cache.set(lock_key, True, timeout=600)
 
     try:
-        # Отправляем сообщение о начале генерации
-        progress_msg = await callback.message.edit_text(
-            "⏳ " + get_text('generating_report', lang) +
-            "\n\n" + (
-                "Это может занять 1-2 минуты. Я пришлю PDF когда он будет готов."
-                if lang == 'ru' else
-                "This may take 1-2 minutes. I'll send the PDF when it's ready."
-            )
-        )
+        # Показываем всплывающее уведомление (как для CSV/XLSX)
+        await callback.answer(get_text('export_generating', lang), show_alert=False)
 
         # Запускаем фоновую задачу (НЕ блокирует handler!)
         asyncio.create_task(
@@ -282,7 +262,6 @@ async def process_pdf_report_request(callback: types.CallbackQuery, state: FSMCo
                 year=year,
                 month=month,
                 lang=lang,
-                progress_msg_id=progress_msg.message_id,
                 lock_key=lock_key
             )
         )
