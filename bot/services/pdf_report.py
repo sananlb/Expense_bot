@@ -811,13 +811,12 @@ class PDFReportService:
                 # Ждем отрисовки графиков
                 await page.wait_for_timeout(2000)
 
-                # Генерируем PDF с timeout
+                # Генерируем PDF (timeout контролируется через set_default_timeout выше)
                 pdf_bytes = await page.pdf(
                     format='A4',
                     print_background=True,
                     margin={'top': '10px', 'bottom': '10px', 'left': '15px', 'right': '15px'},
-                    scale=0.95,
-                    timeout=10000  # Явный timeout на генерацию PDF
+                    scale=0.95
                 )
 
                 return pdf_bytes
