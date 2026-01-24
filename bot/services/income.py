@@ -1070,7 +1070,7 @@ def get_user_income_categories(telegram_id: int) -> List[IncomeCategory]:
         return []
 
 
-def create_income_category(
+async def create_income_category(
     telegram_id: int,
     name: str,
     icon: Optional[str] = None
@@ -1089,93 +1089,97 @@ def create_income_category(
     Raises:
         ValueError: Если категория с таким названием уже существует
     """
-    try:
-        profile = get_or_create_user_profile_sync(telegram_id)
-        
-        # Разбираем имя и иконку используя централизованный паттерн (включает ZWJ/VS-16)
-        match = EMOJI_PREFIX_RE.match(name)
-        parsed_icon = ''
-        text = name
-        if match:
-            parsed_icon = match.group().strip()
-            text = name[len(match.group()):].strip()
-        if icon and not parsed_icon:
-            parsed_icon = icon
+    @sync_to_async
+    def _create_income_category() -> IncomeCategory:
+        try:
+            profile = get_or_create_user_profile_sync(telegram_id)
+            
+            # Разбираем имя и иконку используя централизованный паттерн (включает ZWJ/VS-16)
+            match = EMOJI_PREFIX_RE.match(name)
+            parsed_icon = ''
+            text = name
+            if match:
+                parsed_icon = match.group().strip()
+                text = name[len(match.group()):].strip()
+            if icon and not parsed_icon:
+                parsed_icon = icon
 
-        if len(text) > InputSanitizer.MAX_CATEGORY_LENGTH:
-            raise ValueError(f"Название категории слишком длинное (максимум {InputSanitizer.MAX_CATEGORY_LENGTH} символов)")
+            if len(text) > InputSanitizer.MAX_CATEGORY_LENGTH:
+                raise ValueError(f"Название категории слишком длинное (максимум {InputSanitizer.MAX_CATEGORY_LENGTH} символов)")
 
-        text_sanitized = InputSanitizer.sanitize_category_name(text).strip()
-        if not text_sanitized:
-            raise ValueError("Название категории не может быть пустым")
+            text_sanitized = InputSanitizer.sanitize_category_name(text).strip()
+            if not text_sanitized:
+                raise ValueError("Название категории не может быть пустым")
 
-        text = text_sanitized
+            text = text_sanitized
 
-        display_name = f"{parsed_icon} {text}".strip() if parsed_icon else text
-        existing = IncomeCategory.objects.filter(
-            profile=profile,
-            name__iexact=display_name,
-            is_active=True
-        ).exists()
-        if existing:
-            raise ValueError("Категория с таким названием уже существует")
+            display_name = f"{parsed_icon} {text}".strip() if parsed_icon else text
+            existing = IncomeCategory.objects.filter(
+                profile=profile,
+                name__iexact=display_name,
+                is_active=True
+            ).exists()
+            if existing:
+                raise ValueError("Категория с таким названием уже существует")
 
-        # Определяем язык текста
-        has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', text))
-        has_latin = bool(re.search(r'[a-zA-Z]', text))
-        if has_cyrillic and not has_latin:
-            original_language = 'ru'
-        elif has_latin and not has_cyrillic:
-            original_language = 'en'
-        else:
-            # По умолчанию язык профиля
-            original_language = profile.language_code or 'ru'
+            # Определяем язык текста
+            has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', text))
+            has_latin = bool(re.search(r'[a-zA-Z]', text))
+            if has_cyrillic and not has_latin:
+                original_language = 'ru'
+            elif has_latin and not has_cyrillic:
+                original_language = 'en'
+            else:
+                # По умолчанию язык профиля
+                original_language = profile.language_code or 'ru'
 
-        # Создаём как непереводимую пользовательскую категорию
-        kwargs = dict(
-            profile=profile,
-            icon=parsed_icon or '',
-            is_active=True,
-            is_translatable=False,
-            original_language=original_language,
-        )
-        if original_language == 'ru':
-            kwargs['name_ru'] = text
-        else:
-            kwargs['name_en'] = text
+            # Создаём как непереводимую пользовательскую категорию
+            kwargs = dict(
+                profile=profile,
+                icon=parsed_icon or '',
+                is_active=True,
+                is_translatable=False,
+                original_language=original_language,
+            )
+            if original_language == 'ru':
+                kwargs['name_ru'] = text
+            else:
+                kwargs['name_en'] = text
 
-        category = IncomeCategory.objects.create(**kwargs)
+            category = IncomeCategory.objects.create(**kwargs)
 
-        # Генерируем ключевые слова для новой категории (пропускаем в тестах)
-        import sys
-        if 'pytest' not in sys.modules:
-            try:
-                from bot.services.income_categorization import generate_keywords_for_income_category
-                import asyncio
+            # Генерируем ключевые слова для новой категории (пропускаем в тестах)
+            import sys
+            if 'pytest' not in sys.modules:
+                try:
+                    from bot.services.income_categorization import generate_keywords_for_income_category
+                    import asyncio
 
-                # Запускаем асинхронную функцию в синхронном контексте
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                keywords = loop.run_until_complete(
-                    generate_keywords_for_income_category(category, name)
-                )
-                loop.close()
+                    # Запускаем асинхронную функцию в синхронном контексте
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    keywords = loop.run_until_complete(
+                        generate_keywords_for_income_category(category, name)
+                    )
+                    loop.close()
 
-                logger.info(f"Generated {len(keywords)} keywords for income category '{display_name}'")
-            except Exception as e:
-                logger.warning(f"Could not generate keywords for income category: {e}")
-        
-        logger.info(f"Created income category '{category.name}' for user {telegram_id}")
-        return category
-        
-    except ValueError:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating income category for user {telegram_id}: {e}")
-        raise ValueError("Ошибка при создании категории")
+                    logger.info(f"Generated {len(keywords)} keywords for income category '{display_name}'")
+                except Exception as e:
+                    logger.warning(f"Could not generate keywords for income category: {e}")
+            
+            logger.info(f"Created income category '{category.name}' for user {telegram_id}")
+            return category
+            
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error creating income category for user {telegram_id}: {e}")
+            raise ValueError("Ошибка при создании категории")
+
+    return await _create_income_category()
 
 
-def update_income_category(
+async def update_income_category(
     telegram_id: int,
     category_id: int,
     new_name: Optional[str] = None,
@@ -1196,89 +1200,93 @@ def update_income_category(
     Raises:
         ValueError: Если категория не найдена или название уже существует
     """
-    try:
-        profile = get_or_create_user_profile_sync(telegram_id)
-        
-        category = IncomeCategory.objects.filter(
-            id=category_id,
-            profile=profile,
-            is_active=True
-        ).first()
-        
-        if not category:
-            raise ValueError("Категория не найдена")
+    @sync_to_async
+    def _update_income_category() -> IncomeCategory:
+        try:
+            profile = get_or_create_user_profile_sync(telegram_id)
             
-        if new_name:
-            # Разбираем эмодзи и текст используя централизованный паттерн (включает ZWJ/VS-16)
-            match = EMOJI_PREFIX_RE.match(new_name)
-            parsed_icon = None
-            text = new_name
-            if match:
-                parsed_icon = match.group().strip()
-                text = new_name[len(match.group()):].strip()
-
-            if len(text) > InputSanitizer.MAX_CATEGORY_LENGTH:
-                raise ValueError(f"Название категории слишком длинное (максимум {InputSanitizer.MAX_CATEGORY_LENGTH} символов)")
-
-            text_sanitized = InputSanitizer.sanitize_category_name(text).strip()
-            if not text_sanitized:
-                raise ValueError("Название категории не может быть пустым")
-
-            text = text_sanitized
-
-            # Проверяем уникальность по собранному отображаемому имени
-            display_name = f"{parsed_icon} {text}".strip() if parsed_icon else text
-            existing = IncomeCategory.objects.filter(
+            category = IncomeCategory.objects.filter(
+                id=category_id,
                 profile=profile,
-                name__iexact=display_name,
                 is_active=True
-            ).exclude(id=category_id).exists()
-            if existing:
-                raise ValueError("Категория с таким названием уже существует")
-
-            # Определяем язык текста
-            has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', text))
-            has_latin = bool(re.search(r'[a-zA-Z]', text))
-            if has_cyrillic and not has_latin:
-                lang = 'ru'
-                category.name_ru = text
-                category.name_en = category.name_en or text
-            elif has_latin and not has_cyrillic:
-                lang = 'en'
-                category.name_en = text
-                category.name_ru = category.name_ru or text
-            else:
-                # Смешанный/другой — фиксируем как язык профиля
-                lang = profile.language_code or 'ru'
-                if lang == 'ru':
-                    category.name_ru = text
-                else:
-                    category.name_en = text
-
-            # Обновляем иконку
-            if parsed_icon is not None:
-                category.icon = parsed_icon
-            elif new_icon is not None:
-                category.icon = new_icon
-
-            # Пользовательское редактирование — делаем непереводимым и фиксируем исходный язык
-            category.original_language = lang
-            category.is_translatable = False
-
-        elif new_icon is not None:
-            # Только обновляем иконку
-            category.icon = new_icon
+            ).first()
             
-        category.save()
-        
-        logger.info(f"Updated income category {category_id} for user {telegram_id}")
-        return category
-        
-    except ValueError:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating income category {category_id} for user {telegram_id}: {e}")
-        raise ValueError("Ошибка при обновлении категории")
+            if not category:
+                raise ValueError("Категория не найдена")
+                
+            if new_name:
+                # Разбираем эмодзи и текст используя централизованный паттерн (включает ZWJ/VS-16)
+                match = EMOJI_PREFIX_RE.match(new_name)
+                parsed_icon = None
+                text = new_name
+                if match:
+                    parsed_icon = match.group().strip()
+                    text = new_name[len(match.group()):].strip()
+
+                if len(text) > InputSanitizer.MAX_CATEGORY_LENGTH:
+                    raise ValueError(f"Название категории слишком длинное (максимум {InputSanitizer.MAX_CATEGORY_LENGTH} символов)")
+
+                text_sanitized = InputSanitizer.sanitize_category_name(text).strip()
+                if not text_sanitized:
+                    raise ValueError("Название категории не может быть пустым")
+
+                text = text_sanitized
+
+                # Проверяем уникальность по собранному отображаемому имени
+                display_name = f"{parsed_icon} {text}".strip() if parsed_icon else text
+                existing = IncomeCategory.objects.filter(
+                    profile=profile,
+                    name__iexact=display_name,
+                    is_active=True
+                ).exclude(id=category_id).exists()
+                if existing:
+                    raise ValueError("Категория с таким названием уже существует")
+
+                # Определяем язык текста
+                has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', text))
+                has_latin = bool(re.search(r'[a-zA-Z]', text))
+                if has_cyrillic and not has_latin:
+                    lang = 'ru'
+                    category.name_ru = text
+                    category.name_en = category.name_en or text
+                elif has_latin and not has_cyrillic:
+                    lang = 'en'
+                    category.name_en = text
+                    category.name_ru = category.name_ru or text
+                else:
+                    # Смешанный/другой — фиксируем как язык профиля
+                    lang = profile.language_code or 'ru'
+                    if lang == 'ru':
+                        category.name_ru = text
+                    else:
+                        category.name_en = text
+
+                # Обновляем иконку
+                if parsed_icon is not None:
+                    category.icon = parsed_icon
+                elif new_icon is not None:
+                    category.icon = new_icon
+
+                # Пользовательское редактирование — делаем непереводимым и фиксируем исходный язык
+                category.original_language = lang
+                category.is_translatable = False
+
+            elif new_icon is not None:
+                # Только обновляем иконку
+                category.icon = new_icon
+                
+            category.save()
+            
+            logger.info(f"Updated income category {category_id} for user {telegram_id}")
+            return category
+            
+        except ValueError:
+            raise
+        except Exception as e:
+            logger.error(f"Error updating income category {category_id} for user {telegram_id}: {e}")
+            raise ValueError("Ошибка при обновлении категории")
+
+    return await _update_income_category()
 
 
 @sync_to_async
