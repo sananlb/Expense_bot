@@ -1148,25 +1148,11 @@ async def create_income_category(
 
             category = IncomeCategory.objects.create(**kwargs)
 
-            # Генерируем ключевые слова для новой категории (пропускаем в тестах)
-            import sys
-            if 'pytest' not in sys.modules:
-                try:
-                    from bot.services.income_categorization import generate_keywords_for_income_category
-                    import asyncio
+            # Keywords НЕ генерируются при создании категории.
+            # Они добавляются позже через Celery задачу update_income_keywords()
+            # когда пользователь вручную меняет категорию у дохода (см. update_income()).
+            # Это такой же паттерн как для категорий расходов.
 
-                    # Запускаем асинхронную функцию в синхронном контексте
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    keywords = loop.run_until_complete(
-                        generate_keywords_for_income_category(category, name)
-                    )
-                    loop.close()
-
-                    logger.info(f"Generated {len(keywords)} keywords for income category '{display_name}'")
-                except Exception as e:
-                    logger.warning(f"Could not generate keywords for income category: {e}")
-            
             logger.info(f"Created income category '{category.name}' for user {telegram_id}")
             return category
             
