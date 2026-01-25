@@ -1348,7 +1348,8 @@ async def _generate_and_send_pdf_from_monthly_notification(
     year: int,
     month: int,
     lang: str,
-    lock_key: str
+    lock_key: str,
+    progress_msg_id: int = None
 ):
     """
     Фоновая генерация и отправка PDF отчета из ежемесячного уведомления.
@@ -1361,6 +1362,7 @@ async def _generate_and_send_pdf_from_monthly_notification(
         month: Месяц отчета
         lang: Язык пользователя
         lock_key: Ключ lock в Redis для снятия после завершения
+        progress_msg_id: ID сообщения "Генерирую отчет..." для удаления
     """
     start_time = time.time()
     bot = None
@@ -1387,11 +1389,20 @@ async def _generate_and_send_pdf_from_monthly_notification(
         if not pdf_bytes:
             # Нет данных для отчета
             logger.warning(f"[PDF_NO_DATA] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
-            await bot.send_message(
-                chat_id=chat_id,
-                text=get_text('no_data_for_report', lang),
-                parse_mode='HTML'
-            )
+            # Редактируем progress message
+            if progress_msg_id:
+                await bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=progress_msg_id,
+                    text=get_text('no_data_for_report', lang),
+                    parse_mode='HTML'
+                )
+            else:
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=get_text('no_data_for_report', lang),
+                    parse_mode='HTML'
+                )
             return
 
         # Логируем успешную генерацию
@@ -1438,6 +1449,13 @@ async def _generate_and_send_pdf_from_monthly_notification(
             parse_mode='HTML'
         )
 
+        # Удаляем сообщение о прогрессе
+        if progress_msg_id:
+            try:
+                await bot.delete_message(chat_id=chat_id, message_id=progress_msg_id)
+            except Exception as e:
+                logger.debug(f"Could not delete progress message: {e}")
+
     except asyncio.TimeoutError:
         duration = time.time() - start_time
         logger.error(f"[PDF_TIMEOUT] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
@@ -1445,11 +1463,20 @@ async def _generate_and_send_pdf_from_monthly_notification(
         # Уведомляем пользователя
         if bot:
             try:
-                await bot.send_message(
-                    chat_id=chat_id,
-                    text=get_text('export_error', lang),
-                    parse_mode='HTML'
-                )
+                # Редактируем progress message
+                if progress_msg_id:
+                    await bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=progress_msg_id,
+                        text=get_text('export_error', lang),
+                        parse_mode='HTML'
+                    )
+                else:
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=get_text('export_error', lang),
+                        parse_mode='HTML'
+                    )
             except Exception:
                 pass
 
@@ -1473,11 +1500,20 @@ async def _generate_and_send_pdf_from_monthly_notification(
         # Уведомляем пользователя
         if bot:
             try:
-                await bot.send_message(
-                    chat_id=chat_id,
-                    text=get_text('export_error', lang),
-                    parse_mode='HTML'
-                )
+                # Редактируем progress message
+                if progress_msg_id:
+                    await bot.edit_message_text(
+                        chat_id=chat_id,
+                        message_id=progress_msg_id,
+                        text=get_text('export_error', lang),
+                        parse_mode='HTML'
+                    )
+                else:
+                    await bot.send_message(
+                        chat_id=chat_id,
+                        text=get_text('export_error', lang),
+                        parse_mode='HTML'
+                    )
             except Exception:
                 pass
 
@@ -1499,31 +1535,43 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
     """
     user_id = callback.from_user.id
 
+    # КРИТИЧНО: Отвечаем на callback СРАЗУ!
+    await callback.answer()
+
     # Парсим callback_data (формат: monthly_report_pdf_2025_10)
     parts = callback.data.split('_')
     year = int(parts[3])
     month = int(parts[4])
 
+    # Создаем ключ lock для предотвращения дубликатов
+    lock_key = f"pdf_generation:{user_id}:{year}:{month}"
+
+    # Проверяем существующий lock
+    if cache.get(lock_key):
+        await callback.answer(
+            "⏳ PDF уже генерируется для этого периода. Пожалуйста, подождите..."
+            if lang == 'ru' else
+            "⏳ PDF is already being generated for this period. Please wait...",
+            show_alert=True
+        )
+        return
+
+    # Устанавливаем lock на 10 минут (с запасом)
+    cache.set(lock_key, True, timeout=600)
+
     try:
-        # КРИТИЧНО: Отвечаем на callback СРАЗУ, до любых операций с Redis!
-        # Это гарантирует что Telegram получит ответ даже если Redis медленный/недоступен
-        await callback.answer(get_text('export_generating', lang), show_alert=False)
-
-        # Создаем ключ lock для предотвращения дубликатов
-        lock_key = f"pdf_generation:{user_id}:{year}:{month}"
-
-        # Проверяем существующий lock (теперь безопасно - callback уже отвечен)
-        if cache.get(lock_key):
-            # Toast уже показан, отправляем дополнительное сообщение с объяснением
-            await callback.message.answer(
-                "⏳ PDF уже генерируется для этого периода. Пожалуйста, подождите..."
-                if lang == 'ru' else
-                "⏳ PDF is already being generated for this period. Please wait..."
+        # Заменяем сообщение на текст о генерации
+        progress_msg = await callback.message.edit_text(
+            "⏳ " + (
+                "Generating report..."
+                if lang == 'en' else
+                "Генерирую отчет..."
+            ) + "\n\n" + (
+                "This may take up to a minute. I'll send the PDF when it's ready."
+                if lang == 'en' else
+                "Это может занять до минуты. Я пришлю PDF когда он будет готов."
             )
-            return
-
-        # Устанавливаем lock на 10 минут (с запасом)
-        cache.set(lock_key, True, timeout=600)
+        )
 
         # Запускаем фоновую задачу (НЕ блокирует handler!)
         asyncio.create_task(
@@ -1533,19 +1581,16 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
                 year=year,
                 month=month,
                 lang=lang,
-                lock_key=lock_key
+                lock_key=lock_key,
+                progress_msg_id=progress_msg.message_id
             )
         )
 
         # Handler завершается НЕМЕДЛЕННО - другие запросы пользователя обрабатываются!
 
     except Exception as e:
-        # Снимаем lock при ошибке (если успели установить)
-        try:
-            lock_key = f"pdf_generation:{user_id}:{year}:{month}"
-            cache.delete(lock_key)
-        except:
-            pass
+        # Снимаем lock при ошибке
+        cache.delete(lock_key)
         logger.error(f"Error creating PDF background task: {e}")
         raise
 
