@@ -75,16 +75,12 @@ def parse_description_amount(text: str, allow_only_amount: bool = False) -> Dict
         text = re.sub(r'\bплюс\b', '', text, flags=re.IGNORECASE)
         text = ' '.join(text.split())
 
-    # Знак + распознается как доход только если нет СЛОВА между + и суммой
-    # Пробелы разрешены, но слова - нет
-    # Паттерн 1: +5000 или "+ 5000" (в начале строки)
-    if re.match(r'^\+\s*(?=\d)', text.strip()):
+    # Знак + распознается как доход только если перед ним ничего или пробел,
+    # и после него (с опциональными пробелами) сразу идут цифры.
+    # НЕ матчит "C++" или "abc+500".
+    if re.search(r'(^|\s)\+\s*(?=\d)', text):
         is_income = True
-        text = re.sub(r'^\+\s*', '', text.strip())  # Убираем + и пробелы после него
-    # Паттерн 2: Зарплата +5000 или "Зарплата + 5000" (после описания)
-    elif re.search(r'\s\+\s*(?=\d)', text):
-        is_income = True
-        text = re.sub(r'\s\+\s*', ' ', text)  # Убираем + и пробелы после него
+        text = re.sub(r'(^|\s)\+\s*(?=\d)', r'\1', text)
         text = ' '.join(text.split())
 
     # Regex поддерживает суммы с разделителями и без + опциональную валюту в конце
