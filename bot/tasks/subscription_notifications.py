@@ -8,7 +8,8 @@ from aiogram import Bot
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 import logging
 
-from expenses.models import Subscription, Profile, SubscriptionNotification
+from expenses.models import Subscription, SubscriptionNotification
+from bot.utils.time_helpers import is_daytime_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -55,7 +56,20 @@ async def check_expiring_subscriptions(bot: Bot):
                     f"Не отправляем уведомление об истечении подписки {subscription.id}"
                 )
                 continue
-            
+
+            # Проверяем, что сейчас дневное время в часовом поясе пользователя
+            if not is_daytime_for_user(subscription.profile.timezone):
+                logger.info(
+                    f"User {subscription.profile.telegram_id} skipped: nighttime in timezone "
+                    f"{subscription.profile.timezone} (will notify in next check)"
+                )
+                continue
+
+            logger.info(
+                f"Sending notification to user {subscription.profile.telegram_id} "
+                f"(daytime in timezone {subscription.profile.timezone})"
+            )
+
             # Формируем сообщение
             if subscription.type == 'trial':
                 message = (
@@ -104,8 +118,11 @@ async def check_expiring_subscriptions(bot: Bot):
                 notification_type='one_day',
                 sent_at=now
             )
-            
-            logger.info(f"Отправлено уведомление пользователю {subscription.profile.telegram_id}")
+
+            logger.info(
+                f"Notification successfully sent to user {subscription.profile.telegram_id} "
+                f"for subscription {subscription.id}"
+            )
             
         except Exception as e:
             # Проверяем, заблокировал ли пользователь бота

@@ -3,8 +3,9 @@
 """
 import re
 from typing import Optional, Dict, Any
-from decimal import Decimal, InvalidOperation
 import logging
+
+from .expense_parser import detect_currency
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ async def validate_amount(text: str) -> Optional[float]:
 def parse_description_amount(text: str, allow_only_amount: bool = False) -> Dict[str, Any]:
     """
     Парсит текст в формате 'Описание Сумма' или просто 'Сумма'
+    Поддерживает суммы с пробелами: "48 000", "1 000 000"
     Поддерживает знак + или слово "плюс" для определения доходов
 
     Args:
@@ -58,72 +60,100 @@ def parse_description_amount(text: str, allow_only_amount: bool = False) -> Dict
     Raises:
         ValueError: Если формат неверный
     """
-    parts = text.strip().split()
-
-    if len(parts) == 0:
+    # Проверяем на пустой ввод
+    if not text or not text.strip():
         raise ValueError("Пустой ввод. Отправьте сумму или название и сумму.")
 
-    # Проверяем, есть ли слово "плюс" отдельно (например, "зарплата плюс 5000")
+    text = text.strip()
+
+    # Проверяем знак дохода
     is_income = False
-    if 'плюс' in [p.lower() for p in parts]:
+
+    # Точное совпадение слова "плюс" через границы слов
+    if re.search(r'\bплюс\b', text, re.IGNORECASE):
         is_income = True
-        # Удаляем слово "плюс" из частей
-        parts = [p for p in parts if p.lower() != 'плюс']
-    
-    # Если только одна часть
-    if len(parts) == 1:
+        text = re.sub(r'\bплюс\b', '', text, flags=re.IGNORECASE)
+        text = ' '.join(text.split())
+
+    # Знак + распознается как доход только если нет СЛОВА между + и суммой
+    # Пробелы разрешены, но слова - нет
+    # Паттерн 1: +5000 или "+ 5000" (в начале строки)
+    if re.match(r'^\+\s*(?=\d)', text.strip()):
+        is_income = True
+        text = re.sub(r'^\+\s*', '', text.strip())  # Убираем + и пробелы после него
+    # Паттерн 2: Зарплата +5000 или "Зарплата + 5000" (после описания)
+    elif re.search(r'\s\+\s*(?=\d)', text):
+        is_income = True
+        text = re.sub(r'\s\+\s*', ' ', text)  # Убираем + и пробелы после него
+        text = ' '.join(text.split())
+
+    # Regex поддерживает суммы с разделителями и без + опциональную валюту в конце
+    number_pattern = r'((?:\d{1,3}(?:[\s\xa0,]\d{3})+|\d+)(?:[.,]\d+)?)(?:\s*(?P<currency>[^\d\s].*))?$'
+    match = re.search(number_pattern, text, re.IGNORECASE)
+
+    if not match:
         if allow_only_amount:
-            # Пробуем парсить как сумму
-            try:
-                amount_str = parts[0]
-                # Проверяем знак + или слово "плюс"
-                if amount_str.startswith('+'):
-                    is_income = True
-                    amount_str = amount_str[1:]  # Убираем знак +
-                elif amount_str.lower().startswith('плюс'):
-                    is_income = True
-                    amount_str = amount_str[4:].strip()  # Убираем слово "плюс"
-                amount = float(amount_str.replace(',', '.'))
-                if amount <= 0:
-                    raise ValueError("Сумма должна быть больше 0")
-                return {
-                    'description': None,  # Описания нет
-                    'amount': amount,
-                    'is_income': is_income
-                }
-            except ValueError:
-                raise ValueError("Неверный формат суммы")
+            if len(text.split()) > 1:
+                raise ValueError("Неверный формат. Отправьте сумму или название и сумму.")
+            raise ValueError("Неверный формат суммы")
         else:
             raise ValueError("Неверный формат. Отправьте название и сумму через пробел.")
-    
-    # Если несколько частей - последняя это сумма
-    amount_str = parts[-1]
 
-    # Проверяем знак + или слово "плюс" в сумме
-    if amount_str.startswith('+'):
-        is_income = True
-        amount_str = amount_str[1:]  # Убираем знак +
-    elif amount_str.lower().startswith('плюс'):
-        is_income = True
-        amount_str = amount_str[4:].strip()  # Убираем слово "плюс"
-    
-    try:
-        amount = float(amount_str.replace(',', '.'))
-        if amount <= 0:
-            raise ValueError("Сумма должна быть больше 0")
-    except ValueError:
-        # Может быть это всё описание без суммы?
-        if allow_only_amount:
-            raise ValueError("Неверный формат. Отправьте сумму или название и сумму.")
+    currency_suffix = match.group('currency')
+    if currency_suffix:
+        currency_suffix = currency_suffix.strip()
+        if currency_suffix:
+            detected = detect_currency(f"1 {currency_suffix}", user_currency="XXX")
+            if detected == "XXX":
+                description_end = match.start()
+                has_description = bool(text[:description_end].strip())
+                if allow_only_amount and has_description:
+                    raise ValueError("Неверный формат. Отправьте сумму или название и сумму.")
+                raise ValueError("Неверный формат суммы")
+
+    amount_str = match.group(1)
+    amount_str = amount_str.replace(' ', '').replace('\xa0', '')
+
+    if '.' in amount_str and ',' in amount_str:
+        amount_str = amount_str.replace(',', '')
+    elif ',' in amount_str:
+        comma_parts = amount_str.split(',')
+        if len(comma_parts) == 2 and len(comma_parts[1]) <= 2:
+            amount_str = amount_str.replace(',', '.')
         else:
-            raise ValueError("Неверный формат суммы")
-    
-    # Собираем описание из всех частей кроме последней
-    if len(parts) > 1:
-        description = " ".join(parts[:-1])
-        # Капитализируем первую букву
+            amount_str = amount_str.replace(',', '')
+
+    try:
+        amount = float(amount_str)
+    except (ValueError, Exception):
+        description_end = match.start()
+        has_description = bool(text[:description_end].strip())
+        if allow_only_amount and has_description:
+            raise ValueError("Неверный формат. Отправьте сумму или название и сумму.")
+        raise ValueError("Неверный формат суммы")
+
+    if amount <= 0:
+        raise ValueError("Сумма должна быть больше 0")
+
+    description_end = match.start()
+    description = text[:description_end].strip()
+
+    if description:
+        words = description.split()
+        if len(words) >= 2:
+            candidate = " ".join(words[-2:])
+            if detect_currency(f"1 {candidate}", user_currency="XXX") != "XXX":
+                description = " ".join(words[:-2]).strip()
         if description:
-            description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
+            candidate = description.split()[-1]
+            if detect_currency(f"1 {candidate}", user_currency="XXX") != "XXX":
+                description = " ".join(description.split()[:-1]).strip()
+
+    if not description and not allow_only_amount:
+        raise ValueError("Неверный формат. Отправьте название и сумму через пробел.")
+
+    if description:
+        description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
     else:
         description = None
 

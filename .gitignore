@@ -24,6 +24,9 @@ expense_bot.db
 media/
 staticfiles/
 static/
+# Exception: Allow Chart.js in reports template static
+!reports/templates/static/
+!reports/templates/static/chart.min.js
 
 # Environment variables
 .env
@@ -89,3 +92,7 @@ nul
 
 # Claude Code
 .claude/MONTHLY_INSIGHTS_FIX_REPORT.md
+
+# Local development entry point (not for server)
+run_bot.py
+archive_20260128/
