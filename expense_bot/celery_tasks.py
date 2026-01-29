@@ -1248,7 +1248,6 @@ def process_recurring_payments():
                 logger.error(f"Failed to close event loop in process_recurring_payments: {e}", exc_info=True)
 
             asyncio.set_event_loop(None)
-            loop.close()
 
 
 @shared_task

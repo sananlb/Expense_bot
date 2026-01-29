@@ -6,7 +6,7 @@ echo "Starting Expense Bot container..."
 # Wait for PostgreSQL to be ready
 if [ "$DB_HOST" ]; then
     echo "Waiting for PostgreSQL..."
-    while ! pg_isready -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "${DB_USER:-expense_user}"; do
+    while ! pg_isready -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "${DB_USER:-expense_user}" -d "${DB_NAME:-expense_bot}"; do
         echo "PostgreSQL is unavailable - sleeping"
         sleep 2
     done
