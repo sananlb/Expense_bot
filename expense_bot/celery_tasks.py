@@ -1242,6 +1242,11 @@ def process_recurring_payments():
                 except Exception as e:
                     logger.error(f"Failed to close bot session in process_recurring_payments: {e}", exc_info=True)
 
+            try:
+                loop.close()
+            except Exception as e:
+                logger.error(f"Failed to close event loop in process_recurring_payments: {e}", exc_info=True)
+
             asyncio.set_event_loop(None)
             loop.close()
 
