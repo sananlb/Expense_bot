@@ -499,13 +499,13 @@
           <h3 class="block-title">🚗 Расходы на автомобиль</h3>
 
           <div class="field-group">
-            <label>
-              <span class="label-with-tooltip">
-                Топливо в год (₽)
-                <span class="tooltip" data-tooltip="Пробег × расход × цена топлива">ℹ️</span>
-              </span>
-            </label>
-            <input type="number" id="fuelCost" value="44000" step="1000">
+            <label>Расход топлива (л/100км)</label>
+            <input type="number" id="fuelConsumption" value="10" step="0.5" min="0">
+          </div>
+
+          <div class="field-group">
+            <label>Стоимость топлива (₽/л)</label>
+            <input type="number" id="fuelPrice" value="55" step="1" min="0">
           </div>
 
           <div class="field-group">
@@ -524,8 +524,13 @@
           </div>
 
           <div class="field-group">
-            <label>Налог на авто (₽/год)</label>
-            <input type="number" id="carTax" value="9510" step="1000">
+            <label>
+              <span class="label-with-tooltip">
+                Лошадиные силы
+                <span class="tooltip" data-tooltip="Мощность двигателя для расчета налога">ℹ️</span>
+              </span>
+            </label>
+            <input type="number" id="horsePower" value="190" step="10" min="0">
           </div>
 
           <div class="field-group">
@@ -685,15 +690,33 @@
       });
     });
 
+    function calculateCarTax(horsePower) {
+      // Tax rate depends on engine power (regional average)
+      let rate;
+      if (horsePower <= 100) {
+        rate = 2.5;
+      } else if (horsePower <= 150) {
+        rate = 3.5;
+      } else if (horsePower <= 200) {
+        rate = 5;
+      } else if (horsePower <= 250) {
+        rate = 7.5;
+      } else {
+        rate = 15;
+      }
+      return horsePower * rate;
+    }
+
     function calculate() {
       // Get all values
       const carCost = parseFloat(document.getElementById('carCost').value) || 0;
       const yearlyMileage = parseFloat(document.getElementById('yearlyMileage').value) || 0;
 
-      const fuelCost = parseFloat(document.getElementById('fuelCost').value) || 0;
+      const fuelConsumption = parseFloat(document.getElementById('fuelConsumption').value) || 0;
+      const fuelPrice = parseFloat(document.getElementById('fuelPrice').value) || 0;
       const osago = parseFloat(document.getElementById('osago').value) || 0;
       const kasko = parseFloat(document.getElementById('kasko').value) || 0;
-      const carTax = parseFloat(document.getElementById('carTax').value) || 0;
+      const horsePower = parseFloat(document.getElementById('horsePower').value) || 0;
       const carWash = parseFloat(document.getElementById('carWash').value) || 0;
       const fines = parseFloat(document.getElementById('fines').value) || 0;
       const parking = parseFloat(document.getElementById('parking').value) || 0;
@@ -707,6 +730,12 @@
       const rentalDays = parseFloat(document.getElementById('rentalDays').value) || 1;
 
       const investmentReturn = parseFloat(document.getElementById('investmentReturn').value) || 14;
+
+      // Calculate fuel cost per year
+      const fuelCost = (yearlyMileage / 100) * fuelConsumption * fuelPrice;
+
+      // Calculate car tax based on horse power
+      const carTax = calculateCarTax(horsePower);
 
       // Calculate car expenses
       const monthlyExpenses = (carWash + fines + parking);
