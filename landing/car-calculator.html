@@ -1070,7 +1070,7 @@
               beginAtZero: true,
               ticks: {
                 callback: function(value) {
-                  return formatMoney(value);
+                  return (value / 1000).toFixed(0) + ' т.р.';
                 }
               }
             }
