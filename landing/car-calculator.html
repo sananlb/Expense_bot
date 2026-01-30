@@ -100,16 +100,42 @@
       align-items: center;
       gap: 12px;
       text-decoration: none;
-      font-family: var(--font-display);
+      color: var(--dark);
+      font-weight: 600;
       font-size: 24px;
-      font-weight: 700;
-      color: var(--primary);
+      pointer-events: none;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.15);
     }
 
     .logo img {
-      width: 40px;
-      height: 40px;
+      height: 48px;
+      width: auto;
       object-fit: contain;
+      filter: drop-shadow(-1px 3px 6px rgba(0, 0, 0, 0.5));
+      pointer-events: auto;
+    }
+
+    .logo span {
+      position: relative;
+      display: inline-block;
+      padding-bottom: 2px;
+      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), 0 1px 3px rgba(0, 0, 0, 0.15);
+    }
+
+    .logo span::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(148, 163, 184, 0.08) 20%,
+        rgba(148, 163, 184, 0.12) 50%,
+        rgba(148, 163, 184, 0.08) 80%,
+        transparent 100%
+      );
     }
 
     .back-link {
@@ -155,22 +181,16 @@
 
     /* Input Section */
     .input-section {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .block {
       background: var(--white);
       border-radius: var(--radius);
       padding: 30px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-    }
-
-    .block {
-      margin-bottom: 40px;
-      padding-bottom: 30px;
-      border-bottom: 2px solid #e5e7eb;
-    }
-
-    .block:last-child {
-      border-bottom: none;
-      margin-bottom: 0;
-      padding-bottom: 0;
     }
 
     .block-title {
@@ -489,14 +509,19 @@
           </div>
 
           <div class="field-group">
+            <label>
+              <span class="label-with-tooltip">
+                Лошадиные силы
+                <span class="tooltip" data-tooltip="Мощность двигателя для расчета налога">ℹ️</span>
+              </span>
+            </label>
+            <input type="number" id="horsePower" value="190" step="10" min="0">
+          </div>
+
+          <div class="field-group">
             <label>Пробег за год (км)</label>
             <input type="number" id="yearlyMileage" value="10000" step="1000">
           </div>
-        </div>
-
-        <!-- Block 2: Car Expenses -->
-        <div class="block">
-          <h3 class="block-title">🚗 Расходы на автомобиль</h3>
 
           <div class="field-group">
             <label>Расход топлива (л/100км)</label>
@@ -507,6 +532,11 @@
             <label>Стоимость топлива (₽/л)</label>
             <input type="number" id="fuelPrice" value="55" step="1" min="0">
           </div>
+        </div>
+
+        <!-- Block 2: Car Expenses -->
+        <div class="block">
+          <h3 class="block-title">🚗 Расходы на автомобиль</h3>
 
           <div class="field-group">
             <label>ОСАГО (₽/год)</label>
@@ -521,16 +551,6 @@
               </span>
             </label>
             <input type="number" id="kasko" value="0" step="5000">
-          </div>
-
-          <div class="field-group">
-            <label>
-              <span class="label-with-tooltip">
-                Лошадиные силы
-                <span class="tooltip" data-tooltip="Мощность двигателя для расчета налога">ℹ️</span>
-              </span>
-            </label>
-            <input type="number" id="horsePower" value="190" step="10" min="0">
           </div>
 
           <div class="field-group">
