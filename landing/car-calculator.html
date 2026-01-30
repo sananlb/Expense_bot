@@ -780,6 +780,18 @@
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
+      // FIRST: Mark all number inputs as default (before any calculations)
+      const numberInputs = document.querySelectorAll('input[type="number"]');
+      numberInputs.forEach(input => {
+        input.classList.add('default-value');
+
+        // Remove default-value class when user modifies the input
+        input.addEventListener('input', function() {
+          this.classList.remove('default-value');
+        });
+      });
+
+      // Initialize charts and calculate
       initCharts();
       calculate();
 
@@ -960,20 +972,6 @@
       comparisonChart.data.datasets[1].data = [lostProfit, 0];
       comparisonChart.update();
     }
-
-    // Initialize default value styling
-    document.addEventListener('DOMContentLoaded', function() {
-      // Mark all number inputs as default initially
-      const numberInputs = document.querySelectorAll('input[type="number"]');
-      numberInputs.forEach(input => {
-        input.classList.add('default-value');
-
-        // Remove default-value class when user modifies the input
-        input.addEventListener('input', function() {
-          this.classList.remove('default-value');
-        });
-      });
-    });
   </script>
 </body>
 </html>
