@@ -907,7 +907,25 @@
       // FIRST: Mark all number inputs as default (before any calculations)
       const numberInputs = document.querySelectorAll('input[type="number"]');
       numberInputs.forEach(input => {
+        // Save default value
+        input.dataset.defaultValue = input.value;
         input.classList.add('default-value');
+
+        // Clear field on focus if it has default value
+        input.addEventListener('focus', function() {
+          if (this.classList.contains('default-value')) {
+            this.value = '';
+            this.classList.remove('default-value');
+          }
+        });
+
+        // Restore default value on blur if field is empty
+        input.addEventListener('blur', function() {
+          if (this.value === '') {
+            this.value = this.dataset.defaultValue;
+            this.classList.add('default-value');
+          }
+        });
 
         // Remove default-value class when user modifies the input
         input.addEventListener('input', function() {
