@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Калькулятор стоимости владения автомобилем | Coins Bot</title>
-  <meta name="description" content="Узнайте сколько РЕАЛЬНО стоит владеть автомобилем. Сравните с такси и прокатом. Посчитайте упущенную выгоду от инвестиций. Бесплатный калькулятор.">
+  <meta name="description" content="Узнайте сколько стоит владеть автомобилем. Сравните с такси и прокатом. Посчитайте упущенную выгоду от инвестиций. Бесплатный калькулятор.">
 
   <!-- SEO -->
   <link rel="canonical" href="https://www.coins-bot.ru/car-calculator">
@@ -322,6 +322,30 @@
       font-weight: 600;
     }
 
+    /* Investment Row */
+    .investment-row {
+      display: flex;
+      gap: 30px;
+      align-items: flex-start;
+    }
+
+    .investment-slider {
+      flex: 0 0 auto;
+      width: 250px;
+    }
+
+    .investment-result {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .investment-result label {
+      font-size: 14px;
+      margin-bottom: 0;
+    }
+
     /* Results Section */
     .results-section {
       position: sticky;
@@ -486,7 +510,7 @@
   <div class="container">
     <!-- Hero -->
     <div class="hero">
-      <h1>🚗 Сколько РЕАЛЬНО стоит владеть автомобилем?</h1>
+      <h1>🚗 Сколько стоит владеть автомобилем?</h1>
       <p>Узнайте настоящую стоимость владения авто и сравните с альтернативами</p>
     </div>
 
@@ -559,8 +583,8 @@
           </div>
 
           <div class="field-group">
-            <label>Штрафы (₽/месяц)</label>
-            <input type="number" id="fines" value="250" step="100">
+            <label>Штрафы (₽/год)</label>
+            <input type="number" id="fines" value="3000" step="500">
           </div>
 
           <div class="field-group">
@@ -579,7 +603,7 @@
           </div>
 
           <div class="field-group">
-            <label>Расходники (₽/год)</label>
+            <label>Другие расходы (₽/год)</label>
             <input type="number" id="consumables" value="3000" step="1000">
           </div>
         </div>
@@ -633,25 +657,27 @@
         <div class="block">
           <h3 class="block-title">📈 Упущенная выгода от инвестиций</h3>
 
-          <div class="field-group">
-            <label>
-              <span class="label-with-tooltip">
-                Доходность инвестиций (%/год)
-                <span class="tooltip" data-tooltip="Средняя доходность индекса Мосбиржи: ~14%">ℹ️</span>
-              </span>
-            </label>
-            <input type="range" id="investmentReturn" min="12" max="16" step="2" value="14">
-            <div class="range-labels">
-              <span>12%</span>
-              <span>14%</span>
-              <span>16%</span>
+          <div class="field-group investment-row">
+            <div class="investment-slider">
+              <label>
+                <span class="label-with-tooltip">
+                  Доходность (%/год)
+                  <span class="tooltip" data-tooltip="Средняя доходность индекса Мосбиржи: ~14%">ℹ️</span>
+                </span>
+              </label>
+              <input type="range" id="investmentReturn" min="12" max="16" step="2" value="14">
+              <div class="range-labels">
+                <span>12%</span>
+                <span>14%</span>
+                <span>16%</span>
+              </div>
+              <div class="range-value" id="returnPercent">14%</div>
             </div>
-            <div class="range-value" id="returnPercent">14%</div>
-          </div>
 
-          <div class="field-group">
-            <label>Упущенная выгода в год:</label>
-            <div class="calculated-field" id="lostProfit">0 ₽</div>
+            <div class="investment-result">
+              <label>Упущенная выгода в год:</label>
+              <div class="calculated-field" id="lostProfit">0 ₽</div>
+            </div>
           </div>
         </div>
       </div>
@@ -762,8 +788,8 @@
       const carTax = calculateCarTax(horsePower);
 
       // Calculate car expenses
-      const monthlyExpenses = (carWash + fines + parking);
-      const yearlyExpenses = fuelCost + osago + kasko + carTax + (monthlyExpenses * 12) + maintenance + consumables;
+      const monthlyExpenses = (carWash + parking);
+      const yearlyExpenses = fuelCost + osago + kasko + carTax + (monthlyExpenses * 12) + fines + maintenance + consumables;
 
       // Calculate taxi + rental + carsharing
       const taxiYearly = taxiTripsWeek * 52 * taxiCost;
