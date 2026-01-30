@@ -586,7 +586,7 @@
 
         <!-- Block 3: Alternative -->
         <div class="block">
-          <h3 class="block-title">🚕 Альтернатива: Такси + Прокат</h3>
+          <h3 class="block-title">🚕 Альтернатива: Такси + Прокат + Каршеринг</h3>
 
           <div class="field-group">
             <label>Поездок на такси в неделю</label>
@@ -599,8 +599,8 @@
           </div>
 
           <div class="field-group">
-            <label>Прокат авто (раз в месяц)</label>
-            <input type="number" id="rentalTimesMonth" value="2" step="1">
+            <label>Прокат авто (дней/мес)</label>
+            <input type="number" id="rentalDaysMonth" value="2" step="1" min="0">
           </div>
 
           <div class="field-group">
@@ -609,8 +609,23 @@
           </div>
 
           <div class="field-group">
-            <label>Дней аренды за раз</label>
-            <input type="number" id="rentalDays" value="1" step="1">
+            <label>
+              <span class="label-with-tooltip">
+                Поездок на каршеринге в месяц
+                <span class="tooltip" data-tooltip="Количество раз использования каршеринга">ℹ️</span>
+              </span>
+            </label>
+            <input type="number" id="carsharingTripsMonth" value="0" step="1" min="0">
+          </div>
+
+          <div class="field-group">
+            <label>
+              <span class="label-with-tooltip">
+                Средняя стоимость поездки (₽)
+                <span class="tooltip" data-tooltip="Средний чек за одну поездку на каршеринге">ℹ️</span>
+              </span>
+            </label>
+            <input type="number" id="carsharingCostPerTrip" value="0" step="50" min="0">
           </div>
         </div>
 
@@ -661,7 +676,7 @@
           </div>
 
           <div class="result-item">
-            <div class="result-label">Такси + прокат</div>
+            <div class="result-label">Альтернатива</div>
             <div class="result-value" id="taxiTotal">0 ₽</div>
             <div class="result-breakdown" id="taxiBreakdown"></div>
           </div>
@@ -733,9 +748,10 @@
 
       const taxiTripsWeek = parseFloat(document.getElementById('taxiTripsWeek').value) || 0;
       const taxiCost = parseFloat(document.getElementById('taxiCost').value) || 0;
-      const rentalTimesMonth = parseFloat(document.getElementById('rentalTimesMonth').value) || 0;
+      const rentalDaysMonth = parseFloat(document.getElementById('rentalDaysMonth').value) || 0;
       const rentalCostDay = parseFloat(document.getElementById('rentalCostDay').value) || 0;
-      const rentalDays = parseFloat(document.getElementById('rentalDays').value) || 1;
+      const carsharingTripsMonth = parseFloat(document.getElementById('carsharingTripsMonth').value) || 0;
+      const carsharingCostPerTrip = parseFloat(document.getElementById('carsharingCostPerTrip').value) || 0;
 
       const investmentReturn = parseFloat(document.getElementById('investmentReturn').value) || 14;
 
@@ -749,10 +765,11 @@
       const monthlyExpenses = (carWash + fines + parking);
       const yearlyExpenses = fuelCost + osago + kasko + carTax + (monthlyExpenses * 12) + maintenance + consumables;
 
-      // Calculate taxi + rental
+      // Calculate taxi + rental + carsharing
       const taxiYearly = taxiTripsWeek * 52 * taxiCost;
-      const rentalYearly = rentalTimesMonth * 12 * rentalCostDay * rentalDays;
-      const alternativeTotal = taxiYearly + rentalYearly;
+      const rentalYearly = rentalDaysMonth * 12 * rentalCostDay;
+      const carsharingYearly = carsharingTripsMonth * 12 * carsharingCostPerTrip;
+      const alternativeTotal = taxiYearly + rentalYearly + carsharingYearly;
 
       // Calculate lost profit
       const lostProfit = carCost * (investmentReturn / 100);
@@ -779,7 +796,7 @@
       // Difference text
       if (difference > 0) {
         document.getElementById('differenceText').textContent =
-          `Такси+прокат дешевле на ${formatMoney(Math.abs(difference))}/год`;
+          `Альтернатива дешевле на ${formatMoney(Math.abs(difference))}/год`;
       } else if (difference < 0) {
         document.getElementById('differenceText').textContent =
           `Свой авто дешевле на ${formatMoney(Math.abs(difference))}/год`;
@@ -807,7 +824,7 @@
       comparisonChart = new Chart(ctx, {
         type: 'bar',
         data: {
-          labels: ['Свой авто', 'Такси + прокат'],
+          labels: ['Свой авто', 'Альтернатива'],
           datasets: [
             {
               label: 'Прямые расходы',
