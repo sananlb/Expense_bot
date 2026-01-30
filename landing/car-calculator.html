@@ -193,19 +193,6 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.05);
       border-left: 4px solid #e5e7eb;
       transition: all 0.3s ease;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .block::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 4px;
-      height: 100%;
-      background: linear-gradient(180deg, var(--block-color, #e5e7eb) 0%, transparent 100%);
-      opacity: 0.3;
     }
 
     .block:hover {
@@ -242,20 +229,6 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      padding-bottom: 15px;
-      border-bottom: 2px solid #f1f5f9;
-      position: relative;
-    }
-
-    .block-title::after {
-      content: '';
-      position: absolute;
-      bottom: -2px;
-      left: 0;
-      width: 60px;
-      height: 2px;
-      background: var(--block-color, var(--primary));
-      border-radius: 2px;
     }
 
     .field-group {
