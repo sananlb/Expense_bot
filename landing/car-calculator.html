@@ -96,11 +96,20 @@
     }
 
     .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
       font-family: var(--font-display);
       font-size: 24px;
       font-weight: 700;
       color: var(--primary);
-      text-decoration: none;
+    }
+
+    .logo img {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
     }
 
     .back-link {
@@ -153,9 +162,9 @@
     }
 
     .block {
-      margin-bottom: 30px;
+      margin-bottom: 40px;
       padding-bottom: 30px;
-      border-bottom: 1px solid #e5e7eb;
+      border-bottom: 2px solid #e5e7eb;
     }
 
     .block:last-child {
@@ -221,6 +230,7 @@
     }
 
     input[type="number"],
+    input[type="range"],
     select {
       width: 100%;
       padding: 12px 16px;
@@ -235,6 +245,52 @@
     select:focus {
       outline: none;
       border-color: var(--primary);
+    }
+
+    /* Range slider styles */
+    input[type="range"] {
+      height: 8px;
+      padding: 0;
+      background: #e5e7eb;
+      border: none;
+      border-radius: 4px;
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: var(--primary);
+      cursor: pointer;
+      border-radius: 50%;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      background: var(--primary);
+      cursor: pointer;
+      border-radius: 50%;
+      border: none;
+    }
+
+    .range-labels {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .range-value {
+      text-align: center;
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--primary);
+      margin-top: 8px;
     }
 
     .calculated-field {
@@ -320,44 +376,12 @@
       color: var(--dark);
     }
 
-
-    /* Verdict Section */
-    .verdict-section {
-      background: var(--white);
-      border-radius: var(--radius);
-      padding: 40px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-      margin-bottom: 40px;
-      text-align: center;
-    }
-
-    .verdict-title {
-      font-size: 32px;
-      font-weight: 700;
-      margin-bottom: 20px;
-      color: var(--dark);
-    }
-
-    .verdict-result {
-      font-size: 24px;
-      font-weight: 600;
-      color: var(--success);
-      margin-bottom: 30px;
-    }
-
-    .verdict-reasons {
-      text-align: left;
-      max-width: 600px;
-      margin: 0 auto 30px;
-    }
-
-    .verdict-reasons li {
-      margin-bottom: 10px;
-      font-size: 16px;
-      color: var(--gray);
-    }
-
     /* CTA Buttons */
+    .cta-section {
+      text-align: center;
+      margin-top: 40px;
+    }
+
     .cta-buttons {
       display: flex;
       gap: 15px;
@@ -397,32 +421,6 @@
       background: var(--light);
     }
 
-    /* Comparison Table */
-    .comparison-table {
-      width: 100%;
-      margin-top: 30px;
-      border-collapse: collapse;
-    }
-
-    .comparison-table th,
-    .comparison-table td {
-      padding: 12px;
-      text-align: left;
-      border-bottom: 1px solid #e5e7eb;
-    }
-
-    .comparison-table th {
-      background: var(--light);
-      font-weight: 600;
-      color: var(--dark);
-    }
-
-    .comparison-table .winner {
-      background: rgba(16, 185, 129, 0.1);
-      font-weight: 600;
-      color: var(--success);
-    }
-
     /* Responsive */
     @media (max-width: 968px) {
       .calculator-layout {
@@ -457,7 +455,10 @@
   <!-- Header -->
   <header>
     <div class="header-content">
-      <a href="/" class="logo">🪙 Coins Bot</a>
+      <a href="/" class="logo">
+        <img src="logo_v3.webp" alt="Coins Bot">
+        <span>Coins</span>
+      </a>
       <a href="/" class="back-link">← Вернуться на главную</a>
     </div>
   </header>
@@ -480,7 +481,7 @@
           <div class="field-group">
             <label>
               <span class="label-with-tooltip">
-                Стоимость автомобиля
+                Стоимость автомобиля (₽)
                 <span class="tooltip" data-tooltip="Текущая рыночная стоимость вашего авто">ℹ️</span>
               </span>
             </label>
@@ -491,30 +492,11 @@
             <label>Пробег за год (км)</label>
             <input type="number" id="yearlyMileage" value="10000" step="1000">
           </div>
-
-          <div class="field-group">
-            <label>Планируемый срок владения (лет)</label>
-            <select id="ownershipYears">
-              <option value="3">3 года</option>
-              <option value="5" selected>5 лет</option>
-              <option value="7">7 лет</option>
-              <option value="10">10 лет</option>
-            </select>
-          </div>
-
-          <div class="field-group">
-            <label>Город</label>
-            <select id="city">
-              <option value="moscow">Москва</option>
-              <option value="spb">Санкт-Петербург</option>
-              <option value="region" selected>Регион</option>
-            </select>
-          </div>
         </div>
 
-        <!-- Block 2: Regular Expenses -->
+        <!-- Block 2: Car Expenses -->
         <div class="block">
-          <h3 class="block-title">💰 Регулярные расходы</h3>
+          <h3 class="block-title">🚗 Расходы на автомобиль</h3>
 
           <div class="field-group">
             <label>
@@ -618,7 +600,13 @@
                 <span class="tooltip" data-tooltip="Средняя доходность индекса Мосбиржи: ~14%">ℹ️</span>
               </span>
             </label>
-            <input type="number" id="investmentReturn" value="14" step="1" min="0" max="30">
+            <input type="range" id="investmentReturn" min="12" max="16" step="2" value="14">
+            <div class="range-labels">
+              <span>12%</span>
+              <span>14%</span>
+              <span>16%</span>
+            </div>
+            <div class="range-value" id="returnPercent">14%</div>
           </div>
 
           <div class="field-group">
@@ -630,6 +618,12 @@
 
       <!-- Right Column: Results -->
       <div class="results-section">
+        <!-- Comparison Chart -->
+        <div class="chart-card">
+          <h3 class="chart-title">Сравнение вариантов</h3>
+          <canvas id="comparisonChart"></canvas>
+        </div>
+
         <!-- Results Card -->
         <div class="results-card">
           <h2 class="results-title">Результаты расчета</h2>
@@ -653,27 +647,11 @@
             <div class="result-breakdown" id="differenceText"></div>
           </div>
         </div>
-
-        <!-- Chart -->
-        <div class="chart-card">
-          <h3 class="chart-title">Структура расходов на авто</h3>
-          <canvas id="expensesChart"></canvas>
-        </div>
-
-        <!-- Comparison Chart -->
-        <div class="chart-card">
-          <h3 class="chart-title">Сравнение вариантов</h3>
-          <canvas id="comparisonChart"></canvas>
-        </div>
       </div>
     </div>
 
-    <!-- Verdict -->
-    <div class="verdict-section">
-      <h2 class="verdict-title">Вердикт калькулятора</h2>
-      <div class="verdict-result" id="verdictResult">Загрузка...</div>
-      <div id="verdictContent"></div>
-
+    <!-- CTA Section -->
+    <div class="cta-section">
       <div class="cta-buttons">
         <a href="https://t.me/showmecoin_bot" class="btn btn-primary" target="_blank">
           🤖 Попробовать Coins Bot бесплатно
@@ -686,8 +664,8 @@
   </div>
 
   <script>
-    // Chart instances
-    let expensesChart, comparisonChart;
+    // Chart instance
+    let comparisonChart;
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
@@ -700,13 +678,17 @@
         input.addEventListener('input', calculate);
         input.addEventListener('change', calculate);
       });
+
+      // Special handler for range slider
+      document.getElementById('investmentReturn').addEventListener('input', function() {
+        document.getElementById('returnPercent').textContent = this.value + '%';
+      });
     });
 
     function calculate() {
       // Get all values
       const carCost = parseFloat(document.getElementById('carCost').value) || 0;
       const yearlyMileage = parseFloat(document.getElementById('yearlyMileage').value) || 0;
-      const ownershipYears = parseFloat(document.getElementById('ownershipYears').value) || 5;
 
       const fuelCost = parseFloat(document.getElementById('fuelCost').value) || 0;
       const osago = parseFloat(document.getElementById('osago').value) || 0;
@@ -739,7 +721,7 @@
       const lostProfit = carCost * (investmentReturn / 100);
       document.getElementById('lostProfit').textContent = formatMoney(lostProfit);
 
-      // Calculate totals (always TCO - with lost profit)
+      // Calculate totals (TCO - with lost profit)
       const carTotal = yearlyExpenses + lostProfit;
       const taxiTotal = alternativeTotal;
       const difference = carTotal - taxiTotal;
@@ -749,17 +731,15 @@
       document.getElementById('taxiTotal').textContent = formatMoney(taxiTotal);
       document.getElementById('difference').textContent = formatMoney(Math.abs(difference));
 
-      // Breakdown (always TCO) - with per km and per period
+      // Breakdown
       const costPerKm = yearlyMileage > 0 ? carTotal / yearlyMileage : 0;
-      const totalForPeriod = carTotal * ownershipYears;
       document.getElementById('carBreakdown').textContent =
-        `Расходы: ${formatMoney(yearlyExpenses)} + Упущено: ${formatMoney(lostProfit)} • ${formatMoney(costPerKm)}/км • ${formatMoney(totalForPeriod)} за ${ownershipYears} лет`;
+        `Расходы: ${formatMoney(yearlyExpenses)} + Упущено: ${formatMoney(lostProfit)} • ${formatMoney(costPerKm)}/км`;
 
-      const taxiTotalForPeriod = taxiTotal * ownershipYears;
       document.getElementById('taxiBreakdown').textContent =
-        `Только прямые расходы • ${formatMoney(taxiTotalForPeriod)} за ${ownershipYears} лет`;
+        `Только прямые расходы`;
 
-      // Difference text - fixed logic for difference = 0
+      // Difference text
       if (difference > 0) {
         document.getElementById('differenceText').textContent =
           `Такси+прокат дешевле на ${formatMoney(Math.abs(difference))}/год`;
@@ -771,51 +751,8 @@
           `Варианты равны по стоимости`;
       }
 
-      // Update verdict
-      updateVerdict(difference, carTotal, taxiTotal, yearlyMileage, taxiTripsWeek);
-
-      // Update charts with real values
-      updateCharts(fuelCost, osago, kasko, carTax, carWash, fines, parking, maintenance, consumables, carTotal, taxiTotal);
-    }
-
-    function updateVerdict(difference, carTotal, taxiTotal, yearlyMileage, taxiTripsWeek) {
-      const verdictResult = document.getElementById('verdictResult');
-      const verdictContent = document.getElementById('verdictContent');
-
-      if (difference < 0) {
-        // Car is cheaper (difference is negative)
-        verdictResult.textContent = `✅ Для вас выгоднее: СВОЙ АВТОМОБИЛЬ`;
-        verdictResult.style.color = '#10b981';
-
-        verdictContent.innerHTML = `
-          <ul class="verdict-reasons">
-            <li>✅ Вы ездите достаточно часто (${taxiTripsWeek} раз/нед)</li>
-            <li>✅ Такси+прокат обойдется дороже на ${formatMoney(Math.abs(difference))}/год</li>
-            <li>💡 Вы экономите ${formatMoney(Math.abs(difference) / 12)}/мес</li>
-          </ul>
-          <p style="color: var(--gray); font-size: 14px; margin-top: 20px;">
-            💡 Совет: Записывайте ВСЕ траты на авто через Coins Bot, чтобы видеть реальную картину
-          </p>
-        `;
-      } else {
-        // Taxi is cheaper
-        verdictResult.textContent = `🚕 Для вас выгоднее: ТАКСИ + ПРОКАТ`;
-        verdictResult.style.color = '#f59e0b';
-
-        const lostProfitYearly = parseFloat(document.getElementById('lostProfit').textContent.replace(/[^\d]/g, ''));
-
-        verdictContent.innerHTML = `
-          <ul class="verdict-reasons">
-            <li>💰 Экономия ${formatMoney(difference)}/год (${formatMoney(difference / 12)}/мес)</li>
-            <li>📈 Упущенная выгода от инвестиций: ${formatMoney(lostProfitYearly)}/год</li>
-            <li>⏱️ В такси можно работать, читать, отдыхать</li>
-            <li>🔧 Не нужно думать о ремонте и обслуживании</li>
-          </ul>
-          <p style="color: var(--gray); font-size: 14px; margin-top: 20px;">
-            ⚠️ Но учтите: вы теряете свободу передвижения и независимость
-          </p>
-        `;
-      }
+      // Update chart
+      updateCharts(yearlyExpenses, lostProfit, taxiTotal);
     }
 
     function formatMoney(value) {
@@ -828,53 +765,34 @@
     }
 
     function initCharts() {
-      // Expenses breakdown chart
-      const ctx1 = document.getElementById('expensesChart').getContext('2d');
-      expensesChart = new Chart(ctx1, {
-        type: 'doughnut',
-        data: {
-          labels: ['Топливо', 'ТО и ремонт', 'Страховка', 'Налог', 'Мойка', 'Парковка', 'Прочее'],
-          datasets: [{
-            data: [0, 0, 0, 0, 0, 0, 0],
-            backgroundColor: [
-              '#3b82f6',
-              '#ef4444',
-              '#10b981',
-              '#f59e0b',
-              '#8b5cf6',
-              '#ec4899',
-              '#6b7280'
-            ]
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: true,
-          plugins: {
-            legend: {
-              position: 'bottom'
-            }
-          }
-        }
-      });
-
-      // Comparison chart
-      const ctx2 = document.getElementById('comparisonChart').getContext('2d');
-      comparisonChart = new Chart(ctx2, {
+      // Stacked bar comparison chart
+      const ctx = document.getElementById('comparisonChart').getContext('2d');
+      comparisonChart = new Chart(ctx, {
         type: 'bar',
         data: {
           labels: ['Свой авто', 'Такси + прокат'],
-          datasets: [{
-            label: 'Стоимость в год (₽)',
-            data: [0, 0],
-            backgroundColor: ['#2563eb', '#10b981']
-          }]
+          datasets: [
+            {
+              label: 'Прямые расходы',
+              data: [0, 0],
+              backgroundColor: '#3b82f6'
+            },
+            {
+              label: 'Упущенная выгода',
+              data: [0, 0],
+              backgroundColor: '#f59e0b'
+            }
+          ]
         },
         options: {
           responsive: true,
           maintainAspectRatio: true,
           scales: {
+            x: {
+              stacked: true
+            },
             y: {
+              stacked: true,
               beginAtZero: true,
               ticks: {
                 callback: function(value) {
@@ -885,32 +803,24 @@
           },
           plugins: {
             legend: {
-              display: false
+              position: 'bottom'
+            },
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return context.dataset.label + ': ' + formatMoney(context.parsed.y);
+                }
+              }
             }
           }
         }
       });
     }
 
-    function updateCharts(fuel, osago, kasko, tax, carWash, fines, parking, maintenance, consumables, carTotal, taxiTotal) {
-      // Update expenses chart with real values
-      const washYearly = carWash * 12;
-      const finesYearly = fines * 12;
-      const parkingYearly = parking * 12;
-
-      expensesChart.data.datasets[0].data = [
-        fuel,
-        maintenance,
-        osago + kasko,
-        tax,
-        washYearly,
-        parkingYearly,
-        consumables + finesYearly
-      ];
-      expensesChart.update();
-
-      // Update comparison chart
-      comparisonChart.data.datasets[0].data = [carTotal, taxiTotal];
+    function updateCharts(yearlyExpenses, lostProfit, taxiTotal) {
+      // Update stacked bar chart
+      comparisonChart.data.datasets[0].data = [yearlyExpenses, taxiTotal];
+      comparisonChart.data.datasets[1].data = [lostProfit, 0];
       comparisonChart.update();
     }
   </script>
