@@ -955,7 +955,9 @@ docker image prune -f
 - offer.html (RU)
 - offer_en.html (EN)
 
-## Telegram Channel
+## Marketing & Social Media Channels
+
+### Telegram Channel
 **Channel name:** Coins
 **Channel handle:** @showmecoins
 **URL:** https://t.me/showmecoins
@@ -965,6 +967,28 @@ docker image prune -f
 **Где упоминается:**
 - Приветственное сообщение /start (в конце)
 - Можно добавить в меню "О боте" или "Помощь"
+
+### Яндекс.Дзен
+**Статус:** ✅ АКТИВНЫЙ АККАУНТ
+**URL:** [указать URL канала на Дзене]
+**Контент:** Посты из Telegram канала, финансовые советы
+
+**Преимущества:**
+- DA 90 (отличная индексация в Яндекс)
+- Backlinks для SEO
+- Российская аудитория
+- Кросс-постинг с Telegram
+
+**Планируемый контент:**
+- Личный опыт и кейсы (авто vs такси, семейный бюджет)
+- Практические советы по финансам
+- Обзоры и сравнения
+- Статьи с реальными цифрами
+
+### Другие каналы
+**VK:** [URL если есть]
+**Instagram:** [URL если есть]
+**Планируется:** Кросс-постинг контента с адаптацией под каждую платформу
 
 ## Recent Changes
 - Added grocery store keywords (КБ, Красное белое, ВВ) to product category
