@@ -7,11 +7,11 @@
   <meta name="description" content="Узнайте сколько РЕАЛЬНО стоит владеть автомобилем. Сравните с такси и прокатом. Посчитайте упущенную выгоду от инвестиций. Бесплатный калькулятор.">
 
   <!-- SEO -->
-  <link rel="canonical" href="https://www.coins-bot.ru/car-calculator">
+  <link rel="canonical" href="https://www.coins-bot.ru/car-calculator.html">
 
   <!-- Open Graph -->
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://www.coins-bot.ru/car-calculator">
+  <meta property="og:url" content="https://www.coins-bot.ru/car-calculator.html">
   <meta property="og:title" content="Калькулятор стоимости владения автомобилем">
   <meta property="og:description" content="Я посчитал: мой автомобиль обходится в 142,510₽/год. А у тебя? Посчитай бесплатно!">
   <meta property="og:image" content="https://www.coins-bot.ru/og-image.jpg">
@@ -749,26 +749,33 @@
       document.getElementById('taxiTotal').textContent = formatMoney(taxiTotal);
       document.getElementById('difference').textContent = formatMoney(Math.abs(difference));
 
-      // Breakdown (always TCO)
+      // Breakdown (always TCO) - with per km and per period
+      const costPerKm = yearlyMileage > 0 ? carTotal / yearlyMileage : 0;
+      const totalForPeriod = carTotal * ownershipYears;
       document.getElementById('carBreakdown').textContent =
-        `Расходы: ${formatMoney(yearlyExpenses)} + Упущено: ${formatMoney(lostProfit)}`;
-      document.getElementById('taxiBreakdown').textContent =
-        `Только прямые расходы`;
+        `Расходы: ${formatMoney(yearlyExpenses)} + Упущено: ${formatMoney(lostProfit)} • ${formatMoney(costPerKm)}/км • ${formatMoney(totalForPeriod)} за ${ownershipYears} лет`;
 
-      // Difference text
+      const taxiTotalForPeriod = taxiTotal * ownershipYears;
+      document.getElementById('taxiBreakdown').textContent =
+        `Только прямые расходы • ${formatMoney(taxiTotalForPeriod)} за ${ownershipYears} лет`;
+
+      // Difference text - fixed logic for difference = 0
       if (difference > 0) {
         document.getElementById('differenceText').textContent =
           `Такси+прокат дешевле на ${formatMoney(Math.abs(difference))}/год`;
-      } else {
+      } else if (difference < 0) {
         document.getElementById('differenceText').textContent =
           `Свой авто дешевле на ${formatMoney(Math.abs(difference))}/год`;
+      } else {
+        document.getElementById('differenceText').textContent =
+          `Варианты равны по стоимости`;
       }
 
       // Update verdict
       updateVerdict(difference, carTotal, taxiTotal, yearlyMileage, taxiTripsWeek);
 
-      // Update charts
-      updateCharts(fuelCost, osago, kasko, carTax, monthlyExpenses * 12, maintenance, consumables, carTotal, taxiTotal);
+      // Update charts with real values
+      updateCharts(fuelCost, osago, kasko, carTax, carWash, fines, parking, maintenance, consumables, carTotal, taxiTotal);
     }
 
     function updateVerdict(difference, carTotal, taxiTotal, yearlyMileage, taxiTripsWeek) {
@@ -776,7 +783,7 @@
       const verdictContent = document.getElementById('verdictContent');
 
       if (difference < 0) {
-        // Car is cheaper
+        // Car is cheaper (difference is negative)
         verdictResult.textContent = `✅ Для вас выгоднее: СВОЙ АВТОМОБИЛЬ`;
         verdictResult.style.color = '#10b981';
 
@@ -885,16 +892,20 @@
       });
     }
 
-    function updateCharts(fuel, osago, kasko, tax, monthly, maintenance, consumables, carTotal, taxiTotal) {
-      // Update expenses chart
+    function updateCharts(fuel, osago, kasko, tax, carWash, fines, parking, maintenance, consumables, carTotal, taxiTotal) {
+      // Update expenses chart with real values
+      const washYearly = carWash * 12;
+      const finesYearly = fines * 12;
+      const parkingYearly = parking * 12;
+
       expensesChart.data.datasets[0].data = [
         fuel,
         maintenance,
         osago + kasko,
         tax,
-        monthly * 0.4, // wash
-        monthly * 0.4, // parking
-        consumables + (monthly * 0.2) // other
+        washYearly,
+        parkingYearly,
+        consumables + finesYearly
       ];
       expensesChart.update();
 
