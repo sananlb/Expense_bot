@@ -320,33 +320,6 @@
       color: var(--dark);
     }
 
-    /* Mode Toggle */
-    .mode-toggle {
-      background: var(--white);
-      border-radius: 12px;
-      padding: 4px;
-      display: flex;
-      gap: 4px;
-      margin-bottom: 30px;
-    }
-
-    .mode-btn {
-      flex: 1;
-      padding: 12px;
-      border: none;
-      background: transparent;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.2s;
-      color: var(--dark);
-    }
-
-    .mode-btn.active {
-      background: var(--primary);
-      color: var(--white);
-    }
 
     /* Verdict Section */
     .verdict-section {
@@ -657,20 +630,10 @@
 
       <!-- Right Column: Results -->
       <div class="results-section">
-        <!-- Mode Toggle -->
-        <div class="mode-toggle">
-          <button class="mode-btn active" onclick="switchMode('cashflow')" id="cashflowBtn">
-            💵 Прямые расходы
-          </button>
-          <button class="mode-btn" onclick="switchMode('tco')" id="tcoBtn">
-            📊 Полная стоимость (TCO)
-          </button>
-        </div>
-
         <!-- Results Card -->
         <div class="results-card">
           <h2 class="results-title">Результаты расчета</h2>
-          <p class="results-subtitle" id="modeDescription">Сколько денег реально уходит из кошелька</p>
+          <p class="results-subtitle">Полная экономическая стоимость с учетом упущенной выгоды</p>
 
           <div class="result-item">
             <div class="result-label">Свой автомобиль</div>
@@ -725,7 +688,6 @@
   <script>
     // Chart instances
     let expensesChart, comparisonChart;
-    let currentMode = 'cashflow';
 
     // Initialize
     document.addEventListener('DOMContentLoaded', function() {
@@ -739,19 +701,6 @@
         input.addEventListener('change', calculate);
       });
     });
-
-    function switchMode(mode) {
-      currentMode = mode;
-      document.getElementById('cashflowBtn').classList.toggle('active', mode === 'cashflow');
-      document.getElementById('tcoBtn').classList.toggle('active', mode === 'tco');
-
-      const description = mode === 'cashflow'
-        ? 'Сколько денег реально уходит из кошелька'
-        : 'Полная экономическая стоимость (с упущенной выгодой)';
-      document.getElementById('modeDescription').textContent = description;
-
-      calculate();
-    }
 
     function calculate() {
       // Get all values
@@ -790,17 +739,9 @@
       const lostProfit = carCost * (investmentReturn / 100);
       document.getElementById('lostProfit').textContent = formatMoney(lostProfit);
 
-      // Calculate totals based on mode
-      let carTotal, taxiTotal;
-
-      if (currentMode === 'cashflow') {
-        carTotal = yearlyExpenses;
-        taxiTotal = alternativeTotal;
-      } else {
-        carTotal = yearlyExpenses + lostProfit;
-        taxiTotal = alternativeTotal;
-      }
-
+      // Calculate totals (always TCO - with lost profit)
+      const carTotal = yearlyExpenses + lostProfit;
+      const taxiTotal = alternativeTotal;
       const difference = carTotal - taxiTotal;
 
       // Update display
@@ -808,18 +749,11 @@
       document.getElementById('taxiTotal').textContent = formatMoney(taxiTotal);
       document.getElementById('difference').textContent = formatMoney(Math.abs(difference));
 
-      // Breakdown
-      if (currentMode === 'cashflow') {
-        document.getElementById('carBreakdown').textContent =
-          `${formatMoney(yearlyExpenses / 12)}/мес • ${formatMoney(yearlyExpenses / yearlyMileage)}/км`;
-        document.getElementById('taxiBreakdown').textContent =
-          `${formatMoney(alternativeTotal / 12)}/мес`;
-      } else {
-        document.getElementById('carBreakdown').textContent =
-          `Расходы: ${formatMoney(yearlyExpenses)} + Упущено: ${formatMoney(lostProfit)}`;
-        document.getElementById('taxiBreakdown').textContent =
-          `Только прямые расходы`;
-      }
+      // Breakdown (always TCO)
+      document.getElementById('carBreakdown').textContent =
+        `Расходы: ${formatMoney(yearlyExpenses)} + Упущено: ${formatMoney(lostProfit)}`;
+      document.getElementById('taxiBreakdown').textContent =
+        `Только прямые расходы`;
 
       // Difference text
       if (difference > 0) {
@@ -866,7 +800,7 @@
         verdictContent.innerHTML = `
           <ul class="verdict-reasons">
             <li>💰 Экономия ${formatMoney(difference)}/год (${formatMoney(difference / 12)}/мес)</li>
-            ${currentMode === 'tco' ? `<li>📈 Упущенная выгода от инвестиций: ${formatMoney(lostProfitYearly)}/год</li>` : ''}
+            <li>📈 Упущенная выгода от инвестиций: ${formatMoney(lostProfitYearly)}/год</li>
             <li>⏱️ В такси можно работать, читать, отдыхать</li>
             <li>🔧 Не нужно думать о ремонте и обслуживании</li>
           </ul>
