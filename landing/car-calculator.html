@@ -73,7 +73,7 @@
     }
 
     .container {
-      max-width: 1400px;
+      max-width: 1200px;
       margin: 0 auto;
       padding: 20px;
     }
@@ -87,7 +87,7 @@
     }
 
     .header-content {
-      max-width: 1400px;
+      max-width: 1200px;
       margin: 0 auto;
       padding: 0 20px;
       display: flex;
@@ -293,6 +293,11 @@
     select:focus {
       outline: none;
       border-color: var(--primary);
+    }
+
+    /* Default values styling */
+    input.default-value {
+      color: #9ca3af;
     }
 
     /* Range slider styles */
@@ -955,6 +960,20 @@
       comparisonChart.data.datasets[1].data = [lostProfit, 0];
       comparisonChart.update();
     }
+
+    // Initialize default value styling
+    document.addEventListener('DOMContentLoaded', function() {
+      // Mark all number inputs as default initially
+      const numberInputs = document.querySelectorAll('input[type="number"]');
+      numberInputs.forEach(input => {
+        input.classList.add('default-value');
+
+        // Remove default-value class when user modifies the input
+        input.addEventListener('input', function() {
+          this.classList.remove('default-value');
+        });
+      });
+    });
   </script>
 </body>
 </html>
