@@ -441,6 +441,12 @@ def send_expense_reminders():
                     )
 
             if should_remind:
+                # Проверяем не заблокирован ли бот ПЕРЕД попыткой отправки
+                if profile.bot_blocked:
+                    logger.debug(f"[REMINDER] Skipping user {profile.telegram_id} (bot blocked)")
+                    skipped_count += 1
+                    continue
+
                 # Получаем язык пользователя
                 lang = profile.language_code or 'ru'
 
@@ -468,7 +474,17 @@ def send_expense_reminders():
                     time.sleep(0.05)
 
                 except Exception as e:
-                    logger.error(f"[REMINDER] Failed to send reminder to {profile.telegram_id}: {e}")
+                    error_message = str(e).lower()
+
+                    # Если бот заблокирован - устанавливаем флаг
+                    if "bot was blocked by the user" in error_message or "forbidden" in error_message:
+                        profile.bot_blocked = True
+                        profile.bot_blocked_at = timezone.now()
+                        profile.save(update_fields=['bot_blocked', 'bot_blocked_at'])
+                        logger.info(f"[REMINDER] User {profile.telegram_id} has blocked the bot. Profile marked.")
+                    else:
+                        # Другие ошибки логируем как ERROR
+                        logger.error(f"[REMINDER] Failed to send reminder to {profile.telegram_id}: {e}")
             else:
                 skipped_count += 1
 

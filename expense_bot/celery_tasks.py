@@ -11,8 +11,104 @@ from django.db.models import Count, Sum, Avg, Case, When, FloatField, Q
 from django.utils import timezone
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup
+from aiogram.exceptions import TelegramBadRequest, TelegramNotFound
 
 logger = logging.getLogger(__name__)
+
+def _shutdown_event_loop(loop: asyncio.AbstractEventLoop, *, bot: Bot = None, label: str = "") -> None:
+    """
+    Deterministically shutdown a manually-created asyncio event loop.
+
+    Celery tasks here run async code via run_until_complete(). Some libraries (e.g. aiohttp/aiogram)
+    may schedule additional cleanup work that needs at least one extra loop iteration (or pending tasks
+    completion) before loop.close(), otherwise you can get "Unclosed client session/connector".
+    """
+    if loop is None:
+        return
+
+    if getattr(loop, "is_closed", lambda: False)():
+        return
+
+    ctx = f" in {label}" if label else ""
+
+    try:
+        # Ensure this loop is the current one for any cleanup relying on get_event_loop().
+        try:
+            asyncio.set_event_loop(loop)
+        except Exception:
+            pass
+
+        if bot is not None:
+            try:
+                loop.run_until_complete(bot.close())
+            except Exception as e:
+                logger.error(f"Failed to close bot session{ctx}: {e}", exc_info=True)
+
+            # Extra safety: explicitly close underlying aiohttp session if exposed.
+            try:
+                session = getattr(bot, "session", None)
+                if session is not None:
+                    is_closed = getattr(session, "closed", False)
+                    if not is_closed:
+                        loop.run_until_complete(session.close())
+            except Exception as e:
+                logger.error(f"Failed to close bot aiohttp session{ctx}: {e}", exc_info=True)
+
+        # Give the loop a chance to process callbacks scheduled by close().
+        try:
+            loop.run_until_complete(asyncio.sleep(0))
+        except Exception:
+            pass
+
+        # Drain pending tasks deterministically: wait briefly, then cancel leftovers.
+        try:
+            pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+            if pending:
+                _, still_pending = loop.run_until_complete(asyncio.wait(pending, timeout=1.0))
+                if still_pending:
+                    for task in still_pending:
+                        task.cancel()
+                    # Try to await cancellations, but don't hang forever if a task ignores them.
+                    try:
+                        loop.run_until_complete(
+                            asyncio.wait_for(
+                                asyncio.gather(*still_pending, return_exceptions=True),
+                                timeout=1.0,
+                            )
+                        )
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            f"{len(still_pending)} task(s) still pending after cancellation{ctx}; closing loop anyway"
+                        )
+        except Exception as e:
+            logger.error(f"Failed to drain pending tasks{ctx}: {e}", exc_info=True)
+
+        try:
+            loop.run_until_complete(asyncio.wait_for(loop.shutdown_asyncgens(), timeout=1.0))
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout while shutting down async generators{ctx}; closing loop anyway")
+        except Exception as e:
+            logger.error(f"Failed to shutdown async generators{ctx}: {e}", exc_info=True)
+
+        shutdown_default_executor = getattr(loop, "shutdown_default_executor", None)
+        if shutdown_default_executor is not None:
+            try:
+                loop.run_until_complete(asyncio.wait_for(shutdown_default_executor(), timeout=1.0))
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout while shutting down default executor{ctx}; closing loop anyway")
+            except Exception as e:
+                logger.error(f"Failed to shutdown default executor{ctx}: {e}", exc_info=True)
+
+    finally:
+        try:
+            asyncio.set_event_loop(None)
+        except Exception:
+            pass
+
+        try:
+            loop.close()
+        except Exception as e:
+            logger.error(f"Failed to close event loop{ctx}: {e}", exc_info=True)
 
 
 
@@ -81,15 +177,7 @@ def send_monthly_reports():
         logger.error(f"Error in send_monthly_reports task: {e}")
 
     finally:
-        if loop is not None:
-            if bot is not None:
-                try:
-                    loop.run_until_complete(bot.close())
-                except Exception as e:
-                    logger.error(f"Failed to close bot session in send_monthly_reports: {e}", exc_info=True)
-
-            asyncio.set_event_loop(None)
-            loop.close()
+        _shutdown_event_loop(loop, bot=bot, label="send_monthly_reports")
 
 
 @shared_task
@@ -179,9 +267,7 @@ def generate_monthly_insights():
         logger.error(f"Error in generate_monthly_insights task: {e}")
 
     finally:
-        if loop is not None:
-            asyncio.set_event_loop(None)
-            loop.close()
+        _shutdown_event_loop(loop, label="generate_monthly_insights")
 
 
 @shared_task
@@ -566,8 +652,7 @@ def send_daily_admin_report():
         try:
             loop.run_until_complete(send_admin_alert(report, disable_notification=True))
         finally:
-            asyncio.set_event_loop(None)
-            loop.close()
+            _shutdown_event_loop(loop, label="send_daily_admin_report")
 
         logger.info(f"Расширенный ежедневный отчет за {yesterday} отправлен администратору")
 
@@ -914,8 +999,7 @@ def system_health_check():
                 try:
                     loop.run_until_complete(send_admin_alert(alert_message))
                 finally:
-                    asyncio.set_event_loop(None)
-                    loop.close()
+                    _shutdown_event_loop(loop, label="system_health_check")
                 
                 logger.warning(f"System health alert sent: {overall_status} with {len(issues)} issues")
             
@@ -1235,19 +1319,7 @@ def process_recurring_payments():
         logger.error(f"Error in process_recurring_payments task: {e}")
 
     finally:
-        if loop is not None:
-            if bot is not None:
-                try:
-                    loop.run_until_complete(bot.close())
-                except Exception as e:
-                    logger.error(f"Failed to close bot session in process_recurring_payments: {e}", exc_info=True)
-
-            try:
-                loop.close()
-            except Exception as e:
-                logger.error(f"Failed to close event loop in process_recurring_payments: {e}", exc_info=True)
-
-            asyncio.set_event_loop(None)
+        _shutdown_event_loop(loop, bot=bot, label="process_recurring_payments")
 
 
 @shared_task
@@ -1598,11 +1670,46 @@ def update_top5_keyboards():
                 # Обновляем закреплённое сообщение, если знаем ids
                 pin = Top5Pin.objects.filter(profile=profile).first()
                 if pin:
-                    kb: InlineKeyboardMarkup = build_top5_keyboard(items)
-                    loop.run_until_complete(
-                        bot.edit_message_reply_markup(chat_id=pin.chat_id, message_id=pin.message_id, reply_markup=kb)
-                    )
-                    updated += 1
+                    try:
+                        kb: InlineKeyboardMarkup = build_top5_keyboard(items)
+                        loop.run_until_complete(
+                            bot.edit_message_reply_markup(chat_id=pin.chat_id, message_id=pin.message_id, reply_markup=kb)
+                        )
+                        updated += 1
+
+                    except (TelegramBadRequest, TelegramNotFound) as e:
+                        # Telegram-специфичные ошибки
+                        error_text = str(e).lower()
+
+                        # Сообщение удалено пользователем или не существует
+                        if any(msg in error_text for msg in [
+                            "message to edit not found",
+                            "message not found",
+                            "message to delete not found"
+                        ]):
+                            logger.info(
+                                f"Top-5 pin removed for user {profile.telegram_id}: "
+                                f"message {pin.message_id} not found (probably deleted by user)"
+                            )
+                            try:
+                                pin.delete()
+                            except Exception as delete_err:
+                                logger.error(
+                                    f"Failed to delete Top-5 pin for user {profile.telegram_id}: {delete_err}",
+                                    exc_info=True
+                                )
+                        else:
+                            # Другие TelegramBadRequest (например, invalid chat_id)
+                            logger.warning(
+                                f"Top-5 Telegram error for user {profile.telegram_id}: {e}"
+                            )
+
+                    except Exception as e:
+                        # Неожиданные ошибки (сеть, БД, Python)
+                        logger.error(
+                            f"Top-5 unexpected error for user {profile.telegram_id}: {e}",
+                            exc_info=True
+                        )
             except Exception as user_err:
                 logger.error(f"Top-5 update error for user {profile.telegram_id}: {user_err}")
                 continue
@@ -1611,15 +1718,7 @@ def update_top5_keyboards():
         logger.error(f"Error in update_top5_keyboards: {e}")
 
     finally:
-        if loop is not None:
-            if bot is not None:
-                try:
-                    loop.run_until_complete(bot.close())
-                except Exception as e:
-                    logger.error(f"Failed to close bot session in update_top5_keyboards: {e}", exc_info=True)
-
-            asyncio.set_event_loop(None)
-            loop.close()
+        _shutdown_event_loop(loop, bot=bot, label="update_top5_keyboards")
 
 
 # ==================== INCOME KEYWORDS LEARNING ====================
