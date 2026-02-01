@@ -40,6 +40,9 @@ class UnifiedAIService(AIBaseService):
         self.base_url = None
         self.api_key_mixin: Optional[Type[KeyRotationMixin]] = None
         self._http_client_with_proxy: Optional[httpx.AsyncClient] = None
+        # Cache for AsyncOpenAI clients to prevent "Event loop is closed" errors
+        # Key: (api_key, use_proxy) -> AsyncOpenAI client
+        self._openai_clients: Dict[tuple, AsyncOpenAI] = {}
 
         # Настройка параметров провайдера
         if provider_name == 'deepseek':
@@ -86,16 +89,37 @@ class UnifiedAIService(AIBaseService):
             self._http_client_with_proxy = None
 
     async def aclose(self):
-        """Закрываем httpx async клиент при завершении приложения."""
+        """
+        Закрываем все клиенты при завершении приложения.
+        Включает httpx прокси-клиент и все кэшированные AsyncOpenAI клиенты.
+        """
+        # Close cached AsyncOpenAI clients
+        for _, client in list(self._openai_clients.items()):
+            try:
+                close_method = getattr(client, 'close', None)
+                if close_method:
+                    if asyncio.iscoroutinefunction(close_method):
+                        await close_method()
+                    else:
+                        close_method()
+            except Exception as e:
+                logger.debug(f"[{self.provider_name}] Error closing OpenAI client: {e}")
+        self._openai_clients.clear()
+
+        # Close httpx proxy client
         if self._http_client_with_proxy:
             try:
                 await self._http_client_with_proxy.aclose()
             except Exception:
                 pass
+            finally:
+                # Do not keep reference to a closed proxy client.
+                self._http_client_with_proxy = None
 
     def _get_client(self, use_proxy: bool = True) -> tuple[AsyncOpenAI, int]:
         """
-        Создает клиент OpenAI с актуальным ключом из ротации
+        Получает или создаёт клиент OpenAI с актуальным ключом из ротации.
+        Клиенты кэшируются для предотвращения утечек при закрытии event loop.
 
         Args:
             use_proxy: Использовать прокси (если доступен). False = прямое соединение.
@@ -113,7 +137,6 @@ class UnifiedAIService(AIBaseService):
         api_key, key_index = key_result
 
         # Используем прокси только для OpenRouter
-        http_client = None
         connection_mode = os.getenv('OPENROUTER_CONNECTION_MODE', 'proxy').lower()
         should_use_proxy = (
             use_proxy
@@ -121,8 +144,15 @@ class UnifiedAIService(AIBaseService):
             and connection_mode == 'proxy'
         )
 
-        if should_use_proxy:
-            http_client = self._http_client_with_proxy
+        # Cache key: (api_key, should_use_proxy)
+        cache_key = (api_key, should_use_proxy)
+
+        # Return cached client if exists
+        if cache_key in self._openai_clients:
+            return self._openai_clients[cache_key], key_index
+
+        # Create new client
+        http_client = self._http_client_with_proxy if should_use_proxy else None
 
         # Для прокси-запросов: отключаем retry (мы сами делаем fallback)
         # и используем granular timeout (быстрый connect, дольше на read)
@@ -135,13 +165,18 @@ class UnifiedAIService(AIBaseService):
             timeout = 15.0
             max_retries = 1
 
-        return AsyncOpenAI(
+        client = AsyncOpenAI(
             api_key=api_key,
             base_url=self.base_url,
             timeout=timeout,
             max_retries=max_retries,
             http_client=http_client
-        ), key_index
+        )
+
+        # Cache the client
+        self._openai_clients[cache_key] = client
+
+        return client, key_index
 
     def _is_proxy_error(self, error: Exception) -> bool:
         """Проверяет, является ли ошибка связанной с прокси"""

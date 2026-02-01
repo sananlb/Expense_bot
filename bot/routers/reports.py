@@ -1535,9 +1535,6 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
     """
     user_id = callback.from_user.id
 
-    # КРИТИЧНО: Отвечаем на callback СРАЗУ!
-    await callback.answer()
-
     # Парсим callback_data (формат: monthly_report_pdf_2025_10)
     parts = callback.data.split('_')
     year = int(parts[3])
@@ -1560,8 +1557,13 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
     cache.set(lock_key, True, timeout=600)
 
     try:
-        # Заменяем сообщение на текст о генерации
-        progress_msg = await callback.message.edit_text(
+        # КРИТИЧНО: Отвечаем на callback СРАЗУ!
+        # (важно: callback_query можно ответить только один раз)
+        await callback.answer()
+
+        # ВАЖНО: НЕ трогаем оригинальное сообщение с инсайтом!
+        # Отправляем НОВОЕ сообщение о генерации
+        progress_msg = await callback.message.answer(
             "⏳ " + (
                 "Generating report..."
                 if lang == 'en' else

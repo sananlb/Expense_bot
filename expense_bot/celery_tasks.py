@@ -54,6 +54,14 @@ def _shutdown_event_loop(loop: asyncio.AbstractEventLoop, *, bot: Bot = None, la
             except Exception as e:
                 logger.error(f"Failed to close bot aiohttp session{ctx}: {e}", exc_info=True)
 
+        # Close all AI services (httpx clients) before closing the loop
+        # This prevents "Task exception was never retrieved" / "Event loop is closed" errors
+        try:
+            from bot.services.ai_selector import AISelector
+            loop.run_until_complete(AISelector.close_all_services(clear_cache=True))
+        except Exception as e:
+            logger.debug(f"Failed to close AI services{ctx}: {e}")
+
         # Give the loop a chance to process callbacks scheduled by close().
         try:
             loop.run_until_complete(asyncio.sleep(0))
@@ -126,6 +134,8 @@ def send_monthly_reports():
         bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('MONITORING_BOT_TOKEN')
         bot = Bot(token=bot_token)
         service = NotificationService(bot)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
         # Use timezone-aware datetime to match CELERY_TIMEZONE (Europe/Moscow)
         now = timezone.now()  # Returns timezone-aware datetime in Europe/Moscow
@@ -160,24 +170,176 @@ def send_monthly_reports():
 
         logger.info(f"Sending monthly reports to {profiles.count()} users with expenses")
 
-        # Run async function in sync context
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
         for profile in profiles:
             try:
                 loop.run_until_complete(
-                    service.send_monthly_report_notification(profile.telegram_id, profile)
+                    service.send_monthly_report_notification(
+                        profile.telegram_id,
+                        profile,
+                        prev_year,
+                        prev_month,
+                        attempt=1,
+                    )
                 )
-                logger.info(f"Monthly report notification sent to user {profile.telegram_id}")
             except Exception as e:
-                logger.error(f"Error sending monthly report notification to user {profile.telegram_id}: {e}")
+                error_msg = str(e)
+                if is_retryable_error(error_msg):
+                    logger.warning(
+                        f"[MONTHLY_REPORT] user={profile.telegram_id} status=retry_scheduled "
+                        f"attempt=1 delay=300s period={prev_year}-{prev_month:02d} error={error_msg}"
+                    )
+                    retry_send_monthly_report.apply_async(
+                        args=[profile.telegram_id, prev_year, prev_month, 2],
+                        countdown=300
+                    )
+                else:
+                    logger.error(
+                        f"[MONTHLY_REPORT] user={profile.telegram_id} status=failed_permanent "
+                        f"period={prev_year}-{prev_month:02d} error={error_msg}"
+                    )
 
     except Exception as e:
         logger.error(f"Error in send_monthly_reports task: {e}")
 
     finally:
         _shutdown_event_loop(loop, bot=bot, label="send_monthly_reports")
+
+
+# Константы для retry логики отправки месячных отчетов
+RETRYABLE_ERRORS = [
+    'internal server error',  # 500
+    'bad gateway',            # 502
+    'service unavailable',    # 503
+    'gateway timeout',        # 504
+    'timeout', 'timed out',
+    'connection reset',
+    'retry after',
+    'flood control',
+]
+
+NON_RETRYABLE_ERRORS = [
+    'forbidden',              # 403 - бот заблокирован
+    'chat not found',         # 400 - чат недоступен
+    'user is deactivated',    # пользователь удален
+    'bot was blocked',
+    'have no rights',
+    'need administrator',
+]
+
+# Backoff: 5 мин, 30 мин, 1 час
+RETRY_DELAYS = [300, 1800, 3600]
+
+
+def is_retryable_error(error_msg: str) -> bool:
+    """Check if error is temporary and worth retrying"""
+    error_lower = error_msg.lower()
+
+    # First check if it's a non-retryable error
+    for pattern in NON_RETRYABLE_ERRORS:
+        if pattern in error_lower:
+            return False
+
+    # Then check if it matches retryable patterns
+    for pattern in RETRYABLE_ERRORS:
+        if pattern in error_lower:
+            return True
+
+    # Unknown errors - don't retry by default
+    return False
+
+
+@shared_task
+def retry_send_monthly_report(user_id: int, year: int, month: int, attempt: int = 1):
+    """
+    Retry sending monthly report notification.
+    Called when initial send fails with a temporary error.
+
+    Backoff schedule: 5 min → 30 min → 1 hour
+    """
+    from django.core.cache import cache
+    from expenses.models import Profile
+    from bot.services.notifications import NotificationService
+
+    bot = None
+    loop = None
+
+    # Idempotency check - don't send duplicates
+    sent_key = f"monthly_report_sent:{user_id}:{year}:{month}"
+    if cache.get(sent_key):
+        logger.info(f"[MONTHLY_REPORT] user={user_id} status=already_sent period={year}-{month:02d}")
+        return
+
+    try:
+        bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('MONITORING_BOT_TOKEN')
+        bot = Bot(token=bot_token)
+        service = NotificationService(bot)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        profile = Profile.objects.get(telegram_id=user_id)
+
+        sent = loop.run_until_complete(
+            service.send_monthly_report_notification(
+                profile.telegram_id,
+                profile,
+                year,
+                month,
+                attempt=attempt,
+            )
+        )
+        if not sent:
+            logger.info(
+                f"[MONTHLY_REPORT] user={user_id} status=skipped "
+                f"attempt={attempt} period={year}-{month:02d}"
+            )
+
+    except Profile.DoesNotExist:
+        logger.error(f"[MONTHLY_REPORT] user={user_id} status=failed error=profile_not_found")
+
+    except Exception as e:
+        error_msg = str(e)
+
+        if is_retryable_error(error_msg):
+            if attempt < 4:  # Max 4 attempts total (1 initial + 3 retries)
+                delay = RETRY_DELAYS[min(attempt - 1, len(RETRY_DELAYS) - 1)]
+                logger.warning(
+                    f"[MONTHLY_REPORT] user={user_id} status=retry_scheduled "
+                    f"attempt={attempt} next_attempt={attempt + 1} delay={delay}s error={error_msg}"
+                )
+                # Schedule next retry
+                retry_send_monthly_report.apply_async(
+                    args=[user_id, year, month, attempt + 1],
+                    countdown=delay
+                )
+            else:
+                # All retries exhausted
+                logger.error(
+                    f"[MONTHLY_REPORT] user={user_id} status=failed "
+                    f"attempts={attempt} period={year}-{month:02d} error={error_msg}"
+                )
+                # Alert admin
+                try:
+                    from bot.services.admin_notifier import send_admin_alert
+                    loop.run_until_complete(
+                        send_admin_alert(
+                            f"❌ Monthly report FAILED after {attempt} attempts\n"
+                            f"User: {user_id}\n"
+                            f"Period: {year}-{month:02d}\n"
+                            f"Error: {error_msg}",
+                            disable_notification=True
+                        )
+                    )
+                except Exception as alert_err:
+                    logger.error(f"Failed to send admin alert: {alert_err}")
+        else:
+            # Non-retryable error (user blocked bot, etc.)
+            logger.error(
+                f"[MONTHLY_REPORT] user={user_id} status=failed_permanent "
+                f"period={year}-{month:02d} error={error_msg}"
+            )
+
+    finally:
+        _shutdown_event_loop(loop, bot=bot, label="retry_send_monthly_report")
 
 
 @shared_task

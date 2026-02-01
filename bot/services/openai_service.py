@@ -62,6 +62,9 @@ class OpenAIService(AIBaseService):
         self.api_key_mixin = OpenAIKeyRotationMixin
         self.use_rotation = bool(self.api_key_mixin.get_api_keys())
         self._last_key_index = None
+        # Cache for AsyncOpenAI clients created during key rotation
+        # Key: api_key -> AsyncOpenAI client
+        self._rotation_clients: Dict[str, AsyncOpenAI] = {}
         # Если нет пула клиентов, создаем единичный клиент из Django settings/ENV
         if not OPENAI_CLIENTS:
             try:
@@ -89,14 +92,25 @@ class OpenAIService(AIBaseService):
             return OPENAI_CLIENTS[current_index]
     
     def _get_client(self) -> AsyncOpenAI:
-        """Получить клиент для текущего запроса"""
+        """
+        Получить клиент для текущего запроса.
+        Клиенты кэшируются для предотвращения утечек при закрытии event loop.
+        """
         if self.use_rotation:
             key_result = self.api_key_mixin.get_next_key()
             if not key_result:
                 raise ValueError("No OpenAI API keys available")
             api_key, key_index = key_result
             self._last_key_index = key_index
-            return AsyncOpenAI(api_key=api_key)
+
+            # Return cached client if exists
+            if api_key in self._rotation_clients:
+                return self._rotation_clients[api_key]
+
+            # Create and cache new client
+            client = AsyncOpenAI(api_key=api_key)
+            self._rotation_clients[api_key] = client
+            return client
 
         client = self.get_client()
         if client:
@@ -117,11 +131,21 @@ class OpenAIService(AIBaseService):
             self.api_key_mixin.mark_key_failure(self._last_key_index, error)
 
     async def aclose(self):
-        """Закрывает async клиентов OpenAI."""
+        """
+        Закрывает клиентов OpenAI созданных этим экземпляром.
+
+        НЕ закрывает глобальный пул OPENAI_CLIENTS - он может переиспользоваться
+        другими экземплярами сервиса.
+        """
+        # Close fallback client
         if self.fallback_client:
             await _aclose_openai_client(self.fallback_client)
-        for client in OPENAI_CLIENTS:
+            self.fallback_client = None
+
+        # Close cached rotation clients
+        for _, client in list(self._rotation_clients.items()):
             await _aclose_openai_client(client)
+        self._rotation_clients.clear()
         
     async def categorize_expense(
         self, 

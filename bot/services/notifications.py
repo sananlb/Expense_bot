@@ -20,103 +20,126 @@ class NotificationService:
     def __init__(self, bot: Bot):
         self.bot = bot
         
-    async def send_monthly_report_notification(self, user_id: int, profile: Profile, year: int = None, month: int = None):
-        """Send monthly report notification with format selection buttons"""
-        try:
-            from ..services.monthly_insights import MonthlyInsightsService
+    async def send_monthly_report_notification(
+        self,
+        user_id: int,
+        profile: Profile,
+        year: int = None,
+        month: int = None,
+        attempt: int = 1,
+    ) -> bool:
+        """Send monthly report notification with format selection buttons."""
+        from ..services.monthly_insights import MonthlyInsightsService
+        from django.core.cache import cache
 
-            today = date.today()
+        today = date.today()
 
-            # Get user language first
-            user_lang = profile.language_code or 'ru'
+        # Get user language first
+        user_lang = profile.language_code or 'ru'
 
-            # Если год/месяц не указаны - используем предыдущий месяц
-            if year is None or month is None:
-                if today.month == 1:
-                    report_month = 12
-                    report_year = today.year - 1
-                else:
-                    report_month = today.month - 1
-                    report_year = today.year
+        # Если год/месяц не указаны - используем предыдущий месяц
+        if year is None or month is None:
+            if today.month == 1:
+                report_month = 12
+                report_year = today.year - 1
             else:
-                report_year = year
-                report_month = month
+                report_month = today.month - 1
+                report_year = today.year
+        else:
+            report_year = year
+            report_month = month
 
-            month_name = get_month_name(report_month, user_lang)
+        month_name = get_month_name(report_month, user_lang)
 
-            # Генерируем AI инсайты
-            caption = f"📊 {get_text('monthly_report_ready', user_lang, month=month_name, year=report_year)}"
+        # Генерируем AI инсайты
+        caption = f"📊 {get_text('monthly_report_ready', user_lang, month=month_name, year=report_year)}"
 
-            try:
-                insights_service = MonthlyInsightsService()
-                insight = await insights_service.get_insight(profile, report_year, report_month)
+        try:
+            insights_service = MonthlyInsightsService()
+            insight = await insights_service.get_insight(profile, report_year, report_month)
 
-                if not insight:
-                    # Генерируем новый инсайт
-                    insight = await insights_service.generate_insight(
-                        profile=profile,
-                        year=report_year,
-                        month=report_month,
-                        provider='deepseek',  # Use DeepSeek instead of Google
-                        force_regenerate=False
-                    )
-
-                # Check if insight is valid and doesn't contain error messages
-                error_phrases = ['извините', 'временно недоступен', 'service unavailable', 'error', 'failed', 'test summary']
-                has_error = insight and insight.ai_summary and any(
-                    phrase in insight.ai_summary.lower() for phrase in error_phrases
+            if not insight:
+                # Генерируем новый инсайт
+                insight = await insights_service.generate_insight(
+                    profile=profile,
+                    year=report_year,
+                    month=report_month,
+                    provider='deepseek',  # Use DeepSeek instead of Google
+                    force_regenerate=False
                 )
 
-                # Check minimum summary length (real AI summaries are at least 50 characters)
-                is_too_short = insight and insight.ai_summary and len(insight.ai_summary.strip()) < 50
+            # Check if insight is valid and doesn't contain error messages
+            error_phrases = ['извините', 'временно недоступен', 'service unavailable', 'error', 'failed', 'test summary']
+            has_error = insight and insight.ai_summary and any(
+                phrase in insight.ai_summary.lower() for phrase in error_phrases
+            )
 
-                if not insight or not insight.ai_summary or has_error or is_too_short:
-                    # Инсайт не сгенерирован или содержит ошибку - НЕ отправляем уведомление вообще
-                    if has_error:
-                        logger.warning(f"Insight contains error message for user {user_id} for {report_year}-{report_month:02d}. Notification not sent.")
-                    elif is_too_short:
-                        logger.warning(f"Insight summary too short ({len(insight.ai_summary.strip())} chars) for user {user_id} for {report_year}-{report_month:02d}. Notification not sent.")
-                    elif insight:
-                        logger.warning(f"Insight exists but ai_summary is empty for user {user_id} for {report_year}-{report_month:02d}. Notification not sent.")
-                    else:
-                        logger.info(f"No insights generated for user {user_id} for {report_year}-{report_month:02d} (not enough data). Notification not sent.")
-                    return  # Exit without sending notification
+            # Check minimum summary length (real AI summaries are at least 50 characters)
+            is_too_short = insight and insight.ai_summary and len(insight.ai_summary.strip()) < 50
 
-                # Формируем текст инсайта и добавляем к caption
-                # ВАЖНО: показываем инсайт только если он успешно сгенерирован (не содержит сообщений об ошибках)
-                insight_text = await self._format_insight_text(insight, report_month, report_year, user_lang)
-                choose_format_text = get_text('monthly_report_choose_format', user_lang)
-                full_caption = f"{caption}\n\n{insight_text}\n\n💡 <i>{choose_format_text}</i>"
-
-                # Telegram ограничивает текстовые сообщения до 4096 символов
-                if len(full_caption) <= 4000:
-                    caption = full_caption
+            if not insight or not insight.ai_summary or has_error or is_too_short:
+                # Инсайт не сгенерирован или содержит ошибку - НЕ отправляем уведомление вообще
+                if has_error:
+                    logger.warning(f"Insight contains error message for user {user_id} for {report_year}-{report_month:02d}. Notification not sent.")
+                elif is_too_short:
+                    logger.warning(f"Insight summary too short ({len(insight.ai_summary.strip())} chars) for user {user_id} for {report_year}-{report_month:02d}. Notification not sent.")
+                elif insight:
+                    logger.warning(f"Insight exists but ai_summary is empty for user {user_id} for {report_year}-{report_month:02d}. Notification not sent.")
                 else:
-                    # Если текст слишком длинный, обрезаем инсайт
-                    max_insight_length = 4000 - len(caption) - 50
-                    if max_insight_length > 100:
-                        truncated_insight = insight_text[:max_insight_length] + "..."
-                        caption = f"{caption}\n\n{truncated_insight}\n\n💡 <i>{choose_format_text}</i>"
-                    else:
-                        caption += f"\n\n💡 <i>{choose_format_text}</i>"
+                    logger.info(f"No insights generated for user {user_id} for {report_year}-{report_month:02d} (not enough data). Notification not sent.")
+                return False
 
-                logger.info(f"Monthly insights generated for user {user_id} for {report_year}-{report_month:02d}")
+            # Формируем текст инсайта и добавляем к caption
+            # ВАЖНО: показываем инсайт только если он успешно сгенерирован (не содержит сообщений об ошибках)
+            insight_text = await self._format_insight_text(insight, report_month, report_year, user_lang)
+            choose_format_text = get_text('monthly_report_choose_format', user_lang)
+            full_caption = f"{caption}\n\n{insight_text}\n\n💡 <i>{choose_format_text}</i>"
 
-            except Exception as e:
-                # Ошибка при генерации инсайтов - НЕ отправляем уведомление вообще
-                logger.error(f"Error generating insights for user {user_id}: {e}. Notification not sent.")
-                return  # Exit without sending notification
+            # Telegram ограничивает текстовые сообщения до 4096 символов
+            if len(full_caption) <= 4000:
+                caption = full_caption
+            else:
+                # Если текст слишком длинный, обрезаем инсайт
+                max_insight_length = 4000 - len(caption) - 50
+                if max_insight_length > 100:
+                    truncated_insight = insight_text[:max_insight_length] + "..."
+                    caption = f"{caption}\n\n{truncated_insight}\n\n💡 <i>{choose_format_text}</i>"
+                else:
+                    caption += f"\n\n💡 <i>{choose_format_text}</i>"
 
-            # Создаем клавиатуру с кнопками форматов (в один ряд)
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [
-                    InlineKeyboardButton(text="📄 CSV", callback_data=f"monthly_report_csv_{report_year}_{report_month}"),
-                    InlineKeyboardButton(text="📈 XLSX", callback_data=f"monthly_report_xlsx_{report_year}_{report_month}"),
-                    InlineKeyboardButton(text="📊 PDF", callback_data=f"monthly_report_pdf_{report_year}_{report_month}")
-                ]
-            ])
+            logger.info(f"Monthly insights generated for user {user_id} for {report_year}-{report_month:02d}")
 
-            # Отправляем сообщение с кнопками
+        except Exception as e:
+            # Ошибка при генерации инсайтов - НЕ отправляем уведомление вообще
+            logger.error(f"Error generating insights for user {user_id}: {e}. Notification not sent.")
+            return False
+
+        # Создаем клавиатуру с кнопками форматов (в один ряд)
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="📄 CSV", callback_data=f"monthly_report_csv_{report_year}_{report_month}"),
+                InlineKeyboardButton(text="📈 XLSX", callback_data=f"monthly_report_xlsx_{report_year}_{report_month}"),
+                InlineKeyboardButton(text="📊 PDF", callback_data=f"monthly_report_pdf_{report_year}_{report_month}")
+            ]
+        ])
+
+        # Idempotency check - don't send duplicates
+        sent_key = f"monthly_report_sent:{user_id}:{report_year}:{report_month}"
+        if cache.get(sent_key):
+            logger.info(f"[MONTHLY_REPORT] user={user_id} status=already_sent period={report_year}-{report_month:02d}")
+            return False
+
+        # Prevent concurrent sends from parallel workers for the same user/period.
+        inflight_key = f"monthly_report_sending:{user_id}:{report_year}:{report_month}"
+        if not cache.add(inflight_key, True, timeout=600):
+            logger.info(
+                f"[MONTHLY_REPORT] user={user_id} status=in_progress "
+                f"period={report_year}-{report_month:02d}"
+            )
+            return False
+
+        try:
+            # Let Telegram exceptions bubble up so Celery can decide retry strategy.
             await self.bot.send_message(
                 chat_id=user_id,
                 text=caption,
@@ -124,10 +147,13 @@ class NotificationService:
                 parse_mode='HTML'
             )
 
-            logger.info(f"Monthly report notification sent to user {user_id} for {report_year}-{report_month:02d}")
+            # Mark as sent for idempotency (keep for 7 days)
+            cache.set(sent_key, True, timeout=86400 * 7)
 
-        except Exception as e:
-            logger.error(f"Error sending monthly report notification to user {user_id}: {e}")
+            logger.info(f"[MONTHLY_REPORT] user={user_id} status=sent attempt={attempt} period={report_year}-{report_month:02d}")
+            return True
+        finally:
+            cache.delete(inflight_key)
 
     async def _calculate_category_changes(self, insight, month: int, year: int):
         """

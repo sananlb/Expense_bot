@@ -83,9 +83,37 @@ class AISelector:
     
     @classmethod
     def clear_cache(cls):
-        """Очищает кэш экземпляров сервисов"""
+        """
+        Очищает кэш экземпляров сервисов.
+
+        ВНИМАНИЕ: Эта функция НЕ закрывает httpx клиенты!
+        Для корректного закрытия используйте close_all_services() перед clear_cache().
+
+        В Celery задачах это происходит автоматически в _shutdown_event_loop().
+        """
         cls._instances.clear()
         logger.info("AI service cache cleared")
+
+    @classmethod
+    async def close_all_services(cls, *, clear_cache: bool = True):
+        """
+        Закрывает все httpx/AsyncOpenAI клиенты в кэшированных AI сервисах.
+        Должен вызываться перед закрытием event loop в Celery задачах.
+
+        По умолчанию очищает кэш после закрытия, чтобы не переиспользовать
+        экземпляры сервисов с закрытыми клиентами.
+        """
+        for provider, service in list(cls._instances.items()):
+            if hasattr(service, 'aclose'):
+                try:
+                    await service.aclose()
+                    logger.debug(f"Closed clients for {provider}")
+                except Exception as e:
+                    logger.warning(f"Failed to close clients for {provider}: {e}")
+        if clear_cache:
+            cls._instances.clear()
+            logger.debug("AI service cache cleared after close")
+        logger.debug("All AI service clients closed")
 
 
 def get_service(service_type: str = 'default'):

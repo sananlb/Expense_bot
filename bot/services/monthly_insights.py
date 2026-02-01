@@ -35,10 +35,7 @@ class MonthlyInsightsService:
     def _initialize_ai(self, provider: str = 'deepseek'):
         """Initialize AI service based on provider"""
         if not self.ai_service or self.ai_provider != provider:
-            # Clear cache to force new provider
             from .ai_selector import AISelector
-            AISelector.clear_cache()
-
             # Get service using AISelector directly with provider type
             self.ai_service = AISelector(provider)
             self.ai_provider = provider
