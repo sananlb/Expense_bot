@@ -269,6 +269,90 @@ sudo nginx -t && sudo systemctl reload nginx
 
 ---
 
+## Technical SEO (выполнено 2026-02-02)
+
+### 4. ✅ Schema.org структурированные данные
+
+**Добавлено в `index.html` и `index_en.html`:**
+
+- **SoftwareApplication** — описание бота как приложения
+  - name, description, applicationCategory
+  - operatingSystem: "Android, iOS, Web"
+  - applicationSubCategory: "Telegram Bot"
+  - offers: AggregateOffer с двумя ценами (Free Trial + Premium)
+
+- **Organization** — информация о компании
+  - name, url, logo, contactPoint
+
+**Преимущества:**
+- Улучшенное отображение в поиске Google
+- Rich snippets с ценами и рейтингами
+- Лучшее понимание контента поисковиками
+
+### 5. ✅ Gzip сжатие активировано
+
+**Файлы:**
+- `deploy/nginx/landing-cache.conf` — для лендинга
+- `nginx/expensebot-ssl.conf` — для бота
+
+**Настройки:**
+```nginx
+gzip on;
+gzip_vary on;
+gzip_proxied any;
+gzip_comp_level 6;
+gzip_min_length 256;
+gzip_types text/plain text/css text/xml text/javascript
+           application/json application/javascript application/xml+rss
+           application/rss+xml font/truetype font/opentype
+           application/vnd.ms-fontobject image/svg+xml;
+```
+
+**Результат:** HTML/CSS/JS сжимаются на 60-80%
+
+### 6. ✅ WebP оптимизация изображений (дополнительно)
+
+**Новый файл:** `landing/laptop_xlsx.webp`
+- Оригинал (PNG): 3.8 MB
+- WebP: 434 KB
+- **Экономия: 88%**
+
+**Реализация:** `<picture>` тег с fallback на PNG
+
+### 7. ✅ Отдельные FAQ страницы
+
+**Созданы:**
+- `landing/faq.html` — русская версия (11 вопросов)
+- `landing/faq_en.html` — английская версия
+
+**SEO оптимизации:**
+- FAQPage Schema.org разметка
+- Canonical и hreflang теги
+- Open Graph метаданные
+
+**Чистые URL (nginx):**
+- `/faq` → `faq.html`
+- `/faq-en` → `faq_en.html`
+
+**Навигация обновлена:**
+- Удалён встроенный FAQ раздел из index.html
+- Ссылки в навигации и футере ведут на `/faq`
+
+### 8. ✅ Исправлен путь SSL сертификата
+
+**Было:** `/etc/letsencrypt/live/www.coins-bot.ru/`
+**Стало:** `/etc/letsencrypt/live/coins-bot.ru/`
+
+---
+
+## Коммиты Technical SEO
+
+- `db3043f` — FAQ pages, Schema.org, WebP, Gzip
+- `1da842c` — Fix SSL certificate path
+- `db4b3a6` — Fix FAQ logo to match main page
+
+---
+
 ## Контакты для поддержки
 
 Если возникли проблемы:
