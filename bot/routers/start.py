@@ -268,7 +268,7 @@ async def cmd_start(
     # Если пришли по семейной ссылке, предлагаем подтвердить присоединение
     if family_token:
         try:
-            from bot.services.family import get_invite_by_token
+            from bot.services.household import get_invite_by_token
             inv = await get_invite_by_token(family_token)
             if inv and inv.is_valid():
                 inviter_tid = inv.inviter.telegram_id
@@ -287,7 +287,7 @@ async def cmd_start(
                 from aiogram.utils.keyboard import InlineKeyboardBuilder
                 kb = InlineKeyboardBuilder()
                 kb.button(text=no_text, callback_data="close")
-                kb.button(text=yes_text, callback_data=f"family_accept:{inv.token}")
+                kb.button(text=yes_text, callback_data=f"confirm_join:{inv.token}")
                 kb.adjust(2)
                 await message.answer(confirm_text, reply_markup=kb.as_markup(), parse_mode="HTML")
             else:
@@ -471,7 +471,7 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
 
         if family_token:
             try:
-                from bot.services.family import get_invite_by_token
+                from bot.services.household import get_invite_by_token
                 inv = await get_invite_by_token(family_token)
                 if inv and inv.is_valid():
                     inviter_tid = inv.inviter.telegram_id
@@ -490,7 +490,7 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
                     from aiogram.utils.keyboard import InlineKeyboardBuilder
                     kb = InlineKeyboardBuilder()
                     kb.button(text=no_text, callback_data='close')
-                    kb.button(text=yes_text, callback_data=f"family_accept:{inv.token}")
+                    kb.button(text=yes_text, callback_data=f"confirm_join:{inv.token}")
                     kb.adjust(2)
                     await callback.message.answer(confirm_text, reply_markup=kb.as_markup(), parse_mode="HTML")
                 else:

@@ -243,6 +243,9 @@ class FamilyInvite(models.Model):
             return False
         if self.expires_at and dj_tz.now() > self.expires_at:
             return False
+        # Проверяем что домохозяйство активно
+        if self.household_id and not self.household.is_active:
+            return False
         return True
     
     @staticmethod

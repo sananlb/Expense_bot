@@ -17,6 +17,19 @@ MIN_HOUSEHOLD_NAME_LENGTH = 3
 MAX_HOUSEHOLD_NAME_LENGTH = 50
 
 
+# Вспомогательные async-функции
+from asgiref.sync import sync_to_async
+
+
+@sync_to_async
+def get_invite_by_token(token: str) -> Optional[FamilyInvite]:
+    """Получение приглашения по токену"""
+    try:
+        return FamilyInvite.objects.select_related("inviter", "household").get(token=token)
+    except FamilyInvite.DoesNotExist:
+        return None
+
+
 class HouseholdService:
     """Сервис для управления семейными бюджетами"""
     
@@ -34,10 +47,14 @@ class HouseholdService:
             Tuple[успех, сообщение, домохозяйство]
         """
         try:
+            # Блокируем профиль для предотвращения race condition
+            # (два одновременных запроса могут создать два household)
+            profile = Profile.objects.select_for_update().get(id=profile.id)
+
             # Проверяем, не состоит ли пользователь уже в домохозяйстве
             if profile.household:
                 return False, "Вы уже состоите в семейном бюджете", None
-            
+
             # Валидация названия
             if name:
                 name = name.strip()
@@ -134,7 +151,17 @@ class HouseholdService:
             # Проверяем, не состоит ли пользователь уже в домохозяйстве
             if profile.household:
                 return False, "Вы уже состоите в семейном бюджете"
-            
+
+            # Проверяем наличие активной подписки (включая trial)
+            # Бета-тестеры имеют полный доступ
+            if not profile.is_beta_tester:
+                has_subscription = profile.subscriptions.filter(
+                    is_active=True,
+                    end_date__gt=timezone.now()
+                ).exists()
+                if not has_subscription:
+                    return False, "Для вступления в семейный бюджет необходима активная подписка"
+
             # Ищем и блокируем приглашение для предотвращения race condition
             # (два пользователя могут одновременно использовать один токен)
             invite = FamilyInvite.objects.select_for_update().filter(token=token).first()
@@ -205,6 +232,8 @@ class HouseholdService:
                 # Деактивируем домохозяйство
                 household.is_active = False
                 household.save()
+                # Деактивируем все приглашения
+                FamilyInvite.objects.filter(household=household, is_active=True).update(is_active=False)
                 logger.info(f"Household {household.id} disbanded by creator {profile.telegram_id}")
                 return True, f"Домохозяйство '{household_name}' расформировано"
 
@@ -220,6 +249,8 @@ class HouseholdService:
             if household.members_count == 0:
                 household.is_active = False
                 household.save()
+                # Деактивируем все приглашения
+                FamilyInvite.objects.filter(household=household, is_active=True).update(is_active=False)
                 logger.info(f"Household {household.id} deactivated (no members)")
 
             logger.info(f"User {profile.telegram_id} left household {household.id}")
