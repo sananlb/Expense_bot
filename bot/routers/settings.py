@@ -11,7 +11,7 @@ from datetime import datetime
 import pytz
 import logging
 
-from bot.keyboards import settings_keyboard, back_close_keyboard, get_language_keyboard, get_timezone_keyboard, get_currency_keyboard
+from bot.keyboards import settings_keyboard, back_close_keyboard, get_language_keyboard, get_timezone_keyboard, get_currency_keyboard, delete_profile_step1_keyboard, delete_profile_final_keyboard
 from bot.utils import get_text, set_user_language, get_user_language, format_amount
 from bot.services.profile import get_or_create_profile, get_user_settings, toggle_cashback
 from bot.services.category import update_default_categories_language
@@ -365,18 +365,108 @@ async def change_currency(callback: CallbackQuery, state: FSMContext, lang: str 
 async def process_currency_change(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Обработать изменение валюты"""
     currency = callback.data.replace('curr_', '').upper()
-    
+
     try:
         # Сохраняем валюту в профиле
         profile = await get_or_create_profile(callback.from_user.id)
         profile.currency = currency
         await sync_to_async(profile.save)()
-        
+
         await callback.answer(get_text('currency_changed', lang))
-        
+
     except Exception as e:
         logger.error(f"Error changing currency: {e}")
         await callback.answer(get_text('error_occurred', lang))
-    
+
     # Возвращаемся в меню настроек
     await callback_settings(callback, state, lang)
+
+
+# ═══════════════════════════════════════════════════════════
+# DELETE PROFILE HANDLERS
+# ═══════════════════════════════════════════════════════════
+
+@router.callback_query(F.data == "delete_profile")
+async def delete_profile_step1(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Экран 2: Показать что будет удалено"""
+    await callback.answer()
+
+    confirm_text = (
+        f"{get_text('delete_profile_confirm_title', lang)}\n\n"
+        f"{get_text('delete_profile_confirm_list', lang)}\n\n"
+        f"{get_text('delete_profile_warning', lang)}"
+    )
+
+    await callback.message.edit_text(
+        confirm_text,
+        reply_markup=delete_profile_step1_keyboard(lang),
+        parse_mode="HTML"
+    )
+
+
+@router.callback_query(F.data == "delete_profile_step2")
+async def delete_profile_step2(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Экран 3: Финальная проверка перед удалением"""
+    await callback.answer()
+
+    final_text = (
+        f"{get_text('delete_profile_final_title', lang)}\n\n"
+        f"{get_text('delete_profile_final_question', lang)}"
+    )
+
+    await callback.message.edit_text(
+        final_text,
+        reply_markup=delete_profile_final_keyboard(lang),
+        parse_mode="HTML"
+    )
+
+
+@router.callback_query(F.data == "cancel_delete_profile")
+async def cancel_delete_profile(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Отмена удаления — вернуться в настройки"""
+    await callback.answer()
+    await callback_settings(callback, state, lang)
+
+
+@router.callback_query(F.data == "confirm_delete_profile")
+async def confirm_delete_profile(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Экран 4: Выполнить удаление профиля"""
+    await callback.answer()
+
+    user_id = callback.from_user.id
+
+    # Вспомогательная функция очистки состояния
+    async def cleanup_user_state():
+        """Очистка FSM state и Redis ключей"""
+        await state.clear()
+        try:
+            from django.core.cache import cache
+            cache.delete(f"expense_reminder_sent:{user_id}")
+        except Exception:
+            pass  # Не критично
+
+    try:
+        from bot.services.profile import delete_user_profile
+        success, error_code = await delete_user_profile(user_id)
+
+        if success:
+            await cleanup_user_state()
+            await callback.message.edit_text(
+                get_text('delete_profile_success', lang)
+            )
+        elif error_code == "NOT_FOUND":
+            # Профиль уже удалён — тоже чистим состояние
+            await cleanup_user_state()
+            await callback.message.edit_text(
+                get_text('delete_profile_not_found', lang)
+            )
+        else:
+            await callback.message.edit_text(
+                get_text('delete_profile_error', lang)
+            )
+
+    except Exception as e:
+        logger.error(f"Error deleting profile for user {user_id}: {e}")
+        await callback.message.edit_text(
+            get_text('delete_profile_error', lang)
+        )

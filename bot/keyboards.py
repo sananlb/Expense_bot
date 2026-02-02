@@ -33,12 +33,37 @@ def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True, has_subsc
     cashback_text = get_text('toggle_cashback', lang).format(status=status)
     keyboard.button(text=cashback_text, callback_data="toggle_cashback")
 
+    # Кнопка удаления профиля
+    keyboard.button(text=get_text('delete_profile_button', lang), callback_data="delete_profile")
+
     # Кнопка навигации
     keyboard.button(text=get_text('close', lang), callback_data="close")
 
-    # Правильная настройка кнопок - по одной в ряд (всегда 6 кнопок)
-    keyboard.adjust(1, 1, 1, 1, 1, 1)
+    # Правильная настройка кнопок - по одной в ряд (7 кнопок)
+    keyboard.adjust(1, 1, 1, 1, 1, 1, 1)
 
+    return keyboard.as_markup()
+
+
+def delete_profile_step1_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Клавиатура первого подтверждения удаления профиля"""
+    keyboard = InlineKeyboardBuilder()
+
+    keyboard.button(text=get_text('cancel_button', lang), callback_data="cancel_delete_profile")
+    keyboard.button(text=get_text('delete_profile_continue', lang), callback_data="delete_profile_step2")
+
+    keyboard.adjust(2)
+    return keyboard.as_markup()
+
+
+def delete_profile_final_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Клавиатура финального подтверждения удаления профиля"""
+    keyboard = InlineKeyboardBuilder()
+
+    keyboard.button(text=get_text('cancel_button', lang), callback_data="cancel_delete_profile")
+    keyboard.button(text=get_text('delete_profile_final_button', lang), callback_data="confirm_delete_profile")
+
+    keyboard.adjust(2)
     return keyboard.as_markup()
 
 
