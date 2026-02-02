@@ -12,43 +12,135 @@
   <link rel="alternate" hreflang="en" href="https://www.coins-bot.ru/index_en.html">
   <link rel="alternate" hreflang="x-default" href="https://www.coins-bot.ru/">
 
-  <!-- Google Analytics 4 -->
-  <!-- Global site tag (gtag.js) - Google Analytics -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-YMSY7V8YY7"></script>
+  <!-- Analytics scripts - loaded only after cookie consent -->
   <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-YMSY7V8YY7');
+    // Cookie consent management
+    window.cookieConsent = {
+      _cookieName: 'cookie_consent',
+      _maxAge: 31536000, // 1 year in seconds
+      _getCookie: function(name) {
+        var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        return match ? match[2] : null;
+      },
+      _setCookie: function(name, value, maxAge) {
+        var secure = location.protocol === 'https:' ? '; Secure' : '';
+        document.cookie = name + '=' + value + '; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
+      },
+      _deleteCookie: function(name) {
+        document.cookie = name + '=; path=/; max-age=0';
+      },
+      _deleteAnalyticsCookies: function() {
+        var patterns = ['_ga', '_gid', '_gcl_au', '_gcl_aw', '_gcl_dc', '_gcl_gb', '_gcl_gs', '_ym_uid', '_ym_d', '_ym_visorc', '_ym_isad'];
+        var cookies = document.cookie.split(';');
+        var host = location.hostname;
+        var apex = host.replace(/^www\./, '');
+        for (var i = 0; i < cookies.length; i++) {
+          var cookie = cookies[i].trim();
+          var name = cookie.split('=')[0];
+          for (var j = 0; j < patterns.length; j++) {
+            if (name === patterns[j] || name.indexOf(patterns[j] + '_') === 0) {
+              document.cookie = name + '=; path=/; max-age=0';
+              document.cookie = name + '=; path=/; max-age=0; domain=' + host;
+              document.cookie = name + '=; path=/; max-age=0; domain=.' + host;
+              document.cookie = name + '=; path=/; max-age=0; domain=' + apex;
+              document.cookie = name + '=; path=/; max-age=0; domain=.' + apex;
+            }
+          }
+        }
+      },
+      isAccepted: function() {
+        return this._getCookie(this._cookieName) === 'accepted';
+      },
+      isDeclined: function() {
+        return this._getCookie(this._cookieName) === 'declined';
+      },
+      hasChoice: function() {
+        return this._getCookie(this._cookieName) !== null;
+      },
+      accept: function() {
+        this._setCookie(this._cookieName, 'accepted', this._maxAge);
+        this.loadAnalytics();
+        this.hideBanner();
+      },
+      decline: function() {
+        this._setCookie(this._cookieName, 'declined', this._maxAge);
+        this.hideBanner();
+      },
+      withdraw: function() {
+        this._deleteCookie(this._cookieName);
+        this._deleteAnalyticsCookies();
+        if (this._analyticsLoaded) {
+          window.location.reload();
+        } else {
+          this.showBanner();
+        }
+      },
+      hideBanner: function() {
+        var banner = document.getElementById('cookie-banner');
+        if (banner) {
+          banner.style.opacity = '0';
+          banner.style.transform = 'translateY(20px)';
+          setTimeout(function() { banner.style.display = 'none'; }, 300);
+        }
+      },
+      showBanner: function() {
+        var banner = document.getElementById('cookie-banner');
+        if (banner) {
+          banner.style.display = 'block';
+          setTimeout(function() {
+            banner.style.opacity = '1';
+            banner.style.transform = 'translateY(0)';
+          }, 10);
+        }
+      },
+      loadAnalytics: function() {
+        if (this._analyticsLoaded) return;
+        this._analyticsLoaded = true;
+
+        // Google Analytics 4
+        var gaScript = document.createElement('script');
+        gaScript.async = true;
+        gaScript.src = 'https://www.googletagmanager.com/gtag/js?id=G-YMSY7V8YY7';
+        document.head.appendChild(gaScript);
+
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        window.gtag = gtag;
+        gtag('js', new Date());
+        gtag('config', 'G-YMSY7V8YY7');
+        gtag('config', 'AW-17711916602');
+
+        // Yandex.Metrika
+        (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+        m[i].l=1*new Date();
+        for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+        k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
+        (window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
+
+        ym(104228689, "init", {
+          clickmap:true,
+          trackLinks:true,
+          accurateTrackBounce:true,
+          webvisor:true
+        });
+      },
+      init: function() {
+        if (this.isAccepted()) {
+          this.loadAnalytics();
+        } else if (!this.hasChoice()) {
+          var self = this;
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() { self.showBanner(); });
+          } else {
+            this.showBanner();
+          }
+        }
+      }
+    };
+    // Initialize on load
+    cookieConsent.init();
   </script>
-
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17711916602"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-
-    gtag('config', 'AW-17711916602');
-  </script>
-
-  <!-- Yandex.Metrika counter -->
-  <script type="text/javascript" >
-    (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
-    m[i].l=1*new Date();
-    for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
-    k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
-    (window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
-
-    ym(104228689, "init", {
-         clickmap:true,
-         trackLinks:true,
-         accurateTrackBounce:true,
-         webvisor:true
-    });
-  </script>
-  <noscript><div><img src="https://mc.yandex.ru/watch/104228689" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
-  <!-- /Yandex.Metrika counter -->
+  <!-- noscript pixel removed - requires consent -->
 
   <link rel="icon" type="image/jpeg" href="photo_2025-09-13_10-57-55.jpg">
   <!-- Self-hosted fonts for GDPR compliance and performance -->
@@ -96,7 +188,88 @@
     .footer-bottom{padding-top:30px;border-top:1px solid rgba(148,163,184,.1);text-align:center}
     .footer-copy{font-size:14px;color:#64748b}
     @media(max-width:900px){.hero-content{grid-template-columns:1fr}.footer-content{grid-template-columns:1fr 1fr;gap:30px}.btn{color:#fff!important;background:#2563eb!important}.btn svg{fill:currentColor;color:#fff!important}.pricing-mobile{display:block!important}.pricing-desktop{display:none!important}}
+    /* Cookie Consent Banner */
+    #cookie-banner{display:none;position:fixed;bottom:20px;right:20px;max-width:320px;background:rgba(255,255,255,.98);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.12),0 2px 8px rgba(0,0,0,.08);padding:20px;z-index:10000;opacity:0;transform:translateY(20px);transition:opacity .3s ease,transform .3s ease;font-family:Inter,-apple-system,sans-serif}
+    #cookie-banner h4{margin:0 0 8px;font-size:15px;font-weight:600;color:#0f172a;display:flex;align-items:center;gap:8px}
+    #cookie-banner p{margin:0 0 16px;font-size:13px;line-height:1.5;color:#64748b}
+    #cookie-banner a{color:#2563eb;text-decoration:none}
+    #cookie-banner a:hover{text-decoration:underline}
+    #cookie-banner .cookie-buttons{display:flex;gap:8px}
+    #cookie-banner button{flex:1;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s ease;border:none}
+    #cookie-banner .cookie-accept{background:linear-gradient(135deg,#5569d3 0%,#6e82e3 100%);color:#fff}
+    #cookie-banner .cookie-accept:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(99,102,241,.3)}
+    #cookie-banner .cookie-decline{background:#f8fafc;color:#64748b;border:1px solid #e2e8f0}
+    #cookie-banner .cookie-decline:hover{background:#f1f5f9;color:#0f172a}
+    @media(max-width:480px){#cookie-banner{bottom:12px;right:12px;left:12px;max-width:none}}
   </style>
+
+  <!-- Schema.org: SoftwareApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Coins Bot",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Android, iOS, Web",
+    "applicationSubCategory": "Telegram Bot",
+    "offers": {
+      "@type": "AggregateOffer",
+      "lowPrice": "0",
+      "highPrice": "6",
+      "priceCurrency": "USD",
+      "offerCount": "2",
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "Free Trial",
+          "price": "0",
+          "priceCurrency": "USD",
+          "description": "7 days full access for free"
+        },
+        {
+          "@type": "Offer",
+          "name": "Premium Subscription",
+          "price": "1",
+          "priceCurrency": "USD",
+          "description": "From $1/month after trial"
+        }
+      ]
+    },
+    "description": "Smart expense tracking in Telegram with AI categorization, voice input and family budget",
+    "featureList": [
+      "AI expense categorization",
+      "Voice input",
+      "Family budget sharing",
+      "PDF, XLS and CSV reports",
+      "Cashback tracker",
+      "Monthly AI analytics"
+    ],
+    "screenshot": "https://www.coins-bot.ru/og-image.jpg",
+    "url": "https://www.coins-bot.ru",
+    "inLanguage": ["ru", "en"]
+  }
+  </script>
+
+  <!-- Schema.org: Organization -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Coins Bot",
+    "url": "https://www.coins-bot.ru",
+    "logo": "https://www.coins-bot.ru/logo_v3.webp",
+    "description": "Telegram bot for personal finance tracking with artificial intelligence",
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "contactType": "Customer Support",
+      "availableLanguage": ["Russian", "English"]
+    },
+    "sameAs": [
+      "https://t.me/showmecoins",
+      "https://t.me/showmecoin_bot"
+    ]
+  }
+  </script>
 </head>
 <body>
   <nav>
@@ -382,7 +555,7 @@
           <h3>Support</h3>
           <ul class="footer-links">
             <li><a href="https://t.me/SMF_support" target="_blank">Telegram Support</a></li>
-            <li><a href="#faq">FAQ</a></li>
+            <li><a href="/faq-en">FAQ</a></li>
             <li><a href="mailto:help@tbotsupport.ru">Email</a></li>
           </ul>
         </div>
@@ -392,6 +565,7 @@
             <li><a href="#">About us</a></li>
             <li><a href="privacy_en.html" target="_blank">Privacy Policy</a></li>
             <li><a href="offer_en.html" target="_blank">Terms of Service</a></li>
+            <li><a href="#" onclick="cookieConsent.withdraw(); return false;">Cookie settings</a></li>
           </ul>
         </div>
       </div>
@@ -494,6 +668,19 @@
       });
     });
   </script>
+
+  <!-- Cookie Consent Banner -->
+  <div id="cookie-banner">
+    <h4><span>&#127850;</span> Cookies</h4>
+    <p>
+      We use cookies for analytics and advertising.
+      <a href="privacy_en.html#cookies">Learn more</a>
+    </p>
+    <div class="cookie-buttons">
+      <button class="cookie-accept" onclick="cookieConsent.accept()">Accept</button>
+      <button class="cookie-decline" onclick="cookieConsent.decline()">Decline</button>
+    </div>
+  </div>
 </body>
 </html>
 

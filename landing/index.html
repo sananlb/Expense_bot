@@ -12,43 +12,142 @@
   <link rel="alternate" hreflang="en" href="https://www.coins-bot.ru/index_en.html">
   <link rel="alternate" hreflang="x-default" href="https://www.coins-bot.ru/">
 
-  <!-- Google Analytics 4 -->
-  <!-- Global site tag (gtag.js) - Google Analytics -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-YMSY7V8YY7"></script>
+  <!-- Analytics scripts - loaded only after cookie consent -->
   <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-YMSY7V8YY7');
+    // Cookie consent management
+    window.cookieConsent = {
+      _cookieName: 'cookie_consent',
+      _maxAge: 31536000, // 1 year in seconds
+      _getCookie: function(name) {
+        var match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+        return match ? match[2] : null;
+      },
+      _setCookie: function(name, value, maxAge) {
+        var secure = location.protocol === 'https:' ? '; Secure' : '';
+        document.cookie = name + '=' + value + '; path=/; max-age=' + maxAge + '; SameSite=Lax' + secure;
+      },
+      _deleteCookie: function(name) {
+        document.cookie = name + '=; path=/; max-age=0';
+      },
+      _deleteAnalyticsCookies: function() {
+        // Delete GA, Ads, and Yandex.Metrika cookies
+        var patterns = ['_ga', '_gid', '_gcl_au', '_gcl_aw', '_gcl_dc', '_gcl_gb', '_gcl_gs', '_ym_uid', '_ym_d', '_ym_visorc', '_ym_isad'];
+        var cookies = document.cookie.split(';');
+        // Get apex domain (e.g. coins-bot.ru from www.coins-bot.ru)
+        var host = location.hostname;
+        var apex = host.replace(/^www\./, '');
+        for (var i = 0; i < cookies.length; i++) {
+          var cookie = cookies[i].trim();
+          var name = cookie.split('=')[0];
+          for (var j = 0; j < patterns.length; j++) {
+            if (name === patterns[j] || name.indexOf(patterns[j] + '_') === 0) {
+              // Try all possible domain combinations
+              document.cookie = name + '=; path=/; max-age=0';
+              document.cookie = name + '=; path=/; max-age=0; domain=' + host;
+              document.cookie = name + '=; path=/; max-age=0; domain=.' + host;
+              document.cookie = name + '=; path=/; max-age=0; domain=' + apex;
+              document.cookie = name + '=; path=/; max-age=0; domain=.' + apex;
+            }
+          }
+        }
+      },
+      isAccepted: function() {
+        return this._getCookie(this._cookieName) === 'accepted';
+      },
+      isDeclined: function() {
+        return this._getCookie(this._cookieName) === 'declined';
+      },
+      hasChoice: function() {
+        return this._getCookie(this._cookieName) !== null;
+      },
+      accept: function() {
+        this._setCookie(this._cookieName, 'accepted', this._maxAge);
+        this.loadAnalytics();
+        this.hideBanner();
+      },
+      decline: function() {
+        this._setCookie(this._cookieName, 'declined', this._maxAge);
+        this.hideBanner();
+      },
+      withdraw: function() {
+        // Remove consent cookie
+        this._deleteCookie(this._cookieName);
+        // Delete analytics cookies (GA, Ads, Yandex)
+        this._deleteAnalyticsCookies();
+        if (this._analyticsLoaded) {
+          // Analytics was loaded, need to reload page to stop it
+          window.location.reload();
+        } else {
+          // Analytics wasn't loaded, just show banner again
+          this.showBanner();
+        }
+      },
+      hideBanner: function() {
+        var banner = document.getElementById('cookie-banner');
+        if (banner) {
+          banner.style.opacity = '0';
+          banner.style.transform = 'translateY(20px)';
+          setTimeout(function() { banner.style.display = 'none'; }, 300);
+        }
+      },
+      showBanner: function() {
+        var banner = document.getElementById('cookie-banner');
+        if (banner) {
+          banner.style.display = 'block';
+          setTimeout(function() {
+            banner.style.opacity = '1';
+            banner.style.transform = 'translateY(0)';
+          }, 10);
+        }
+      },
+      loadAnalytics: function() {
+        if (this._analyticsLoaded) return;
+        this._analyticsLoaded = true;
+
+        // Google Analytics 4
+        var gaScript = document.createElement('script');
+        gaScript.async = true;
+        gaScript.src = 'https://www.googletagmanager.com/gtag/js?id=G-YMSY7V8YY7';
+        document.head.appendChild(gaScript);
+
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        window.gtag = gtag;
+        gtag('js', new Date());
+        gtag('config', 'G-YMSY7V8YY7');
+        gtag('config', 'AW-17711916602');
+
+        // Yandex.Metrika
+        (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+        m[i].l=1*new Date();
+        for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+        k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
+        (window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
+
+        ym(104228689, "init", {
+          clickmap:true,
+          trackLinks:true,
+          accurateTrackBounce:true,
+          webvisor:true
+        });
+      },
+      init: function() {
+        if (this.isAccepted()) {
+          this.loadAnalytics();
+        } else if (!this.hasChoice()) {
+          var self = this;
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() { self.showBanner(); });
+          } else {
+            this.showBanner();
+          }
+        }
+      }
+    };
+    // Initialize on load
+    cookieConsent.init();
   </script>
-
-  <!-- Google tag (gtag.js) -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-17711916602"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-
-    gtag('config', 'AW-17711916602');
-  </script>
-
-  <!-- Yandex.Metrika counter -->
-  <script type="text/javascript" >
-    (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
-    m[i].l=1*new Date();
-    for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
-    k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
-    (window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
-
-    ym(104228689, "init", {
-         clickmap:true,
-         trackLinks:true,
-         accurateTrackBounce:true,
-         webvisor:true
-    });
-  </script>
-  <noscript><div><img src="https://mc.yandex.ru/watch/104228689" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
-  <!-- /Yandex.Metrika counter -->
+  <!-- noscript pixel removed - requires consent -->
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
@@ -2494,7 +2593,167 @@
     .phone-screen .carousel-track.no-transition {
       transition: none;
     }
+
+    /* Cookie Consent Banner */
+    #cookie-banner {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      max-width: 320px;
+      background: rgba(255, 255, 255, 0.98);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08);
+      padding: 20px;
+      z-index: 10000;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      font-family: var(--font-body);
+    }
+
+    #cookie-banner h4 {
+      margin: 0 0 8px 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--dark);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #cookie-banner p {
+      margin: 0 0 16px 0;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--gray);
+    }
+
+    #cookie-banner a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    #cookie-banner a:hover {
+      text-decoration: underline;
+    }
+
+    #cookie-banner .cookie-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    #cookie-banner button {
+      flex: 1;
+      padding: 10px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: none;
+    }
+
+    #cookie-banner .cookie-accept {
+      background: var(--gradient-1);
+      color: white;
+    }
+
+    #cookie-banner .cookie-accept:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+
+    #cookie-banner .cookie-decline {
+      background: var(--light);
+      color: var(--gray);
+      border: 1px solid #e2e8f0;
+    }
+
+    #cookie-banner .cookie-decline:hover {
+      background: #f1f5f9;
+      color: var(--dark);
+    }
+
+    @media (max-width: 480px) {
+      #cookie-banner {
+        bottom: 12px;
+        right: 12px;
+        left: 12px;
+        max-width: none;
+      }
+    }
   </style>
+
+  <!-- Schema.org: SoftwareApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Coins Bot",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Android, iOS, Web",
+    "applicationSubCategory": "Telegram Bot",
+    "offers": {
+      "@type": "AggregateOffer",
+      "lowPrice": "0",
+      "highPrice": "600",
+      "priceCurrency": "RUB",
+      "offerCount": "2",
+      "offers": [
+        {
+          "@type": "Offer",
+          "name": "Бесплатный пробный период",
+          "price": "0",
+          "priceCurrency": "RUB",
+          "description": "7 дней полного доступа бесплатно"
+        },
+        {
+          "@type": "Offer",
+          "name": "Премиум подписка",
+          "price": "75",
+          "priceCurrency": "RUB",
+          "description": "От 75₽/месяц после пробного периода"
+        }
+      ]
+    },
+    "description": "Умный учет расходов в Telegram с AI-категоризацией, голосовым вводом и семейным бюджетом",
+    "featureList": [
+      "AI-категоризация расходов",
+      "Голосовой ввод трат",
+      "Семейный бюджет",
+      "PDF, XLS и CSV отчеты",
+      "Кешбэк-трекер",
+      "Ежемесячная AI-аналитика"
+    ],
+    "screenshot": "https://www.coins-bot.ru/og-image.jpg",
+    "url": "https://www.coins-bot.ru",
+    "inLanguage": ["ru", "en"]
+  }
+  </script>
+
+  <!-- Schema.org: Organization -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "Coins Bot",
+    "url": "https://www.coins-bot.ru",
+    "logo": "https://www.coins-bot.ru/logo_v3.webp",
+    "description": "Telegram-бот для учета личных финансов с искусственным интеллектом",
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "contactType": "Customer Support",
+      "availableLanguage": ["Russian", "English"]
+    },
+    "sameAs": [
+      "https://t.me/showmecoins",
+      "https://t.me/showmecoin_bot"
+    ]
+  }
+  </script>
 </head>
 <body>
   <!-- Animated Background -->
@@ -2516,7 +2775,7 @@
           <a href="#features" data-i18n="nav_features">Возможности</a>
           <a href="#how" data-i18n="nav_how">Как работает</a>
           <a href="#pricing" data-i18n="nav_pricing">Тарифы</a>
-          <a href="#faq" data-i18n="nav_faq">FAQ</a>
+          <a href="/faq" data-i18n="nav_faq">FAQ</a>
           <span class="lang-switch">
             <a href="#" id="lang-ru" class="active">RU</a>
             <span>|</span>
@@ -2543,7 +2802,7 @@
       <a href="#features" data-i18n="nav_features">Возможности</a>
       <a href="#how" data-i18n="nav_how">Как работает</a>
       <a href="#pricing" data-i18n="nav_pricing">Тарифы</a>
-      <a href="#faq" data-i18n="nav_faq">FAQ</a>
+      <a href="/faq" data-i18n="nav_faq">FAQ</a>
       <div class="lang-switch" id="mobile-lang-switch" style="margin: 8px 0 12px;">
         <a href="#" id="lang-ru-m" class="active">RU</a>
         <span>|</span>
@@ -2690,7 +2949,10 @@
       </div>
       <div class="analytics-container">
         <div class="analytics-image reveal">
-          <img src="laptop_xlsx.png" alt="Excel analytics report">
+          <picture>
+            <source srcset="laptop_xlsx.webp" type="image/webp">
+            <img src="laptop_xlsx.png" alt="Excel analytics report" loading="lazy" width="1920" height="1080">
+          </picture>
         </div>
         <div class="analytics-content reveal">
           <div class="format-badges">
@@ -2991,7 +3253,13 @@
           faq_q3: 'Можно ли вести учет в разных валютах?',
           faq_a3: 'Да, мультивалютность доступна всем пользователям. Вы можете записывать траты в любой валюте — бот ведет отдельную статистику по каждой валюте, сохраняя точность учета без автоматической конвертации.',
           faq_q4: 'Как отменить подписку?',
-          faq_a4: 'Подписка не продлевается автоматически — никаких случайных платежей! За 1 день до окончания подписки вам придет напоминание о необходимости продления. Доступ к Premium функциям сохраняется до конца оплаченного периода, после чего автоматически переключается на бесплатную версию. Все ваши данные сохраняются.'
+          faq_a4: 'Подписка не продлевается автоматически — никаких случайных платежей! За 1 день до окончания подписки вам придет напоминание о необходимости продления. Доступ к Premium функциям сохраняется до конца оплаченного периода, после чего автоматически переключается на бесплатную версию. Все ваши данные сохраняются.',
+          cookie_title: 'Cookies',
+          cookie_text: 'Мы используем cookie для аналитики и рекламы.',
+          cookie_link: 'Подробнее',
+          cookie_accept: 'Принять',
+          cookie_decline: 'Отклонить',
+          footer_cookies: 'Настройки cookies'
         },
         en: {
           meta_title: 'Coins Bot — Smart expense tracking in Telegram',
@@ -3101,7 +3369,13 @@
           faq_q3: 'Can I track in multiple currencies?',
           faq_a3: 'Yes, multi‑currency is available to all users. Record expenses in any currency — the bot keeps separate stats per currency without automatic conversion.',
           faq_q4: 'How do I cancel a subscription?',
-          faq_a4: 'Subscriptions are not auto‑renewed — no accidental charges! One day before the end you’ll get a reminder to renew. Premium access remains until the end of the paid period, then switches to Free. Your data stays intact.'
+          faq_a4: 'Subscriptions are not auto‑renewed — no accidental charges! One day before the end you'll get a reminder to renew. Premium access remains until the end of the paid period, then switches to Free. Your data stays intact.',
+          cookie_title: 'Cookies',
+          cookie_text: 'We use cookies for analytics and advertising.',
+          cookie_link: 'Learn more',
+          cookie_accept: 'Accept',
+          cookie_decline: 'Decline',
+          footer_cookies: 'Cookie settings'
         }
       };
 
@@ -3139,8 +3413,10 @@
         // Update footer policy/offer links per language
         const priv = document.getElementById('footer-privacy-link');
         const off = document.getElementById('footer-offer-link');
+        const cookieLink = document.getElementById('cookie-policy-link');
         if (priv) priv.setAttribute('href', lang === 'ru' ? 'privacy.html' : 'privacy_en.html');
         if (off) off.setAttribute('href', lang === 'ru' ? 'offer.html' : 'offer_en.html');
+        if (cookieLink) cookieLink.setAttribute('href', lang === 'ru' ? 'privacy.html#cookies' : 'privacy_en.html#cookies');
         localStorage.setItem('coins_lang', lang);
       }
 
@@ -3165,59 +3441,6 @@
       });
     })();
   </script>
-
-  <!-- FAQ -->
-  <section class="faq" id="faq">
-    <div class="container">
-      <div class="section-header reveal">
-        <span class="section-tag" data-i18n="nav_faq">FAQ</span>
-        <h2 class="section-title" data-i18n="faq_title">Частые вопросы</h2>
-        <p class="section-subtitle" data-i18n="faq_subtitle">Всё что нужно знать перед началом</p>
-      </div>
-      <div class="faq-container">
-        <div class="faq-item reveal">
-          <div class="faq-question">
-            <span data-i18n="faq_q1">Это безопасно? Где хранятся мои данные?</span>
-          </div>
-          <div class="faq-answer">
-            <div class="faq-answer-content">
-              <span data-i18n="faq_a1">Абсолютно безопасно. Мы не требуем доступ к банковским счетам. Все данные полностью обезличены и хранятся на защищенных серверах с шифрованием.</span>
-            </div>
-          </div>
-        </div>
-        <div class="faq-item reveal">
-          <div class="faq-question">
-            <span data-i18n="faq_q2">Как работает семейный доступ?</span>
-          </div>
-          <div class="faq-answer">
-            <div class="faq-answer-content">
-              <span data-i18n="faq_a2">Создайте семейную группу и пригласите участников по специальной ссылке. Каждый ведет свой учет, но вы видите общую статистику и можете планировать бюджет вместе.</span>
-            </div>
-          </div>
-        </div>
-        <div class="faq-item reveal">
-          <div class="faq-question">
-            <span data-i18n="faq_q3">Можно ли вести учет в разных валютах?</span>
-          </div>
-          <div class="faq-answer">
-            <div class="faq-answer-content">
-              <span data-i18n="faq_a3">Да, мультивалютность доступна всем пользователям. Вы можете записывать траты в любой валюте — бот ведет отдельную статистику по каждой валюте, сохраняя точность учета без автоматической конвертации.</span>
-            </div>
-          </div>
-        </div>
-        <div class="faq-item reveal">
-          <div class="faq-question">
-            <span data-i18n="faq_q4">Как отменить подписку?</span>
-          </div>
-          <div class="faq-answer">
-            <div class="faq-answer-content">
-              <span data-i18n="faq_a4">Подписка не продлевается автоматически — никаких случайных платежей! За 1 день до окончания подписки вам придет напоминание о необходимости продления. Доступ к Premium функциям сохраняется до конца оплаченного периода, после чего автоматически переключается на бесплатную версию. Все ваши данные сохраняются.</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
 
   <!-- CTA Section -->
   <section class="cta-section">
@@ -3263,7 +3486,7 @@
           <h3 data-i18n="footer_support">Поддержка</h3>
           <ul class="footer-links">
             <li><a href="https://t.me/SMF_support" target="_blank" data-i18n="footer_telegram_support">Telegram поддержка</a></li>
-            <li><a href="#faq">FAQ</a></li>
+            <li><a href="/faq">FAQ</a></li>
             <li><a href="mailto:help@tbotsupport.ru">Email</a></li>
           </ul>
         </div>
@@ -3273,6 +3496,7 @@
             <li><a href="#" data-i18n="footer_about_link">О нас</a></li>
             <li><a id="footer-privacy-link" href="privacy.html" target="_blank" data-i18n="footer_privacy">Политика конфиденциальности</a></li>
             <li><a id="footer-offer-link" href="offer.html" target="_blank" data-i18n="footer_offer">Публичная оферта</a></li>
+            <li><a href="#" onclick="cookieConsent.withdraw(); return false;" data-i18n="footer_cookies">Настройки cookies</a></li>
           </ul>
         </div>
       </div>
@@ -3321,7 +3545,7 @@
       const triggerOffset = 80; // задержка срабатывания ~80px внутри белой секции
 
       // Sections with light backgrounds
-      const whiteSections = document.querySelectorAll('.features, .demo-section, .pricing, .faq');
+      const whiteSections = document.querySelectorAll('.features, .demo-section, .pricing');
       const hero = document.querySelector('.hero');
       let isOverWhite = false;
 
@@ -3973,5 +4197,18 @@
       });
     });
   </script>
+
+  <!-- Cookie Consent Banner -->
+  <div id="cookie-banner">
+    <h4><span>&#127850;</span> <span data-i18n="cookie_title">Cookies</span></h4>
+    <p data-i18n="cookie_text">
+      Мы используем cookie для аналитики и рекламы.
+      <a href="privacy.html#cookies" id="cookie-policy-link" data-i18n="cookie_link">Подробнее</a>
+    </p>
+    <div class="cookie-buttons">
+      <button class="cookie-accept" onclick="cookieConsent.accept()" data-i18n="cookie_accept">Принять</button>
+      <button class="cookie-decline" onclick="cookieConsent.decline()" data-i18n="cookie_decline">Отклонить</button>
+    </div>
+  </div>
 </body>
 </html>

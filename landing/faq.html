@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FAQ — Coins Bot | Частые вопросы о боте учета расходов</title>
+  <meta name="description" content="Ответы на часто задаваемые вопросы о Coins Bot: как добавлять расходы и доходы, настройка категорий, отчеты, кешбэк, подписка и многое другое.">
+
+  <!-- SEO: Canonical and Language Alternates -->
+  <link rel="canonical" href="https://www.coins-bot.ru/faq">
+  <link rel="alternate" hreflang="ru" href="https://www.coins-bot.ru/faq">
+  <link rel="alternate" hreflang="en" href="https://www.coins-bot.ru/faq-en">
+  <link rel="alternate" hreflang="x-default" href="https://www.coins-bot.ru/faq">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.coins-bot.ru/faq">
+  <meta property="og:title" content="FAQ — Coins Bot">
+  <meta property="og:description" content="Ответы на часто задаваемые вопросы о боте учета расходов в Telegram">
+  <meta property="og:image" content="https://www.coins-bot.ru/og-image.jpg">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="photo_2025-09-13_10-57-55.jpg">
+
+  <!-- Self-hosted fonts -->
+  <link rel="stylesheet" href="fonts/fonts.css">
+
+  <!-- Schema.org FAQPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Что умеет Coins Bot?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Coins Bot — это Telegram-бот для учета расходов и доходов. Просто отправьте сумму и описание ('500 кофе', 'такси 450'), и бот автоматически определит категорию. Доступны: голосовой ввод, семейный бюджет, кешбэк, PDF/Excel отчеты, AI-ассистент для вопросов по статистике."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Как добавить трату?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Просто отправьте сумму и описание: '500 кофе', 'такси 450'. Можно указать валюту: '50 usd ужин'. Запись задним числом: '12.11 продукты 1200' (формат ДД.ММ). Категорию бот предложит сам, исправления запоминаются. Голосовой ввод доступен с подпиской/триалом."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Как добавить доход?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Используйте знак '+': '+50000 зарплата', '+1200 кешбэк'. Запись задним числом: '25.11 +50000 зарплата' (формат ДД.ММ). Категорию бот подберет автоматически, можно отредактировать после добавления. Учет доходов доступен только с активной подпиской или триалом."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Как посмотреть отчеты и статистику?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Статистика доступна в меню 'Бюджет': траты за сегодня, по месяцам, дневник операций. Там же можно сгенерировать PDF/Excel отчёт с графиками. Для анализа трат за конкретный период просто спросите: 'сколько я потратил в ноябре' или 'покажи траты за октябрь'."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Как управлять категориями?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Управление в меню 'Категории': отдельно категории расходов и доходов. Настройте под себя сразу — это важно для будущей аналитики. Редактируйте категорию только на похожую по смыслу (система ищет по ключевым словам). Нужна другая по смыслу — создайте новую."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Бот неправильно определяет категорию, что делать?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Категория определяется автоматически: по ключевым словам или вашей истории. Если совпадений нет — AI подберёт категорию. Результат не устроил? Отредактируйте запись, выбрав правильную категорию — система запомнит и в следующий раз определит верно."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Как работает кешбэк?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Добавьте кешбэк в меню 'Кешбэк'. После этого все записи с категорией, на которую добавлен кешбэк, будут отображаться с кешбэком. Также есть учёт кешбэка как дохода в отчётах. Закрепите сообщение кешбэк в чате с ботом, чтобы оно всегда было под рукой."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Как добавить регулярный платеж?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Меню 'Ежемесячные операции': задайте описание, сумму, категорию и день месяца. Можно редактировать или ставить на паузу. Запись о ежемесячной операции появится в чате как все другие записи в выбранный день в 12:00, её можно будет отредактировать."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Как изменить настройки (язык, валюту, часовой пояс)?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Откройте /settings: можно сменить язык (ru/en), валюту, часовой пояс, включить/выключить кешбэк и другие опции."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Что дает подписка?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Большинство функций доступны бесплатно! С подпиской (есть триал для новых): AI-ассистент — вопросы по статистике естественным языком; учёт доходов; голосовой ввод; учёт кешбэка; семейный бюджет. Подробности и актуальные цены — команда /subscription."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Как установить лимит или бюджет?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Лимиты пока не реализованы как отдельная функция. Но вы можете внести баланс или бюджет как доход: '+40000 бюджет'. Тогда все расходы будут вычитаться и вы увидите текущий баланс в статистике."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    /* Variables */
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1e40af;
+      --primary-light: #60a5fa;
+      --secondary: #6e82e3;
+      --accent: #fbbf24;
+      --success: #10b981;
+      --dark: #0f172a;
+      --gray: #64748b;
+      --light: #f8fafc;
+      --white: #ffffff;
+      --gradient-1: linear-gradient(135deg, #5569d3 0%, #6e82e3 100%);
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+      --shadow: 0 4px 6px rgba(0,0,0,0.04), 0 2px 4px rgba(0,0,0,0.06);
+      --shadow-lg: 0 10px 15px rgba(0,0,0,0.04), 0 4px 6px rgba(0,0,0,0.08);
+      --radius: 20px;
+      --radius-lg: 28px;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-display: 'Sora', 'Inter', sans-serif;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: linear-gradient(180deg, #f6f8fb 0%, #f0f2f6 100%);
+      color: var(--dark);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    /* Header */
+    .header {
+      background: var(--white);
+      box-shadow: var(--shadow-sm);
+      padding: 16px 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--dark);
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      object-fit: cover;
+    }
+
+    .logo-text {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .back-link {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: color 0.2s;
+    }
+
+    .back-link:hover {
+      color: var(--primary-dark);
+    }
+
+    /* Main content */
+    .faq-page {
+      padding: 60px 0 80px;
+    }
+
+    .page-header {
+      text-align: center;
+      margin-bottom: 50px;
+    }
+
+    .page-tag {
+      display: inline-block;
+      background: rgba(37, 99, 235, 0.08);
+      color: var(--primary);
+      padding: 8px 20px;
+      border-radius: 100px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      letter-spacing: 0.02em;
+    }
+
+    .page-title {
+      font-family: var(--font-display);
+      font-size: 42px;
+      font-weight: 600;
+      color: var(--dark);
+      margin-bottom: 16px;
+    }
+
+    .page-subtitle {
+      font-size: 18px;
+      color: var(--gray);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* FAQ Items */
+    .faq-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .faq-category {
+      margin-bottom: 40px;
+    }
+
+    .faq-category-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+      padding-left: 4px;
+    }
+
+    .faq-item {
+      background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, #fafbfc 100%);
+      border: 1px solid rgba(0,0,0,0.04);
+      border-radius: var(--radius);
+      margin-bottom: 14px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.05);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .faq-item:hover {
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
+      transform: translateY(-2px);
+    }
+
+    .faq-question {
+      padding: 20px 20px 10px 20px;
+      font-weight: 600;
+      color: var(--dark);
+      font-size: 17px;
+    }
+
+    .faq-answer {
+      padding: 10px 20px 20px;
+      color: #475569;
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .faq-answer code {
+      background: rgba(37, 99, 235, 0.08);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 14px;
+      color: var(--primary-dark);
+    }
+
+    /* CTA */
+    .cta-section {
+      text-align: center;
+      margin-top: 60px;
+      padding: 40px;
+      background: var(--gradient-1);
+      border-radius: var(--radius-lg);
+    }
+
+    .cta-title {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--white);
+      margin-bottom: 12px;
+    }
+
+    .cta-subtitle {
+      font-size: 16px;
+      color: rgba(255,255,255,0.9);
+      margin-bottom: 24px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 28px;
+      border-radius: 14px;
+      font-weight: 600;
+      font-size: 16px;
+      text-decoration: none;
+      transition: all 0.3s;
+      background: white;
+      color: var(--primary);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    }
+
+    /* Footer */
+    .footer {
+      background: var(--dark);
+      color: rgba(255,255,255,0.7);
+      padding: 40px 0;
+      text-align: center;
+    }
+
+    .footer a {
+      color: rgba(255,255,255,0.9);
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .footer-copy {
+      font-size: 14px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .page-title {
+        font-size: 32px;
+      }
+
+      .page-subtitle {
+        font-size: 16px;
+      }
+
+      .faq-question {
+        font-size: 16px;
+        padding: 16px 16px 8px;
+      }
+
+      .faq-answer {
+        padding: 8px 16px 16px;
+        font-size: 14px;
+      }
+
+      .cta-section {
+        padding: 30px 20px;
+      }
+
+      .cta-title {
+        font-size: 24px;
+      }
+
+      .footer-links {
+        flex-direction: column;
+        gap: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="index.html" class="logo">
+          <img src="photo_2025-09-13_10-57-55.jpg" alt="Coins Bot" class="logo-icon">
+          <span class="logo-text">Coins Bot</span>
+        </a>
+        <a href="index.html" class="back-link">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          На главную
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="faq-page">
+    <div class="container">
+      <div class="page-header">
+        <span class="page-tag">FAQ</span>
+        <h1 class="page-title">Частые вопросы</h1>
+        <p class="page-subtitle">Подробные ответы о работе бота учета расходов</p>
+      </div>
+
+      <div class="faq-container">
+        <!-- Общие вопросы -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Общие вопросы</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">Что умеет Coins Bot?</div>
+            <div class="faq-answer">
+              Coins Bot — это Telegram-бот для учета расходов и доходов. Просто отправьте сумму и описание (<code>500 кофе</code>, <code>такси 450</code>), и бот автоматически определит категорию. Доступны: голосовой ввод, семейный бюджет, кешбэк, PDF/Excel отчеты, AI-ассистент для вопросов по статистике.
+            </div>
+          </div>
+        </div>
+
+        <!-- Операции -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Добавление операций</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">Как добавить трату?</div>
+            <div class="faq-answer">
+              Просто отправьте сумму и описание: <code>500 кофе</code>, <code>такси 450</code>. Можно указать валюту: <code>50 usd ужин</code>. Запись задним числом: <code>12.11 продукты 1200</code> (формат ДД.ММ). Категорию бот предложит сам, исправления запоминаются. Голосовой ввод доступен с подпиской/триалом.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <div class="faq-question">Как добавить доход?</div>
+            <div class="faq-answer">
+              Используйте знак <code>+</code>: <code>+50000 зарплата</code>, <code>+1200 кешбэк</code>. Запись задним числом: <code>25.11 +50000 зарплата</code> (формат ДД.ММ). Категорию бот подберет автоматически, можно отредактировать после добавления. Учет доходов доступен только с активной подпиской или триалом.
+            </div>
+          </div>
+        </div>
+
+        <!-- Отчеты -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Отчеты и статистика</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">Как посмотреть отчеты и статистику?</div>
+            <div class="faq-answer">
+              Статистика доступна в меню «Бюджет»: траты за сегодня, по месяцам, дневник операций. Там же можно сгенерировать PDF/Excel отчёт с графиками. Для анализа трат за конкретный период просто спросите: «сколько я потратил в ноябре» или «покажи траты за октябрь».
+            </div>
+          </div>
+        </div>
+
+        <!-- Категории -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Категории</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">Как управлять категориями?</div>
+            <div class="faq-answer">
+              Управление в меню «Категории»: отдельно категории расходов и доходов. Настройте под себя сразу — это важно для будущей аналитики. Редактируйте категорию только на похожую по смыслу (система ищет по ключевым словам). Нужна другая по смыслу — создайте новую. Исправления после добавления записи тоже обучают автокатегоризацию.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <div class="faq-question">Бот неправильно определяет категорию, что делать?</div>
+            <div class="faq-answer">
+              Категория определяется автоматически: по ключевым словам или вашей истории. Если совпадений нет — AI подберёт категорию. Результат не устроил? Отредактируйте запись, выбрав правильную категорию — система запомнит и в следующий раз определит верно.
+            </div>
+          </div>
+        </div>
+
+        <!-- Кешбэк -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Кешбэк</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">Как работает кешбэк?</div>
+            <div class="faq-answer">
+              Добавьте кешбэк в меню «Кешбэк». После этого все записи с категорией, на которую добавлен кешбэк, будут отображаться с кешбэком. Также есть учёт кешбэка как дохода в отчётах. Закрепите сообщение кешбэк в чате с ботом, чтобы оно всегда было под рукой.
+            </div>
+          </div>
+        </div>
+
+        <!-- Регулярные платежи -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Регулярные платежи</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">Как добавить регулярный платеж?</div>
+            <div class="faq-answer">
+              Меню «Ежемесячные операции»: задайте описание, сумму, категорию и день месяца. Можно редактировать или ставить на паузу. Запись о ежемесячной операции появится в чате как все другие записи в выбранный день в 12:00, её можно будет отредактировать.
+            </div>
+          </div>
+        </div>
+
+        <!-- Настройки -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Настройки</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">Как изменить настройки (язык, валюту, часовой пояс)?</div>
+            <div class="faq-answer">
+              Откройте <code>/settings</code>: можно сменить язык (ru/en), валюту, часовой пояс, включить/выключить кешбэк и другие опции.
+            </div>
+          </div>
+        </div>
+
+        <!-- Подписка -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Подписка</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">Что дает подписка?</div>
+            <div class="faq-answer">
+              Большинство функций доступны бесплатно! С подпиской (есть триал для новых): AI-ассистент — вопросы по статистике естественным языком; учёт доходов; голосовой ввод; учёт кешбэка; семейный бюджет. Подробности и актуальные цены — команда <code>/subscription</code>.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <div class="faq-question">Как установить лимит или бюджет?</div>
+            <div class="faq-answer">
+              Лимиты пока не реализованы как отдельная функция. Но вы можете внести баланс или бюджет как доход: <code>+40000 бюджет</code>. Тогда все расходы будут вычитаться и вы увидите текущий баланс в статистике.
+            </div>
+          </div>
+        </div>
+
+        <!-- CTA -->
+        <div class="cta-section">
+          <h2 class="cta-title">Остались вопросы?</h2>
+          <p class="cta-subtitle">Напишите в поддержку или попробуйте бота — это бесплатно!</p>
+          <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_faq" target="_blank" class="btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
+            </svg>
+            Запустить бота
+          </a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-links">
+        <a href="index.html">Главная</a>
+        <a href="https://t.me/SMF_support" target="_blank">Поддержка</a>
+        <a href="privacy.html">Конфиденциальность</a>
+        <a href="offer.html">Оферта</a>
+      </div>
+      <div class="footer-copy">© 2025 Coins Bot. Все права защищены.</div>
+    </div>
+  </footer>
+</body>
+</html>

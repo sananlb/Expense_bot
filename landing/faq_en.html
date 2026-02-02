@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FAQ — Coins Bot | Frequently Asked Questions</title>
+  <meta name="description" content="Answers to frequently asked questions about Coins Bot: how to add expenses and income, category settings, reports, cashback, subscription and more.">
+
+  <!-- SEO: Canonical and Language Alternates -->
+  <link rel="canonical" href="https://www.coins-bot.ru/faq-en">
+  <link rel="alternate" hreflang="ru" href="https://www.coins-bot.ru/faq">
+  <link rel="alternate" hreflang="en" href="https://www.coins-bot.ru/faq-en">
+  <link rel="alternate" hreflang="x-default" href="https://www.coins-bot.ru/faq">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.coins-bot.ru/faq-en">
+  <meta property="og:title" content="FAQ — Coins Bot">
+  <meta property="og:description" content="Answers to frequently asked questions about Telegram expense tracking bot">
+  <meta property="og:image" content="https://www.coins-bot.ru/og-image.jpg">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/jpeg" href="photo_2025-09-13_10-57-55.jpg">
+
+  <!-- Self-hosted fonts -->
+  <link rel="stylesheet" href="fonts/fonts.css">
+
+  <!-- Schema.org FAQPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What can Coins Bot do?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Coins Bot is a Telegram bot for tracking expenses and income. Just send amount with description ('500 coffee', 'taxi 450'), and the bot will automatically detect the category. Features include: voice input, family budget, cashback tracking, PDF/Excel reports, AI assistant for statistics questions."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How to add an expense?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Send amount with description: '500 coffee', 'taxi 450'. You can add currency: '50 usd lunch'. Backdate entry: '12.11 groceries 1200' (DD.MM format). The bot auto-assigns category and remembers your corrections. Voice input is available with subscription/trial."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How to add income?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Use a '+' sign: '+50000 salary', '+1200 cashback'. Backdate entry: '25.11 +50000 salary' (DD.MM format). The bot auto-selects category; you can edit it after. Income tracking is available only with an active subscription or trial."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How to view reports and statistics?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Statistics available in 'Budget' menu: today's expenses, monthly view, transaction diary. You can also generate PDF/Excel reports with charts there. For expense analysis for a specific period just ask: 'how much did I spend in November' or 'show expenses for October'."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How to manage categories?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Manage in 'Categories' menu: separate expense and income categories. Set them up right away — important for future analytics. Edit category only to similar meaning (system searches by keywords). Need different meaning — create a new one."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Bot assigns wrong category, what to do?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Category is detected automatically: by keywords or your history. If no match — AI will pick the category. Not satisfied? Edit the record with correct category — system will remember and detect correctly next time."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does cashback work?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Add cashback in 'Cashback' menu. After that, all records with categories that have cashback will display with cashback. Cashback is also tracked as income in reports. Pin the cashback message in chat so it's always at hand."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How to add recurring payment?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "'Monthly operations' menu: set description, amount, category, and day of month. You can edit or pause them. The recurring record will appear in chat like any other record on the chosen day at 12:00, and you can edit it."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How to change settings (language, currency, timezone)?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Open /settings: change language (ru/en), currency, timezone, toggle cashback, and other options."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What does subscription give?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Most features are free! Subscription (trial for new users) adds: AI assistant — ask about your stats naturally; income tracking; voice input; cashback tracking; family budget. Details and current prices — /subscription command."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How to set a limit or budget?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Limits are not yet implemented as a separate feature. But you can add balance or budget as income: '+40000 budget'. All expenses will be subtracted and you'll see current balance in statistics."
+        }
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    /* Variables */
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1e40af;
+      --primary-light: #60a5fa;
+      --secondary: #6e82e3;
+      --accent: #fbbf24;
+      --success: #10b981;
+      --dark: #0f172a;
+      --gray: #64748b;
+      --light: #f8fafc;
+      --white: #ffffff;
+      --gradient-1: linear-gradient(135deg, #5569d3 0%, #6e82e3 100%);
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.06);
+      --shadow: 0 4px 6px rgba(0,0,0,0.04), 0 2px 4px rgba(0,0,0,0.06);
+      --shadow-lg: 0 10px 15px rgba(0,0,0,0.04), 0 4px 6px rgba(0,0,0,0.08);
+      --radius: 20px;
+      --radius-lg: 28px;
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-display: 'Sora', 'Inter', sans-serif;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: var(--font-body);
+      background: linear-gradient(180deg, #f6f8fb 0%, #f0f2f6 100%);
+      color: var(--dark);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+
+    /* Header */
+    .header {
+      background: var(--white);
+      box-shadow: var(--shadow-sm);
+      padding: 16px 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--dark);
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      object-fit: cover;
+    }
+
+    .logo-text {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .back-link {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: color 0.2s;
+    }
+
+    .back-link:hover {
+      color: var(--primary-dark);
+    }
+
+    /* Main content */
+    .faq-page {
+      padding: 60px 0 80px;
+    }
+
+    .page-header {
+      text-align: center;
+      margin-bottom: 50px;
+    }
+
+    .page-tag {
+      display: inline-block;
+      background: rgba(37, 99, 235, 0.08);
+      color: var(--primary);
+      padding: 8px 20px;
+      border-radius: 100px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      letter-spacing: 0.02em;
+    }
+
+    .page-title {
+      font-family: var(--font-display);
+      font-size: 42px;
+      font-weight: 600;
+      color: var(--dark);
+      margin-bottom: 16px;
+    }
+
+    .page-subtitle {
+      font-size: 18px;
+      color: var(--gray);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* FAQ Items */
+    .faq-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .faq-category {
+      margin-bottom: 40px;
+    }
+
+    .faq-category-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+      padding-left: 4px;
+    }
+
+    .faq-item {
+      background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, #fafbfc 100%);
+      border: 1px solid rgba(0,0,0,0.04);
+      border-radius: var(--radius);
+      margin-bottom: 14px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.05);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .faq-item:hover {
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.08);
+      transform: translateY(-2px);
+    }
+
+    .faq-question {
+      padding: 20px 20px 10px 20px;
+      font-weight: 600;
+      color: var(--dark);
+      font-size: 17px;
+    }
+
+    .faq-answer {
+      padding: 10px 20px 20px;
+      color: #475569;
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .faq-answer code {
+      background: rgba(37, 99, 235, 0.08);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 14px;
+      color: var(--primary-dark);
+    }
+
+    /* CTA */
+    .cta-section {
+      text-align: center;
+      margin-top: 60px;
+      padding: 40px;
+      background: var(--gradient-1);
+      border-radius: var(--radius-lg);
+    }
+
+    .cta-title {
+      font-family: var(--font-display);
+      font-size: 28px;
+      font-weight: 600;
+      color: var(--white);
+      margin-bottom: 12px;
+    }
+
+    .cta-subtitle {
+      font-size: 16px;
+      color: rgba(255,255,255,0.9);
+      margin-bottom: 24px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 28px;
+      border-radius: 14px;
+      font-weight: 600;
+      font-size: 16px;
+      text-decoration: none;
+      transition: all 0.3s;
+      background: white;
+      color: var(--primary);
+    }
+
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+    }
+
+    /* Footer */
+    .footer {
+      background: var(--dark);
+      color: rgba(255,255,255,0.7);
+      padding: 40px 0;
+      text-align: center;
+    }
+
+    .footer a {
+      color: rgba(255,255,255,0.9);
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+
+    .footer-links {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .footer-copy {
+      font-size: 14px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .page-title {
+        font-size: 32px;
+      }
+
+      .page-subtitle {
+        font-size: 16px;
+      }
+
+      .faq-question {
+        font-size: 16px;
+        padding: 16px 16px 8px;
+      }
+
+      .faq-answer {
+        padding: 8px 16px 16px;
+        font-size: 14px;
+      }
+
+      .cta-section {
+        padding: 30px 20px;
+      }
+
+      .cta-title {
+        font-size: 24px;
+      }
+
+      .footer-links {
+        flex-direction: column;
+        gap: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="container">
+      <div class="header-content">
+        <a href="index_en.html" class="logo">
+          <img src="photo_2025-09-13_10-57-55.jpg" alt="Coins Bot" class="logo-icon">
+          <span class="logo-text">Coins Bot</span>
+        </a>
+        <a href="index_en.html" class="back-link">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          Back to Home
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="faq-page">
+    <div class="container">
+      <div class="page-header">
+        <span class="page-tag">FAQ</span>
+        <h1 class="page-title">Frequently Asked Questions</h1>
+        <p class="page-subtitle">Detailed answers about the expense tracking bot</p>
+      </div>
+
+      <div class="faq-container">
+        <!-- General -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">General</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">What can Coins Bot do?</div>
+            <div class="faq-answer">
+              Coins Bot is a Telegram bot for tracking expenses and income. Just send amount with description (<code>500 coffee</code>, <code>taxi 450</code>), and the bot will automatically detect the category. Features include: voice input, family budget, cashback tracking, PDF/Excel reports, AI assistant for statistics questions.
+            </div>
+          </div>
+        </div>
+
+        <!-- Transactions -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Adding Transactions</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">How to add an expense?</div>
+            <div class="faq-answer">
+              Send amount with description: <code>500 coffee</code>, <code>taxi 450</code>. You can add currency: <code>50 usd lunch</code>. Backdate entry: <code>12.11 groceries 1200</code> (DD.MM format). The bot auto-assigns category and remembers your corrections. Voice input is available with subscription/trial.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <div class="faq-question">How to add income?</div>
+            <div class="faq-answer">
+              Use a <code>+</code> sign: <code>+50000 salary</code>, <code>+1200 cashback</code>. Backdate entry: <code>25.11 +50000 salary</code> (DD.MM format). The bot auto-selects category; you can edit it after. Income tracking is available only with an active subscription or trial.
+            </div>
+          </div>
+        </div>
+
+        <!-- Reports -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Reports & Statistics</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">How to view reports and statistics?</div>
+            <div class="faq-answer">
+              Statistics available in "Budget" menu: today's expenses, monthly view, transaction diary. You can also generate PDF/Excel reports with charts there. For expense analysis for a specific period just ask: "how much did I spend in November" or "show expenses for October".
+            </div>
+          </div>
+        </div>
+
+        <!-- Categories -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Categories</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">How to manage categories?</div>
+            <div class="faq-answer">
+              Manage in "Categories" menu: separate expense and income categories. Set them up right away — important for future analytics. Edit category only to similar meaning (system searches by keywords). Need different meaning — create a new one. Your corrections after adding a record also improve detection.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <div class="faq-question">Bot assigns wrong category, what to do?</div>
+            <div class="faq-answer">
+              Category is detected automatically: by keywords or your history. If no match — AI will pick the category. Not satisfied? Edit the record with correct category — system will remember and detect correctly next time.
+            </div>
+          </div>
+        </div>
+
+        <!-- Cashback -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Cashback</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">How does cashback work?</div>
+            <div class="faq-answer">
+              Add cashback in "Cashback" menu. After that, all records with categories that have cashback will display with cashback. Cashback is also tracked as income in reports. Pin the cashback message in chat so it's always at hand.
+            </div>
+          </div>
+        </div>
+
+        <!-- Recurring -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Recurring Payments</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">How to add recurring payment?</div>
+            <div class="faq-answer">
+              "Monthly operations" menu: set description, amount, category, and day of month. You can edit or pause them. The recurring record will appear in chat like any other record on the chosen day at 12:00, and you can edit it.
+            </div>
+          </div>
+        </div>
+
+        <!-- Settings -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Settings</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">How to change settings (language, currency, timezone)?</div>
+            <div class="faq-answer">
+              Open <code>/settings</code>: change language (ru/en), currency, timezone, toggle cashback, and other options.
+            </div>
+          </div>
+        </div>
+
+        <!-- Subscription -->
+        <div class="faq-category">
+          <h2 class="faq-category-title">Subscription</h2>
+
+          <div class="faq-item">
+            <div class="faq-question">What does subscription give?</div>
+            <div class="faq-answer">
+              Most features are free! Subscription (trial for new users) adds: AI assistant — ask about your stats naturally; income tracking; voice input; cashback tracking; family budget. Details and current prices — <code>/subscription</code> command.
+            </div>
+          </div>
+
+          <div class="faq-item">
+            <div class="faq-question">How to set a limit or budget?</div>
+            <div class="faq-answer">
+              Limits are not yet implemented as a separate feature. But you can add balance or budget as income: <code>+40000 budget</code>. All expenses will be subtracted and you'll see current balance in statistics.
+            </div>
+          </div>
+        </div>
+
+        <!-- CTA -->
+        <div class="cta-section">
+          <h2 class="cta-title">Still have questions?</h2>
+          <p class="cta-subtitle">Contact support or try the bot — it's free!</p>
+          <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_faq" target="_blank" class="btn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
+            </svg>
+            Launch Bot
+          </a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-links">
+        <a href="index_en.html">Home</a>
+        <a href="https://t.me/SMF_support" target="_blank">Support</a>
+        <a href="privacy_en.html">Privacy</a>
+        <a href="offer_en.html">Terms</a>
+      </div>
+      <div class="footer-copy">© 2025 Coins Bot. All rights reserved.</div>
+    </div>
+  </footer>
+</body>
+</html>
