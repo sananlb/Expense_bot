@@ -1,6 +1,6 @@
 # План интеграции автоматической конвертации валют
 
-**Версия:** 2.0 (исправлена)
+**Версия:** 2.1 (исправлена)
 **Дата:** 2026-02-03
 
 ## Обзор
@@ -25,11 +25,13 @@
 │
 └── auto_convert = ON
     ├── Курс получен    → Сохраняется: 4627 RUB (original: 50 USD)
-    │                     Отображается: "☕ Кофе - 4627 ₽ _(~50 $)_"
+    │                     Отображается: "☕ Кофе - 4627 ₽ <i>(~50 $)</i>"
     │
     └── Курс НЕ получен → Сохраняется: 50 USD (graceful degradation)
                           Отображается: "☕ Кофе - 50 $"
 ```
+
+> **Примечание:** Telegram бот использует HTML разметку (`<i>`, `<b>`), НЕ Markdown.
 
 ---
 
@@ -175,16 +177,24 @@ class CurrencyConverter:
         return f"{self._cache_prefix}:{source}:{date_obj.isoformat()}"
 
     async def fetch_daily_rates(self, date_obj: Optional[date] = None,
-                                currency_hint: Optional[str] = None) -> Dict[str, Dict]:
+                                from_currency: Optional[str] = None,
+                                to_currency: Optional[str] = None) -> Dict[str, Dict]:
         """
         Получает курсы валют с правильным выбором источника и кеша.
+
+        ВАЖНО: Проверяем ОБЕ валюты (from и to) при выборе источника!
+        Сценарий: from_currency=RUB, to_currency=ARS
+        - RUB не экзотика, но ARS — экзотика, поэтому нужен Fawaz
         """
         await self._ensure_session()
 
-        is_exotic = currency_hint and currency_hint.upper() in self.CBRF_UNAVAILABLE
+        # Проверяем ОБЕ валюты на экзотику
+        from_exotic = from_currency and from_currency.upper() in self.CBRF_UNAVAILABLE
+        to_exotic = to_currency and to_currency.upper() in self.CBRF_UNAVAILABLE
+        is_exotic = from_exotic or to_exotic
 
         if is_exotic:
-            # Экзотическая валюта → Fawaz с отдельным кешем
+            # Любая из валют экзотическая → Fawaz с отдельным кешем
             cache_key = self._get_cache_key(date_obj, source='fawaz')
             cached_rates = cache.get(cache_key)
             if cached_rates:
@@ -196,7 +206,7 @@ class CurrencyConverter:
                 return rates
             return {}
 
-        # Обычная валюта → ЦБ РФ
+        # Обычные валюты → ЦБ РФ
         cache_key = self._get_cache_key(date_obj, source='cbrf')
         cached_rates = cache.get(cache_key)
         if cached_rates:
@@ -234,8 +244,12 @@ class CurrencyConverter:
         if not conversion_date:
             conversion_date = date.today()
 
-        # Получаем курсы с подсказкой валюты (выберет правильный источник)
-        rates = await self.fetch_daily_rates(conversion_date, currency_hint=from_currency)
+        # Получаем курсы с указанием ОБЕИХ валют (выберет правильный источник)
+        rates = await self.fetch_daily_rates(
+            conversion_date,
+            from_currency=from_currency,
+            to_currency=to_currency
+        )
         if not rates:
             return None, None
 
@@ -338,7 +352,10 @@ async def maybe_convert_amount(
             operation_date = timezone.localdate()
 
     # Проверяем: экзотика + историческая дата = нет источника
-    is_exotic = input_currency in CurrencyConverter.CBRF_UNAVAILABLE
+    # ВАЖНО: Проверяем ОБЕ валюты (from и to)!
+    is_from_exotic = input_currency in CurrencyConverter.CBRF_UNAVAILABLE
+    is_to_exotic = user_currency in CurrencyConverter.CBRF_UNAVAILABLE
+    is_exotic = is_from_exotic or is_to_exotic
     today = get_user_local_date(profile) if profile else timezone.localdate()
     is_historical = operation_date < today
 
@@ -709,9 +726,11 @@ async def toggle_auto_convert(callback: CallbackQuery):
     await callback.answer(get_text(f'auto_convert_{status}', lang))
 
     # Получаем остальные параметры для клавиатуры
-    cashback_enabled = user_settings.cashback_tracking_enabled if user_settings else True
-    has_subscription = await check_user_subscription(profile)
-    view_scope = user_settings.default_view_scope if user_settings else 'personal'
+    from bot.services.subscription import check_subscription
+
+    cashback_enabled = user_settings.cashback_enabled if user_settings else True
+    has_subscription = await check_subscription(callback.from_user.id)
+    view_scope = user_settings.view_scope if user_settings else 'personal'
 
     # Обновляем клавиатуру
     keyboard = settings_keyboard(
@@ -726,7 +745,7 @@ async def toggle_auto_convert(callback: CallbackQuery):
 
 ### 7.4 Добавить тексты
 
-**Файл:** `bot/utils/texts.py`
+**Файл:** `bot/texts.py`
 
 ```python
 # Добавить в словарь TEXTS:
@@ -753,8 +772,10 @@ async def toggle_auto_convert(callback: CallbackQuery):
 
 **Файл:** `bot/utils/expense_formatter.py`
 
+**ВАЖНО:** Форматтеры используют HTML (`<b>`, `<i>`), НЕ Markdown!
+
 ```python
-from .formatters import get_currency_symbol
+from bot.utils import get_currency_symbol  # Реэкспортируется из bot/utils/__init__.py
 
 def format_expenses_diary_style(
     expenses: List[Any],
@@ -775,8 +796,8 @@ def format_expenses_diary_style(
         # ДОБАВИТЬ: оригинальная сумма если была конвертация
         if hasattr(expense, 'was_converted') and expense.was_converted:
             orig_symbol = get_currency_symbol(expense.original_currency)
-            # Курсив в Telegram Markdown: _текст_
-            amount_str += f" _(~{expense.original_amount:.0f} {orig_symbol})_"
+            # HTML курсив для Telegram (НЕ Markdown!)
+            amount_str += f" <i>(~{expense.original_amount:.0f} {orig_symbol})</i>"
 
         # ... формируем строку ...
 ```
@@ -785,8 +806,10 @@ def format_expenses_diary_style(
 
 **Файл:** `bot/utils/income_formatter.py`
 
+**ВАЖНО:** Форматтеры используют HTML (`<b>`, `<i>`), НЕ Markdown!
+
 ```python
-from .formatters import get_currency_symbol
+from bot.utils import get_currency_symbol  # Реэкспортируется из bot/utils/__init__.py
 
 def format_incomes_diary_style(
     incomes: List[Any],
@@ -805,7 +828,8 @@ def format_incomes_diary_style(
         # ДОБАВИТЬ: оригинальная сумма если была конвертация
         if hasattr(income, 'was_converted') and income.was_converted:
             orig_symbol = get_currency_symbol(income.original_currency)
-            amount_str += f" _(~{income.original_amount:.0f} {orig_symbol})_"
+            # HTML курсив для Telegram (НЕ Markdown!)
+            amount_str += f" <i>(~{income.original_amount:.0f} {orig_symbol})</i>"
 
         # ... формируем строку ...
 ```
@@ -897,11 +921,49 @@ from unittest.mock import patch, AsyncMock, MagicMock
 from bot.services.conversion_helper import maybe_convert_amount
 
 
+def test_parse_fawaz_response_inversion():
+    """
+    Тест парсинга Fawaz API с инверсией курса.
+
+    КРИТИЧНО: Fawaz возвращает "1 RUB = X валюта", нужна инверсия!
+    """
+    from bot.services.currency_conversion import CurrencyConverter
+    from decimal import Decimal
+
+    converter = CurrencyConverter()
+
+    # Мок ответа Fawaz API: 1 RUB = 0.013 USD
+    fawaz_response = {
+        'date': '2026-02-03',
+        'rub': {
+            'usd': 0.013,    # 1 RUB = 0.013 USD
+            'eur': 0.011,    # 1 RUB = 0.011 EUR
+            'ars': 12.5,     # 1 RUB = 12.5 ARS (экзотика)
+        }
+    }
+
+    rates = converter._parse_fawaz_response(fawaz_response, 'rub')
+
+    # Проверяем что курсы ИНВЕРТИРОВАНЫ
+    # 1 USD = 1/0.013 = 76.92 RUB
+    assert 'USD' in rates
+    usd_rate = rates['USD']['unit_rate']
+    assert abs(float(usd_rate) - 76.92) < 0.1, f"USD rate should be ~76.92, got {usd_rate}"
+
+    # 1 EUR = 1/0.011 = 90.91 RUB
+    assert 'EUR' in rates
+    eur_rate = rates['EUR']['unit_rate']
+    assert abs(float(eur_rate) - 90.91) < 0.1, f"EUR rate should be ~90.91, got {eur_rate}"
+
+    # 1 ARS = 1/12.5 = 0.08 RUB
+    assert 'ARS' in rates
+    ars_rate = rates['ARS']['unit_rate']
+    assert abs(float(ars_rate) - 0.08) < 0.01, f"ARS rate should be ~0.08, got {ars_rate}"
+
+
 @pytest.mark.asyncio
-async def test_fawaz_rate_inversion():
-    """Тест что Fawaz курс инвертируется правильно"""
-    # Fawaz возвращает: 1 RUB = 0.013 USD
-    # Ожидаем: 1 USD = 76.9 RUB (1/0.013)
+async def test_conversion_helper_with_fawaz():
+    """Тест maybe_convert_amount с моком конвертера"""
     with patch('bot.services.currency_conversion.currency_converter') as mock:
         mock.convert_with_details = AsyncMock(
             return_value=(Decimal('7690'), Decimal('76.9'))
@@ -916,6 +978,36 @@ async def test_fawaz_rate_inversion():
 
         assert result[0] == Decimal('7690')  # 100 * 76.9
         assert result[1] == 'RUB'
+
+
+@pytest.mark.asyncio
+async def test_exotic_to_currency_uses_fawaz():
+    """
+    Тест: если to_currency экзотическая, используется Fawaz.
+
+    Сценарий: from_currency=RUB, to_currency=ARS
+    RUB не экзотика, но ARS — экзотика, поэтому нужен Fawaz!
+    """
+    from datetime import date
+
+    with patch('bot.services.currency_conversion.currency_converter') as mock:
+        mock.convert_with_details = AsyncMock(
+            return_value=(Decimal('1250'), Decimal('12.5'))
+        )
+
+        result = await maybe_convert_amount(
+            amount=Decimal('100'),
+            input_currency='RUB',      # НЕ экзотика
+            user_currency='ARS',       # Экзотика!
+            auto_convert_enabled=True,
+            operation_date=date.today()
+        )
+
+        # Должна произойти конвертация через Fawaz
+        assert result[0] == Decimal('1250')
+        assert result[1] == 'ARS'
+        assert result[2] == Decimal('100')  # original_amount
+        assert result[3] == 'RUB'           # original_currency
 
 
 @pytest.mark.asyncio
@@ -997,9 +1089,9 @@ expense_bot/
 │   │   ├── settings.py              # + toggle_auto_convert, обновить вызовы settings_keyboard
 │   │   └── expense.py               # add_expense → add_expense_with_conversion
 │   ├── utils/
-│   │   ├── expense_formatter.py     # + отображение оригинальной суммы
-│   │   ├── income_formatter.py      # + отображение + исправить хардкод RUB
-│   │   └── texts.py                 # + тексты auto_convert_*
+│   │   ├── expense_formatter.py     # + отображение оригинальной суммы (HTML!)
+│   │   └── income_formatter.py      # + отображение + исправить хардкод RUB (HTML!)
+│   ├── texts.py                     # + тексты auto_convert_*
 │   ├── keyboards.py                 # + параметр auto_convert
 │   └── management/commands/
 │       └── setup_periodic_tasks.py  # + prefetch_cbrf_rates task
