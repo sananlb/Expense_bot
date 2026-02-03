@@ -1,5 +1,8 @@
 # План интеграции автоматической конвертации валют
 
+**Версия:** 2.0 (исправлена)
+**Дата:** 2026-02-03
+
 ## Обзор
 
 Добавление функционала автоматической конвертации валют при добавлении трат/доходов в другой валюте. Пользователь сможет выбрать в настройках, хочет ли он видеть траты в оригинальной валюте или автоматически конвертировать в валюту по умолчанию.
@@ -11,7 +14,7 @@
 | **ЦБ РФ** (PRIMARY) | Официальный курс | 54 валюты (USD, EUR, CNY, GBP, etc.) |
 | **Fawaz API** (FALLBACK) | Экзотические валюты + если ЦБ недоступен | ARS, COP, PEN, CLP, MXN |
 
-**Архитектурное решение:** Используем существующий `currency_conversion.py` + Redis кеш. **БЕЗ** новых моделей Currency/ExchangeRate (упрощение).
+**Архитектурное решение:** Используем существующий `currency_conversion.py` + Redis кеш. **БЕЗ** новых моделей Currency/ExchangeRate.
 
 ### Целевое поведение
 ```
@@ -109,11 +112,54 @@ python manage.py migrate
 
 ---
 
-## Этап 2: Изменить сервис конвертации валют
+## Этап 2: Исправить сервис конвертации валют
 
 **Файл:** `bot/services/currency_conversion.py`
 
-### 2.1 Добавить константу и изменить приоритет источников
+### 2.1 КРИТИЧНО: Исправить инверсию курса Fawaz API
+
+**Проблема:** Fawaz API с `base=rub` возвращает `"usd": 0.013` (1 RUB = 0.013 USD).
+Код интерпретирует как "1 USD = 0.013 RUB" — это **НЕПРАВИЛЬНО**!
+
+**Исправление:**
+
+```python
+def _parse_fawaz_response(self, data: dict, base_currency: str) -> Dict[str, Dict]:
+    """Parse Fawaz API response"""
+    try:
+        rates = {}
+        currency_data = data.get(base_currency.lower(), {})
+
+        for currency_code, rate_value in currency_data.items():
+            if currency_code.upper() in self.SUPPORTED_CURRENCIES:
+                currency_upper = currency_code.upper()
+
+                # КРИТИЧНО: Fawaz возвращает "1 RUB = X валюта"
+                # Нам нужно "1 валюта = X RUB", поэтому ИНВЕРТИРУЕМ
+                if rate_value and rate_value > 0:
+                    inverted_rate = Decimal('1') / Decimal(str(rate_value))
+                else:
+                    continue
+
+                rates[currency_upper] = {
+                    'value': inverted_rate,
+                    'nominal': 1,
+                    'name': self.SUPPORTED_CURRENCIES.get(currency_upper, currency_upper),
+                    'unit_rate': inverted_rate  # 1 USD = ~76 RUB
+                }
+
+        return rates
+
+    except Exception as e:
+        logger.error(f"Error parsing Fawaz response: {e}")
+        return {}
+```
+
+### 2.2 Раздельные кеши для CBRF и Fawaz
+
+**Проблема:** Общий кеш — если первым запросом кешируется ЦБ, экзотика (ARS) не попадёт.
+
+**Исправление:**
 
 ```python
 class CurrencyConverter:
@@ -122,31 +168,41 @@ class CurrencyConverter:
     # Валюты НЕ доступные через ЦБ РФ
     CBRF_UNAVAILABLE = {'ARS', 'COP', 'PEN', 'CLP', 'MXN'}
 
+    def _get_cache_key(self, date_obj: Optional[date] = None, source: str = 'cbrf') -> str:
+        """Generate cache key for rates WITH source prefix"""
+        if not date_obj:
+            date_obj = date.today()
+        return f"{self._cache_prefix}:{source}:{date_obj.isoformat()}"
+
     async def fetch_daily_rates(self, date_obj: Optional[date] = None,
                                 currency_hint: Optional[str] = None) -> Dict[str, Dict]:
         """
-        Получает курсы валют.
-
-        Args:
-            date_obj: дата курса
-            currency_hint: подсказка какую валюту нужно (для выбора источника)
+        Получает курсы валют с правильным выбором источника и кеша.
         """
         await self._ensure_session()
 
-        # Проверяем кеш
-        cache_key = self._get_cache_key(date_obj)
-        cached_rates = cache.get(cache_key)
-        if cached_rates:
-            return cached_rates
+        is_exotic = currency_hint and currency_hint.upper() in self.CBRF_UNAVAILABLE
 
-        # Если нужна экзотическая валюта → сразу Fawaz
-        if currency_hint and currency_hint.upper() in self.CBRF_UNAVAILABLE:
+        if is_exotic:
+            # Экзотическая валюта → Fawaz с отдельным кешем
+            cache_key = self._get_cache_key(date_obj, source='fawaz')
+            cached_rates = cache.get(cache_key)
+            if cached_rates:
+                return cached_rates
+
             rates = await self.fetch_fawaz_rates('rub')
             if rates:
                 cache.set(cache_key, rates, self._cache_timeout)
                 return rates
+            return {}
 
-        # PRIMARY: ЦБ РФ (официальный курс)
+        # Обычная валюта → ЦБ РФ
+        cache_key = self._get_cache_key(date_obj, source='cbrf')
+        cached_rates = cache.get(cache_key)
+        if cached_rates:
+            return cached_rates
+
+        # PRIMARY: ЦБ РФ
         rates = await self.fetch_cbrf_rates(date_obj)
         if rates:
             logger.info(f"CBRF: Fetched {len(rates)} rates")
@@ -155,9 +211,10 @@ class CurrencyConverter:
 
         # FALLBACK: Fawaz (если ЦБ недоступен)
         logger.warning("CBRF unavailable, falling back to Fawaz API")
+        fallback_key = self._get_cache_key(date_obj, source='fawaz')
         rates = await self.fetch_fawaz_rates('rub')
         if rates:
-            cache.set(cache_key, rates, self._cache_timeout)
+            cache.set(fallback_key, rates, self._cache_timeout)
         return rates
 
 
@@ -170,22 +227,19 @@ class CurrencyConverter:
     ) -> Tuple[Optional[Decimal], Optional[Decimal]]:
         """
         Конвертирует сумму и возвращает использованный курс.
-
-        Returns:
-            Tuple[сконвертированная сумма, курс] или (None, None)
         """
         if from_currency == to_currency:
             return amount, Decimal('1')
 
         if not conversion_date:
-            conversion_date = timezone.localdate()
+            conversion_date = date.today()
 
-        # Получаем курсы с подсказкой валюты
+        # Получаем курсы с подсказкой валюты (выберет правильный источник)
         rates = await self.fetch_daily_rates(conversion_date, currency_hint=from_currency)
         if not rates:
             return None, None
 
-        # Конвертация через RUB
+        # Конвертация
         if from_currency == 'RUB':
             if to_currency not in rates:
                 return None, None
@@ -210,7 +264,7 @@ class CurrencyConverter:
 
 ---
 
-## Этап 3: Централизованный helper для создания операций с конвертацией
+## Этап 3: Централизованный helper с timezone профиля
 
 **Файл:** `bot/services/conversion_helper.py` (НОВЫЙ)
 
@@ -223,11 +277,25 @@ import logging
 from decimal import Decimal
 from datetime import date
 from typing import Optional, Tuple
+
+import pytz
 from django.utils import timezone
 
-from .currency_conversion import currency_converter
+from .currency_conversion import currency_converter, CurrencyConverter
 
 logger = logging.getLogger(__name__)
+
+
+def get_user_local_date(profile) -> date:
+    """
+    Получает текущую дату в timezone пользователя.
+    ВАЖНО: Использует timezone профиля, а не сервера!
+    """
+    try:
+        user_tz = pytz.timezone(profile.timezone or 'UTC')
+        return timezone.now().astimezone(user_tz).date()
+    except Exception:
+        return timezone.localdate()
 
 
 async def maybe_convert_amount(
@@ -235,7 +303,8 @@ async def maybe_convert_amount(
     input_currency: str,
     user_currency: str,
     auto_convert_enabled: bool,
-    operation_date: Optional[date] = None
+    operation_date: Optional[date] = None,
+    profile=None  # Для получения timezone
 ) -> Tuple[Decimal, str, Optional[Decimal], Optional[str], Optional[Decimal]]:
     """
     Конвертирует сумму если нужно.
@@ -246,6 +315,7 @@ async def maybe_convert_amount(
         user_currency: валюта пользователя по умолчанию
         auto_convert_enabled: включена ли автоконвертация
         operation_date: дата операции (для курса)
+        profile: профиль пользователя (для timezone)
 
     Returns:
         Tuple[
@@ -260,10 +330,27 @@ async def maybe_convert_amount(
     if input_currency == user_currency or not auto_convert_enabled:
         return amount, input_currency, None, None, None
 
-    # Пытаемся конвертировать
+    # Определяем дату для курса
     if operation_date is None:
-        operation_date = timezone.localdate()
+        if profile:
+            operation_date = get_user_local_date(profile)
+        else:
+            operation_date = timezone.localdate()
 
+    # Проверяем: экзотика + историческая дата = нет источника
+    is_exotic = input_currency in CurrencyConverter.CBRF_UNAVAILABLE
+    today = get_user_local_date(profile) if profile else timezone.localdate()
+    is_historical = operation_date < today
+
+    if is_exotic and is_historical:
+        # Fawaz @latest не поддерживает исторические даты
+        logger.warning(
+            f"No historical rates for exotic currency {input_currency} "
+            f"on {operation_date}, keeping original"
+        )
+        return amount, input_currency, None, None, None
+
+    # Пытаемся конвертировать
     try:
         converted, rate = await currency_converter.convert_with_details(
             amount=amount,
@@ -275,11 +362,11 @@ async def maybe_convert_amount(
         if converted is not None and rate is not None:
             logger.info(
                 f"Converted {amount} {input_currency} -> {converted} {user_currency} "
-                f"(rate: {rate})"
+                f"(rate: {rate}, date: {operation_date})"
             )
             return converted, user_currency, amount, input_currency, rate
         else:
-            # Graceful degradation: не удалось сконвертировать
+            # Graceful degradation
             logger.warning(
                 f"Failed to convert {amount} {input_currency} to {user_currency}, "
                 f"keeping original"
@@ -302,6 +389,7 @@ async def maybe_convert_amount(
 ```python
 from .conversion_helper import maybe_convert_amount
 
+# Существующая функция — добавить параметры
 @sync_to_async
 def create_expense(
     user_id: int,
@@ -312,7 +400,7 @@ def create_expense(
     ai_categorized: bool = False,
     ai_confidence: Optional[float] = None,
     currency: str = 'RUB',
-    # Новые параметры для конвертации (передаются из async контекста)
+    # НОВЫЕ параметры для конвертации
     original_amount: Optional[Decimal] = None,
     original_currency: Optional[str] = None,
     exchange_rate_used: Optional[Decimal] = None,
@@ -330,19 +418,15 @@ def create_expense(
         expense_time=datetime.now().time(),
         ai_categorized=ai_categorized,
         ai_confidence=ai_confidence,
-        # Новые поля
+        # НОВЫЕ поля
         original_amount=original_amount,
         original_currency=original_currency,
         exchange_rate_used=exchange_rate_used,
     )
     return expense
-```
 
-### 4.2 Обертка для вызова с конвертацией
 
-**Файл:** `bot/services/expense.py` (добавить)
-
-```python
+# НОВАЯ функция — обёртка с конвертацией
 async def create_expense_with_conversion(
     user_id: int,
     amount: Decimal,
@@ -367,7 +451,7 @@ async def create_expense_with_conversion(
         return None
 
     user_settings = await sync_to_async(
-        lambda: getattr(profile, 'settings', None)
+        lambda: UserSettings.objects.filter(profile=profile).first()
     )()
     auto_convert = user_settings.auto_convert_currency if user_settings else False
 
@@ -383,7 +467,8 @@ async def create_expense_with_conversion(
         input_currency=input_currency,
         user_currency=profile.currency,
         auto_convert_enabled=auto_convert,
-        operation_date=expense_date
+        operation_date=expense_date,
+        profile=profile  # Для timezone
     )
 
     # Создаем трату
@@ -400,9 +485,16 @@ async def create_expense_with_conversion(
         original_currency=original_currency,
         exchange_rate_used=rate,
     )
+
+
+# ОБНОВИТЬ АЛИАС (строка ~177)
+# Было: add_expense = create_expense
+# Стало:
+add_expense = create_expense  # Оставляем для обратной совместимости
+add_expense_with_conversion = create_expense_with_conversion  # НОВЫЙ алиас
 ```
 
-### 4.3 Аналогично для income.py
+### 4.2 Аналогично для income.py
 
 **Файл:** `bot/services/income.py`
 
@@ -410,23 +502,68 @@ async def create_expense_with_conversion(
 # Аналогичная структура:
 # 1. Добавить параметры original_amount, original_currency, exchange_rate_used в create_income
 # 2. Добавить create_income_with_conversion()
+# 3. Добавить алиас: add_income_with_conversion = create_income_with_conversion
 ```
 
 ---
 
-## Этап 5: Изменить recurring.py
+## Этап 5: Обновить ВСЕ точки вызова (WIRING)
+
+### 5.1 Точки вызова add_expense в роутерах
+
+**Файл:** `bot/routers/expense.py`
+
+```python
+# БЫЛО:
+from ..services.expense import add_expense
+
+expense = await add_expense(
+    user_id=user_id,
+    amount=amount,
+    currency=currency,
+    ...
+)
+
+# СТАЛО:
+from ..services.expense import add_expense_with_conversion
+
+expense = await add_expense_with_conversion(
+    user_id=user_id,
+    amount=amount,
+    input_currency=currency,  # Переименован параметр!
+    ...
+)
+```
+
+### 5.2 Полный список файлов для обновления
+
+| Файл | Что изменить |
+|------|--------------|
+| `bot/routers/expense.py` | `add_expense` → `add_expense_with_conversion` (3 места) |
+| `bot/routers/income.py` | `add_income` → `add_income_with_conversion` |
+| `bot/routers/voice.py` | Если есть вызовы — обновить |
+| `bot/services/ai_parser.py` | Если создаёт траты — обновить |
+
+### 5.3 Поиск всех точек вызова
+
+```bash
+# Выполнить перед реализацией:
+grep -rn "add_expense\|create_expense" --include="*.py" bot/routers/
+grep -rn "add_income\|create_income" --include="*.py" bot/routers/
+```
+
+---
+
+## Этап 6: Изменить recurring.py
 
 **Файл:** `bot/services/recurring.py`
 
-### Проблема
-Функция `process_recurring_payments_for_today()` напрямую вызывает `Expense.objects.create()` и `Income.objects.create()`, обходя конвертацию.
-
-### Решение
-Использовать helper внутри sync контекста:
+**Проблема:** Функция напрямую вызывает `Expense.objects.create()` — обходит конвертацию.
 
 ```python
-from .conversion_helper import maybe_convert_amount
+from .conversion_helper import maybe_convert_amount, get_user_local_date
 from asgiref.sync import async_to_sync
+from expenses.models import UserSettings
 
 @sync_to_async
 @transaction.atomic
@@ -436,9 +573,10 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
 
     for payment in payments:
         profile = payment.profile
+        today = get_user_local_date(profile)
 
         # Получаем настройки
-        user_settings = getattr(profile, 'settings', None)
+        user_settings = UserSettings.objects.filter(profile=profile).first()
         auto_convert = user_settings.auto_convert_currency if user_settings else False
 
         # Конвертируем если нужно (sync wrapper для async функции)
@@ -448,7 +586,8 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
                 input_currency=payment.currency,
                 user_currency=profile.currency,
                 auto_convert_enabled=True,
-                operation_date=today
+                operation_date=today,
+                profile=profile
             )
             final_amount, final_currency, orig_amount, orig_currency, rate = convert_result
         else:
@@ -464,6 +603,7 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
                 currency=final_currency,
                 description=f"[Ежемесячный] {payment.description}",
                 income_date=today,
+                # НОВЫЕ поля
                 original_amount=orig_amount,
                 original_currency=orig_currency,
                 exchange_rate_used=rate,
@@ -477,6 +617,7 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
                 description=f"[Ежемесячный] {payment.description}",
                 expense_date=today,
                 expense_time=datetime.now().time(),
+                # НОВЫЕ поля
                 original_amount=orig_amount,
                 original_currency=orig_currency,
                 exchange_rate_used=rate,
@@ -485,16 +626,20 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
 
 ---
 
-## Этап 6: UI настроек
+## Этап 7: UI настроек
 
-### 6.1 Добавить кнопку в клавиатуру настроек
+### 7.1 Добавить параметр в keyboards.py
 
 **Файл:** `bot/keyboards.py`
 
 ```python
-def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True,
-                     has_subscription: bool = False, view_scope: str = 'personal',
-                     auto_convert: bool = False) -> InlineKeyboardMarkup:  # Новый параметр
+def settings_keyboard(
+    lang: str = 'ru',
+    cashback_enabled: bool = True,
+    has_subscription: bool = False,
+    view_scope: str = 'personal',
+    auto_convert: bool = False  # НОВЫЙ параметр
+) -> InlineKeyboardMarkup:
     """Меню настроек"""
     keyboard = InlineKeyboardBuilder()
 
@@ -503,14 +648,41 @@ def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True,
     keyboard.button(text=get_text('change_timezone', lang), callback_data="change_timezone")
     keyboard.button(text=get_text('change_currency', lang), callback_data="change_currency")
 
-    # Новая кнопка автоконвертации
-    auto_convert_text = f"{'✅' if auto_convert else '⬜'} {get_text('auto_convert_currency', lang)}"
+    # НОВАЯ кнопка автоконвертации
+    auto_convert_icon = '✅' if auto_convert else '⬜'
+    auto_convert_text = f"{auto_convert_icon} {get_text('auto_convert_currency', lang)}"
     keyboard.button(text=auto_convert_text, callback_data="toggle_auto_convert")
 
     # ... остальные кнопки ...
 ```
 
-### 6.2 Добавить обработчик
+### 7.2 Обновить ВСЕ вызовы settings_keyboard()
+
+**Файл:** `bot/routers/settings.py`
+
+```python
+# Строка ~89 и ~93 — обновить вызовы:
+
+# БЫЛО:
+reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription, view_scope)
+
+# СТАЛО:
+# Сначала получаем настройку auto_convert
+user_settings = await sync_to_async(
+    lambda: UserSettings.objects.filter(profile=profile).first()
+)()
+auto_convert = user_settings.auto_convert_currency if user_settings else False
+
+reply_markup=settings_keyboard(
+    lang=lang,
+    cashback_enabled=cashback_enabled,
+    has_subscription=has_subscription,
+    view_scope=view_scope,
+    auto_convert=auto_convert  # НОВЫЙ параметр
+)
+```
+
+### 7.3 Добавить обработчик toggle_auto_convert
 
 **Файл:** `bot/routers/settings.py`
 
@@ -523,9 +695,9 @@ async def toggle_auto_convert(callback: CallbackQuery):
     profile = await get_or_create_profile(callback.from_user.id)
 
     # Получаем или создаем настройки
-    user_settings, _ = await sync_to_async(UserSettings.objects.get_or_create)(
-        profile=profile
-    )
+    user_settings, created = await sync_to_async(
+        lambda: UserSettings.objects.get_or_create(profile=profile)
+    )()
 
     # Инвертируем значение
     user_settings.auto_convert_currency = not user_settings.auto_convert_currency
@@ -536,47 +708,54 @@ async def toggle_auto_convert(callback: CallbackQuery):
 
     await callback.answer(get_text(f'auto_convert_{status}', lang))
 
+    # Получаем остальные параметры для клавиатуры
+    cashback_enabled = user_settings.cashback_tracking_enabled if user_settings else True
+    has_subscription = await check_user_subscription(profile)
+    view_scope = user_settings.default_view_scope if user_settings else 'personal'
+
     # Обновляем клавиатуру
     keyboard = settings_keyboard(
         lang=lang,
-        # ... другие параметры ...
+        cashback_enabled=cashback_enabled,
+        has_subscription=has_subscription,
+        view_scope=view_scope,
         auto_convert=user_settings.auto_convert_currency
     )
     await callback.message.edit_reply_markup(reply_markup=keyboard)
 ```
 
-### 6.3 Добавить тексты
+### 7.4 Добавить тексты
 
 **Файл:** `bot/utils/texts.py`
 
 ```python
-TEXTS = {
-    # ... существующие тексты ...
+# Добавить в словарь TEXTS:
 
-    'auto_convert_currency': {
-        'ru': 'Автоконвертация валют',
-        'en': 'Auto-convert currencies',
-    },
-    'auto_convert_enabled': {
-        'ru': '✅ Автоконвертация включена',
-        'en': '✅ Auto-conversion enabled',
-    },
-    'auto_convert_disabled': {
-        'ru': '⬜ Автоконвертация выключена',
-        'en': '⬜ Auto-conversion disabled',
-    },
-}
+'auto_convert_currency': {
+    'ru': 'Автоконвертация валют',
+    'en': 'Auto-convert currencies',
+},
+'auto_convert_enabled': {
+    'ru': '✅ Автоконвертация включена',
+    'en': '✅ Auto-conversion enabled',
+},
+'auto_convert_disabled': {
+    'ru': '⬜ Автоконвертация выключена',
+    'en': '⬜ Auto-conversion disabled',
+},
 ```
 
 ---
 
-## Этап 7: Форматирование с отображением оригинальной суммы
+## Этап 8: Форматирование с отображением оригинальной суммы
 
-### 7.1 Изменить expense_formatter.py
+### 8.1 Изменить expense_formatter.py
 
 **Файл:** `bot/utils/expense_formatter.py`
 
 ```python
+from .formatters import get_currency_symbol
+
 def format_expenses_diary_style(
     expenses: List[Any],
     today: date = None,
@@ -588,24 +767,27 @@ def format_expenses_diary_style(
     # ... существующая логика ...
 
     for expense in expenses:
-        # ... существующий код ...
+        # ... существующий код получения amount_str ...
 
-        amount_str = format_amount(expense.amount, expense.currency, lang)
+        currency = expense.currency or 'RUB'
+        amount_str = format_amount(expense.amount, currency, lang)
 
-        # Добавляем оригинальную сумму если была конвертация
+        # ДОБАВИТЬ: оригинальная сумма если была конвертация
         if hasattr(expense, 'was_converted') and expense.was_converted:
             orig_symbol = get_currency_symbol(expense.original_currency)
-            # Курсив в Telegram: _текст_
+            # Курсив в Telegram Markdown: _текст_
             amount_str += f" _(~{expense.original_amount:.0f} {orig_symbol})_"
 
         # ... формируем строку ...
 ```
 
-### 7.2 Изменить income_formatter.py
+### 8.2 Изменить income_formatter.py
 
 **Файл:** `bot/utils/income_formatter.py`
 
 ```python
+from .formatters import get_currency_symbol
+
 def format_incomes_diary_style(
     incomes: List[Any],
     today: date = None,
@@ -616,11 +798,11 @@ def format_incomes_diary_style(
     # ... существующая логика ...
 
     for income in incomes:
-        # ИСПРАВЛЕНИЕ: использовать валюту дохода, а не хардкод RUB
+        # ИСПРАВИТЬ: использовать валюту дохода, НЕ хардкод RUB
         currency = income.currency or 'RUB'  # Было: currency = 'RUB'
         amount_str = format_amount(income.amount, currency, lang)
 
-        # Добавляем оригинальную сумму если была конвертация
+        # ДОБАВИТЬ: оригинальная сумма если была конвертация
         if hasattr(income, 'was_converted') and income.was_converted:
             orig_symbol = get_currency_symbol(income.original_currency)
             amount_str += f" _(~{income.original_amount:.0f} {orig_symbol})_"
@@ -630,9 +812,9 @@ def format_incomes_diary_style(
 
 ---
 
-## Этап 8: Celery задача для предзагрузки курсов
+## Этап 9: Celery задача для предзагрузки курсов
 
-### 8.1 Создать задачу
+### 9.1 Создать задачу
 
 **Файл:** `expense_bot/celery_tasks.py` (добавить)
 
@@ -642,14 +824,19 @@ def prefetch_cbrf_rates():
     """
     Предзагрузка курсов ЦБ РФ на завтра.
     Запускается в 23:30 МСК.
+
+    ВАЖНО: Используем fetch_daily_rates() который:
+    - Создаёт сессию (_ensure_session)
+    - Кладёт результат в кеш
     """
     from bot.services.currency_conversion import currency_converter
     from asgiref.sync import async_to_sync
 
     async def _prefetch():
-        rates = await currency_converter.fetch_cbrf_rates()
+        # fetch_daily_rates() сам создаст сессию и закеширует результат
+        rates = await currency_converter.fetch_daily_rates()
         if rates:
-            logger.info(f"CBRF: Prefetched {len(rates)} rates")
+            logger.info(f"CBRF: Prefetched {len(rates)} rates for tomorrow")
             return len(rates)
         else:
             logger.error("CBRF: Failed to prefetch rates")
@@ -659,7 +846,7 @@ def prefetch_cbrf_rates():
     return f"Prefetched {count} CBRF rates"
 ```
 
-### 8.2 Зарегистрировать в setup_periodic_tasks.py
+### 9.2 Зарегистрировать в setup_periodic_tasks.py
 
 **Файл:** `bot/management/commands/setup_periodic_tasks.py`
 
@@ -689,7 +876,7 @@ def handle(self, *args, **options):
     self.stdout.write(self.style.SUCCESS('Created prefetch_cbrf_rates task'))
 ```
 
-### 8.3 Применить регистрацию
+### 9.3 Применить регистрацию
 
 ```bash
 python manage.py setup_periodic_tasks
@@ -697,24 +884,28 @@ python manage.py setup_periodic_tasks
 
 ---
 
-## Этап 9: Тестирование
+## Этап 10: Тестирование
 
-### 9.1 Unit тесты
+### 10.1 Unit тесты
 
 **Файл:** `tests/test_currency_conversion.py`
 
 ```python
 import pytest
 from decimal import Decimal
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, AsyncMock, MagicMock
 from bot.services.conversion_helper import maybe_convert_amount
 
 
 @pytest.mark.asyncio
-async def test_convert_usd_to_rub():
-    """Тест конвертации USD -> RUB"""
+async def test_fawaz_rate_inversion():
+    """Тест что Fawaz курс инвертируется правильно"""
+    # Fawaz возвращает: 1 RUB = 0.013 USD
+    # Ожидаем: 1 USD = 76.9 RUB (1/0.013)
     with patch('bot.services.currency_conversion.currency_converter') as mock:
-        mock.convert_with_details = AsyncMock(return_value=(Decimal('9250'), Decimal('92.5')))
+        mock.convert_with_details = AsyncMock(
+            return_value=(Decimal('7690'), Decimal('76.9'))
+        )
 
         result = await maybe_convert_amount(
             amount=Decimal('100'),
@@ -723,25 +914,33 @@ async def test_convert_usd_to_rub():
             auto_convert_enabled=True
         )
 
-        assert result[0] == Decimal('9250')  # final_amount
-        assert result[1] == 'RUB'            # final_currency
-        assert result[2] == Decimal('100')   # original_amount
-        assert result[3] == 'USD'            # original_currency
+        assert result[0] == Decimal('7690')  # 100 * 76.9
+        assert result[1] == 'RUB'
 
 
 @pytest.mark.asyncio
-async def test_no_conversion_when_disabled():
-    """Тест: автоконвертация выключена"""
+async def test_exotic_historical_no_conversion():
+    """Тест: экзотика + прошлая дата = нет конвертации"""
+    from datetime import date, timedelta
+
+    mock_profile = MagicMock()
+    mock_profile.timezone = 'Europe/Moscow'
+
+    yesterday = date.today() - timedelta(days=1)
+
     result = await maybe_convert_amount(
         amount=Decimal('100'),
-        input_currency='USD',
+        input_currency='ARS',  # Экзотика
         user_currency='RUB',
-        auto_convert_enabled=False
+        auto_convert_enabled=True,
+        operation_date=yesterday,  # Вчера
+        profile=mock_profile
     )
 
-    assert result[0] == Decimal('100')  # amount unchanged
-    assert result[1] == 'USD'           # currency unchanged
-    assert result[2] is None            # no original
+    # Должен сохранить оригинал без конвертации
+    assert result[0] == Decimal('100')
+    assert result[1] == 'ARS'
+    assert result[2] is None  # no original_amount
 
 
 @pytest.mark.asyncio
@@ -765,7 +964,7 @@ async def test_graceful_degradation():
 
 ---
 
-## Этап 10: Деплой
+## Этап 11: Деплой
 
 ```bash
 # 1. Применить миграции
@@ -789,25 +988,36 @@ expense_bot/
 │                                    # + UserSettings.auto_convert_currency
 ├── bot/
 │   ├── services/
-│   │   ├── currency_conversion.py   # Изменить: CBRF primary, добавить convert_with_details
-│   │   ├── conversion_helper.py     # НОВЫЙ: maybe_convert_amount()
-│   │   ├── expense.py               # Изменить: добавить create_expense_with_conversion
-│   │   ├── income.py                # Изменить: добавить create_income_with_conversion
-│   │   └── recurring.py             # Изменить: использовать конвертацию
+│   │   ├── currency_conversion.py   # Исправить: инверсия Fawaz, раздельные кеши
+│   │   ├── conversion_helper.py     # НОВЫЙ: maybe_convert_amount() + timezone
+│   │   ├── expense.py               # + create_expense_with_conversion, обновить параметры
+│   │   ├── income.py                # + create_income_with_conversion
+│   │   └── recurring.py             # + конвертация в process_recurring_payments
 │   ├── routers/
-│   │   └── settings.py              # + toggle_auto_convert handler
+│   │   ├── settings.py              # + toggle_auto_convert, обновить вызовы settings_keyboard
+│   │   └── expense.py               # add_expense → add_expense_with_conversion
 │   ├── utils/
 │   │   ├── expense_formatter.py     # + отображение оригинальной суммы
-│   │   ├── income_formatter.py      # + отображение оригинальной суммы + исправить хардкод RUB
-│   │   └── texts.py                 # + тексты для UI
-│   ├── keyboards.py                 # + кнопка автоконвертации
+│   │   ├── income_formatter.py      # + отображение + исправить хардкод RUB
+│   │   └── texts.py                 # + тексты auto_convert_*
+│   ├── keyboards.py                 # + параметр auto_convert
 │   └── management/commands/
 │       └── setup_periodic_tasks.py  # + prefetch_cbrf_rates task
 ├── expense_bot/
 │   └── celery_tasks.py              # + prefetch_cbrf_rates()
 └── tests/
-    └── test_currency_conversion.py  # НОВЫЙ: тесты
+    └── test_currency_conversion.py  # НОВЫЙ: тесты с моками
 ```
+
+---
+
+## Чек-лист перед реализацией
+
+- [ ] Проверить все точки вызова: `grep -rn "add_expense\|create_expense" bot/`
+- [ ] Проверить все точки вызова: `grep -rn "add_income\|create_income" bot/`
+- [ ] Проверить вызовы settings_keyboard: `grep -rn "settings_keyboard" bot/`
+- [ ] Проверить формат Fawaz API ещё раз
+- [ ] Написать тесты ДО реализации
 
 ---
 
@@ -816,40 +1026,12 @@ expense_bot/
 | Ситуация | Решение |
 |----------|---------|
 | Курс не получен | Graceful degradation: сохраняем в оригинальной валюте |
-| Выходной день | ЦБ вернет курс пятницы |
-| Экзотическая валюта (ARS, COP, PEN, CLP, MXN) | Сразу Fawaz API |
-| Историческая дата (операция в прошлом) | ЦБ РФ поддерживает исторические курсы |
-| Fawaz для историч. дат экзотич. валют | Используем @latest (только сегодня), предупреждаем пользователя |
-| Timezone на границе суток | Используем `timezone.localdate()` с timezone профиля |
-
----
-
-## Приоритет источников курсов
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                   ВЫБОР ИСТОЧНИКА КУРСА                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  Валюта в CBRF_UNAVAILABLE?                                 │
-│  {'ARS', 'COP', 'PEN', 'CLP', 'MXN'}                        │
-│                                                             │
-│       ДА                              НЕТ                   │
-│        │                               │                    │
-│        ▼                               ▼                    │
-│   Fawaz API                       ЦБ РФ (PRIMARY)           │
-│   (экзотические)                       │                    │
-│                                        │                    │
-│                               ЦБ доступен?                  │
-│                                   │                         │
-│                          ДА       │       НЕТ               │
-│                           │       │        │                │
-│                           ▼       │        ▼                │
-│                    Использовать   │   Fawaz API             │
-│                    курс ЦБ РФ     │   (fallback)            │
-│                                   │                         │
-└─────────────────────────────────────────────────────────────┘
-```
+| Выходной день | ЦБ вернёт курс пятницы |
+| Экзотика (ARS, COP, PEN, CLP, MXN) сегодня | Fawaz API с инвертированным курсом |
+| Экзотика + прошлая дата | Graceful degradation (Fawaz не поддерживает историю) |
+| ЦБ РФ валюта + прошлая дата | ЦБ РФ с параметром `date_req` |
+| Timezone на границе суток | `get_user_local_date(profile)` использует timezone профиля |
+| Redis сброшен | On-demand запрос к API при первом обращении |
 
 ---
 
@@ -858,4 +1040,4 @@ expense_bot/
 - ✅ Существующие траты/доходы остаются без изменений (nullable поля)
 - ✅ Автоконвертация по умолчанию ВЫКЛЮЧЕНА
 - ✅ Graceful degradation при любых ошибках
-- ✅ Обратная совместимость с форматированием
+- ✅ `add_expense` алиас сохранён для обратной совместимости
