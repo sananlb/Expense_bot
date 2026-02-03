@@ -1947,6 +1947,28 @@ def update_income_keywords(income_id: int, old_category_id: int, new_category_id
         logger.error(f"Error in update_income_keywords task: {e}")
 
 
+@shared_task(name='prefetch_cbrf_rates')
+def prefetch_cbrf_rates():
+    """
+    Предзагрузка курсов ЦБ РФ.
+    Запускается в 23:30 МСК для кеширования на следующий день.
+    """
+    from bot.services.currency_conversion import currency_converter
+    from asgiref.sync import async_to_sync
+
+    async def _prefetch():
+        rates = await currency_converter.fetch_daily_rates()
+        if rates:
+            logger.info(f"CBRF: Prefetched {len(rates)} rates")
+            return len(rates)
+        else:
+            logger.error("CBRF: Failed to prefetch rates")
+            return 0
+
+    count = async_to_sync(_prefetch)()
+    return f"Prefetched {count} CBRF rates"
+
+
 @shared_task
 def learn_income_keywords_on_create(income_id: int):
     """

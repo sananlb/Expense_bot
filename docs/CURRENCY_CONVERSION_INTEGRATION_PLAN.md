@@ -1,6 +1,6 @@
 # План интеграции автоматической конвертации валют
 
-**Версия:** 2.1 (исправлена)
+**Версия:** 2.3 (финальная)
 **Дата:** 2026-02-03
 
 ## Обзор
@@ -274,6 +274,56 @@ class CurrencyConverter:
         to_rate = rates[to_currency]['unit_rate']
         rate = from_rate / to_rate
         return (amount * rate).quantize(Decimal('0.01')), rate
+
+
+### 2.3 Обновить get_rate() для поддержки экзотики
+
+**Проблема:** После добавления параметров `from_currency`/`to_currency` в `fetch_daily_rates()`,
+существующие методы `get_rate()` и `get_live_currency_rates()` их НЕ передают — всегда идут в CBRF.
+
+**Текущий код (строки 291-307):**
+```python
+async def get_rate(self, currency_code: str,
+                  rate_date: Optional[date] = None) -> Optional[Decimal]:
+    rates = await self.fetch_daily_rates(rate_date)  # ❌ Нет from_currency!
+    ...
+
+async def get_live_currency_rates(self) -> Dict[str, Decimal]:
+    rates = await self.fetch_daily_rates()  # ❌ Нет from_currency!
+    ...
+```
+
+**Исправление:**
+```python
+async def get_rate(self, currency_code: str,
+                  rate_date: Optional[date] = None) -> Optional[Decimal]:
+    """Get exchange rate for specific currency"""
+    # Передаём currency_code чтобы выбрать правильный источник
+    rates = await self.fetch_daily_rates(
+        rate_date,
+        from_currency=currency_code,  # ✅ Для экзотики → Fawaz
+        to_currency='RUB'
+    )
+    if currency_code in rates:
+        return rates[currency_code]['unit_rate']
+    return None
+
+async def get_live_currency_rates(self) -> Dict[str, Decimal]:
+    """Get current exchange rates for all supported currencies"""
+    # Для полного списка: сначала CBRF, потом дополняем Fawaz
+    cbrf_rates = await self.fetch_daily_rates()
+
+    # Добавляем экзотику из Fawaz
+    for exotic in self.CBRF_UNAVAILABLE:
+        if exotic not in cbrf_rates:
+            exotic_rates = await self.fetch_daily_rates(
+                from_currency=exotic,
+                to_currency='RUB'
+            )
+            if exotic in exotic_rates:
+                cbrf_rates[exotic] = exotic_rates[exotic]
+
+    return {code: info['unit_rate'] for code, info in cbrf_rates.items()}
 ```
 
 ---
@@ -459,13 +509,10 @@ async def create_expense_with_conversion(
     """
     from expenses.models import UserSettings
     from .conversion_helper import maybe_convert_amount
+    from bot.utils.db_utils import get_or_create_user_profile_sync
 
-    # Получаем профиль и настройки
-    profile = await sync_to_async(
-        lambda: Profile.objects.filter(telegram_id=user_id).first()
-    )()
-    if not profile:
-        return None
+    # Получаем профиль (используем тот же метод что и в остальном коде!)
+    profile = await sync_to_async(get_or_create_user_profile_sync)(user_id)
 
     user_settings = await sync_to_async(
         lambda: UserSettings.objects.filter(profile=profile).first()
@@ -556,10 +603,11 @@ expense = await add_expense_with_conversion(
 
 | Файл | Что изменить |
 |------|--------------|
-| `bot/routers/expense.py` | `add_expense` → `add_expense_with_conversion` (3 места) |
-| `bot/routers/income.py` | `add_income` → `add_income_with_conversion` |
-| `bot/routers/voice.py` | Если есть вызовы — обновить |
-| `bot/services/ai_parser.py` | Если создаёт траты — обновить |
+| `bot/routers/expense.py` | `add_expense` → `add_expense_with_conversion` (3 импорта: строки 20, 965, 1163 + 3 вызова: строки 1051, 1804, 1914) |
+| `bot/routers/expense.py` | `create_income` → `create_income_with_conversion` (2 импорта: строки 1443, 1635 + 3 вызова: строки 1495, 1660, 1738) |
+| `bot/services/__init__.py` | Добавить экспорт `create_expense_with_conversion`, `create_income_with_conversion` |
+
+> **Примечание:** Файлы `bot/routers/voice.py`, `bot/routers/income.py`, `bot/services/ai_parser.py` НЕ содержат вызовов создания операций.
 
 ### 5.3 Поиск всех точек вызова
 
@@ -772,66 +820,86 @@ async def toggle_auto_convert(callback: CallbackQuery):
 
 **Файл:** `bot/utils/expense_formatter.py`
 
-**ВАЖНО:** Форматтеры используют HTML (`<b>`, `<i>`), НЕ Markdown!
+**ВАЖНО:**
+- Форматтеры используют HTML (`<b>`, `<i>`), НЕ Markdown!
+- Форматирование суммы делается inline (НЕ через `format_amount`)
 
 ```python
 from bot.utils import get_currency_symbol  # Реэкспортируется из bot/utils/__init__.py
 
-def format_expenses_diary_style(
-    expenses: List[Any],
-    today: date = None,
-    max_expenses: int = 100,
-    show_warning: bool = True,
-    lang: str = 'ru'
-) -> str:
-    """Форматирует траты в стиле дневника"""
+def format_expenses_diary_style(...):
     # ... существующая логика ...
 
-    for expense in expenses:
-        # ... существующий код получения amount_str ...
-
+    for expense in expenses_to_show:
+        # Существующий код (строки ~79-92):
         currency = expense.currency or 'RUB'
-        amount_str = format_amount(expense.amount, currency, lang)
+        amount = float(expense.amount)
 
-        # ДОБАВИТЬ: оригинальная сумма если была конвертация
+        # ... добавление в day_total ...
+
+        # ДОБАВИТЬ после строки 92 (перед day_expenses.append):
+        # Формируем суффикс с оригинальной суммой если была конвертация
+        original_suffix = ""
         if hasattr(expense, 'was_converted') and expense.was_converted:
             orig_symbol = get_currency_symbol(expense.original_currency)
-            # HTML курсив для Telegram (НЕ Markdown!)
-            amount_str += f" <i>(~{expense.original_amount:.0f} {orig_symbol})</i>"
+            original_suffix = f" <i>(~{expense.original_amount:.0f} {orig_symbol})</i>"
 
-        # ... формируем строку ...
+        # Добавляем трату в список дня
+        day_expenses.append({
+            'time': time_str,
+            'description': description,
+            'amount': amount,
+            'currency': currency,
+            'original_suffix': original_suffix  # НОВОЕ поле
+        })
+
+    # При формировании текста (строки 126-137):
+    # ТЕКУЩИЙ КОД строит amount_str inline:
+    for exp in day_data['expenses']:
+        amount_str = f"{exp['amount']:,.0f}".replace(',', ' ')
+        if exp['currency'] == 'RUB':
+            amount_str += ' ₽'
+        elif exp['currency'] == 'USD':
+            amount_str += ' $'
+        elif exp['currency'] == 'EUR':
+            amount_str += ' €'
+        else:
+            amount_str += f" {exp['currency']}"
+
+        # ДОБАВИТЬ суффикс к amount_str:
+        suffix = exp.get('original_suffix', '')
+        text += f"  {exp['time']} — {exp['description']} {amount_str}{suffix}\n"
 ```
 
 ### 8.2 Изменить income_formatter.py
 
 **Файл:** `bot/utils/income_formatter.py`
 
-**ВАЖНО:** Форматтеры используют HTML (`<b>`, `<i>`), НЕ Markdown!
+**ВАЖНО:**
+- Форматтеры используют HTML (`<b>`, `<i>`), НЕ Markdown!
+- **БАГ:** Строка 91 хардкодит `currency = 'RUB'` — НУЖНО ИСПРАВИТЬ!
 
 ```python
 from bot.utils import get_currency_symbol  # Реэкспортируется из bot/utils/__init__.py
 
-def format_incomes_diary_style(
-    incomes: List[Any],
-    today: date = None,
-    max_incomes: int = 100,
-    lang: str = 'ru'
-) -> str:
-    """Форматирует доходы в стиле дневника"""
+def format_incomes_diary_style(...):
     # ... существующая логика ...
 
     for income in incomes:
-        # ИСПРАВИТЬ: использовать валюту дохода, НЕ хардкод RUB
-        currency = income.currency or 'RUB'  # Было: currency = 'RUB'
-        amount_str = format_amount(income.amount, currency, lang)
+        # ИСПРАВИТЬ строку ~91:
+        # Было: currency = 'RUB'
+        # Стало:
+        currency = income.currency or 'RUB'
 
-        # ДОБАВИТЬ: оригинальная сумма если была конвертация
+        # Существующий код форматирования amount...
+
+        # ДОБАВИТЬ: суффикс с оригинальной суммой если была конвертация
+        original_suffix = ""
         if hasattr(income, 'was_converted') and income.was_converted:
             orig_symbol = get_currency_symbol(income.original_currency)
-            # HTML курсив для Telegram (НЕ Markdown!)
-            amount_str += f" <i>(~{income.original_amount:.0f} {orig_symbol})</i>"
+            original_suffix = f" <i>(~{income.original_amount:.0f} {orig_symbol})</i>"
 
-        # ... формируем строку ...
+        # Добавить original_suffix при формировании строки вывода
 ```
 
 ---
@@ -964,7 +1032,8 @@ def test_parse_fawaz_response_inversion():
 @pytest.mark.asyncio
 async def test_conversion_helper_with_fawaz():
     """Тест maybe_convert_amount с моком конвертера"""
-    with patch('bot.services.currency_conversion.currency_converter') as mock:
+    # ВАЖНО: Патчим там где ИСПОЛЬЗУЕТСЯ (в conversion_helper), а не где ОПРЕДЕЛЯЕТСЯ!
+    with patch('bot.services.conversion_helper.currency_converter') as mock:
         mock.convert_with_details = AsyncMock(
             return_value=(Decimal('7690'), Decimal('76.9'))
         )
@@ -990,7 +1059,7 @@ async def test_exotic_to_currency_uses_fawaz():
     """
     from datetime import date
 
-    with patch('bot.services.currency_conversion.currency_converter') as mock:
+    with patch('bot.services.conversion_helper.currency_converter') as mock:
         mock.convert_with_details = AsyncMock(
             return_value=(Decimal('1250'), Decimal('12.5'))
         )
@@ -1038,7 +1107,7 @@ async def test_exotic_historical_no_conversion():
 @pytest.mark.asyncio
 async def test_graceful_degradation():
     """Тест: graceful degradation при ошибке конвертации"""
-    with patch('bot.services.currency_conversion.currency_converter') as mock:
+    with patch('bot.services.conversion_helper.currency_converter') as mock:
         mock.convert_with_details = AsyncMock(return_value=(None, None))
 
         result = await maybe_convert_amount(
@@ -1080,6 +1149,7 @@ expense_bot/
 │                                    # + UserSettings.auto_convert_currency
 ├── bot/
 │   ├── services/
+│   │   ├── __init__.py              # + экспорт create_expense_with_conversion, create_income_with_conversion
 │   │   ├── currency_conversion.py   # Исправить: инверсия Fawaz, раздельные кеши
 │   │   ├── conversion_helper.py     # НОВЫЙ: maybe_convert_amount() + timezone
 │   │   ├── expense.py               # + create_expense_with_conversion, обновить параметры
@@ -1087,10 +1157,11 @@ expense_bot/
 │   │   └── recurring.py             # + конвертация в process_recurring_payments
 │   ├── routers/
 │   │   ├── settings.py              # + toggle_auto_convert, обновить вызовы settings_keyboard
-│   │   └── expense.py               # add_expense → add_expense_with_conversion
+│   │   └── expense.py               # add_expense → add_expense_with_conversion (3 импорта + 3 вызова)
+│   │                                # create_income → create_income_with_conversion (2 импорта + 3 вызова)
 │   ├── utils/
-│   │   ├── expense_formatter.py     # + отображение оригинальной суммы (HTML!)
-│   │   └── income_formatter.py      # + отображение + исправить хардкод RUB (HTML!)
+│   │   ├── expense_formatter.py     # + original_suffix в day_expenses (HTML!)
+│   │   └── income_formatter.py      # + original_suffix + исправить хардкод RUB (HTML!)
 │   ├── texts.py                     # + тексты auto_convert_*
 │   ├── keyboards.py                 # + параметр auto_convert
 │   └── management/commands/
@@ -1101,13 +1172,20 @@ expense_bot/
     └── test_currency_conversion.py  # НОВЫЙ: тесты с моками
 ```
 
+> **НЕ затрагиваются:** `bot/routers/voice.py` (не существует), `bot/routers/income.py` (не создаёт доходы), `bot/services/ai_parser.py` (не существует)
+
 ---
 
 ## Чек-лист перед реализацией
 
-- [ ] Проверить все точки вызова: `grep -rn "add_expense\|create_expense" bot/`
-- [ ] Проверить все точки вызова: `grep -rn "add_income\|create_income" bot/`
-- [ ] Проверить вызовы settings_keyboard: `grep -rn "settings_keyboard" bot/`
+- [ ] Проверить точки вызова add_expense: `grep -rn "add_expense\|create_expense" bot/routers/expense.py`
+  - Ожидается: 3 импорта (строки 20, 965, 1163) + 3 вызова (строки 1051, 1804, 1914)
+- [ ] Проверить точки вызова create_income: `grep -rn "create_income" bot/routers/expense.py`
+  - Ожидается: 2 импорта (строки 1443, 1635) + 3 вызова (строки 1495, 1660, 1738)
+- [ ] Проверить вызовы settings_keyboard: `grep -rn "settings_keyboard" bot/routers/settings.py`
+  - Ожидается: 1 импорт (строка 14) + 2 вызова (строки 137, 201)
+- [ ] Проверить экспорты: `grep -n "create_expense\|create_income" bot/services/__init__.py`
+- [ ] Проверить хардкод RUB в income_formatter: `grep -n "currency = 'RUB'" bot/utils/income_formatter.py`
 - [ ] Проверить формат Fawaz API ещё раз
 - [ ] Написать тесты ДО реализации
 

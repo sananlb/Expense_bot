@@ -173,6 +173,27 @@ class Command(BaseCommand):
                 self.style.SUCCESS(f"{'✅ Создана' if created else '✔️ Обновлена'} задача: Update Top5 Keyboards")
             )
 
+            # 9. Предзагрузка курсов ЦБ РФ в 20:30 UTC (23:30 МСК)
+            schedule_prefetch_rates, created = CrontabSchedule.objects.get_or_create(
+                minute='30',
+                hour='20',      # 20:30 UTC = 23:30 МСК
+                day_of_week='*',
+                day_of_month='*',
+                month_of_year='*',
+            )
+
+            task, created = PeriodicTask.objects.update_or_create(
+                name='Prefetch CBRF rates daily',
+                defaults={
+                    'task': 'prefetch_cbrf_rates',
+                    'crontab': schedule_prefetch_rates,
+                    'enabled': True,
+                }
+            )
+            self.stdout.write(
+                self.style.SUCCESS(f"{'✅ Создана' if created else '✔️ Обновлена'} задача: Prefetch CBRF rates daily")
+            )
+
             # Выводим итоговую информацию
             self.stdout.write('\n' + '=' * 50)
             self.stdout.write(self.style.SUCCESS('📋 ИТОГИ:'))

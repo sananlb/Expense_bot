@@ -11,9 +11,12 @@ logger = logging.getLogger(__name__)
 
 class CurrencyConverter:
     """Currency conversion service using multiple API sources with fallback support"""
-    
+
     # Primary API (Free, no limits)
     FAWAZ_API_URL = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies"
+
+    # Валюты НЕ доступные через ЦБ РФ (только Fawaz)
+    CBRF_UNAVAILABLE = {'ARS', 'COP', 'PEN', 'CLP', 'MXN'}
     
     # Fallback APIs
     CBRF_DAILY_URL = "http://www.cbr.ru/scripts/XML_daily.asp"
@@ -123,32 +126,57 @@ class CurrencyConverter:
             return {}
 
     def _parse_fawaz_response(self, data: dict, base_currency: str) -> Dict[str, Dict]:
-        """Parse Fawaz API response"""
+        """
+        Parse Fawaz API response
+
+        ВАЖНО: Fawaz возвращает курс "1 RUB = X USD" (например 0.01),
+        но нам нужен курс "1 USD = X RUB" (например 100).
+        Поэтому мы ИНВЕРТИРУЕМ курс.
+        """
         try:
             rates = {}
             currency_data = data.get(base_currency.lower(), {})
-            
+
             for currency_code, rate_value in currency_data.items():
                 if currency_code.upper() in self.SUPPORTED_CURRENCIES:
                     currency_upper = currency_code.upper()
+
+                    # КРИТИЧНО: Инвертируем курс!
+                    # Fawaz: "1 RUB = 0.01 USD" -> Нам нужно: "1 USD = 100 RUB"
+                    if rate_value and rate_value > 0:
+                        inverted_rate = Decimal('1') / Decimal(str(rate_value))
+                    else:
+                        continue
+
                     rates[currency_upper] = {
-                        'value': Decimal(str(rate_value)),
+                        'value': inverted_rate,
                         'nominal': 1,
                         'name': self.SUPPORTED_CURRENCIES.get(currency_upper, currency_upper),
-                        'unit_rate': Decimal(str(rate_value))
+                        'unit_rate': inverted_rate  # 1 USD = ~100 RUB
                     }
-            
+
             return rates
-            
+
         except Exception as e:
             logger.error(f"Error parsing Fawaz response: {e}")
             return {}
 
-    async def fetch_daily_rates(self, date_obj: Optional[date] = None) -> Dict[str, Dict]:
+    async def fetch_daily_rates(self, date_obj: Optional[date] = None,
+                                from_currency: Optional[str] = None,
+                                to_currency: Optional[str] = None) -> Dict[str, Dict]:
         """
-        Fetch daily exchange rates with fallback support
-        First tries Fawaz API, then falls back to CBRF
-        
+        Fetch daily exchange rates.
+
+        Strategy:
+        - CBRF (ЦБ РФ) is PRIMARY for standard currencies (USD, EUR, CNY, etc.)
+        - Fawaz is used ONLY for exotic currencies (ARS, COP, PEN, CLP, MXN)
+        - Fawaz is FALLBACK if CBRF fails for standard currencies
+
+        Args:
+            date_obj: Date for exchange rate (default: today)
+            from_currency: Source currency code for source selection
+            to_currency: Target currency code for source selection
+
         Returns dict: {
             'USD': {'value': 75.5, 'nominal': 1, 'name': 'US Dollar'},
             'EUR': {'value': 89.2, 'nominal': 1, 'name': 'Euro'},
@@ -156,28 +184,54 @@ class CurrencyConverter:
         }
         """
         await self._ensure_session()
-        
+
+        # Determine if we need Fawaz API (exotic currencies not available in CBRF)
+        needs_fawaz = False
+        if from_currency and from_currency.upper() in self.CBRF_UNAVAILABLE:
+            needs_fawaz = True
+        if to_currency and to_currency.upper() in self.CBRF_UNAVAILABLE:
+            needs_fawaz = True
+
+        # Determine source for cache key
+        source = 'fawaz' if needs_fawaz else 'cbrf'
+
         # Check cache first
-        cache_key = self._get_cache_key(date_obj)
+        cache_key = self._get_cache_key(date_obj, source)
         cached_rates = cache.get(cache_key)
         if cached_rates:
             return cached_rates
-        
-        # Try Fawaz API first (supports all currencies, including Latin American)
-        if not date_obj or date_obj == date.today():
-            rates = await self.fetch_fawaz_rates('rub')
-            if rates:
-                logger.info("Successfully fetched rates from Fawaz API")
-                cache.set(cache_key, rates, self._cache_timeout)
-                return rates
-        
-        # Fallback to CBRF for historical data or if Fawaz fails
-        logger.info("Falling back to CBRF API")
+
+        # If exotic currency needed, use Fawaz API only
+        if needs_fawaz:
+            if not date_obj or date_obj == date.today():
+                rates = await self.fetch_fawaz_rates('rub')
+                if rates:
+                    logger.info("Successfully fetched rates from Fawaz API (exotic currency)")
+                    cache.set(cache_key, rates, self._cache_timeout)
+                    return rates
+            # Fawaz doesn't support historical data for exotic currencies
+            logger.warning(f"Cannot fetch historical rates for exotic currencies")
+            return {}
+
+        # PRIMARY: CBRF (ЦБ РФ) for standard currencies
         rates = await self.fetch_cbrf_rates(date_obj)
         if rates:
+            logger.info(f"Successfully fetched {len(rates)} rates from CBRF")
             cache.set(cache_key, rates, self._cache_timeout)
-        
-        return rates
+            return rates
+
+        # FALLBACK: Fawaz if CBRF fails (only for today, Fawaz has no historical data)
+        if not date_obj or date_obj == date.today():
+            logger.warning("CBRF unavailable, falling back to Fawaz API")
+            fawaz_cache_key = self._get_cache_key(date_obj, 'fawaz_fallback')
+            rates = await self.fetch_fawaz_rates('rub')
+            if rates:
+                logger.info("Successfully fetched rates from Fawaz API (fallback)")
+                cache.set(fawaz_cache_key, rates, self._cache_timeout)
+                return rates
+
+        logger.error(f"Failed to fetch rates from any source for date {date_obj}")
+        return {}
 
     async def fetch_cbrf_rates(self, date_obj: Optional[date] = None) -> Dict[str, Dict]:
         """
@@ -260,12 +314,20 @@ class CurrencyConverter:
             days_back = conversion_date.weekday() - 4
             conversion_date = conversion_date - timedelta(days=days_back)
         
-        # Get rates
-        rates = await self.fetch_daily_rates(conversion_date)
+        # Get rates (pass currencies for proper source selection)
+        rates = await self.fetch_daily_rates(
+            conversion_date,
+            from_currency=from_currency,
+            to_currency=to_currency
+        )
         if not rates:
             # Try previous business day
             conversion_date = self._get_previous_business_day(conversion_date)
-            rates = await self.fetch_daily_rates(conversion_date)
+            rates = await self.fetch_daily_rates(
+                conversion_date,
+                from_currency=from_currency,
+                to_currency=to_currency
+            )
             if not rates:
                 logger.error(f"No rates available for {conversion_date}")
                 return None
@@ -288,13 +350,83 @@ class CurrencyConverter:
                 return None
             return rub_amount / rates[to_currency]['unit_rate']
     
-    async def get_rate(self, currency_code: str, 
+    async def get_rate(self, currency_code: str,
                       rate_date: Optional[date] = None) -> Optional[Decimal]:
-        """Get exchange rate for specific currency"""
-        rates = await self.fetch_daily_rates(rate_date)
+        """Get exchange rate for specific currency (relative to RUB)"""
+        # Pass currency_code for proper source selection (exotic currencies use Fawaz)
+        rates = await self.fetch_daily_rates(
+            rate_date,
+            from_currency=currency_code,
+            to_currency='RUB'
+        )
         if currency_code in rates:
             return rates[currency_code]['unit_rate']
         return None
+
+    async def convert_with_details(
+        self,
+        amount: Decimal,
+        from_currency: str,
+        to_currency: str = 'RUB',
+        conversion_date: Optional[date] = None
+    ) -> Tuple[Optional[Decimal], Optional[Decimal]]:
+        """
+        Конвертирует сумму и возвращает использованный курс.
+
+        Args:
+            amount: Amount to convert
+            from_currency: Source currency code (e.g., 'USD')
+            to_currency: Target currency code (default 'RUB')
+            conversion_date: Date for exchange rate (default: today)
+
+        Returns:
+            (converted_amount, rate_used) или (None, None) при ошибке
+        """
+        if from_currency == to_currency:
+            return amount, Decimal('1')
+
+        if not conversion_date:
+            conversion_date = date.today()
+
+        rates = await self.fetch_daily_rates(
+            conversion_date,
+            from_currency=from_currency,
+            to_currency=to_currency
+        )
+        if not rates:
+            logger.warning(f"No rates available for conversion {from_currency} -> {to_currency} on {conversion_date}")
+            return None, None
+
+        # Конвертация
+        if from_currency == 'RUB':
+            if to_currency not in rates:
+                logger.warning(f"Currency {to_currency} not found in rates for date {conversion_date}")
+                return None, None
+            rate = Decimal('1') / rates[to_currency]['unit_rate']
+            result = (amount * rate).quantize(Decimal('0.01'))
+            logger.info(f"Converted {amount} {from_currency} -> {result} {to_currency} (rate: {rate:.6f}, date: {conversion_date})")
+            return result, rate
+
+        if to_currency == 'RUB':
+            if from_currency not in rates:
+                logger.warning(f"Currency {from_currency} not found in rates for date {conversion_date}")
+                return None, None
+            rate = rates[from_currency]['unit_rate']
+            result = (amount * rate).quantize(Decimal('0.01'))
+            logger.info(f"Converted {amount} {from_currency} -> {result} {to_currency} (rate: {rate:.6f}, date: {conversion_date})")
+            return result, rate
+
+        # Кросс-курс через RUB
+        if from_currency not in rates or to_currency not in rates:
+            logger.warning(f"Cross-rate conversion failed: {from_currency} or {to_currency} not in rates for {conversion_date}")
+            return None, None
+
+        from_rate = rates[from_currency]['unit_rate']
+        to_rate = rates[to_currency]['unit_rate']
+        rate = from_rate / to_rate
+        result = (amount * rate).quantize(Decimal('0.01'))
+        logger.info(f"Cross-converted {amount} {from_currency} -> {result} {to_currency} (rate: {rate:.6f}, date: {conversion_date})")
+        return result, rate
     
     async def get_available_currencies(self) -> List[Tuple[str, str]]:
         """Get list of available currencies"""
@@ -306,11 +438,11 @@ class CurrencyConverter:
         rates = await self.fetch_daily_rates()
         return {code: info['unit_rate'] for code, info in rates.items()}
     
-    def _get_cache_key(self, date_obj: Optional[date] = None) -> str:
-        """Generate cache key for rates"""
+    def _get_cache_key(self, date_obj: Optional[date] = None, source: str = 'cbrf') -> str:
+        """Generate cache key for rates WITH source prefix"""
         if not date_obj:
             date_obj = date.today()
-        return f"{self._cache_prefix}:{date_obj.isoformat()}"
+        return f"{self._cache_prefix}:{source}:{date_obj.isoformat()}"
     
     def _get_previous_business_day(self, date_obj: date) -> date:
         """Get previous business day (Mon-Fri)"""

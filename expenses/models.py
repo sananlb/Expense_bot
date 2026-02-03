@@ -274,6 +274,12 @@ class UserSettings(models.Model):
         verbose_name='Режим отображения'
     )
 
+    # Автоконвертация валют
+    auto_convert_currency = models.BooleanField(
+        default=False,
+        verbose_name="Автоконвертация валют"
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -438,6 +444,24 @@ class Expense(models.Model):
     # Основная информация
     amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0.01)])
     currency = models.CharField(max_length=3, default='RUB')  # Валюта траты
+
+    # Поля для конвертации валют (nullable для обратной совместимости)
+    original_amount = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        null=True, blank=True,
+        verbose_name="Оригинальная сумма"
+    )
+    original_currency = models.CharField(
+        max_length=3,
+        null=True, blank=True,
+        verbose_name="Оригинальная валюта"
+    )
+    exchange_rate_used = models.DecimalField(
+        max_digits=12, decimal_places=6,
+        null=True, blank=True,
+        verbose_name="Использованный курс"
+    )
+
     description = models.TextField(blank=True)
     
     # Дата и время (автоматические по ТЗ)
@@ -481,7 +505,15 @@ class Expense(models.Model):
         ]
     
     def __str__(self):
-        return f"{self.amount} {self.profile.currency} - {self.description[:30]}"
+        return f"{self.amount} {self.currency} - {self.description[:30]}"
+
+    @property
+    def was_converted(self) -> bool:
+        """Была ли трата сконвертирована"""
+        return (
+            self.original_currency is not None
+            and self.original_currency != self.currency
+        )
 
 
 class Budget(models.Model):
@@ -1018,8 +1050,26 @@ class Income(models.Model):
     # Основная информация
     amount = models.DecimalField(max_digits=12, decimal_places=2, validators=[MinValueValidator(0.01)])
     currency = models.CharField(max_length=3, default='RUB')  # Валюта дохода
+
+    # Поля для конвертации валют (nullable для обратной совместимости)
+    original_amount = models.DecimalField(
+        max_digits=12, decimal_places=2,
+        null=True, blank=True,
+        verbose_name="Оригинальная сумма"
+    )
+    original_currency = models.CharField(
+        max_length=3,
+        null=True, blank=True,
+        verbose_name="Оригинальная валюта"
+    )
+    exchange_rate_used = models.DecimalField(
+        max_digits=12, decimal_places=6,
+        null=True, blank=True,
+        verbose_name="Использованный курс"
+    )
+
     description = models.TextField(blank=True)
-    
+
     # Дата и время
     income_date = models.DateField(default=date.today)
     income_time = models.TimeField(default=datetime.now)
@@ -1059,6 +1109,14 @@ class Income(models.Model):
     
     def __str__(self):
         return f"+{self.amount} {self.currency} - {self.description[:30]}"
+
+    @property
+    def was_converted(self) -> bool:
+        """Был ли доход сконвертирован"""
+        return (
+            self.original_currency is not None
+            and self.original_currency != self.currency
+        )
 
 
 class IncomeCategoryKeyword(models.Model):

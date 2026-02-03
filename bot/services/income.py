@@ -34,12 +34,16 @@ logger = logging.getLogger(__name__)
 def create_income(
     user_id: int,
     amount: Decimal,
-    category_id: int = None,
-    description: str = None,
-    income_date: date = None,
+    category_id: Optional[int] = None,
+    description: Optional[str] = None,
+    income_date: Optional[date] = None,
     ai_categorized: bool = False,
-    ai_confidence: float = None,
-    currency: str = 'RUB'
+    ai_confidence: Optional[float] = None,
+    currency: str = 'RUB',
+    # Параметры для конвертации валюты
+    original_amount: Optional[Decimal] = None,
+    original_currency: Optional[str] = None,
+    exchange_rate_used: Optional[Decimal] = None,
 ) -> Optional[Income]:
     """
     Создать новый доход
@@ -160,7 +164,10 @@ def create_income(
             income_time=income_time,
             ai_categorized=ai_categorized,
             ai_confidence=ai_confidence,
-            currency=currency.upper()
+            currency=currency.upper(),
+            original_amount=original_amount,
+            original_currency=original_currency,
+            exchange_rate_used=exchange_rate_used,
         )
 
         # Если была AI-категоризация, обучаем систему
@@ -194,6 +201,66 @@ def create_income(
 
 # Алиас для обратной совместимости
 add_income = create_income
+
+
+async def create_income_with_conversion(
+    user_id: int,
+    amount: Decimal,
+    input_currency: str,
+    category_id: Optional[int] = None,
+    description: Optional[str] = None,
+    income_date: Optional[date] = None,
+    ai_categorized: bool = False,
+    ai_confidence: Optional[float] = None,
+) -> Optional[Income]:
+    """
+    Создает доход с автоконвертацией валюты если включено в настройках.
+    """
+    from expenses.models import UserSettings
+    from .conversion_helper import maybe_convert_amount
+    from bot.utils.db_utils import get_or_create_user_profile_sync
+
+    profile = await sync_to_async(get_or_create_user_profile_sync)(user_id)
+
+    user_settings = await sync_to_async(
+        lambda: UserSettings.objects.filter(profile=profile).first()
+    )()
+    auto_convert = user_settings.auto_convert_currency if user_settings else False
+
+    # Конвертируем если нужно
+    (
+        final_amount,
+        final_currency,
+        original_amount,
+        original_currency,
+        rate
+    ) = await maybe_convert_amount(
+        amount=amount,
+        input_currency=input_currency,
+        user_currency=profile.currency,
+        auto_convert_enabled=auto_convert,
+        operation_date=income_date,
+        profile=profile
+    )
+
+    # Создаем доход
+    return await create_income(
+        user_id=user_id,
+        amount=final_amount,
+        currency=final_currency,
+        category_id=category_id,
+        description=description,
+        income_date=income_date,
+        ai_categorized=ai_categorized,
+        ai_confidence=ai_confidence,
+        original_amount=original_amount,
+        original_currency=original_currency,
+        exchange_rate_used=rate,
+    )
+
+
+# Алиас для обратной совместимости
+add_income_with_conversion = create_income_with_conversion
 
 
 @sync_to_async

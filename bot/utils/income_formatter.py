@@ -87,8 +87,8 @@ def format_incomes_diary_style(
 
         # Категория
         category_name = get_category_display_name(income.category, lang) if income.category else get_text('no_category', lang)
-        
-        currency = 'RUB'  # Доходы всегда в рублях
+
+        currency = income.currency or 'RUB'
         amount = float(income.amount)
         
         # Добавляем к сумме дня
@@ -102,7 +102,9 @@ def format_incomes_diary_style(
             'description': description,
             'category': category_name,
             'amount': amount,
-            'currency': currency
+            'currency': currency,
+            'original_amount': income.original_amount if hasattr(income, 'original_amount') else None,
+            'original_currency': income.original_currency if hasattr(income, 'original_currency') else None,
         })
     
     # Добавляем последний день
@@ -141,21 +143,30 @@ def format_incomes_diary_style(
         text += f"\n<b>📅 {date_str}</b>\n"
         
         # Выводим доходы дня
-        for income in day_data['incomes']:
-            amount_str = f"{income['amount']:,.0f}".replace(',', ' ')
-            amount_str += ' ₽'
-            
+        for inc in day_data['incomes']:
+            from bot.utils import get_currency_symbol
+            amount_str = f"{inc['amount']:,.0f}".replace(',', ' ')
+            currency_symbol = get_currency_symbol(inc['currency'])
+            amount_str += f' {currency_symbol}'
+
+            # Добавляем оригинальную сумму если была конвертация
+            original_suffix = ""
+            if inc.get('original_amount') and inc.get('original_currency'):
+                orig_symbol = get_currency_symbol(inc['original_currency'])
+                original_suffix = f" <i>(~{inc['original_amount']:.0f} {orig_symbol})</i>"
+
             # Форматируем строку дохода
-            text += f"  {income['time']} — +{income['description']} {amount_str}\n"
+            text += f"  {inc['time']} — +{inc['description']} {amount_str}{original_suffix}\n"
         
         # Добавляем итог дня
         if day_data['totals']:
+            from bot.utils import get_currency_symbol
             text += f"  💰 <b>{get_text('total_for_day', lang)}:</b> "
             totals_list = []
-            for currency, total in day_data['totals'].items():
+            for curr, total in day_data['totals'].items():
                 total_str = f"{total:,.0f}".replace(',', ' ')
-                currency_symbol = '₽'
-                totals_list.append(f"+{total_str} {currency_symbol}")
+                curr_symbol = get_currency_symbol(curr)
+                totals_list.append(f"+{total_str} {curr_symbol}")
             text += ", ".join(totals_list) + "\n"
 
     # Общий итог
@@ -247,22 +258,39 @@ def format_incomes_from_dict_list(
 
         result_parts.append(f"\n<b>📅 {formatted_date}</b>")
 
-        day_total = 0
+        day_totals_by_currency = {}
         for income in grouped_by_date[date_str]:
+            from bot.utils import get_currency_symbol
             time_str = income.get('time', '00:00')
             amount = income.get('amount', 0)
             description = income.get('description', get_text('income_default_desc', lang))
+            currency = income.get('currency', 'RUB')
 
             # Форматируем сумму
             amount_str = f"{amount:,.0f}".replace(',', ' ')
+            curr_symbol = get_currency_symbol(currency)
+
+            # Добавляем оригинальную сумму если была конвертация
+            original_suffix = ""
+            if income.get('original_amount') and income.get('original_currency'):
+                orig_symbol = get_currency_symbol(income['original_currency'])
+                original_suffix = f" <i>(~{income['original_amount']:.0f} {orig_symbol})</i>"
 
             # Доходы делаем жирными (как в дневнике)
-            result_parts.append(f"  {time_str} — <b>{description}</b> <b>+{amount_str} ₽</b>")
-            day_total += amount
+            result_parts.append(f"  {time_str} — <b>{description}</b> <b>+{amount_str} {curr_symbol}</b>{original_suffix}")
+
+            # Суммируем по валютам
+            if currency not in day_totals_by_currency:
+                day_totals_by_currency[currency] = 0
+            day_totals_by_currency[currency] += amount
 
         # Итог за день
-        day_total_str = f"{day_total:,.0f}".replace(',', ' ')
-        result_parts.append(f"  💰 <b>{get_text('total_for_day', lang)}:</b> +{day_total_str} ₽")
+        totals_list = []
+        for curr, total in day_totals_by_currency.items():
+            total_str = f"{total:,.0f}".replace(',', ' ')
+            curr_symbol = get_currency_symbol(curr)
+            totals_list.append(f"+{total_str} {curr_symbol}")
+        result_parts.append(f"  💰 <b>{get_text('total_for_day', lang)}:</b> {', '.join(totals_list)}")
 
     # Если было ограничение
     if is_limited:

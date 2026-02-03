@@ -4,8 +4,8 @@
 from typing import List, Optional
 from datetime import date, datetime
 from decimal import Decimal
-from expenses.models import RecurringPayment, Profile, Expense
-from asgiref.sync import sync_to_async
+from expenses.models import RecurringPayment, Profile, Expense, UserSettings
+from asgiref.sync import sync_to_async, async_to_sync
 from django.db import transaction
 import logging
 from bot.utils.category_helpers import get_category_display_name
@@ -178,8 +178,29 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
         if payment.last_processed == today:
             logger.info(f"Payment {payment.id} already processed today")
             continue
-        
+
         try:
+            # Получаем настройки пользователя для конвертации валют
+            user_settings = UserSettings.objects.filter(profile=payment.profile).first()
+            auto_convert = user_settings.auto_convert_currency if user_settings else False
+
+            # Конвертируем если нужно
+            if auto_convert and payment.currency != payment.profile.currency:
+                from .conversion_helper import maybe_convert_amount
+                convert_result = async_to_sync(maybe_convert_amount)(
+                    amount=payment.amount,
+                    input_currency=payment.currency,
+                    user_currency=payment.profile.currency,
+                    auto_convert_enabled=True,
+                    operation_date=today,
+                    profile=payment.profile
+                )
+                final_amount, final_currency, orig_amount, orig_currency, rate = convert_result
+            else:
+                final_amount = payment.amount
+                final_currency = payment.currency
+                orig_amount = orig_currency = rate = None
+
             # Создаем операцию в зависимости от типа
             if payment.operation_type == RecurringPayment.OPERATION_TYPE_INCOME:
                 # Создаем доход
@@ -187,8 +208,11 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
                 operation = Income.objects.create(
                     profile=payment.profile,
                     category=payment.income_category,
-                    amount=payment.amount,
-                    currency=payment.currency,
+                    amount=final_amount,
+                    currency=final_currency,
+                    original_amount=orig_amount,
+                    original_currency=orig_currency,
+                    exchange_rate_used=rate,
                     description=f"[Ежемесячный] {payment.description}",
                     income_date=today
                 )
@@ -202,8 +226,11 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
                 operation = Expense.objects.create(
                     profile=payment.profile,
                     category=payment.expense_category,
-                    amount=payment.amount,
-                    currency=payment.currency,
+                    amount=final_amount,
+                    currency=final_currency,
+                    original_amount=orig_amount,
+                    original_currency=orig_currency,
+                    exchange_rate_used=rate,
                     description=f"[Ежемесячный] {payment.description}",
                     expense_date=today,
                     expense_time=datetime.now().time()

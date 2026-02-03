@@ -35,7 +35,11 @@ def create_expense(
     expense_date: Optional[date] = None,
     ai_categorized: bool = False,
     ai_confidence: Optional[float] = None,
-    currency: str = 'RUB'
+    currency: str = 'RUB',
+    # Параметры для конвертации валюты
+    original_amount: Optional[Decimal] = None,
+    original_currency: Optional[str] = None,
+    exchange_rate_used: Optional[Decimal] = None,
 ) -> Optional[Expense]:
     """
     Создать новую трату
@@ -142,7 +146,10 @@ def create_expense(
             expense_date=expense_date,
             expense_time=expense_time,
             ai_categorized=ai_categorized,
-            ai_confidence=ai_confidence
+            ai_confidence=ai_confidence,
+            original_amount=original_amount,
+            original_currency=original_currency,
+            exchange_rate_used=exchange_rate_used,
         )
 
         # Обновляем объект с загруженным profile для корректной работы
@@ -175,6 +182,66 @@ def create_expense(
 
 # Alias for backward compatibility
 add_expense = create_expense
+
+
+async def create_expense_with_conversion(
+    user_id: int,
+    amount: Decimal,
+    input_currency: str,
+    category_id: Optional[int] = None,
+    description: Optional[str] = None,
+    expense_date: Optional[date] = None,
+    ai_categorized: bool = False,
+    ai_confidence: Optional[float] = None,
+) -> Optional[Expense]:
+    """
+    Создает трату с автоконвертацией валюты если включено в настройках.
+    """
+    from expenses.models import UserSettings
+    from .conversion_helper import maybe_convert_amount
+    from bot.utils.db_utils import get_or_create_user_profile_sync
+
+    profile = await sync_to_async(get_or_create_user_profile_sync)(user_id)
+
+    user_settings = await sync_to_async(
+        lambda: UserSettings.objects.filter(profile=profile).first()
+    )()
+    auto_convert = user_settings.auto_convert_currency if user_settings else False
+
+    # Конвертируем если нужно
+    (
+        final_amount,
+        final_currency,
+        original_amount,
+        original_currency,
+        rate
+    ) = await maybe_convert_amount(
+        amount=amount,
+        input_currency=input_currency,
+        user_currency=profile.currency,
+        auto_convert_enabled=auto_convert,
+        operation_date=expense_date,
+        profile=profile
+    )
+
+    # Создаем трату
+    return await create_expense(
+        user_id=user_id,
+        amount=final_amount,
+        currency=final_currency,
+        category_id=category_id,
+        description=description,
+        expense_date=expense_date,
+        ai_categorized=ai_categorized,
+        ai_confidence=ai_confidence,
+        original_amount=original_amount,
+        original_currency=original_currency,
+        exchange_rate_used=rate,
+    )
+
+
+# Alias for backward compatibility
+add_expense_with_conversion = create_expense_with_conversion
 
 
 @sync_to_async

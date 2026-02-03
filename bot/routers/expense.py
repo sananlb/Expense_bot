@@ -17,7 +17,7 @@ import os
 from django.core.cache import cache
 from aiogram import Bot
 
-from ..services.expense import add_expense
+from ..services.expense import add_expense_with_conversion
 from ..services.cashback import calculate_potential_cashback, calculate_expense_cashback
 from ..services.category import get_or_create_category, create_default_income_categories
 from bot.utils.income_category_definitions import (
@@ -962,7 +962,7 @@ async def process_edit_description(message: types.Message, state: FSMContext, la
 async def handle_amount_clarification(message: types.Message, state: FSMContext, lang: str = 'ru', voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
     """Обработка суммы после уточнения описания траты (текст или голос)"""
     from ..utils.expense_parser import parse_expense_message
-    from ..services.expense import add_expense
+    from ..services.expense import add_expense_with_conversion
     from ..services.category import get_or_create_category
     from ..services.cashback import calculate_expense_cashback
     from ..utils.expense_intent import is_show_expenses_request
@@ -1048,12 +1048,12 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
     # Сохраняем трату
     expense_date = parsed_full.get('expense_date') if parsed_full else parsed_amount.get('expense_date')
     try:
-        expense = await add_expense(
+        expense = await add_expense_with_conversion(
             user_id=user_id,
             category_id=category.id,
             amount=amount,
             description=final_description,
-            currency=currency,
+            input_currency=currency,
             expense_date=expense_date,  # Добавляем дату, если она была указана
             ai_categorized=parsed_full.get('ai_enhanced', False) if parsed_full else False,
             ai_confidence=parsed_full.get('confidence') if parsed_full else None
@@ -1160,7 +1160,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     """
     # Импортируем необходимые функции в начале
     from ..services.category import get_or_create_category
-    from ..services.expense import add_expense
+    from ..services.expense import add_expense_with_conversion
     from ..services.cashback import calculate_expense_cashback
     from aiogram.fsm.context import FSMContext
     from ..routers.chat import process_chat_message
@@ -1440,7 +1440,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         
         if parsed_income:
             # Создаем доход
-            from ..services.income import create_income
+            from ..services.income import create_income_with_conversion
             from expenses.models import IncomeCategory
             
             # Получаем или создаем категорию дохода
@@ -1492,7 +1492,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             
             # Создаем доход
             try:
-                income = await create_income(
+                income = await create_income_with_conversion(
                     user_id=user_id,
                     amount=parsed_income['amount'],
                     category_id=category.id if category else None,
@@ -1500,7 +1500,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     income_date=parsed_income.get('income_date'),
                     ai_categorized=parsed_income.get('ai_enhanced', False),
                     ai_confidence=parsed_income.get('confidence', 0.5),
-                    currency=parsed_income.get('currency', 'RUB')
+                    input_currency=parsed_income.get('currency', 'RUB')
                 )
             except ValueError as e:
                 # Обработка ошибок валидации даты
@@ -1632,7 +1632,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             logger.info(f"Found {len(similar) if similar else 0} similar expenses")
             
             # Также проверяем похожие доходы
-            from ..services.income import get_last_income_by_description, create_income
+            from ..services.income import get_last_income_by_description, create_income_with_conversion
             similar_income = await get_last_income_by_description(user_id, text)
             
             if similar or similar_income:
@@ -1657,12 +1657,12 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     
                     # Создаем доход
                     try:
-                        income = await create_income(
+                        income = await create_income_with_conversion(
                             user_id=user_id,
                             amount=amount,
                             category_id=category.id if category else None,
                             description=description_capitalized,
-                            currency=currency
+                            input_currency=currency
                         )
                     except ValueError as e:
                         # Обработка ошибок валидации даты
@@ -1735,12 +1735,12 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                         
                         # Создаем доход
                         try:
-                            income = await create_income(
+                            income = await create_income_with_conversion(
                                 user_id=user_id,
                                 amount=amount,
                                 category_id=category.id if category else None,
                                 description=description_capitalized,
-                                currency=currency
+                                input_currency=currency
                             )
                         except ValueError as e:
                             # Обработка ошибок валидации даты
@@ -1801,12 +1801,12 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 
                 # Сохраняем трату
                 try:
-                    expense = await add_expense(
+                    expense = await add_expense_with_conversion(
                         user_id=user_id,
                         category_id=category.id,
                         amount=amount,
                         description=description_capitalized,
-                        currency=currency,
+                        input_currency=currency,
                         expense_date=parsed.get('expense_date') if parsed else None,  # Добавляем дату, если она была указана
                         ai_categorized=parsed.get('ai_enhanced', False) if parsed else False,
                         ai_confidence=parsed.get('confidence') if parsed else None
@@ -1911,12 +1911,12 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     
     # Добавляем трату в оригинальной валюте
     try:
-        expense = await add_expense(
+        expense = await add_expense_with_conversion(
             user_id=user_id,
             category_id=category.id,
             amount=amount,
             description=parsed['description'],
-            currency=currency,
+            input_currency=currency,
             expense_date=parsed.get('expense_date'),  # Добавляем дату, если она была указана
             ai_categorized=parsed.get('ai_enhanced', False),
             ai_confidence=parsed.get('confidence')

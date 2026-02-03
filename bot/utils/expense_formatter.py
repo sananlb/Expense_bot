@@ -89,7 +89,9 @@ def format_expenses_diary_style(
             'time': time_str,
             'description': description,
             'amount': amount,
-            'currency': currency
+            'currency': currency,
+            'original_amount': expense.original_amount if hasattr(expense, 'original_amount') else None,
+            'original_currency': expense.original_currency if hasattr(expense, 'original_currency') else None,
         })
     
     # Добавляем последний день
@@ -123,18 +125,25 @@ def format_expenses_diary_style(
         text += f"\n<b>📅 {date_str}</b>\n"
         
         # Выводим траты дня
-        for expense in day_data['expenses']:
-            amount_str = f"{expense['amount']:,.0f}".replace(',', ' ')
-            if expense['currency'] == 'RUB':
+        for exp in day_data['expenses']:
+            amount_str = f"{exp['amount']:,.0f}".replace(',', ' ')
+            if exp['currency'] == 'RUB':
                 amount_str += ' ₽'
-            elif expense['currency'] == 'USD':
+            elif exp['currency'] == 'USD':
                 amount_str += ' $'
-            elif expense['currency'] == 'EUR':
+            elif exp['currency'] == 'EUR':
                 amount_str += ' €'
             else:
-                amount_str += f" {expense['currency']}"
-            
-            text += f"  {expense['time']} — {expense['description']} {amount_str}\n"
+                amount_str += f" {exp['currency']}"
+
+            # Добавляем оригинальную сумму если была конвертация
+            original_suffix = ""
+            if exp.get('original_amount') and exp.get('original_currency'):
+                from bot.utils import get_currency_symbol
+                orig_symbol = get_currency_symbol(exp['original_currency'])
+                original_suffix = f" <i>(~{exp['original_amount']:.0f} {orig_symbol})</i>"
+
+            text += f"  {exp['time']} — {exp['description']} {amount_str}{original_suffix}\n"
         
         # Добавляем итог дня
         if day_data['totals']:
