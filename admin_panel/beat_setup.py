@@ -137,6 +137,14 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
             queue='analytics',
         )
 
+        # 20:30 UTC (23:30 MSK) daily — Prefetch CBRF exchange rates for next day
+        upsert(
+            name='prefetch-cbrf-rates',
+            task='prefetch_cbrf_rates',
+            schedule=crontab(minute='30', hour='20'),
+            queue='maintenance',
+        )
+
         logger.info("[Beat setup] Ensured PeriodicTasks: %s", ", ".join(created_or_updated))
     except Exception as e:
         logger.error("[Beat setup] Error ensuring PeriodicTasks: %s", e)
