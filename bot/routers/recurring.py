@@ -24,7 +24,7 @@ from ..services.income import get_user_income_categories
 from ..utils.message_utils import send_message_with_cleanup, safe_delete_message
 from ..utils import get_text
 from ..utils.category_helpers import get_category_display_name
-from ..utils.validators import validate_amount, parse_description_amount
+from ..utils.validators import parse_description_amount
 from ..utils.formatters import format_currency, format_date
 from ..utils.expense_parser import convert_words_to_numbers, detect_currency
 from ..decorators import rate_limit
@@ -707,17 +707,29 @@ async def process_edit_amount(message: types.Message, state: FSMContext, lang: s
         await send_message_with_cleanup(message, state, get_text('payment_not_found', lang))
         return
 
+    # Парсим сумму с поддержкой валюты (например "9900 kzt" или просто "9900")
     try:
-        amount = await validate_amount(text)
+        parsed = parse_description_amount(text, allow_only_amount=True)
+        amount = parsed['amount']
     except ValueError:
         await send_message_with_cleanup(message, state, "❌ Некорректная сумма. Введите положительное число.")
         return
 
+    # Определяем валюту из текста (опционально)
+    from ..services.profile import get_or_create_profile
+    profile = await get_or_create_profile(user_id)
+    user_currency = profile.currency if profile else 'RUB'
+    detected_currency = detect_currency(text, user_currency)
+    new_currency = (detected_currency or None)  # None = не менять валюту
+
     # Сохраняем ID prompt сообщения для удаления ПОСЛЕ показа нового
     prompt_message_id = data.get('editing_prompt_message_id')
 
-    # Обновляем сумму
-    await update_recurring_payment(user_id, payment_id, amount=amount)
+    # Обновляем сумму (и валюту если указана)
+    update_kwargs = {'amount': amount}
+    if new_currency:
+        update_kwargs['currency'] = new_currency.upper()
+    await update_recurring_payment(user_id, payment_id, **update_kwargs)
     await state.clear()
 
     # Возвращаемся к основному меню СНАЧАЛА
