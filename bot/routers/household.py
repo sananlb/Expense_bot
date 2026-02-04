@@ -111,14 +111,15 @@ async def process_household_name(message: Message, state: FSMContext, lang: str 
         name=message.text
     )
     
-    if success:
+    if success and household:
         # Показываем подменю семейного бюджета вместо сообщения об успехе
+        # Используем возвращённый household, т.к. profile в памяти ещё не обновился
         household_name, members_count, max_members, is_creator = await sync_to_async(
             lambda default_name=get_text('household_default_name', lang): (
-                (profile.household.name or default_name),
-                profile.household.members_count,
-                profile.household.max_members,
-                (profile.household.creator_id == profile.id)
+                (household.name or default_name),
+                household.members_count,
+                household.max_members,
+                (household.creator_id == profile.id)
             )
         )()
 
