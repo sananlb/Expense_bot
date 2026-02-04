@@ -1280,6 +1280,10 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         "RecurringForm:waiting_for_amount",
         "RecurringForm:waiting_for_day",
         "RecurringForm:waiting_for_edit_data",
+        # Recurring states - редактирование отдельных полей
+        "RecurringForm:editing_amount",
+        "RecurringForm:editing_description",
+        "RecurringForm:editing_day",
         # Referral states - пользователь вводит сумму
         "ReferralStates:waiting_for_withdrawal_amount",
         # Category states - пользователь вводит название/иконку
