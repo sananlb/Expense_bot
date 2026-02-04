@@ -118,7 +118,7 @@ async def global_error_handler(event: ErrorEvent, bot: Bot) -> bool:
         try:
             await bot.send_message(
                 chat_id,
-                "😔 Что-то пошло не так. Попробуйте ещё раз через несколько секунд.",
+                "😔 Что-то пошло не так. Попробуйте позднее.",
                 parse_mode="HTML"
             )
         except TelegramAPIError as send_error:
