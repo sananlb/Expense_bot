@@ -141,7 +141,7 @@ def format_expenses_diary_style(
             if exp.get('original_amount') and exp.get('original_currency'):
                 from bot.utils.formatters import format_currency
                 original_formatted = format_currency(exp['original_amount'], exp['original_currency'])
-                original_suffix = f" <i>(~{original_formatted})</i>"
+                original_suffix = f" <i>({original_formatted})</i>"
 
             text += f"  {exp['time']} — {exp['description']} {amount_str}{original_suffix}\n"
         

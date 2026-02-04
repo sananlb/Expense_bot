@@ -53,7 +53,6 @@ class TestAmountParsing:
         assert result["amount"] == pytest.approx(89.90)
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(reason="Known limitation: 'k' suffix not parsed")
     async def test_amount_with_k_suffix(self):
         """Amounts with 'k' suffix (thousands) should parse correctly."""
         result = await parse_expense_message("Зарплата 50k", use_ai=False)
@@ -61,12 +60,18 @@ class TestAmountParsing:
         assert result["amount"] == pytest.approx(50000)
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(reason="Known limitation: 'тыс' parsed incorrectly")
     async def test_amount_with_тыс_suffix(self):
         """Amounts with 'тыс' suffix should parse correctly."""
         result = await parse_expense_message("Аренда 25 тыс", use_ai=False)
         assert result is not None
         assert result["amount"] == pytest.approx(25000)
+
+    @pytest.mark.asyncio
+    async def test_amount_with_cyrillic_k_suffix(self):
+        """Amounts with Cyrillic 'к' suffix should parse correctly."""
+        result = await parse_expense_message("Премия 10к", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(10000)
 
     @pytest.mark.asyncio
     async def test_amount_at_start(self):
@@ -127,7 +132,6 @@ class TestDateParsing:
     """Tests for date extraction from expense messages."""
 
     @pytest.mark.asyncio
-    @pytest.mark.xfail(reason="Known bug: short date like 05.04 parsed as amount 5.04")
     async def test_short_date_without_year_ignored(self):
         """Short date format without year should be ignored (not a valid date)."""
         result = await parse_expense_message("Coffee 120 05.04", use_ai=False)

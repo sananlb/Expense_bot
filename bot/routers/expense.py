@@ -832,7 +832,13 @@ async def process_edit_amount(
         cleaned_text = text
         for curr_patterns in CURRENCY_PATTERNS.values():
             for pattern in curr_patterns:
-                new_text = re.sub(pattern, '', cleaned_text, flags=re.IGNORECASE)
+                # Для кириллических паттернов расширяем до конца слова
+                # чтобы "долл" удалял всё слово "доллара", а не оставлял "ара"
+                if '(?<![а-яА-Я])' in pattern and not pattern.endswith(r'\b'):
+                    extended_pattern = pattern + r'[а-яА-Я]*'
+                else:
+                    extended_pattern = pattern
+                new_text = re.sub(extended_pattern, '', cleaned_text, flags=re.IGNORECASE)
                 if new_text != cleaned_text:
                     currency_explicit = True
                     cleaned_text = new_text
@@ -860,11 +866,89 @@ async def process_edit_amount(
     item_id = data.get('editing_expense_id')
     is_income = data.get('editing_type') == 'income'
 
+    # Проверяем нужна ли автоконвертация
     update_kwargs = {'amount': amount}
-    if currency_explicit:
-        update_kwargs['currency'] = currency
 
-    # Обновляем операцию с новой валютой (если указана явно)
+    if currency_explicit and currency != user_currency:
+        # Проверяем настройку автоконвертации
+        from expenses.models import UserSettings, Expense, Income
+        from asgiref.sync import sync_to_async
+
+        @sync_to_async
+        def get_auto_convert_setting_and_date():
+            """Получаем настройку автоконвертации и дату операции"""
+            try:
+                settings = UserSettings.objects.filter(profile=profile).first()
+                auto_convert = settings.auto_convert_currency if settings else True
+            except Exception:
+                auto_convert = True
+
+            # Получаем дату операции для правильного курса конвертации
+            operation_date = None
+            try:
+                if is_income:
+                    item = Income.objects.filter(id=item_id, profile=profile).first()
+                    if item:
+                        operation_date = item.income_date
+                else:
+                    item = Expense.objects.filter(id=item_id, profile=profile).first()
+                    if item:
+                        operation_date = item.expense_date
+            except Exception:
+                pass
+
+            return auto_convert, operation_date
+
+        auto_convert, operation_date = await get_auto_convert_setting_and_date()
+
+        if auto_convert:
+            # Конвертируем валюту с использованием курса на дату операции
+            from ..services.conversion_helper import maybe_convert_amount
+            from decimal import Decimal
+
+            (
+                final_amount,
+                final_currency,
+                original_amount,
+                original_currency,
+                rate
+            ) = await maybe_convert_amount(
+                amount=Decimal(str(amount)),
+                input_currency=currency,
+                user_currency=user_currency,
+                auto_convert_enabled=True,
+                operation_date=operation_date,
+                profile=profile
+            )
+
+            update_kwargs = {
+                'amount': final_amount,
+                'currency': final_currency,
+                'original_amount': original_amount,
+                'original_currency': original_currency,
+                'exchange_rate_used': rate,
+            }
+        else:
+            # Автоконвертация выключена - сохраняем в исходной валюте
+            # Сбрасываем поля конвертации, если они были заполнены ранее
+            update_kwargs['currency'] = currency
+            update_kwargs['original_amount'] = None
+            update_kwargs['original_currency'] = None
+            update_kwargs['exchange_rate_used'] = None
+    elif currency_explicit:
+        # Валюта указана явно, но совпадает с валютой пользователя
+        # Сбрасываем поля конвертации
+        update_kwargs['currency'] = currency
+        update_kwargs['original_amount'] = None
+        update_kwargs['original_currency'] = None
+        update_kwargs['exchange_rate_used'] = None
+    else:
+        # Валюта не указана - сбрасываем поля конвертации если были
+        update_kwargs['original_amount'] = None
+        update_kwargs['original_currency'] = None
+        update_kwargs['exchange_rate_used'] = None
+
+    # Обновляем операцию
     if is_income:
         from ..services.income import update_income
         success = await update_income(message.from_user.id, item_id, **update_kwargs)
@@ -1185,58 +1269,55 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     current_state = await state.get_state()
 
     # Список состояний, при которых НЕ нужно обрабатывать траты
+    # ТОЛЬКО состояния где ожидается ТЕКСТОВЫЙ ввод пользователя!
+    # Состояния с кнопками должны быть в states_to_clear_on_expense
     skip_states = [
-        # Household states
+        # Household states - пользователь вводит название
         "HouseholdStates:waiting_for_household_name",
         "HouseholdStates:waiting_for_rename",
-        # Recurring states
+        # Recurring states - пользователь вводит описание/сумму/день
         "RecurringForm:waiting_for_description",
         "RecurringForm:waiting_for_amount",
-        "RecurringForm:waiting_for_category",
         "RecurringForm:waiting_for_day",
         "RecurringForm:waiting_for_edit_data",
-        # Referral states (если есть)
+        # Referral states - пользователь вводит сумму
         "ReferralStates:waiting_for_withdrawal_amount",
-        # Category states
+        # Category states - пользователь вводит название/иконку
         "CategoryForm:waiting_for_name",
-        "CategoryForm:waiting_for_icon",
         "CategoryForm:waiting_for_custom_icon",
-        "CategoryForm:waiting_for_edit_choice",
         "CategoryForm:waiting_for_new_name",
-        "CategoryForm:waiting_for_new_icon",
-        # CategoryStates (второй класс для категорий)
         "CategoryStates:editing_name",
-        # Edit expense states
-        "EditExpenseForm:choosing_field",
+        # Edit expense - пользователь вводит текст/голос
         "EditExpenseForm:editing_amount",
         "EditExpenseForm:editing_description",
-        "EditExpenseForm:editing_category",
-        # Cashback states
-        "CashbackForm:waiting_for_category",
+        # Cashback states - пользователь вводит банк/процент
         "CashbackForm:waiting_for_bank",
         "CashbackForm:waiting_for_percent",
-        # Subscription states
+        # Subscription states - пользователь вводит промокод
         "PromoCodeStates:waiting_for_promo",
-        # Settings states
-        "SettingsStates:language",
-        "SettingsStates:timezone",
-        "SettingsStates:currency",
-        # Top5 states (если есть)
-        "Top5States:waiting_for_period",
-        # Chat states
+        # Chat states - пользователь общается с AI
         "ChatStates:active_chat"
     ]
 
-    # Если активно любое состояние редактирования или меню, которое должно быть закрыто при вводе траты
+    # Состояния где выбор осуществляется КНОПКАМИ - при текстовом вводе сбрасываем и обрабатываем как трату
     states_to_clear_on_expense = [
+        # Edit expense - выбор категории/поля кнопками
         "EditExpenseForm:editing_category",
         "EditExpenseForm:choosing_field",
-        "EditExpenseForm:editing_amount",
-        "EditExpenseForm:editing_description",
-        "PromoCodeStates:waiting_for_promo",
-        "CategoryForm:waiting_for_name",
+        # Settings - выбор кнопками
+        "SettingsStates:language",
+        "SettingsStates:timezone",
+        "SettingsStates:currency",
+        # Recurring - выбор категории кнопками
+        "RecurringForm:waiting_for_category",
+        # Category - выбор иконки/действия кнопками
         "CategoryForm:waiting_for_icon",
-        "CategoryStates:editing_name"
+        "CategoryForm:waiting_for_edit_choice",
+        "CategoryForm:waiting_for_new_icon",
+        # Cashback - выбор категории кнопками
+        "CashbackForm:waiting_for_category",
+        # Top5 - выбор периода кнопками
+        "Top5States:waiting_for_period"
     ]
 
     if current_state and current_state in states_to_clear_on_expense:

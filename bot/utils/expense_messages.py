@@ -52,7 +52,7 @@ async def format_expense_added_message(
     if hasattr(expense, 'original_amount') and expense.original_amount and \
        hasattr(expense, 'original_currency') and expense.original_currency:
         original_formatted = format_currency(expense.original_amount, expense.original_currency)
-        original_text = f" <i>(~{original_formatted})</i>"
+        original_text = f" <i>({original_formatted})</i>"
 
     # Делаем описание жирным и добавляем невидимые символы для расширения
     # Используем неразрывные пробелы (U+00A0) и символ нулевой ширины (U+200B)
@@ -181,7 +181,7 @@ async def format_income_added_message(
     if hasattr(income, 'original_amount') and income.original_amount and \
        hasattr(income, 'original_currency') and income.original_currency:
         original_formatted = format_currency(income.original_amount, income.original_currency)
-        original_text = f" <i>(~{original_formatted})</i>"
+        original_text = f" <i>({original_formatted})</i>"
 
     # Делаем описание жирным и добавляем невидимые символы для расширения
     invisible_padding = "\u200B" * 20  # Символы нулевой ширины для расширения
