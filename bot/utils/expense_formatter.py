@@ -76,7 +76,7 @@ def format_expenses_diary_style(
         if len(description) > 30:
             description = description[:27] + "..."
         
-        currency = expense.currency or 'RUB'
+        currency = expense.currency or expense.profile.currency or 'RUB'
         amount = float(expense.amount)
         
         # Добавляем к сумме дня
@@ -126,15 +126,10 @@ def format_expenses_diary_style(
         
         # Выводим траты дня
         for exp in day_data['expenses']:
+            from bot.utils import get_currency_symbol
             amount_str = f"{exp['amount']:,.0f}".replace(',', ' ')
-            if exp['currency'] == 'RUB':
-                amount_str += ' ₽'
-            elif exp['currency'] == 'USD':
-                amount_str += ' $'
-            elif exp['currency'] == 'EUR':
-                amount_str += ' €'
-            else:
-                amount_str += f" {exp['currency']}"
+            currency_symbol = get_currency_symbol(exp['currency'])
+            amount_str += f' {currency_symbol}'
 
             # Добавляем оригинальную сумму если была конвертация
             original_suffix = ""
@@ -148,11 +143,12 @@ def format_expenses_diary_style(
         # Добавляем итог дня
         if day_data['totals']:
             text += f"  💰 <b>{get_text('total_for_day', lang)}:</b> "
+            from bot.utils import get_currency_symbol
             totals_list = []
             for currency, total in day_data['totals'].items():
                 total_str = f"{total:,.0f}".replace(',', ' ')
-                currency_symbol = {'RUB': '₽', 'USD': '$', 'EUR': '€'}.get(currency, currency)
-                totals_list.append(f"{total_str} {currency_symbol}")
+                curr_symbol = get_currency_symbol(currency)
+                totals_list.append(f"{total_str} {curr_symbol}")
             text += ", ".join(totals_list) + "\n"
     
     # Если было ограничение по количеству
@@ -274,7 +270,7 @@ def format_expenses_from_dict_list(
 
         # Расходы за день
         day_expenses = grouped_expenses[expense_date]
-        day_total = 0
+        day_totals: Dict[str, float] = {}
 
         for exp_data in day_expenses:
             time_str = exp_data.get('time', '')
@@ -283,25 +279,24 @@ def format_expenses_from_dict_list(
 
             description = exp_data.get('description') or get_text('no_description', lang)
             amount = exp_data.get('amount', 0)
-            currency = exp_data.get('currency', 'RUB')
+            currency = exp_data.get('currency') or exp_data.get('profile_currency') or exp_data.get('user_currency') or 'RUB'
 
             # Форматируем сумму
+            from bot.utils import get_currency_symbol
             amount_str = f"{amount:,.0f}".replace(',', ' ')
-            if currency == 'RUB':
-                amount_str += ' ₽'
-            elif currency == 'USD':
-                amount_str += ' $'
-            elif currency == 'EUR':
-                amount_str += ' €'
-            else:
-                amount_str += f" {currency}"
+            currency_symbol = get_currency_symbol(currency)
+            amount_str += f' {currency_symbol}'
 
             result_parts.append(f"  {time_str} — {description} {amount_str}")
-            day_total += amount
+            day_totals[currency] = day_totals.get(currency, 0) + amount
 
         # Добавляем итог за день
-        day_total_str = f"{day_total:,.0f}".replace(',', ' ')
-        result_parts.append(f"  💸 <b>{get_text('grand_total', lang)}:</b> {day_total_str} ₽")
+        if day_totals:
+            from bot.utils.formatters import format_currency
+            totals_list = []
+            for curr in sorted(day_totals.keys()):
+                totals_list.append(format_currency(day_totals[curr], curr))
+            result_parts.append(f"  💸 <b>{get_text('grand_total', lang)}:</b> " + ", ".join(totals_list))
 
     # Предупреждение о лимите
     if show_warning or len(expenses_data) > max_expenses:

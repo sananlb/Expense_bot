@@ -14,7 +14,7 @@ from django.core.cache import cache
 from aiogram import Bot
 
 from bot.keyboards import expenses_summary_keyboard
-from bot.utils import get_text, format_amount, get_month_name
+from bot.utils import get_text, format_amount, get_month_name, get_currency_symbol
 from bot.utils.category_helpers import get_category_display_name
 from bot.services.expense import get_expenses_summary, get_expenses_by_period, get_last_expenses
 from bot.utils.message_utils import send_message_with_cleanup
@@ -483,6 +483,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                 return None
 
         profile = await get_user_profile()
+        default_currency = (profile.currency or 'RUB') if profile else 'RUB'
         user_tz = pytz.timezone(profile.timezone if profile else 'UTC')
         
         # Определяем "сегодня" с учетом часового пояса пользователя
@@ -529,24 +530,26 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
             # Объединяем и сортируем по дате (от новых к старым)
             operations = []
             for exp in expenses:
+                currency = exp.currency or exp.profile.currency or default_currency
                 operations.append({
                     'type': 'expense',
                     'date': exp.expense_date,
                     'time': exp.expense_time or exp.created_at.time(),
                     'amount': exp.amount,
-                    'currency': exp.currency,
+                    'currency': currency,
                     'category': get_category_display_name(exp.category, lang) if exp.category else get_text('no_category', lang),
                     'description': exp.description,
                     'object': exp
                 })
             
             for inc in incomes:
+                currency = inc.currency or inc.profile.currency or default_currency
                 operations.append({
                     'type': 'income',
                     'date': inc.income_date,
                     'time': inc.income_time or inc.created_at.time(),
                     'amount': inc.amount,
-                    'currency': inc.currency,
+                    'currency': currency,
                     'category': get_category_display_name(inc.category, lang) if inc.category else get_text('other_income', lang),
                     'description': inc.description,
                     'object': inc
@@ -615,7 +618,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                 if len(description) > 30:
                     description = description[:27] + "..."
                 
-                currency = operation['currency'] or 'RUB'
+                currency = operation['currency'] or default_currency
                 amount = float(operation['amount'])
                 
                 # Добавляем к сумме дня
@@ -714,14 +717,8 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                 # Выводим операции дня
                 for expense in day_data['expenses']:
                     amount_str = f"{expense['amount']:,.0f}".replace(',', ' ')
-                    if expense['currency'] == 'RUB':
-                        amount_str += ' ₽'
-                    elif expense['currency'] == 'USD':
-                        amount_str += ' $'
-                    elif expense['currency'] == 'EUR':
-                        amount_str += ' €'
-                    else:
-                        amount_str += f" {expense['currency']}"
+                    currency_symbol = get_currency_symbol(expense['currency'])
+                    amount_str += f' {currency_symbol}'
                     
                     # Добавляем "+" для доходов и делаем название жирным
                     if expense.get('type') == 'income':
@@ -741,8 +738,8 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                         for currency, total in day_data['totals'].items():
                             if total.get('expenses', 0) > 0:
                                 exp_str = f"{total['expenses']:,.0f}".replace(',', ' ')
-                                currency_symbol = {'RUB': '₽', 'USD': '$', 'EUR': '€'}.get(currency, currency)
-                                expenses_list.append(f"{exp_str} {currency_symbol}")
+                                curr_symbol = get_currency_symbol(currency)
+                                expenses_list.append(f"{exp_str} {curr_symbol}")
                         text += ", ".join(expenses_list) + "\n"
                     
                     if has_incomes:
@@ -751,8 +748,8 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
                         for currency, total in day_data['totals'].items():
                             if total.get('incomes', 0) > 0:
                                 inc_str = f"{total['incomes']:,.0f}".replace(',', ' ')
-                                currency_symbol = {'RUB': '₽', 'USD': '$', 'EUR': '€'}.get(currency, currency)
-                                incomes_list.append(f"+{inc_str} {currency_symbol}")
+                                curr_symbol = get_currency_symbol(currency)
+                                incomes_list.append(f"+{inc_str} {curr_symbol}")
                         text += ", ".join(incomes_list) + "\n"
         
         # Добавляем вопрос в конце

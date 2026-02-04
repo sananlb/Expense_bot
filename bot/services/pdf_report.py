@@ -371,7 +371,7 @@ class PDFReportService:
                     key = (expense['expense_date__year'], expense['expense_date__month'])
                     if key not in expenses_by_month:
                         expenses_by_month[key] = {}
-                    curr = expense['currency'] or 'RUB'
+                    curr = expense['currency'] or primary_currency
                     if curr not in expenses_by_month[key]:
                         expenses_by_month[key][curr] = {'total': 0, 'count': 0}
                     expenses_by_month[key][curr]['total'] = float(expense['total'])
@@ -382,7 +382,7 @@ class PDFReportService:
                     key = (income['income_date__year'], income['income_date__month'])
                     if key not in incomes_by_month:
                         incomes_by_month[key] = {}
-                    curr = income['currency'] or 'RUB'
+                    curr = income['currency'] or primary_currency
                     if curr not in incomes_by_month[key]:
                         incomes_by_month[key][curr] = {'total': 0, 'count': 0}
                     incomes_by_month[key][curr]['total'] = float(income['total'])

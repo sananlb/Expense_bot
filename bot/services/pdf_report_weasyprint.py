@@ -84,6 +84,7 @@ class PDFReportService:
     async def _generate_chart_images(self, report_data: Dict) -> Dict[str, str]:
         """Генерация графиков с использованием matplotlib"""
         charts = {}
+        currency_symbol = report_data.get('currency_symbol', '₽')
         
         # Настройка стиля
         plt.style.use('seaborn-v0_8-white')
@@ -148,7 +149,7 @@ class PDFReportService:
                 bottom = [b + a for b, a in zip(bottom, cat_amounts)]
             
             ax1.set_xlabel('День месяца', fontsize=12)
-            ax1.set_ylabel('Сумма расходов (₽)', fontsize=12)
+            ax1.set_ylabel(f"Сумма расходов ({currency_symbol})", fontsize=12)
             ax1.set_title('Расходы по дням месяца', fontsize=14, pad=10)
             ax1.grid(axis='y', alpha=0.3)
             ax1.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=9)
@@ -171,7 +172,7 @@ class PDFReportService:
             
             ax2.bar(days, cashback_data, color='#10b981', width=0.8, alpha=0.8)
             ax2.set_xlabel('День месяца', fontsize=12)
-            ax2.set_ylabel('Кешбек (₽)', fontsize=12)
+            ax2.set_ylabel(f"Кешбек ({currency_symbol})", fontsize=12)
             ax2.set_title('Потенциальный кешбек по дням', fontsize=12, pad=5)
             ax2.grid(axis='y', alpha=0.3)
             
@@ -377,7 +378,7 @@ class PDFReportService:
         <div class="summary-grid">
             <div class="summary-item">
                 <p class="summary-label">Общая сумма</p>
-                <p class="summary-value">{{ total_amount }} ₽</p>
+                <p class="summary-value">{{ total_amount }} {{ currency_symbol }}</p>
                 {% if change_direction %}
                 <p class="summary-trend {% if change_direction == '↑' %}trend-up{% else %}trend-down{% endif %}">
                     {{ change_direction }} {{ change_percent }}% к {{ prev_month_name }}
@@ -390,7 +391,7 @@ class PDFReportService:
             </div>
             <div class="summary-item">
                 <p class="summary-label">Потенциальный кешбек</p>
-                <p class="summary-value">{{ total_cashback }} ₽</p>
+                <p class="summary-value">{{ total_cashback }} {{ currency_symbol }}</p>
             </div>
         </div>
     </div>
@@ -405,8 +406,8 @@ class PDFReportService:
                     <span class="category-name">{{ cat.icon }} {{ cat.name }}</span>
                 </div>
                 <div class="category-right">
-                    <div class="category-amount">{{ "{:,.0f}".format(cat.amount) }} ₽</div>
-                    <div class="category-cashback">+{{ "{:,.0f}".format(cat.cashback) }} ₽ кешбек</div>
+                    <div class="category-amount">{{ "{:,.0f}".format(cat.amount) }} {{ currency_symbol }}</div>
+                    <div class="category-cashback">+{{ "{:,.0f}".format(cat.cashback) }} {{ currency_symbol }} кешбек</div>
                 </div>
             </div>
             {% endfor %}
@@ -444,6 +445,7 @@ class PDFReportService:
             'total_amount': report_data['total_amount'],
             'total_count': report_data['total_count'],
             'total_cashback': report_data['total_cashback'],
+            'currency_symbol': report_data.get('currency_symbol', '₽'),
             'change_percent': report_data.get('change_percent', 0),
             'change_direction': report_data.get('change_direction', ''),
             'prev_month_name': report_data.get('prev_month_name', ''),
@@ -634,6 +636,8 @@ class PDFReportService:
             prev_months = ['январю', 'февралю', 'марту', 'апрелю', 'маю', 'июню',
                            'июлю', 'августу', 'сентябрю', 'октябрю', 'ноябрю', 'декабрю']
             
+            from bot.utils import get_currency_symbol
+            currency_symbol = get_currency_symbol(profile.currency or 'RUB')
             report_data = {
                 'period': f"1 - {end_date.day} {months[month-1]} {year}",
                 'total_amount': f"{total_amount:,.0f}",
@@ -646,7 +650,8 @@ class PDFReportService:
                 'daily_expenses': daily_expenses,
                 'daily_categories': daily_categories,
                 'days_in_month': end_date.day,
-                'logo_base64': await self._get_logo_base64()
+                'logo_base64': await self._get_logo_base64(),
+                'currency_symbol': currency_symbol,
             }
             
             return report_data

@@ -174,6 +174,8 @@ async def _categorize_income_with_ai(
     if user_context is None:
         user_context = await build_user_context(profile)
 
+    fallback_currency = profile.currency or 'RUB'
+
     # Получаем AI сервис через ai_selector (использует настройки из .env)
     try:
         ai_service = get_service('categorization')
@@ -188,7 +190,7 @@ async def _categorize_income_with_ai(
             ai_service.categorize_expense(
                 text=text,
                 amount=None,
-                currency=user_context.get('currency', 'RUB') if user_context else 'RUB',
+                currency=user_context.get('currency', fallback_currency) if user_context else fallback_currency,
                 categories=categories,
                 user_context=user_context
             ),
@@ -215,7 +217,7 @@ async def _categorize_income_with_ai(
                 fallback_service.categorize_expense(
                     text=text,
                     amount=None,
-                    currency=user_context.get('currency', 'RUB') if user_context else 'RUB',
+                    currency=user_context.get('currency', fallback_currency) if user_context else fallback_currency,
                     categories=categories,
                     user_context=user_context
                 ),

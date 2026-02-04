@@ -159,12 +159,13 @@ class ExportService:
 
         # Добавить траты
         for expense in expenses:
+            currency = expense.currency or expense.profile.currency or 'RUB'
             operations.append({
                 'date': expense.expense_date,
                 'time': expense.expense_time or expense.created_at.time(),  # Fallback на время создания
                 'type': 'expense',
                 'amount': -float(expense.amount),  # Отрицательное для трат
-                'currency': expense.currency,
+                'currency': currency,
                 'category': expense.category.get_display_name(lang) if expense.category else get_text('no_category', lang),
                 'category_id': expense.category_id,  # ID категории для расчета кешбэка
                 'description': expense.description or '',
@@ -173,12 +174,13 @@ class ExportService:
 
         # Добавить доходы
         for income in incomes:
+            currency = income.currency or income.profile.currency or 'RUB'
             operations.append({
                 'date': income.income_date,
                 'time': income.income_time or income.created_at.time(),  # Fallback на время создания
                 'type': 'income',
                 'amount': float(income.amount),  # Положительное для доходов
-                'currency': income.currency,
+                'currency': currency,
                 'category': income.category.get_display_name(lang) if income.category else get_text('no_category', lang),
                 'category_id': income.category_id,  # ID категории
                 'description': income.description or '',
@@ -373,12 +375,13 @@ class ExportService:
 
             desc_display = (expense.description or 'Без описания').strip()
             desc_norm = desc_display.lower()
-            key = (desc_norm, expense.currency)
+            expense_currency = expense.currency or expense.profile.currency or 'RUB'
+            key = (desc_norm, expense_currency)
             if key not in expense_operations:
                 expense_operations[key] = {
                     'description': desc_display if desc_display else 'Без описания',
                     'category': category_name,
-                    'currency': expense.currency,
+                    'currency': expense_currency,
                     'monthly_totals': [0 for _ in months_list],
                     'monthly_counts': [0 for _ in months_list],
                     'total': 0.0,
@@ -422,12 +425,13 @@ class ExportService:
 
             desc_display = (income.description or 'Без описания').strip()
             desc_norm = desc_display.lower()
-            key = (desc_norm, income.currency)
+            income_currency = income.currency or income.profile.currency or 'RUB'
+            key = (desc_norm, income_currency)
             if key not in income_operations:
                 income_operations[key] = {
                     'description': desc_display if desc_display else 'Без описания',
                     'category': category_name,
-                    'currency': income.currency,
+                    'currency': income_currency,
                     'monthly_totals': [0 for _ in months_list],
                     'monthly_counts': [0 for _ in months_list],
                     'total': 0.0,
@@ -970,11 +974,10 @@ class ExportService:
         ws.cell(row=savings_row, column=2).border = thin_border
 
         # Добавляем подпись под таблицей (курсивом) о том что данные только в валюте пользователя
-        try:
-            profile = Profile.objects.get(id=profile_id)
-            user_currency = profile.currency or 'RUB'
-        except Profile.DoesNotExist:
-            user_currency = 'RUB'
+        user_currency = (
+            Profile.objects.filter(id=profile_id).values_list('currency', flat=True).first()
+            or 'RUB'
+        )
 
         caption_row = savings_row + 2
         caption_text = f"(Анализ предоставлен только для операций в валюте по умолчанию ({user_currency}))" if lang == 'ru' else f"(Analysis provided only for transactions in default currency ({user_currency}))"
@@ -1509,7 +1512,11 @@ class ExportService:
         elif incomes:
             primary_currency = getattr(incomes[0].profile, 'currency', None) or incomes[0].currency
         if not primary_currency:
-            primary_currency = 'RUB'
+            try:
+                profile = Profile.objects.get(telegram_id=user_id)
+                primary_currency = profile.currency or 'RUB'
+            except Profile.DoesNotExist:
+                primary_currency = 'RUB'
 
         # Подсчет статистики по категориям РАСХОДОВ
         category_stats = {}

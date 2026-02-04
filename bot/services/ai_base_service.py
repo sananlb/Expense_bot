@@ -135,7 +135,9 @@ Return JSON:
                 recent = user_context['recent_expenses'][:3]
                 user_info += f"\nНедавние траты пользователя: {', '.join(recent)}"
             if 'total_today' in user_context:
-                user_info += f"\nПотрачено сегодня: {user_context['total_today']} ₽"
+                from bot.utils.formatters import format_currency
+                currency = user_context.get('currency') or 'RUB'
+                user_info += f"\nПотрачено сегодня: {format_currency(user_context['total_today'], currency)}"
         
         return f"""Ты - умный помощник в боте для учета личных расходов и доходов. 
 Твоя задача - помогать пользователю с учетом финансов, отвечать на вопросы и давать советы.

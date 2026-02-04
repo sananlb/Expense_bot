@@ -40,6 +40,8 @@ def calculate_top5_sync(profile: Profile, window_start: date, window_end: date) 
       id, title_display, title_norm, category_id, category_kind (expense|income), amount, amount_norm,
       currency, op_type (expense|income), count, last_at
     """
+    default_currency = profile.currency or 'RUB'
+
     # Собираем расходы
     expense_qs = Expense.objects.filter(
         profile=profile,
@@ -59,8 +61,9 @@ def calculate_top5_sync(profile: Profile, window_start: date, window_end: date) 
     # Группировка расходов
     for e in expense_qs:
         title_norm = _norm_title(e.description)
-        amount_norm = _norm_amount(e.amount, e.currency or 'RUB')
-        key = (title_norm, e.category_id or 0, str(amount_norm), (e.currency or 'RUB').upper(), 'expense')
+        currency = e.currency or default_currency
+        amount_norm = _norm_amount(e.amount, currency)
+        key = (title_norm, e.category_id or 0, str(amount_norm), currency.upper(), 'expense')
         g = groups.setdefault(key, {
             'title_norm': title_norm,
             'title_display': e.description or '',
@@ -68,7 +71,7 @@ def calculate_top5_sync(profile: Profile, window_start: date, window_end: date) 
             'category_kind': 'expense',
             'amount': Decimal(e.amount),
             'amount_norm': amount_norm,
-            'currency': (e.currency or 'RUB').upper(),
+            'currency': currency.upper(),
             'op_type': 'expense',
             'count': 0,
             'last_at': None,
@@ -83,8 +86,9 @@ def calculate_top5_sync(profile: Profile, window_start: date, window_end: date) 
     # Группировка доходов
     for inc in income_qs:
         title_norm = _norm_title(inc.description)
-        amount_norm = _norm_amount(inc.amount, inc.currency or 'RUB')
-        key = (title_norm, inc.category_id or 0, str(amount_norm), (inc.currency or 'RUB').upper(), 'income')
+        currency = inc.currency or default_currency
+        amount_norm = _norm_amount(inc.amount, currency)
+        key = (title_norm, inc.category_id or 0, str(amount_norm), currency.upper(), 'income')
         g = groups.setdefault(key, {
             'title_norm': title_norm,
             'title_display': inc.description or '',
@@ -92,7 +96,7 @@ def calculate_top5_sync(profile: Profile, window_start: date, window_end: date) 
             'category_kind': 'income',
             'amount': Decimal(inc.amount),
             'amount_norm': amount_norm,
-            'currency': (inc.currency or 'RUB').upper(),
+            'currency': currency.upper(),
             'op_type': 'income',
             'count': 0,
             'last_at': None,
@@ -158,7 +162,7 @@ def calculate_top5_sync(profile: Profile, window_start: date, window_end: date) 
             'category_name': category_name,     # Сохраняем название в снепшот
             'amount': float(it.get('amount_norm') or 0),  # используем нормализованную сумму
             'amount_norm': float(it.get('amount_norm') or 0),
-            'currency': (it.get('currency') or 'RUB').upper(),
+            'currency': (it.get('currency') or default_currency).upper(),
             'op_type': it.get('op_type') or 'expense',
             'count': int(it.get('count') or 0),
             'last_at': (it.get('last_at').isoformat() if it.get('last_at') else None),

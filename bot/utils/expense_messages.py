@@ -44,7 +44,7 @@ async def format_expense_added_message(
         Отформатированное сообщение
     """
     # Форматируем основную информацию о расходе
-    currency = expense.currency or 'RUB'
+    currency = expense.currency or expense.profile.currency or 'RUB'
     amount_text = format_currency(expense.amount, currency)
 
     # Проверяем была ли конвертация валюты
@@ -173,7 +173,7 @@ async def format_income_added_message(
         Отформатированное сообщение
     """
     # Форматируем основную информацию о доходе
-    currency = income.currency or 'RUB'
+    currency = income.currency or income.profile.currency or 'RUB'
     amount_text = format_currency(income.amount, currency)
 
     # Проверяем была ли конвертация валюты

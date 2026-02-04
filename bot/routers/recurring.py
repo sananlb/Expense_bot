@@ -51,6 +51,13 @@ async def cmd_recurring(message: types.Message, state: FSMContext, lang: str = '
     await show_recurring_menu(message, state, lang)
 
 
+async def get_user_default_currency(user_id: int) -> str:
+    from ..services.profile import get_or_create_profile
+    profile = await get_or_create_profile(user_id)
+    currency = profile.currency if profile else None
+    return (currency or 'RUB').upper()
+
+
 async def show_recurring_menu(message: types.Message | types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать меню ежемесячных платежей"""
     # Получаем user_id в зависимости от типа сообщения
@@ -58,6 +65,8 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
         user_id = message.from_user.id
     else:
         user_id = message.from_user.id
+
+    user_currency = await get_user_default_currency(user_id)
     
     # Получаем регулярные платежи пользователя
     payments = await get_user_recurring_payments(user_id)
@@ -87,7 +96,7 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
             for payment in sorted_income:
                 status = "✅" if payment.is_active else "⏸"
                 text += f"\n\n{status} <b>{payment.description}</b>\n"
-                text += f"{get_text('recurring_amount', lang)}: <i>+{format_currency(payment.amount, payment.currency or 'RUB')}</i>\n"
+                text += f"{get_text('recurring_amount', lang)}: <i>+{format_currency(payment.amount, payment.currency or user_currency)}</i>\n"
                 text += f"{get_text('recurring_date', lang)}: <i>{get_text('day_of_month', lang).format(day=payment.day_of_month)}</i>\n"
                 if payment.category:
                     category_name = get_category_display_name(payment.category, lang)
@@ -101,7 +110,7 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
             for payment in sorted_expense:
                 status = "✅" if payment.is_active else "⏸"
                 text += f"\n\n{status} <b>{payment.description}</b>\n"
-                text += f"{get_text('recurring_amount', lang)}: <i>{format_currency(payment.amount, payment.currency or 'RUB')}</i>\n"
+                text += f"{get_text('recurring_amount', lang)}: <i>{format_currency(payment.amount, payment.currency or user_currency)}</i>\n"
                 text += f"{get_text('recurring_date', lang)}: <i>{get_text('day_of_month', lang).format(day=payment.day_of_month)}</i>\n"
                 if payment.category:
                     category_name = get_category_display_name(payment.category, lang)
@@ -422,6 +431,7 @@ async def process_day_text(
 async def edit_recurring_list(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать список платежей для редактирования"""
     user_id = callback.from_user.id
+    user_currency = await get_user_default_currency(user_id)
     payments = await get_user_recurring_payments(user_id)
     
     if not payments:
@@ -436,7 +446,7 @@ async def edit_recurring_list(callback: types.CallbackQuery, state: FSMContext, 
     keyboard_buttons = []
     for payment in sorted_payments:
         status = "✅" if payment.is_active else "⏸"
-        text = f"{status} {payment.description} - {format_currency(payment.amount, payment.currency or 'RUB')}"
+        text = f"{status} {payment.description} - {format_currency(payment.amount, payment.currency or user_currency)}"
         keyboard_buttons.append([
             InlineKeyboardButton(
                 text=text,
@@ -461,6 +471,7 @@ async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext, 
     """Меню редактирования платежа"""
     payment_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
+    user_currency = await get_user_default_currency(user_id)
     
     payment = await get_recurring_payment_by_id(user_id, payment_id)
     if not payment:
@@ -472,7 +483,7 @@ async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext, 
     
     text = get_text('edit_payment_text', lang).format(
         description=payment.description,
-        amount=format_currency(payment.amount, payment.currency or 'RUB'),
+        amount=format_currency(payment.amount, payment.currency or user_currency),
         category=get_category_display_name(payment.category, lang) if payment.category else get_text('no_category', lang),
         day=payment.day_of_month,
         status=status_text
@@ -536,6 +547,7 @@ async def edit_amount_start(callback: types.CallbackQuery, state: FSMContext, la
     """Начать редактирование суммы"""
     payment_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
+    user_currency = await get_user_default_currency(user_id)
     
     payment = await get_recurring_payment_by_id(user_id, payment_id)
     if not payment:
@@ -547,7 +559,7 @@ async def edit_amount_start(callback: types.CallbackQuery, state: FSMContext, la
         [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
     ])
 
-    current_amount = format_currency(payment.amount, payment.currency or 'RUB')
+    current_amount = format_currency(payment.amount, payment.currency or user_currency)
     text = f"{get_text('enter_new_amount', lang)}\n\nТекущая сумма: <i>{current_amount}</i>"
 
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
@@ -716,19 +728,16 @@ async def process_edit_amount(message: types.Message, state: FSMContext, lang: s
         return
 
     # Определяем валюту из текста (опционально)
-    from ..services.profile import get_or_create_profile
-    profile = await get_or_create_profile(user_id)
-    user_currency = profile.currency if profile else 'RUB'
-    detected_currency = detect_currency(text, user_currency)
-    new_currency = (detected_currency or None)  # None = не менять валюту
+    # Возвращаем "XXX", если валюта явно не указана
+    detected_currency = detect_currency(text, user_currency="XXX")
 
     # Сохраняем ID prompt сообщения для удаления ПОСЛЕ показа нового
     prompt_message_id = data.get('editing_prompt_message_id')
 
     # Обновляем сумму (и валюту если указана)
     update_kwargs = {'amount': amount}
-    if new_currency:
-        update_kwargs['currency'] = new_currency.upper()
+    if detected_currency != "XXX":
+        update_kwargs['currency'] = detected_currency.upper()
     await update_recurring_payment(user_id, payment_id, **update_kwargs)
     await state.clear()
 
@@ -869,6 +878,7 @@ async def process_edit_data(message: types.Message, state: FSMContext, lang: str
 async def delete_recurring_list(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать список платежей для удаления"""
     user_id = callback.from_user.id
+    user_currency = await get_user_default_currency(user_id)
     payments = await get_user_recurring_payments(user_id)
     
     if not payments:
@@ -883,7 +893,7 @@ async def delete_recurring_list(callback: types.CallbackQuery, state: FSMContext
     keyboard_buttons = []
     for payment in sorted_payments:
         status = "✅" if payment.is_active else "⏸"
-        text = f"{status} {payment.description} - {format_currency(payment.amount, payment.currency or 'RUB')}"
+        text = f"{status} {payment.description} - {format_currency(payment.amount, payment.currency or user_currency)}"
         keyboard_buttons.append([
             InlineKeyboardButton(
                 text=text,

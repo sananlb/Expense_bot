@@ -886,10 +886,9 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         description = description[0].upper() + description[1:] if len(description) > 1 else description.upper()
     
     # Определяем валюту
-    user_currency = (profile.currency if profile else 'RUB') or 'RUB'
-    user_currency = user_currency.upper()
+    user_currency = (profile.currency if profile else 'RUB').upper()
     currency = detect_currency(original_text, user_currency)
-    
+
     # Базовый результат (НЕ заполняем category если не найдена)
     result = {
         'amount': float(amount),
@@ -1178,7 +1177,7 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
                     'amount': float(amount),
                     'description': description,
                     'income_date': expense_date or date.today(),
-                    'currency': last_income.currency or 'RUB',
+                    'currency': last_income.currency or last_income.profile.currency or 'RUB',
                     'is_income': True,
                     'similar_income': True,
                     'ai_enhanced': False,
@@ -1337,10 +1336,9 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
             description = get_text('income', lang_code)
     
     # Определяем валюту
-    user_currency = (profile.currency if profile else 'RUB') or 'RUB'
-    user_currency = user_currency.upper()
+    user_currency = (profile.currency if profile else 'RUB').upper()
     currency = detect_currency(original_text, user_currency)
-    
+
     # Формируем результат
     result = {
         'amount': float(amount),

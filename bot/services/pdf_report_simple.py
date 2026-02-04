@@ -50,7 +50,7 @@ class SimplePDFReportService:
             categories_by_currency = {}
             
             for expense in expenses:
-                currency = expense.currency or 'RUB'
+                currency = expense.currency or profile.currency or 'RUB'
                 
                 # Суммируем по валютам
                 if currency not in currency_totals:

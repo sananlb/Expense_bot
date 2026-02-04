@@ -39,7 +39,7 @@ def create_income(
     income_date: Optional[date] = None,
     ai_categorized: bool = False,
     ai_confidence: Optional[float] = None,
-    currency: str = 'RUB',
+    currency: Optional[str] = None,
     # Параметры для конвертации валюты
     original_amount: Optional[Decimal] = None,
     original_currency: Optional[str] = None,
@@ -65,6 +65,9 @@ def create_income(
         # Получаем или создаем профиль пользователя
         profile = get_or_create_user_profile_sync(user_id)
         
+        # Обрабатываем валюту (по умолчанию валюта профиля)
+        currency = currency or profile.currency or 'RUB'
+
         # Обрабатываем дату
         if income_date is None:
             income_date = date.today()
@@ -413,6 +416,7 @@ async def get_today_income_summary(user_id: int) -> Dict:
     try:
         profile = await Profile.objects.aget(telegram_id=user_id)
         today = date.today()
+        default_currency = profile.currency or 'RUB'
 
         @sync_to_async
         def get_today_incomes():
@@ -428,7 +432,7 @@ async def get_today_income_summary(user_id: int) -> Dict:
         # Группируем по валютам
         currency_totals = {}
         for income in incomes:
-            currency = income.currency or 'RUB'
+            currency = income.currency or default_currency
             if currency not in currency_totals:
                 currency_totals[currency] = 0.0
             currency_totals[currency] += float(income.amount)
@@ -471,11 +475,12 @@ async def get_date_income_summary(user_id: int, target_date: date) -> Dict:
             )
 
         incomes = await get_incomes_for_date()
+        default_currency = profile.currency or 'RUB'
 
         # Группируем по валютам
         currency_totals = {}
         for income in incomes:
-            currency = income.currency or 'RUB'
+            currency = income.currency or default_currency
             if currency not in currency_totals:
                 currency_totals[currency] = 0.0
             currency_totals[currency] += float(income.amount)

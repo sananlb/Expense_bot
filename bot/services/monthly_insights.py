@@ -14,6 +14,7 @@ from expenses.models import (
     ExpenseCategory, IncomeCategory, UserSettings
 )
 from .ai_selector import get_service, get_model, get_provider_settings, get_fallback_chain
+from bot.utils.formatters import format_currency
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +182,8 @@ class MonthlyInsightsService:
             'total_incomes': total_incomes,
             'expenses_by_category': expenses_by_category_named,
             'top_categories': top_categories,
-            'balance': total_incomes - total_expenses
+            'balance': total_incomes - total_expenses,
+            'currency': primary_currency,
         }
 
     async def _collect_historical_data(
@@ -334,17 +336,16 @@ class MonthlyInsightsService:
         }
         months_dict = months_en if user_lang == 'en' else months_ru
 
-        # Helper функция для форматирования сумм без лишних нулей
+        # Helper функция для форматирования сумм в валюте пользователя
         def format_amount(amount):
-            """Форматирует сумму: если целая, то без дробной части"""
-            return f"{int(amount)}" if amount == int(amount) else f"{float(amount):.2f}"
+            return format_currency(amount, primary_currency)
 
         # Prepare category details
         category_details = []
         for cat_name, cat_data in list(month_data['expenses_by_category'].items())[:10]:
             percentage = (cat_data['amount'] / month_data['total_expenses'] * 100) if month_data['total_expenses'] > 0 else 0
             category_details.append(
-                f"- {cat_name}: {format_amount(cat_data['amount'])} ₽ ({percentage:.1f}%, {cat_data['count']} трат)"
+                f"- {cat_name}: {format_amount(cat_data['amount'])} ({percentage:.1f}%, {cat_data['count']} трат)"
             )
 
         # Build comparison section if previous month data exists
@@ -365,16 +366,16 @@ class MonthlyInsightsService:
             if has_income:
                 comparison_section = f"""
 СРАВНЕНИЕ С ПРЕДЫДУЩИМ МЕСЯЦЕМ ({prev_month_name}):
-- Расходы в прошлом месяце: {format_amount(prev_month_data['total_expenses'])} ₽
-- Изменение расходов: {expense_change_str} ₽ ({expense_change_pct:+.1f}%)
-- Доходы в прошлом месяце: {format_amount(prev_month_data['total_incomes'])} ₽
+- Расходы в прошлом месяце: {format_amount(prev_month_data['total_expenses'])}
+- Изменение расходов: {expense_change_str} ({expense_change_pct:+.1f}%)
+- Доходы в прошлом месяце: {format_amount(prev_month_data['total_incomes'])}
 - Количество трат в прошлом месяце: {len(prev_month_data['expenses'])}
 """
             else:
                 comparison_section = f"""
 СРАВНЕНИЕ С ПРЕДЫДУЩИМ МЕСЯЦЕМ ({prev_month_name}):
-- Расходы в прошлом месяце: {format_amount(prev_month_data['total_expenses'])} ₽
-- Изменение расходов: {expense_change_str} ₽ ({expense_change_pct:+.1f}%)
+- Расходы в прошлом месяце: {format_amount(prev_month_data['total_expenses'])}
+- Изменение расходов: {expense_change_str} ({expense_change_pct:+.1f}%)
 - Количество трат в прошлом месяце: {len(prev_month_data['expenses'])}
 """
 
@@ -390,13 +391,13 @@ class MonthlyInsightsService:
 
                 # Format top categories (only show if exist)
                 if h['top_categories']:
-                    top_cats = ", ".join([f"{c['category']} ({format_amount(c['amount'])}₽)" for c in h['top_categories'][:2]])
+                    top_cats = ", ".join([f"{c['category']} ({format_amount(c['amount'])})" for c in h['top_categories'][:2]])
                     historical_lines.append(
-                        f"- {h_month_name} {h['year']}: {format_amount(h['total_expenses'])} ₽ (топ: {top_cats})"
+                        f"- {h_month_name} {h['year']}: {format_amount(h['total_expenses'])} (топ: {top_cats})"
                     )
                 else:
                     historical_lines.append(
-                        f"- {h_month_name} {h['year']}: {format_amount(h['total_expenses'])} ₽"
+                        f"- {h_month_name} {h['year']}: {format_amount(h['total_expenses'])}"
                     )
 
             historical_section = f"""
@@ -416,7 +417,7 @@ class MonthlyInsightsService:
                 exp_date = exp.expense_date.strftime('%d.%m')
                 exp_desc = exp.description[:30] if exp.description else '(без описания)'
                 exp_amount = format_amount(exp.amount)
-                expense_lines.append(f"  - {exp_date}: {exp_desc} - {exp_amount}₽")
+                expense_lines.append(f"  - {exp_date}: {exp_desc} - {exp_amount}")
 
             if len(top_expenses) > 20:
                 expense_lines.append(f"  ... и ещё {len(top_expenses) - 20} трат")
@@ -444,11 +445,11 @@ class MonthlyInsightsService:
                     exp_amount = format_amount(exp.amount)
                     # Get category name
                     cat_name = exp.category.get_display_name(user_lang) if exp.category else '(без категории)'
-                    large_lines.append(f"  - {exp_date}: {exp_desc} - {exp_amount}₽ [категория: {cat_name}]")
+                    large_lines.append(f"  - {exp_date}: {exp_desc} - {exp_amount} [категория: {cat_name}]")
 
                 large_expenses_section = f"""
 КРУПНЫЕ ТРАТЫ (выше среднего):
-Средняя трата: {format_amount(avg_expense)}₽
+Средняя трата: {format_amount(avg_expense)}
 {chr(10).join(large_lines)}
 """
 
@@ -487,7 +488,7 @@ class MonthlyInsightsService:
                     total_amount = sum(amounts)
                     cat_name = desc_categories.get(desc) or '(без категории)'
                     regular_lines.append(
-                        f"  - \"{desc[:30]}\": {count}x, средняя {format_amount(avg_amount)}₽, всего {format_amount(total_amount)}₽ [категория: {cat_name}]"
+                        f"  - \"{desc[:30]}\": {count}x, средняя {format_amount(avg_amount)}, всего {format_amount(total_amount)} [категория: {cat_name}]"
                     )
 
                 regular_expenses_section = f"""
@@ -498,13 +499,13 @@ class MonthlyInsightsService:
         # Build financial summary section (only expenses if no income)
         if has_income:
             finance_section = f"""ДАННЫЕ ЗА ТЕКУЩИЙ МЕСЯЦ:
-- Всего потрачено: {format_amount(month_data['total_expenses'])} ₽
-- Всего доходов: {format_amount(month_data['total_incomes'])} ₽
-- Баланс: {format_amount(month_data['balance'])} ₽
+- Всего потрачено: {format_amount(month_data['total_expenses'])}
+- Всего доходов: {format_amount(month_data['total_incomes'])}
+- Баланс: {format_amount(month_data['balance'])}
 - Количество трат: {len(month_data['expenses'])}"""
         else:
             finance_section = f"""ДАННЫЕ ЗА ТЕКУЩИЙ МЕСЯЦ:
-- Всего потрачено: {format_amount(month_data['total_expenses'])} ₽
+- Всего потрачено: {format_amount(month_data['total_expenses'])}
 - Количество трат: {len(month_data['expenses'])}"""
 
         # Build prompt based on user language
@@ -778,9 +779,10 @@ IMPORTANT:
 
         total = float(month_data['total_expenses'])
         count = len(month_data['expenses'])
+        currency = month_data.get('currency', 'RUB')
 
         # Basic summary
-        summary = f"За {month_name} вы потратили {total:,.0f} рублей ({count} трат).".replace(',', ' ')
+        summary = f"За {month_name} вы потратили {format_currency(total, currency)} ({count} трат)."
 
         # Add comparison if available
         if prev_month_data:
@@ -789,9 +791,9 @@ IMPORTANT:
             change_pct = (change / prev_total * 100) if prev_total > 0 else 0
 
             if change > 0:
-                summary += f" Это на {change:,.0f}₽ ({change_pct:.0f}%) больше, чем в прошлом месяце.".replace(',', ' ')
+                summary += f" Это на {format_currency(change, currency)} ({change_pct:.0f}%) больше, чем в прошлом месяце."
             elif change < 0:
-                summary += f" Это на {abs(change):,.0f}₽ ({abs(change_pct):.0f}%) меньше, чем в прошлом месяце.".replace(',', ' ')
+                summary += f" Это на {format_currency(abs(change), currency)} ({abs(change_pct):.0f}%) меньше, чем в прошлом месяце."
             else:
                 summary += " Траты остались на том же уровне."
 
@@ -804,7 +806,7 @@ IMPORTANT:
             cat_name, cat_data = top_cats[0]
             cat_amount = float(cat_data['amount'])
             cat_pct = (cat_amount / total * 100) if total > 0 else 0
-            analysis_parts.append(f"• Основная категория: {cat_name} ({cat_amount:,.0f}₽, {cat_pct:.0f}%)".replace(',', ' '))
+            analysis_parts.append(f"• Основная категория: {cat_name} ({format_currency(cat_amount, currency)}, {cat_pct:.0f}%)")
         else:
             analysis_parts.append("• За этот месяц трат не было")
 
@@ -822,7 +824,7 @@ IMPORTANT:
 
         # Point 3: Spending pattern
         avg_expense = total / count if count > 0 else 0
-        analysis_parts.append(f"• Средняя трата: {avg_expense:,.0f}₽".replace(',', ' '))
+        analysis_parts.append(f"• Средняя трата: {format_currency(avg_expense, currency)}")
 
         # Point 4: Generic advice
         analysis_parts.append("• Совет: продолжайте отслеживать расходы для контроля бюджета")

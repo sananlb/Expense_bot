@@ -35,7 +35,7 @@ def create_expense(
     expense_date: Optional[date] = None,
     ai_categorized: bool = False,
     ai_confidence: Optional[float] = None,
-    currency: str = 'RUB',
+    currency: Optional[str] = None,
     # Параметры для конвертации валюты
     original_amount: Optional[Decimal] = None,
     original_currency: Optional[str] = None,
@@ -59,6 +59,9 @@ def create_expense(
     profile = get_or_create_user_profile_sync(user_id)
     
     try:
+        # Обрабатываем валюту (по умолчанию валюта профиля)
+        currency = currency or profile.currency or 'RUB'
+
         if expense_date is None:
             expense_date = date.today()
         
@@ -333,7 +336,7 @@ def _group_expenses_by_category(
     total_count = 0
 
     for expense in expenses:
-        currency = expense.currency or 'RUB'
+        currency = expense.currency or expense.profile.currency or 'RUB'
 
         # Currency statistics
         if currency not in expenses_by_currency:
@@ -493,7 +496,7 @@ def _calculate_household_cashback(
     # Collect totals by category for each household member
     member_totals: Dict[int, Dict[int, Decimal]] = {}
     for exp in expenses:
-        if (exp.currency or 'RUB') != main_currency:
+        if (exp.currency or exp.profile.currency or 'RUB') != main_currency:
             continue
         if not exp.category_id:
             continue
@@ -622,7 +625,7 @@ def get_expenses_summary(
             total = expenses_by_currency[main_currency]['total']
             count = total_count
         else:
-            main_currency = 'RUB'
+            main_currency = profile.currency or 'RUB'
             total = Decimal('0')
             count = 0
 
@@ -1019,11 +1022,12 @@ def find_similar_expenses(
         unique_amounts = {}
         for expense in similar_expenses:
             category_display = expense.category.get_display_name(user_lang) if expense.category else ('Прочие расходы' if user_lang == 'ru' else 'Other Expenses')
-            key = (float(expense.amount), expense.currency, category_display)
+            currency = expense.currency or expense.profile.currency or 'RUB'
+            key = (float(expense.amount), currency, category_display)
             if key not in unique_amounts:
                 unique_amounts[key] = {
                     'amount': float(expense.amount),
-                    'currency': expense.currency,
+                    'currency': currency,
                     'category': category_display,
                     'count': 1,
                     'last_date': expense.expense_date
@@ -1110,6 +1114,7 @@ async def get_today_summary(user_id: int) -> Dict[str, Any]:
     try:
         profile = await Profile.objects.aget(telegram_id=user_id)
         today = date.today()
+        default_currency = profile.currency or 'RUB'
         
         @sync_to_async
         def get_today_expenses():
@@ -1125,13 +1130,13 @@ async def get_today_summary(user_id: int) -> Dict[str, Any]:
         # Group by currency
         currency_totals = {}
         for expense in expenses:
-            currency = expense.currency or 'RUB'
+            currency = expense.currency or default_currency
             if currency not in currency_totals:
                 currency_totals[currency] = Decimal('0')
             currency_totals[currency] += expense.amount
         
         # Get user's primary currency
-        user_currency = profile.currency or 'RUB'
+        user_currency = default_currency
         
         # Keep currencies separate
         # Total will be shown per currency
@@ -1151,7 +1156,7 @@ async def get_today_summary(user_id: int) -> Dict[str, Any]:
         categories = {}
         for expense in expenses:
             if expense.category:
-                currency = expense.currency or 'RUB'
+                currency = expense.currency or default_currency
                 cat_key = expense.category.id
 
                 # Create category entry if doesn't exist
@@ -1208,17 +1213,18 @@ async def get_date_summary(user_id: int, target_date: date) -> Dict[str, Any]:
             )
         
         expenses = await get_date_expenses()
+        default_currency = profile.currency or 'RUB'
         
         # Group by currency
         currency_totals = {}
         for expense in expenses:
-            currency = expense.currency or 'RUB'
+            currency = expense.currency or default_currency
             if currency not in currency_totals:
                 currency_totals[currency] = Decimal('0')
             currency_totals[currency] += expense.amount
         
         # Get user's primary currency
-        user_currency = profile.currency or 'RUB'
+        user_currency = default_currency
         
         # Keep currencies separate
         single_currency = len(currency_totals) == 1
@@ -1236,7 +1242,7 @@ async def get_date_summary(user_id: int, target_date: date) -> Dict[str, Any]:
         categories = {}
         for expense in expenses:
             if expense.category:
-                currency = expense.currency or 'RUB'
+                currency = expense.currency or default_currency
                 cat_key = expense.category.id
 
                 # Create category entry if doesn't exist

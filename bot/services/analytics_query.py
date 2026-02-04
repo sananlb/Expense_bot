@@ -440,6 +440,7 @@ class AnalyticsQueryExecutor:
         limited_incomes = incomes.order_by('-income_date')[:spec.limit]
 
         user_lang = profile.language_code or 'ru'
+        default_currency = profile.currency or 'RUB'
 
         for expense in limited_expenses:
             operations.append({
@@ -448,7 +449,7 @@ class AnalyticsQueryExecutor:
                 'amount': float(expense.amount),
                 'category': expense.category.get_display_name(user_lang) if expense.category else None,
                 'description': expense.description,
-                'currency': expense.currency
+                'currency': expense.currency or default_currency
             })
 
         for income in limited_incomes:
@@ -458,7 +459,7 @@ class AnalyticsQueryExecutor:
                 'amount': float(income.amount),
                 'category': income.category.get_display_name(user_lang) if income.category else None,
                 'description': income.description,
-                'currency': income.currency
+                'currency': income.currency or default_currency
             })
 
         # Sort combined list

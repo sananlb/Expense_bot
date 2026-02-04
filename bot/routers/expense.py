@@ -215,8 +215,8 @@ async def show_prev_month_expenses(callback: types.CallbackQuery, state: FSMCont
         
         cashback = await calculate_potential_cashback(user_id, start_date, end_date)
         if cashback > 0:
-            text += f"\n\n💳 <b>Потенциальный кешбэк:</b>\n• {format_currency(cashback, 'RUB')}"
-    
+            text += f"\n\n💳 <b>Потенциальный кешбэк:</b>\n• {format_currency(cashback, summary.get('currency', 'RUB'))}"
+
     # Обновляем текущий период в состоянии
     await state.update_data(current_month=prev_month, current_year=prev_year)
     
@@ -371,8 +371,8 @@ async def show_next_month_expenses(callback: types.CallbackQuery, state: FSMCont
         
         cashback = await calculate_potential_cashback(user_id, start_date, end_date)
         if cashback > 0:
-            text += f"\n\n💳 <b>Потенциальный кешбэк:</b>\n• {format_currency(cashback, 'RUB')}"
-    
+            text += f"\n\n💳 <b>Потенциальный кешбэк:</b>\n• {format_currency(cashback, summary.get('currency', 'RUB'))}"
+
     # Обновляем текущий период в состоянии
     await state.update_data(current_month=next_month, current_year=next_year)
     
@@ -1101,6 +1101,7 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
         profile = await Profile.objects.aget(telegram_id=user_id)
     except Profile.DoesNotExist:
         profile = None
+    default_currency = profile.currency if profile else 'RUB'
     
     # Парсим сумму из сообщения пользователя
     parsed_amount = await parse_expense_message(text, user_id=user_id, profile=profile, use_ai=False)
@@ -1116,13 +1117,13 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
     # Если полный парсинг успешен, используем его результат
     if parsed_full:
         amount = parsed_full['amount']
-        currency = parsed_full.get('currency', 'RUB')
+        currency = parsed_full.get('currency', default_currency)
         category_name = parsed_full.get('category', 'Прочие расходы')
         final_description = parsed_full.get('description', description)
     else:
         # Fallback: используем отдельно распарсенные данные
         amount = parsed_amount['amount']
-        currency = parsed_amount.get('currency', 'RUB')
+        currency = parsed_amount.get('currency', default_currency)
         category_name = 'Прочие расходы'
         final_description = description
     
@@ -1155,7 +1156,7 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
     cashback_text = ""
     has_subscription = await check_subscription(user_id)
     # Получаем валюту пользователя из профиля
-    user_currency = profile.currency if profile else 'RUB'
+    user_currency = default_currency
     # Кешбэк начисляется только для трат в валюте пользователя
     if has_subscription and currency == user_currency:
         current_month = datetime.now().month
@@ -1166,7 +1167,7 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
             month=current_month
         )
         if cashback > 0:
-            cashback_text = f" (+{cashback:.0f} ₽)"
+            cashback_text = f" (+{format_currency(cashback, user_currency)})"
             # Сохраняем кешбек в базе данных
             expense.cashback_amount = Decimal(str(cashback))
             await expense.asave()
@@ -1519,6 +1520,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 await create_default_income_categories(user_id)
             except Exception as e:
                 logger.debug(f"Failed to create default income categories: {e}")
+        default_currency = profile.currency or 'RUB'
 
         # Парсим доход
         parsed_income = await parse_income_message(text, user_id=user_id, profile=profile, use_ai=True)
@@ -1585,7 +1587,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     income_date=parsed_income.get('income_date'),
                     ai_categorized=parsed_income.get('ai_enhanced', False),
                     ai_confidence=parsed_income.get('confidence', 0.5),
-                    input_currency=parsed_income.get('currency', 'RUB')
+                    input_currency=parsed_income.get('currency', default_currency)
                 )
             except ValueError as e:
                 # Обработка ошибок валидации даты
@@ -1734,7 +1736,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 elif similar_income and not similar:
                     # Только похожий доход - создаем доход вместо расхода
                     amount = similar_income.amount
-                    currency = similar_income.currency or 'RUB'
+                    currency = similar_income.currency or similar_income.profile.currency or 'RUB'
                     category = similar_income.category
                     
                     # Делаем первую букву заглавной
@@ -1812,7 +1814,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     if use_income:
                         # Используем доход
                         amount = similar_income.amount
-                        currency = similar_income.currency or 'RUB'
+                        currency = similar_income.currency or similar_income.profile.currency or 'RUB'
                         category = similar_income.category
                         
                         # Делаем первую букву заглавной
@@ -1919,7 +1921,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                         month=current_month
                     )
                     if cashback > 0:
-                        cashback_text = f" (+{cashback:.0f} ₽)"
+                        cashback_text = f" (+{format_currency(cashback, user_currency)})"
                         # Сохраняем кешбек в базе данных
                         expense.cashback_amount = Decimal(str(cashback))
                         await expense.asave()
@@ -1992,7 +1994,11 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     
     # Сохраняем в оригинальной валюте
     amount = parsed['amount']
-    currency = parsed.get('currency', 'RUB')
+    currency = parsed.get('currency')
+    if not currency:
+        from bot.services.profile import get_or_create_profile
+        profile = await get_or_create_profile(user_id)
+        currency = profile.currency or 'RUB'
     
     # Добавляем трату в оригинальной валюте
     try:
@@ -2042,7 +2048,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             month=current_month
         )
         if cashback > 0:
-            cashback_text = f" (+{cashback:.0f} ₽)"
+            cashback_text = f" (+{format_currency(cashback, user_currency)})"
             # Сохраняем кешбек в базе данных
             expense.cashback_amount = Decimal(str(cashback))
             await expense.asave()
@@ -2246,14 +2252,12 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext):
     has_cashback = False
     if not is_income and not expense.cashback_excluded:  # Только для расходов
         # Получаем валюту пользователя
-        try:
-            profile = await Profile.objects.aget(telegram_id=user_id)
-            user_currency = profile.currency if profile else 'RUB'
-        except Profile.DoesNotExist:
-            user_currency = 'RUB'
+        from bot.services.profile import get_or_create_profile
+        profile = await get_or_create_profile(user_id)
+        user_currency = profile.currency or 'RUB'
 
         # Кешбек начисляется только для трат в валюте пользователя
-        expense_currency = expense.currency if hasattr(expense, 'currency') else 'RUB'
+        expense_currency = expense.currency or user_currency
         if expense_currency == user_currency:
             current_month = datetime.now().month
             cashback = await calculate_expense_cashback(
@@ -2270,7 +2274,7 @@ async def edit_expense(callback: types.CallbackQuery, state: FSMContext):
     # Получаем правильное поле для суммы и описания
     amount = expense.amount
     description = expense.description
-    currency = expense.currency if hasattr(expense, 'currency') else '₽'
+    currency = expense.currency or user_currency
     
     edit_prefix = "income" if is_income else "expense"
     buttons = [
@@ -2675,7 +2679,7 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext, lang: str 
                 # Получаем валюту пользователя из профиля
                 user_currency = expense.profile.currency if expense.profile else 'RUB'
                 # Кешбек начисляется только для трат в валюте пользователя
-                expense_currency = expense.currency if hasattr(expense, 'currency') else 'RUB'
+                expense_currency = expense.currency or user_currency
                 if expense_currency == user_currency:
                     current_month = datetime.now().month
                     cashback = await calculate_expense_cashback(
@@ -2685,7 +2689,7 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext, lang: str 
                         month=current_month
                     )
                     if cashback > 0:
-                        cashback_text = f" (+{cashback:.0f} ₽)"
+                        cashback_text = f" (+{format_currency(cashback, user_currency)})"
                         # Сохраняем кешбек в базе данных
                         expense.cashback_amount = Decimal(str(cashback))
                         await expense.asave()
@@ -2797,10 +2801,11 @@ async def show_edit_menu(message: types.Message, state: FSMContext, expense_id: 
         )
         
         translated_category = get_category_display_name(expense.category, lang)
+        currency = expense.currency or expense.profile.currency or 'RUB'
         data = await state.get_data()
         edit_prefix = 'income' if data.get('editing_type') == 'income' else 'expense'
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"💰 Сумма: {expense.amount:.0f} ₽", callback_data=f"edit_field_amount_{edit_prefix}_{expense.id}")],
+            [InlineKeyboardButton(text=f"💰 Сумма: {format_currency(expense.amount, currency)}", callback_data=f"edit_field_amount_{edit_prefix}_{expense.id}")],
             [InlineKeyboardButton(text=f"📝 Описание: {expense.description}", callback_data=f"edit_field_description_{edit_prefix}_{expense.id}")],
             [InlineKeyboardButton(text=f"📁 Категория: {translated_category}", callback_data=f"edit_field_category_{edit_prefix}_{expense.id}")],
             [InlineKeyboardButton(text="✅ Готово", callback_data=f"edit_done_{edit_prefix}_{expense.id}")]
@@ -2840,9 +2845,10 @@ async def show_edit_menu_callback(
         )
         
         translated_category = get_category_display_name(expense.category, lang)
+        currency = expense.currency or expense.profile.currency or 'RUB'
         edit_prefix = 'income' if is_income else 'expense'
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=f"💰 Сумма: {expense.amount:.0f} ₽", callback_data=f"edit_field_amount_{edit_prefix}_{expense.id}")],
+            [InlineKeyboardButton(text=f"💰 Сумма: {format_currency(expense.amount, currency)}", callback_data=f"edit_field_amount_{edit_prefix}_{expense.id}")],
             [InlineKeyboardButton(text=f"📝 Описание: {expense.description}", callback_data=f"edit_field_description_{edit_prefix}_{expense.id}")],
             [InlineKeyboardButton(text=f"📁 Категория: {translated_category}", callback_data=f"edit_field_category_{edit_prefix}_{expense.id}")],
             [InlineKeyboardButton(text="✅ Готово", callback_data=f"edit_done_{edit_prefix}_{expense.id}")]
@@ -2900,7 +2906,7 @@ async def show_updated_expense(message: types.Message, state: FSMContext, item_i
                 # Получаем валюту пользователя из профиля
                 user_currency = expense.profile.currency if expense.profile else 'RUB'
                 # Кешбек начисляется только для трат в валюте пользователя
-                expense_currency = expense.currency if hasattr(expense, 'currency') else 'RUB'
+                expense_currency = expense.currency or user_currency
                 if expense_currency == user_currency:
                     current_month = datetime.now().month
                     cashback = await calculate_expense_cashback(
@@ -2910,7 +2916,7 @@ async def show_updated_expense(message: types.Message, state: FSMContext, item_i
                         month=current_month
                     )
                     if cashback > 0:
-                        cashback_text = f" (+{cashback:.0f} ₽)"
+                        cashback_text = f" (+{format_currency(cashback, user_currency)})"
                         # Сохраняем кешбек в базе данных
                         expense.cashback_amount = Decimal(str(cashback))
                         await expense.asave()
@@ -2981,7 +2987,7 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
                 # Получаем валюту пользователя из профиля
                 user_currency = expense.profile.currency if expense.profile else 'RUB'
                 # Кешбек начисляется только для трат в валюте пользователя
-                expense_currency = expense.currency if hasattr(expense, 'currency') else 'RUB'
+                expense_currency = expense.currency or user_currency
                 if expense_currency == user_currency:
                     current_month = datetime.now().month
                     cashback = await calculate_expense_cashback(
@@ -2991,7 +2997,7 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
                         month=current_month
                     )
                     if cashback > 0:
-                        cashback_text = f" (+{cashback:.0f} ₽)"
+                        cashback_text = f" (+{format_currency(cashback, user_currency)})"
                         # Сохраняем кешбек в базе данных
                         expense.cashback_amount = Decimal(str(cashback))
                         await expense.asave()

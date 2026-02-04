@@ -335,7 +335,7 @@ class ExpenseFunctions:
                 'date': max_day['expense_date'].isoformat(),
                 'weekday': weekday,
                 'total': float(max_day['total']),
-                'currency': 'RUB',
+                'currency': profile.currency or 'RUB',
                 'count': len(details),
                 'details': details
             }
@@ -436,7 +436,7 @@ class ExpenseFunctions:
                 'start_date': start_date.isoformat(),
                 'end_date': end_date.isoformat(),
                 'total': float(total),
-                'currency': 'RUB',
+                'currency': profile.currency or 'RUB',
                 'count': count,
                 'categories': categories[:5]  # Топ-5 категорий
             }
@@ -545,7 +545,7 @@ class ExpenseFunctions:
                 'start_date': start_dt.isoformat(),
                 'end_date': end_dt.isoformat(),
                 'total': float(total_sum),
-                'currency': 'RUB',
+                'currency': profile.currency or 'RUB',
                 'categories': categories
             }
             
@@ -619,7 +619,7 @@ class ExpenseFunctions:
                     'min': min(amounts) if amounts else 0,
                     'total': sum(amounts)
                 },
-                'currency': 'RUB'
+                'currency': profile.currency or 'RUB'
             }
             
         except Profile.DoesNotExist:
@@ -838,7 +838,7 @@ class ExpenseFunctions:
                 'average_per_day': float(total / period_days) if period_days > 0 else 0,
                 'average_per_active_day': float(total / days_with_expenses) if days_with_expenses > 0 else 0,
                 'average_per_expense': float(total / count) if count > 0 else 0,
-                'currency': 'RUB'
+                'currency': profile.currency or 'RUB'
             }
             
         except Profile.DoesNotExist:
@@ -1199,7 +1199,7 @@ class ExpenseFunctions:
                 'total': float(total),
                 'count': count,
                 'average': float(total / count) if count > 0 else 0,
-                'currency': 'RUB',
+                'currency': profile.currency or 'RUB',
                 'start_date': start_date.isoformat(),
                 'end_date': end_date.isoformat()
             }
@@ -1489,7 +1489,7 @@ class ExpenseFunctions:
                 'days_in_month': days_in_month,
                 'average_per_day': float(avg_per_day),
                 'predicted_total': float(predicted_total),
-                'currency': 'RUB'
+                'currency': profile.currency or 'RUB'
             }
         except Exception as e:
             logger.error(f"Error in predict_month_expense: {e}")
@@ -1601,7 +1601,7 @@ class ExpenseFunctions:
     #             'period_start': month_start.isoformat(),
     #             'period_end': month_end.isoformat(),
     #             'total_amount': float(total_amount),
-    #             'currency': 'RUB',
+    #             'currency': profile.currency or 'RUB',
     #             'expenses_count': len(expenses_list),
     #             'expenses': expenses_list,
     #             'category_statistics': category_stats
@@ -1727,7 +1727,7 @@ class ExpenseFunctions:
                 'start_date': start_date.isoformat(),
                 'end_date': end_date.isoformat(),
                 'total': float(total),
-                'currency': 'RUB',
+                'currency': profile.currency or 'RUB',
                 'count': count,
                 'categories': categories[:5]  # Топ-5 категорий
             }
@@ -1803,7 +1803,7 @@ class ExpenseFunctions:
                 'success': True,
                 'period_days': period_days,
                 'total': float(total_sum),
-                'currency': 'RUB',
+                'currency': profile.currency or 'RUB',
                 'categories': categories
             }
             
@@ -1954,7 +1954,7 @@ class ExpenseFunctions:
                 'start_date': start_date.isoformat(),
                 'end_date': end_date.isoformat(),
                 'total': float(total),
-                'currency': 'RUB'
+                'currency': profile.currency or 'RUB'
             }
         except Exception as e:
             logger.error(f"Error in get_income_period_total: {e}")
@@ -2150,7 +2150,7 @@ class ExpenseFunctions:
                 'total': float(total_income),
                 'start_date': start_dt.isoformat(),
                 'end_date': end_dt.isoformat(),
-                'currency': 'RUB'
+                'currency': profile.currency or 'RUB'
             }
         except Exception as e:
             logger.error(f"Error in get_income_category_statistics: {e}")
@@ -2946,7 +2946,7 @@ class ExpenseFunctions:
                     'total_income': total_income,
                     'total_expense': total_expense,
                     'net_balance': net_balance,
-                    'currency': 'RUB'
+                    'currency': profile.currency or 'RUB'
                 }
             }
             
@@ -3040,7 +3040,7 @@ class ExpenseFunctions:
                     'net': float(net_balance),
                     'status': 'profit' if net_balance > 0 else 'loss' if net_balance < 0 else 'break_even'
                 },
-                'currency': 'RUB'
+                'currency': profile.currency or 'RUB'
             }
             
         except Exception as e:

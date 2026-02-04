@@ -291,7 +291,9 @@ def format_cashback_note(cashbacks: List[Cashback], month: int, lang: str = 'ru'
 
             if cb.limit_amount:
                 limit_text = get_text('limit', lang)
-                text += f"\n    💰 {limit_text}: {cb.limit_amount:,.0f} ₽"
+                from bot.utils.formatters import format_currency
+                currency = cb.profile.currency if getattr(cb, 'profile', None) else 'RUB'
+                text += f"\n    💰 {limit_text}: {format_currency(cb.limit_amount, currency)}"
 
             text += "\n"
 

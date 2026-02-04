@@ -88,7 +88,7 @@ def format_incomes_diary_style(
         # Категория
         category_name = get_category_display_name(income.category, lang) if income.category else get_text('no_category', lang)
 
-        currency = income.currency or 'RUB'
+        currency = income.currency or income.profile.currency or 'RUB'
         amount = float(income.amount)
         
         # Добавляем к сумме дня
@@ -170,8 +170,14 @@ def format_incomes_diary_style(
             text += ", ".join(totals_list) + "\n"
 
     # Общий итог
-    grand_total = sum(income.amount for income in incomes_to_show)
-    text += f"\n<b>💎 {get_text('total_income', lang)}: {grand_total:,.0f} ₽</b>"
+    from bot.utils.formatters import format_currency
+    totals_by_currency: Dict[str, float] = {}
+    for income in incomes_to_show:
+        curr = income.currency or income.profile.currency or 'RUB'
+        totals_by_currency[curr] = totals_by_currency.get(curr, 0) + float(income.amount)
+    if totals_by_currency:
+        totals_list = [format_currency(total, curr) for curr, total in sorted(totals_by_currency.items())]
+        text += f"\n<b>💎 {get_text('total_income', lang)}: " + ", ".join(totals_list) + "</b>"
     
     # Если было ограничение по количеству
     if is_limited and show_warning:
@@ -264,7 +270,7 @@ def format_incomes_from_dict_list(
             time_str = income.get('time', '00:00')
             amount = income.get('amount', 0)
             description = income.get('description', get_text('income_default_desc', lang))
-            currency = income.get('currency', 'RUB')
+            currency = income.get('currency') or income.get('profile_currency') or income.get('user_currency') or 'RUB'
 
             # Форматируем сумму
             amount_str = f"{amount:,.0f}".replace(',', ' ')
