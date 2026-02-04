@@ -206,7 +206,7 @@ async def create_expense_with_conversion(
     user_settings = await sync_to_async(
         lambda: UserSettings.objects.filter(profile=profile).first()
     )()
-    auto_convert = user_settings.auto_convert_currency if user_settings else False
+    auto_convert = user_settings.auto_convert_currency if user_settings else True
 
     # Конвертируем если нужно
     (

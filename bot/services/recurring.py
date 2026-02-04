@@ -30,10 +30,15 @@ def get_user_recurring_payments(user_id: int, active_only: bool = False) -> List
 
 
 @sync_to_async
-def create_recurring_payment(user_id: int, category_id: int, amount: float, 
-                           description: Optional[str], day_of_month: int, 
-                           is_income: bool = False) -> RecurringPayment:
-    """Создать новую регулярную операцию (доход или расход)"""
+def create_recurring_payment(user_id: int, category_id: int, amount: float,
+                           description: Optional[str], day_of_month: int,
+                           is_income: bool = False,
+                           currency: Optional[str] = None) -> RecurringPayment:
+    """Создать новую регулярную операцию (доход или расход)
+
+    Args:
+        currency: Валюта платежа. Если None - используется валюта профиля.
+    """
     from expenses.models import ExpenseCategory, IncomeCategory
     profile = Profile.objects.get(telegram_id=user_id)
     
@@ -88,7 +93,7 @@ def create_recurring_payment(user_id: int, category_id: int, amount: float,
         amount=Decimal(str(amount)),
         description=description,
         day_of_month=day_of_month,
-        currency=profile.currency
+        currency=currency or profile.currency  # Используем валюту из ввода или дефолтную
     )
     
     # Перезагружаем с select_related
@@ -182,7 +187,7 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
         try:
             # Получаем настройки пользователя для конвертации валют
             user_settings = UserSettings.objects.filter(profile=payment.profile).first()
-            auto_convert = user_settings.auto_convert_currency if user_settings else False
+            auto_convert = user_settings.auto_convert_currency if user_settings else True
 
             # Конвертируем если нужно
             if auto_convert and payment.currency != payment.profile.currency:
@@ -275,9 +280,9 @@ def get_payments_for_day(day: int) -> List[RecurringPayment]:
         return list(RecurringPayment.objects.filter(
             day_of_month__gte=last_day_of_month,
             is_active=True
-        ).select_related('profile', 'category'))
-    
+        ).select_related('profile', 'expense_category', 'income_category'))
+
     return list(RecurringPayment.objects.filter(
         day_of_month=day,
         is_active=True
-    ).select_related('profile', 'category'))
+    ).select_related('profile', 'expense_category', 'income_category'))

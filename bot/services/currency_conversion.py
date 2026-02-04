@@ -303,9 +303,13 @@ class CurrencyConverter:
         Returns:
             Converted amount or None if conversion failed
         """
+        # Приводим amount к Decimal если пришёл float/int
+        if not isinstance(amount, Decimal):
+            amount = Decimal(str(amount))
+
         if from_currency == to_currency:
             return amount
-        
+
         if not conversion_date:
             conversion_date = date.today()
         
@@ -382,6 +386,10 @@ class CurrencyConverter:
         Returns:
             (converted_amount, rate_used) или (None, None) при ошибке
         """
+        # Приводим amount к Decimal если пришёл float/int
+        if not isinstance(amount, Decimal):
+            amount = Decimal(str(amount))
+
         if from_currency == to_currency:
             return amount, Decimal('1')
 

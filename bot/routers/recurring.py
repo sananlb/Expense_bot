@@ -26,7 +26,7 @@ from ..utils import get_text
 from ..utils.category_helpers import get_category_display_name
 from ..utils.validators import validate_amount, parse_description_amount
 from ..utils.formatters import format_currency, format_date
-from ..utils.expense_parser import convert_words_to_numbers
+from ..utils.expense_parser import convert_words_to_numbers, detect_currency
 from ..decorators import rate_limit
 
 router = Router(name="recurring")
@@ -200,9 +200,16 @@ async def process_description(message: types.Message, state: FSMContext, voice_t
         logger.warning(f"Invalid recurring payment input from user {message.from_user.id}: {e}")
         await send_message_with_cleanup(message, state, "❌ Некорректный формат ввода. Укажите описание и сумму.")
         return
-    
-    await state.update_data(description=description, amount=amount, is_income=is_income)
-    
+
+    # Получаем валюту пользователя и определяем валюту из текста
+    from ..services.profile import get_or_create_profile
+    profile = await get_or_create_profile(user_id)
+    user_currency = profile.currency if profile else 'RUB'
+    detected_currency = detect_currency(text, user_currency)
+    currency = (detected_currency or user_currency).upper()
+
+    await state.update_data(description=description, amount=amount, is_income=is_income, currency=currency)
+
     # Теперь сразу показываем выбор категории
     data = await state.get_data()
     lang = data.get('lang', 'ru')
@@ -324,7 +331,8 @@ async def process_day_button(callback: types.CallbackQuery, state: FSMContext, l
             amount=data['amount'],
             description=description,
             day_of_month=day,
-            is_income=is_income
+            is_income=is_income,
+            currency=data.get('currency')
         )
         
         await state.clear()
@@ -393,7 +401,9 @@ async def process_day_text(
             category_id=data['category_id'],
             amount=data['amount'],
             description=data['description'],
-            day_of_month=day
+            day_of_month=day,
+            is_income=data.get('is_income', False),
+            currency=data.get('currency')
         )
 
         await state.clear()
@@ -426,10 +436,10 @@ async def edit_recurring_list(callback: types.CallbackQuery, state: FSMContext, 
     keyboard_buttons = []
     for payment in sorted_payments:
         status = "✅" if payment.is_active else "⏸"
-        text = f"{status} {payment.description} - {payment.amount:.0f} ₽"
+        text = f"{status} {payment.description} - {format_currency(payment.amount, payment.currency or 'RUB')}"
         keyboard_buttons.append([
             InlineKeyboardButton(
-                text=text, 
+                text=text,
                 callback_data=f"edit_recurring_{payment.id}"
             )
         ])
@@ -462,7 +472,7 @@ async def edit_recurring_menu(callback: types.CallbackQuery, state: FSMContext, 
     
     text = get_text('edit_payment_text', lang).format(
         description=payment.description,
-        amount=format_currency(payment.amount, 'RUB'),
+        amount=format_currency(payment.amount, payment.currency or 'RUB'),
         category=get_category_display_name(payment.category, lang) if payment.category else get_text('no_category', lang),
         day=payment.day_of_month,
         status=status_text
@@ -861,10 +871,10 @@ async def delete_recurring_list(callback: types.CallbackQuery, state: FSMContext
     keyboard_buttons = []
     for payment in sorted_payments:
         status = "✅" if payment.is_active else "⏸"
-        text = f"{status} {payment.description} - {payment.amount:.0f} ₽"
+        text = f"{status} {payment.description} - {format_currency(payment.amount, payment.currency or 'RUB')}"
         keyboard_buttons.append([
             InlineKeyboardButton(
-                text=text, 
+                text=text,
                 callback_data=f"del_recurring_{payment.id}"
             )
         ])

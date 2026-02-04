@@ -16,18 +16,13 @@ def back_close_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     return keyboard.as_markup()
 
 
-def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True, has_subscription: bool = False, view_scope: str = 'personal', auto_convert: bool = False) -> InlineKeyboardMarkup:
+def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True, has_subscription: bool = False, view_scope: str = 'personal') -> InlineKeyboardMarkup:
     """Меню настроек"""
     keyboard = InlineKeyboardBuilder()
 
     keyboard.button(text=get_text('change_language', lang), callback_data="change_language")
     keyboard.button(text=get_text('change_timezone', lang), callback_data="change_timezone")
     keyboard.button(text=get_text('change_currency', lang), callback_data="change_currency")
-
-    # Кнопка автоконвертации валют
-    auto_convert_icon = '✅' if auto_convert else '⬜'
-    auto_convert_text = f"{auto_convert_icon} {get_text('auto_convert_currency', lang)}"
-    keyboard.button(text=auto_convert_text, callback_data="toggle_auto_convert")
 
     # Кнопка семейного бюджета
     keyboard.button(text=get_text('household_button', lang), callback_data="household_budget")
@@ -44,8 +39,8 @@ def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True, has_subsc
     # Кнопка навигации
     keyboard.button(text=get_text('close', lang), callback_data="close")
 
-    # Правильная настройка кнопок - по одной в ряд (8 кнопок)
-    keyboard.adjust(1, 1, 1, 1, 1, 1, 1, 1)
+    # Правильная настройка кнопок - по одной в ряд (7 кнопок)
+    keyboard.adjust(1, 1, 1, 1, 1, 1, 1)
 
     return keyboard.as_markup()
 
@@ -117,10 +112,10 @@ def get_timezone_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     return keyboard.as_markup()
 
 
-def get_currency_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+def get_currency_keyboard(lang: str = 'ru', auto_convert: bool = True) -> InlineKeyboardMarkup:
     """Выбор валюты"""
     keyboard = InlineKeyboardBuilder()
-    
+
     currencies = [
         # Основные валюты
         ("RUB ₽", "curr_rub"),
@@ -152,16 +147,21 @@ def get_currency_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         ("GBP £", "curr_gbp"),   # Британский фунт
         ("CHF", "curr_chf"),     # Швейцарский франк
     ]
-    
+
     for text, callback_data in currencies:
         keyboard.button(text=text, callback_data=callback_data)
-    
+
+    # Кнопка автоконвертации (в стиле кешбэка)
+    status = get_text('disable_convert' if auto_convert else 'enable_convert', lang)
+    convert_text = get_text('toggle_convert', lang).format(status=status)
+    keyboard.button(text=convert_text, callback_data="toggle_auto_convert")
+
     # Кнопки навигации
     keyboard.button(text=get_text('back_arrow', lang), callback_data="settings")
     keyboard.button(text=get_text('close', lang), callback_data="close")
-    
-    # Группируем по 3 кнопки в ряд (теперь у нас 25 валют + 2 навигационные кнопки)
-    keyboard.adjust(*[3] * 8, 1, 1, 1)  # 8 рядов по 3 валюты + 1 валюта + кнопки навигации по одной в ряд
+
+    # Группируем: 25 валют (8 рядов по 3 + 1) + кнопка конвертации + 2 навигационные
+    keyboard.adjust(*[3] * 8, 1, 1, 1, 1)
     return keyboard.as_markup()
 
 

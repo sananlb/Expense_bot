@@ -55,6 +55,10 @@ async def maybe_convert_amount(
             exchange_rate_used      # Использованный курс (или None)
         ]
     """
+    # Приводим amount к Decimal если пришёл float/int
+    if not isinstance(amount, Decimal):
+        amount = Decimal(str(amount))
+
     # Если валюты совпадают или автоконвертация выключена
     if input_currency == user_currency or not auto_convert_enabled:
         return amount, input_currency, None, None, None

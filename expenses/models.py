@@ -274,9 +274,9 @@ class UserSettings(models.Model):
         verbose_name='Режим отображения'
     )
 
-    # Автоконвертация валют
+    # Автоконвертация валют (включена по умолчанию)
     auto_convert_currency = models.BooleanField(
-        default=False,
+        default=True,
         verbose_name="Автоконвертация валют"
     )
 

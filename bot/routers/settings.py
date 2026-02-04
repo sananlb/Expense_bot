@@ -126,16 +126,15 @@ async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
 
         text = "\n".join(text_lines)
 
-        # Получаем настройки кешбэка и автоконвертации
+        # Получаем настройки кешбэка
         user_settings = await get_user_settings(message.from_user.id)
         cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
-        auto_convert = user_settings.auto_convert_currency if hasattr(user_settings, 'auto_convert_currency') else False
 
         await send_message_with_cleanup(
             message,
             state,
             text,
-            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription, view_scope, auto_convert),
+            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription, view_scope),
             parse_mode="HTML"
         )
         
@@ -194,13 +193,12 @@ async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: st
 
         text = "\n".join(text_lines)
 
-        # Получаем настройки кешбэка и автоконвертации
+        # Получаем настройки кешбэка
         user_settings = await get_user_settings(callback.from_user.id)
         cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
-        auto_convert = user_settings.auto_convert_currency if hasattr(user_settings, 'auto_convert_currency') else False
         await callback.message.edit_text(
             text,
-            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription, view_scope, auto_convert),
+            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription, view_scope),
             parse_mode="HTML"
         )
         
@@ -355,11 +353,20 @@ async def process_timezone_change(callback: CallbackQuery, state: FSMContext, la
 @router.callback_query(F.data == "change_currency")
 async def change_currency(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Изменить валюту"""
+    from expenses.models import UserSettings
+
     await state.set_state(SettingsStates.currency)
-    
+
+    # Получаем статус автоконвертации
+    profile = await get_or_create_profile(callback.from_user.id)
+    user_settings = await sync_to_async(
+        lambda: UserSettings.objects.filter(profile=profile).first()
+    )()
+    auto_convert = user_settings.auto_convert_currency if user_settings else True
+
     await callback.message.edit_text(
         get_text('change_currency', lang),
-        reply_markup=get_currency_keyboard(lang)
+        reply_markup=get_currency_keyboard(lang, auto_convert=auto_convert)
     )
 
 
@@ -402,19 +409,8 @@ async def toggle_auto_convert(callback: CallbackQuery, state: FSMContext, lang: 
 
     await callback.answer(get_text(f'auto_convert_{status}', lang))
 
-    # Получаем параметры для клавиатуры
-    from bot.services.subscription import check_subscription
-    cashback_enabled = user_settings.cashback_enabled if user_settings else True
-    has_subscription = await check_subscription(callback.from_user.id)
-    view_scope = user_settings.view_scope if user_settings else 'personal'
-
-    keyboard = settings_keyboard(
-        lang=lang,
-        cashback_enabled=cashback_enabled,
-        has_subscription=has_subscription,
-        view_scope=view_scope,
-        auto_convert=user_settings.auto_convert_currency
-    )
+    # Обновляем клавиатуру валют с новым статусом конвертации
+    keyboard = get_currency_keyboard(lang=lang, auto_convert=user_settings.auto_convert_currency)
     await callback.message.edit_reply_markup(reply_markup=keyboard)
 
 
