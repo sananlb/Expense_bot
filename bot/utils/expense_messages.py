@@ -46,11 +46,18 @@ async def format_expense_added_message(
     # Форматируем основную информацию о расходе
     currency = expense.currency or 'RUB'
     amount_text = format_currency(expense.amount, currency)
-    
+
+    # Проверяем была ли конвертация валюты
+    original_text = ""
+    if hasattr(expense, 'original_amount') and expense.original_amount and \
+       hasattr(expense, 'original_currency') and expense.original_currency:
+        original_formatted = format_currency(expense.original_amount, expense.original_currency)
+        original_text = f" <i>(~{original_formatted})</i>"
+
     # Делаем описание жирным и добавляем невидимые символы для расширения
     # Используем неразрывные пробелы (U+00A0) и символ нулевой ширины (U+200B)
     invisible_padding = "\u200B" * 20  # Символы нулевой ширины для расширения
-    
+
     # Формируем сообщение
     message = ""
 
@@ -60,9 +67,9 @@ async def format_expense_added_message(
         description = description.replace("[Ежемесячный] ", "")
     if description.startswith("[Регулярный] "):
         description = description.replace("[Регулярный] ", "")
-    
+
     message += f"✅ <b>{description}</b>{invisible_padding}\n\n"
-    message += f"🧾 {amount_text}{cashback_text}\n"
+    message += f"🧾 {amount_text}{original_text}{cashback_text}\n"
     
     # Получаем отображаемое имя категории на языке пользователя
     category_display = get_category_display_name(category, lang)
@@ -168,10 +175,17 @@ async def format_income_added_message(
     # Форматируем основную информацию о доходе
     currency = income.currency or 'RUB'
     amount_text = format_currency(income.amount, currency)
-    
+
+    # Проверяем была ли конвертация валюты
+    original_text = ""
+    if hasattr(income, 'original_amount') and income.original_amount and \
+       hasattr(income, 'original_currency') and income.original_currency:
+        original_formatted = format_currency(income.original_amount, income.original_currency)
+        original_text = f" <i>(~{original_formatted})</i>"
+
     # Делаем описание жирным и добавляем невидимые символы для расширения
     invisible_padding = "\u200B" * 20  # Символы нулевой ширины для расширения
-    
+
     message = ""
 
     description = income.description
@@ -181,7 +195,7 @@ async def format_income_added_message(
         description = description.replace("[Ежемесячный] ", "")
 
     message += f"✅ <b>{description}</b>{invisible_padding}\n\n"
-    message += f"🧾 +{amount_text}\n"
+    message += f"🧾 +{amount_text}{original_text}\n"
     
     # Получаем отображаемое имя категории на языке пользователя
     if category:

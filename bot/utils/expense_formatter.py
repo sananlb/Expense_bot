@@ -139,9 +139,9 @@ def format_expenses_diary_style(
             # Добавляем оригинальную сумму если была конвертация
             original_suffix = ""
             if exp.get('original_amount') and exp.get('original_currency'):
-                from bot.utils import get_currency_symbol
-                orig_symbol = get_currency_symbol(exp['original_currency'])
-                original_suffix = f" <i>(~{exp['original_amount']:.0f} {orig_symbol})</i>"
+                from bot.utils.formatters import format_currency
+                original_formatted = format_currency(exp['original_amount'], exp['original_currency'])
+                original_suffix = f" <i>(~{original_formatted})</i>"
 
             text += f"  {exp['time']} — {exp['description']} {amount_str}{original_suffix}\n"
         
