@@ -32,6 +32,14 @@ async def check_expiring_subscriptions(bot: Bot):
     
     async for subscription in expiring_subscriptions:
         try:
+            # Пропускаем пользователей, заблокировавших бота
+            if subscription.profile.bot_blocked:
+                logger.info(
+                    f"Пропуск уведомления для пользователя {subscription.profile.telegram_id}: "
+                    f"бот заблокирован с {subscription.profile.bot_blocked_at}"
+                )
+                continue
+
             # Проверяем, не было ли уже отправлено уведомление для этой подписки
             notification_exists = await SubscriptionNotification.objects.filter(
                 subscription=subscription,

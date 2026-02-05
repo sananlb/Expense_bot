@@ -308,6 +308,11 @@ AMOUNT_PATTERNS = [
     r'\s(\d+(?:[.,]\d+)?)\s',
 ]
 
+# \b не срабатывает после символов валют (₽, €, $ и т.д.) между двумя не-word,
+# поэтому заменяем границу на вариант с lookbehind по символам.
+CURRENCY_SYMBOL_BOUNDARY = r'(?:(?<=[$€£¥₽₸₣₹₺])|\b)'
+AMOUNT_PATTERNS = [pattern.replace(r'\b', CURRENCY_SYMBOL_BOUNDARY) for pattern in AMOUNT_PATTERNS]
+
 # Паттерны для определения валюты
 # ВАЖНО: Используем (?<![а-яА-Яa-zA-Z]) вместо \b в начале чтобы работало
 # для слитного написания с числом (100лари, 500руб, 5000kzt, etc)

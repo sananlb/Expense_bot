@@ -87,6 +87,22 @@ class TestAmountParsing:
         assert result is not None
         assert result["amount"] == pytest.approx(200)
 
+    @pytest.mark.asyncio
+    async def test_amount_with_ruble_symbol_and_space(self):
+        """Amount with ₽ and space should parse correctly."""
+        result = await parse_expense_message("1600₽ продукты", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(1600)
+        assert result["description"] == "Продукты"
+
+    @pytest.mark.asyncio
+    async def test_amount_with_ruble_symbol_no_space(self):
+        """Amount with ₽ and no space should parse correctly."""
+        result = await parse_expense_message("1600₽продукты", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(1600)
+        assert result["description"] == "Продукты"
+
 
 # =============================================================================
 # Currency Detection Tests
