@@ -152,8 +152,9 @@ def format_incomes_diary_style(
             # Добавляем оригинальную сумму если была конвертация
             original_suffix = ""
             if inc.get('original_amount') and inc.get('original_currency'):
-                orig_symbol = get_currency_symbol(inc['original_currency'])
-                original_suffix = f" <i>(~{inc['original_amount']:.0f} {orig_symbol})</i>"
+                from bot.utils.formatters import format_currency
+                original_formatted = format_currency(inc['original_amount'], inc['original_currency'])
+                original_suffix = f" <i>({original_formatted})</i>"
 
             # Форматируем строку дохода
             text += f"  {inc['time']} — +{inc['description']} {amount_str}{original_suffix}\n"
@@ -279,8 +280,9 @@ def format_incomes_from_dict_list(
             # Добавляем оригинальную сумму если была конвертация
             original_suffix = ""
             if income.get('original_amount') and income.get('original_currency'):
-                orig_symbol = get_currency_symbol(income['original_currency'])
-                original_suffix = f" <i>(~{income['original_amount']:.0f} {orig_symbol})</i>"
+                from bot.utils.formatters import format_currency
+                original_formatted = format_currency(income['original_amount'], income['original_currency'])
+                original_suffix = f" <i>({original_formatted})</i>"
 
             # Доходы делаем жирными (как в дневнике)
             result_parts.append(f"  {time_str} — <b>{description}</b> <b>+{amount_str} {curr_symbol}</b>{original_suffix}")

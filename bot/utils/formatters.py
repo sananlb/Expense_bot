@@ -7,14 +7,46 @@ from datetime import datetime, date
 from bot.utils.language import get_text
 
 
+def _get_currency_rate_from_cache(currency: str) -> Optional[Decimal]:
+    """
+    Получить курс валюты к рублю из кеша (синхронно)
+
+    Args:
+        currency: Код валюты (USD, EUR и т.д.)
+
+    Returns:
+        Decimal: Курс валюты к рублю (1 USD = X RUB) или None если не найдено
+    """
+    from django.core.cache import cache
+    from datetime import date as date_module
+
+    if currency == 'RUB':
+        return Decimal('1')
+
+    # Проверяем оба источника (CBRF и Fawaz)
+    today = date_module.today()
+    for source in ['cbrf', 'fawaz', 'fawaz_fallback']:
+        cache_key = f"currency_rate:{source}:{today.isoformat()}"
+        rates = cache.get(cache_key)
+        if rates and currency in rates:
+            return rates[currency].get('unit_rate')
+
+    return None
+
+
 def format_currency(amount: Union[float, Decimal, int], currency: str = 'RUB') -> str:
     """
     Форматирование суммы с валютой
-    
+
+    Логика округления:
+    - Валюты дешевле рубля (курс < 1 RUB): округление до целых
+    - Валюты дороже рубля (курс >= 1 RUB): до 2 знаков после запятой
+    - RUB: всегда до целых
+
     Args:
         amount: Сумма
         currency: Код валюты
-        
+
     Returns:
         str: Отформатированная строка
     """
@@ -175,16 +207,42 @@ def format_currency(amount: Union[float, Decimal, int], currency: str = 'RUB') -
         'EEK': 'kr'
     }
     
-    # Специальная обработка для рублей и других валют без дробной части
-    if currency in ['RUB', 'JPY', 'KRW', 'CLP', 'ISK', 'TWD', 'HUF', 'COP', 'IDR', 'VND', 'KHR', 'LAK', 'MMK', 'PYG', 'BIF', 'XAF', 'XOF', 'XPF', 'CLP', 'DJF', 'GNF', 'KMF', 'MGA', 'RWF', 'VUV', 'XAF', 'XOF', 'XPF']:
+    # Определяем формат округления на основе курса валюты
+    # RUB всегда округляем до целых
+    if currency == 'RUB':
         formatted_amount = f"{float(amount):,.0f}".replace(',', ' ')
     else:
-        # Для остальных валют: если число целое, не показываем дробную часть
-        float_amount = float(amount)
-        if float_amount == int(float_amount):
-            formatted_amount = f"{int(float_amount):,}".replace(',', ' ')
+        # Получаем курс валюты к рублю из кеша
+        rate_to_rub = _get_currency_rate_from_cache(currency)
+
+        # Список валют дешевле рубля (курс < 1 RUB) - fallback если нет в кеше
+        cheap_currencies = {
+            'JPY', 'KRW', 'CLP', 'ISK', 'TWD', 'HUF', 'COP', 'IDR', 'VND',
+            'KHR', 'LAK', 'MMK', 'PYG', 'BIF', 'XAF', 'XOF', 'XPF', 'DJF',
+            'GNF', 'KMF', 'MGA', 'RWF', 'VUV', 'UZS', 'IRR', 'LBP', 'SYP'
+        }
+
+        # Определяем нужно ли округлять до целых
+        round_to_zero = False
+
+        if rate_to_rub is not None:
+            # Используем курс из кеша
+            # Валюты дешевле рубля (курс < 1.0) округляем до целых
+            round_to_zero = (rate_to_rub < Decimal('1.0'))
         else:
-            formatted_amount = f"{float_amount:,.2f}".replace(',', ' ')
+            # Fallback: используем статический список
+            round_to_zero = (currency in cheap_currencies)
+
+        if round_to_zero:
+            # Дешевые валюты - всегда целые числа
+            formatted_amount = f"{float(amount):,.0f}".replace(',', ' ')
+        else:
+            # Дорогие валюты (USD, EUR, GBP и т.д.) - до 2 знаков если есть дробная часть
+            float_amount = float(amount)
+            if float_amount == int(float_amount):
+                formatted_amount = f"{int(float_amount):,}".replace(',', ' ')
+            else:
+                formatted_amount = f"{float_amount:,.2f}".replace(',', ' ')
     
     # Получаем символ валюты
     symbol = currency_symbols.get(currency, currency)
