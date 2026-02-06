@@ -1,37 +1,10 @@
 """
 Утилиты форматирования текста и данных
 """
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 from decimal import Decimal
 from datetime import datetime, date
 from bot.utils.language import get_text
-
-
-def _get_currency_rate_from_cache(currency: str) -> Optional[Decimal]:
-    """
-    Получить курс валюты к рублю из кеша (синхронно)
-
-    Args:
-        currency: Код валюты (USD, EUR и т.д.)
-
-    Returns:
-        Decimal: Курс валюты к рублю (1 USD = X RUB) или None если не найдено
-    """
-    from django.core.cache import cache
-    from datetime import date as date_module
-
-    if currency == 'RUB':
-        return Decimal('1')
-
-    # Проверяем оба источника (CBRF и Fawaz)
-    today = date_module.today()
-    for source in ['cbrf', 'fawaz', 'fawaz_fallback']:
-        cache_key = f"currency_rate:{source}:{today.isoformat()}"
-        rates = cache.get(cache_key)
-        if rates and currency in rates:
-            return rates[currency].get('unit_rate')
-
-    return None
 
 
 def format_currency(amount: Union[float, Decimal, int], currency: str = 'RUB') -> str:
@@ -40,7 +13,7 @@ def format_currency(amount: Union[float, Decimal, int], currency: str = 'RUB') -
 
     Логика округления:
     - Валюты дешевле рубля (курс < 1 RUB): округление до целых
-    - Валюты дороже рубля (курс >= 1 RUB): до 2 знаков после запятой
+    - Валюты дороже рубля (курс >= 1 RUB): до 2 знаков после запятой (если есть дробная часть)
     - RUB: всегда до целых
 
     Args:
@@ -207,33 +180,68 @@ def format_currency(amount: Union[float, Decimal, int], currency: str = 'RUB') -
         'EEK': 'kr'
     }
     
-    # Определяем формат округления на основе курса валюты
+    # Определяем формат округления на основе стоимости валюты
     # RUB всегда округляем до целых
     if currency == 'RUB':
         formatted_amount = f"{float(amount):,.0f}".replace(',', ' ')
     else:
-        # Получаем курс валюты к рублю из кеша
-        rate_to_rub = _get_currency_rate_from_cache(currency)
-
-        # Список валют дешевле рубля (курс < 1 RUB) - fallback если нет в кеше
+        # Список валют дешевле рубля (курс < 1 RUB) - округляем до целых
+        # Эти валюты имеют низкую стоимость единицы, поэтому дробная часть не имеет смысла
         cheap_currencies = {
-            'JPY', 'KRW', 'CLP', 'ISK', 'TWD', 'HUF', 'COP', 'IDR', 'VND',
-            'KHR', 'LAK', 'MMK', 'PYG', 'BIF', 'XAF', 'XOF', 'XPF', 'DJF',
-            'GNF', 'KMF', 'MGA', 'RWF', 'VUV', 'UZS', 'IRR', 'LBP', 'SYP'
+            # Азиатские валюты
+            'JPY',   # Японская иена (~0.68 RUB)
+            'KRW',   # Корейская вона (~0.075 RUB)
+            'IDR',   # Индонезийская рупия (~0.006 RUB)
+            'VND',   # Вьетнамский донг (~0.004 RUB)
+            'KHR',   # Камбоджийский риель (~0.025 RUB)
+            'LAK',   # Лаосский кип (~0.005 RUB)
+            'MMK',   # Мьянманский кьят (~0.05 RUB)
+            'MNT',   # Монгольский тугрик (~0.03 RUB)
+
+            # Ближневосточные валюты
+            'IRR',   # Иранский риал (~0.002 RUB)
+            'LBP',   # Ливанский фунт (~0.001 RUB)
+            'SYP',   # Сирийский фунт (~0.0004 RUB)
+            'IQD',   # Иракский динар (~0.07 RUB)
+            'YER',   # Йеменский риал (~0.04 RUB)
+
+            # Латиноамериканские валюты
+            'CLP',   # Чилийское песо (~0.1 RUB)
+            'COP',   # Колумбийское песо (~0.025 RUB)
+            'PYG',   # Парагвайский гуарани (~0.013 RUB)
+
+            # Африканские валюты
+            'GNF',   # Гвинейский франк (~0.01 RUB)
+            'UGX',   # Угандийский шиллинг (~0.027 RUB)
+            'TZS',   # Танзанийский шиллинг (~0.04 RUB)
+            'RWF',   # Руандийский франк (~0.08 RUB)
+            'BIF',   # Бурундийский франк (~0.035 RUB)
+            'MGA',   # Малагасийский ариари (~0.022 RUB)
+            'KMF',   # Коморский франк (~0.22 RUB)
+            'SLL',   # Сьерра-леонский леоне (~0.005 RUB)
+            'LRD',   # Либерийский доллар (~0.052 RUB)
+
+            # Островные валюты Океании
+            'VUV',   # Вануатский вату (~0.85 RUB)
+            'WST',   # Самоанская тала (~3.6 RUB - но традиционно без копеек)
+            'TOP',   # Тонганская паанга (~4.3 RUB - но традиционно без копеек)
+
+            # Центральноафриканские франки
+            'XAF',   # Франк КФА BEAC (~0.17 RUB)
+            'XOF',   # Франк КФА BCEAO (~0.17 RUB)
+            'XPF',   # Франк КФП (~0.9 RUB)
+            'DJF',   # Франк Джибути (~0.56 RUB)
+
+            # Прочие дешевые валюты
+            'UZS',   # Узбекский сум (~0.008 RUB)
+            'KZT',   # Казахский тенге (~0.2 RUB)
+            'ISK',   # Исландская крона (~0.73 RUB)
+            'HUF',   # Венгерский форинт (~0.28 RUB)
+            'TWD',   # Новый тайваньский доллар (~3.2 RUB - но традиционно без копеек)
         }
 
         # Определяем нужно ли округлять до целых
-        round_to_zero = False
-
-        if rate_to_rub is not None:
-            # Используем курс из кеша
-            # Валюты дешевле рубля (курс < 1.0) округляем до целых
-            round_to_zero = (rate_to_rub < Decimal('1.0'))
-        else:
-            # Fallback: используем статический список
-            round_to_zero = (currency in cheap_currencies)
-
-        if round_to_zero:
+        if currency in cheap_currencies:
             # Дешевые валюты - всегда целые числа
             formatted_amount = f"{float(amount):,.0f}".replace(',', ' ')
         else:
