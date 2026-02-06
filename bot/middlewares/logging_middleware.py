@@ -141,7 +141,7 @@ class LoggingMiddleware(BaseMiddleware):
             duration = time.time() - request_start
             
             # Логируем медленные запросы
-            if duration > 2.0:  # Более 2 секунд
+            if duration > 6.0:  # Более 6 секунд
                 logger.warning(
                     f"Slow request detected: "
                     f"type={message_type}, "
