@@ -13,10 +13,10 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-expense_user} -d ${DB_NAME:-expense_bot}"]
-      interval: 120s
+      interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 30s
+      retries: 5
+      start_period: 15s
 
   redis:
     image: redis:7-alpine
@@ -25,16 +25,19 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
-      interval: 120s
+      interval: 10s
       timeout: 3s
-      retries: 3
-      start_period: 20s
+      retries: 5
+      start_period: 10s
 
   bot:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: expense_bot_app
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     env_file:
       - .env
     environment:
@@ -67,6 +70,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: expense_bot_celery
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     env_file:
       - .env
     environment:
@@ -96,6 +102,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: expense_bot_celery_beat
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     env_file:
       - .env
     environment:
@@ -125,6 +134,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: expense_bot_web
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     env_file:
       - .env
     environment:

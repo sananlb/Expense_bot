@@ -1,9 +1,11 @@
 """
 Установка команд бота
 """
-import asyncio
+import logging
 from aiogram import Bot
 from aiogram.types import BotCommand, BotCommandScopeDefault, BotCommandScopeChat
+
+logger = logging.getLogger(__name__)
 
 
 async def set_bot_commands(bot: Bot):
@@ -17,11 +19,14 @@ async def set_bot_commands(bot: Bot):
         BotCommand(command="settings", description="⚙️ Настройки"),
         BotCommand(command="start", description="📖 Информация"),
     ]
-    
-    await bot.set_my_commands(
-        commands=commands,
-        scope=BotCommandScopeDefault()
-    )
+
+    try:
+        await bot.set_my_commands(
+            commands=commands,
+            scope=BotCommandScopeDefault()
+        )
+    except Exception as e:
+        logger.error("Failed to set bot commands", exc_info=True)
 
 
 async def update_user_commands(bot: Bot, user_id: int):
@@ -64,5 +69,4 @@ async def update_user_commands(bot: Bot, user_id: int):
         scope = BotCommandScopeChat(chat_id=user_id)
         await bot.set_my_commands(commands, scope=scope)
     except Exception as e:
-        # Логируем ошибку, но не прерываем работу
-        pass
+        logger.error(f"Failed to set user commands for {user_id}", exc_info=True)
