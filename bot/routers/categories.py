@@ -145,6 +145,7 @@ async def _apply_icon_and_finalize(event: types.CallbackQuery | types.Message, s
         except Exception:
             pass
 
+    had_error = False
     try:
         if cat_type == 'income':
             if operation == 'edit':
@@ -166,12 +167,13 @@ async def _apply_icon_and_finalize(event: types.CallbackQuery | types.Message, s
     except ValueError as e:
         # Бизнес-ошибка (дубликат, пустое название, лимит) — показываем пользователю
         # event.answer() уже вызван выше (строка 142), повторный show_alert не сработает
+        had_error = True
         await send_message_with_cleanup(event, state, f"❌ {str(e)}")
-        return
     finally:
-        # Показываем новое меню ПЕРЕД очисткой state, чтобы send_message_with_cleanup
-        # могла удалить старое меню выбора иконок из last_menu_message_id
-        await _finalize_after_change(event, state, operation or 'create', cat_type)
+        if not had_error:
+            # Показываем новое меню ПЕРЕД очисткой state, чтобы send_message_with_cleanup
+            # могла удалить старое меню выбора иконок из last_menu_message_id
+            await _finalize_after_change(event, state, operation or 'create', cat_type)
 
         # Очищаем только поля связанные с категориями, но сохраняем last_menu_message_id
         data = await state.get_data()

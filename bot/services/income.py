@@ -1278,14 +1278,9 @@ async def update_income_category(
                 if lang == 'ru':
                     category.name_ru = text
                     category.name_en = category.name_en or text
-                elif lang == 'en':
+                else:
                     category.name_en = text
                     category.name_ru = category.name_ru or text
-                else:
-                    if lang == 'ru':
-                        category.name_ru = text
-                    else:
-                        category.name_en = text
 
                 # Обновляем иконку
                 if parsed_icon is not None:
