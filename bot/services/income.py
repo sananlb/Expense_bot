@@ -2,21 +2,24 @@
 Сервис для работы с доходами
 """
 import logging
-import re
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from typing import Dict, List, Optional, Any
 
 from asgiref.sync import sync_to_async
+from django.db import transaction
 from django.db.models import Q, Sum, Count
 from django.utils import timezone
 
 from expenses.models import Income, IncomeCategory, Profile
 from bot.utils.db_utils import get_or_create_user_profile_sync
 from bot.utils.category_helpers import get_category_display_name, get_category_name_without_emoji
+from bot.utils.category_validators import (
+    validate_category_name, detect_category_language,
+    check_category_duplicate, validate_category_limit,
+)
 from bot.utils.language import get_text
 from bot.utils.emoji_utils import EMOJI_PREFIX_RE
-from bot.utils.input_sanitizer import InputSanitizer
 
 # Предзагрузка Celery задач для устранения "холодного старта"
 # Импортируем заранее, чтобы при первом вызове не было задержки 6+ секунд
@@ -1165,68 +1168,50 @@ async def create_income_category(
     def _create_income_category() -> IncomeCategory:
         try:
             profile = get_or_create_user_profile_sync(telegram_id)
-            
-            # Разбираем имя и иконку используя централизованный паттерн (включает ZWJ/VS-16)
-            match = EMOJI_PREFIX_RE.match(name)
-            parsed_icon = ''
-            text = name
-            if match:
-                parsed_icon = match.group().strip()
-                text = name[len(match.group()):].strip()
-            if icon and not parsed_icon:
-                parsed_icon = icon
 
-            if len(text) > InputSanitizer.MAX_CATEGORY_LENGTH:
-                raise ValueError(f"Название категории слишком длинное (максимум {InputSanitizer.MAX_CATEGORY_LENGTH} символов)")
+            with transaction.atomic():
+                validate_category_limit(IncomeCategory, profile)
 
-            text_sanitized = InputSanitizer.sanitize_category_name(text).strip()
-            if not text_sanitized:
-                raise ValueError("Название категории не может быть пустым")
+                # Разбираем имя и иконку используя централизованный паттерн (включает ZWJ/VS-16)
+                match = EMOJI_PREFIX_RE.match(name)
+                parsed_icon = ''
+                text = name
+                if match:
+                    parsed_icon = match.group().strip()
+                    text = name[len(match.group()):].strip()
+                if icon and not parsed_icon:
+                    parsed_icon = icon
 
-            text = text_sanitized
+                text = validate_category_name(text)
 
-            display_name = f"{parsed_icon} {text}".strip() if parsed_icon else text
-            existing = IncomeCategory.objects.filter(
-                profile=profile,
-                name__iexact=display_name,
-                is_active=True
-            ).exists()
-            if existing:
-                raise ValueError("Категория с таким названием уже существует")
+                display_name = f"{parsed_icon} {text}".strip() if parsed_icon else text
+                if check_category_duplicate(IncomeCategory, profile, text, display_name):
+                    raise ValueError("Категория с таким названием уже существует")
 
-            # Определяем язык текста
-            has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', text))
-            has_latin = bool(re.search(r'[a-zA-Z]', text))
-            if has_cyrillic and not has_latin:
-                original_language = 'ru'
-            elif has_latin and not has_cyrillic:
-                original_language = 'en'
-            else:
-                # По умолчанию язык профиля
-                original_language = profile.language_code or 'ru'
+                original_language = detect_category_language(text, profile.language_code or 'ru')
 
-            # Создаём как непереводимую пользовательскую категорию
-            kwargs = dict(
-                profile=profile,
-                icon=parsed_icon or '',
-                is_active=True,
-                is_translatable=False,
-                original_language=original_language,
-            )
-            if original_language == 'ru':
-                kwargs['name_ru'] = text
-            else:
-                kwargs['name_en'] = text
+                # Создаём как непереводимую пользовательскую категорию
+                kwargs = dict(
+                    profile=profile,
+                    icon=parsed_icon or '',
+                    is_active=True,
+                    is_translatable=False,
+                    original_language=original_language,
+                )
+                if original_language == 'ru':
+                    kwargs['name_ru'] = text
+                else:
+                    kwargs['name_en'] = text
 
-            category = IncomeCategory.objects.create(**kwargs)
+                category = IncomeCategory.objects.create(**kwargs)
 
-            # Keywords НЕ генерируются при создании категории.
-            # Они добавляются позже через Celery задачу update_income_keywords()
-            # когда пользователь вручную меняет категорию у дохода (см. update_income()).
-            # Это такой же паттерн как для категорий расходов.
+                # Keywords НЕ генерируются при создании категории.
+                # Они добавляются позже через Celery задачу update_income_keywords()
+                # когда пользователь вручную меняет категорию у дохода (см. update_income()).
+                # Это такой же паттерн как для категорий расходов.
 
-            logger.info(f"Created income category '{category.name}' for user {telegram_id}")
-            return category
+                logger.info(f"Created income category '{category.name}' for user {telegram_id}")
+                return category
             
         except ValueError:
             raise
@@ -1281,39 +1266,22 @@ async def update_income_category(
                     parsed_icon = match.group().strip()
                     text = new_name[len(match.group()):].strip()
 
-                if len(text) > InputSanitizer.MAX_CATEGORY_LENGTH:
-                    raise ValueError(f"Название категории слишком длинное (максимум {InputSanitizer.MAX_CATEGORY_LENGTH} символов)")
+                text = validate_category_name(text)
 
-                text_sanitized = InputSanitizer.sanitize_category_name(text).strip()
-                if not text_sanitized:
-                    raise ValueError("Название категории не может быть пустым")
-
-                text = text_sanitized
-
-                # Проверяем уникальность по собранному отображаемому имени
+                # Проверяем уникальность по мультиязычным полям + legacy name
                 display_name = f"{parsed_icon} {text}".strip() if parsed_icon else text
-                existing = IncomeCategory.objects.filter(
-                    profile=profile,
-                    name__iexact=display_name,
-                    is_active=True
-                ).exclude(id=category_id).exists()
-                if existing:
+                if check_category_duplicate(IncomeCategory, profile, text, display_name, exclude_id=category_id):
                     raise ValueError("Категория с таким названием уже существует")
 
                 # Определяем язык текста
-                has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', text))
-                has_latin = bool(re.search(r'[a-zA-Z]', text))
-                if has_cyrillic and not has_latin:
-                    lang = 'ru'
+                lang = detect_category_language(text, profile.language_code or 'ru')
+                if lang == 'ru':
                     category.name_ru = text
                     category.name_en = category.name_en or text
-                elif has_latin and not has_cyrillic:
-                    lang = 'en'
+                elif lang == 'en':
                     category.name_en = text
                     category.name_ru = category.name_ru or text
                 else:
-                    # Смешанный/другой — фиксируем как язык профиля
-                    lang = profile.language_code or 'ru'
                     if lang == 'ru':
                         category.name_ru = text
                     else:

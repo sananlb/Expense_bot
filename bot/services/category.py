@@ -9,8 +9,6 @@ from bot.utils.db_utils import get_or_create_user_profile_sync
 from bot.utils.category_helpers import get_category_display_name, get_category_name_without_emoji
 from difflib import get_close_matches
 import logging
-from bot.utils.input_sanitizer import InputSanitizer
-
 # ВАЖНО: Импортируем из централизованного модуля (включает ZWJ для композитных эмодзи)
 from bot.utils.emoji_utils import EMOJI_PREFIX_RE, normalize_category_for_matching, strip_leading_emoji
 
@@ -320,7 +318,11 @@ def get_user_categories(user_id: int) -> List[ExpenseCategory]:
 async def create_category(user_id: int, name: str, icon: str = '💰') -> ExpenseCategory:
     """Создать новую категорию"""
     from django.db import transaction
-    
+    from bot.utils.category_validators import (
+        validate_category_name, detect_category_language,
+        check_category_duplicate, validate_category_limit,
+    )
+
     @sync_to_async
     def _create_category():
         with transaction.atomic():
@@ -328,52 +330,19 @@ async def create_category(user_id: int, name: str, icon: str = '💰') -> Expens
                 profile = Profile.objects.get(telegram_id=user_id)
             except Profile.DoesNotExist:
                 profile = Profile.objects.create(telegram_id=user_id)
-            
-            # Проверяем лимит категорий (максимум 50)
-            categories_count = ExpenseCategory.objects.filter(profile=profile).count()
-            if categories_count >= 50:
-                logger.warning(f"User {user_id} reached categories limit (50)")
-                raise ValueError("Достигнут лимит категорий (максимум 50)")
 
-            raw_name = (name or '').strip()
-            if len(raw_name) > InputSanitizer.MAX_CATEGORY_LENGTH:
-                raise ValueError(f"Название категории слишком длинное (максимум {InputSanitizer.MAX_CATEGORY_LENGTH} символов)")
+            validate_category_limit(ExpenseCategory, profile)
 
-            name_sanitized = InputSanitizer.sanitize_category_name(raw_name).strip()
-            if not name_sanitized:
-                raise ValueError("Название категории не может быть пустым")
-
-            clean_name = name_sanitized
+            clean_name = validate_category_name((name or '').strip())
 
             # Определяем язык категории
-            import re
-
-            # Определяем, на каком языке название
-            has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', clean_name))
-            has_latin = bool(re.search(r'[a-zA-Z]', clean_name))
-
-            # Получаем язык пользователя напрямую из профиля (он уже загружен)
             user_lang = getattr(profile, 'language_code', None) or 'ru'
+            original_language = detect_category_language(clean_name, user_lang)
 
-            # Определяем оригинальный язык категории
-            if has_cyrillic and not has_latin:
-                original_language = 'ru'
-            elif has_latin and not has_cyrillic:
-                original_language = 'en'
-            else:
-                original_language = user_lang  # По умолчанию язык пользователя
-            
-            # Проверяем, нет ли уже такой категории (по мультиязычным полям)
-            from django.db.models import Q
-            existing = ExpenseCategory.objects.filter(
-                profile=profile
-            ).filter(
-                Q(name_ru=clean_name) | Q(name_en=clean_name)
-            ).first()
-
-            if existing:
-                logger.warning(f"Category '{clean_name}' already exists for user {user_id}")
-                return existing, False
+            # Проверяем, нет ли уже такой категории
+            display_name = f"{icon} {clean_name}".strip() if icon and icon.strip() else clean_name
+            if check_category_duplicate(ExpenseCategory, profile, clean_name, display_name):
+                raise ValueError("Категория с таким названием уже существует")
 
             # Создаем категорию с правильными мультиязычными полями
             category = ExpenseCategory.objects.create(
@@ -387,11 +356,9 @@ async def create_category(user_id: int, name: str, icon: str = '💰') -> Expens
             )
 
             logger.info(f"Created category '{clean_name}' (id: {category.id}) for user {user_id}")
-            return category, True
-    
-    category, is_new = await _create_category()
-    
-    return category
+            return category
+
+    return await _create_category()
 
 
 @sync_to_async
@@ -415,9 +382,14 @@ def update_category(user_id: int, category_id: int, **kwargs) -> Optional[Expens
 
 
 async def update_category_name(user_id: int, category_id: int, new_name: str) -> bool:
-    """Обновить название категории"""
-    import re
-    from bot.utils.language import get_user_language
+    """Обновить название категории.
+
+    Raises:
+        ValueError: если название невалидно или дубликат найден.
+    """
+    from bot.utils.category_validators import (
+        validate_category_name, check_category_duplicate,
+    )
 
     # Извлекаем иконку и текст (поддерживает композитные эмодзи с ZWJ)
     match = EMOJI_PREFIX_RE.match(new_name)
@@ -430,26 +402,8 @@ async def update_category_name(user_id: int, category_id: int, new_name: str) ->
         icon = ''
         name_without_icon = new_name.strip()
 
-    if len(name_without_icon) > InputSanitizer.MAX_CATEGORY_LENGTH:
-        logger.warning(
-            "Category name too long (len=%s, max=%s) for user %s",
-            len(name_without_icon),
-            InputSanitizer.MAX_CATEGORY_LENGTH,
-            user_id
-        )
-        return False
+    name_without_icon = validate_category_name(name_without_icon)
 
-    name_sanitized = InputSanitizer.sanitize_category_name(name_without_icon).strip()
-    if not name_sanitized:
-        logger.warning("Empty category name after sanitization for user %s", user_id)
-        return False
-
-    name_without_icon = name_sanitized
-    
-    # Определяем язык нового названия
-    has_cyrillic = bool(re.search(r'[а-яА-ЯёЁ]', name_without_icon))
-    has_latin = bool(re.search(r'[a-zA-Z]', name_without_icon))
-    
     # Получаем текущую категорию для определения какие поля обновлять
     try:
         category = await sync_to_async(ExpenseCategory.objects.get)(
@@ -457,16 +411,30 @@ async def update_category_name(user_id: int, category_id: int, new_name: str) ->
             profile__telegram_id=user_id
         )
     except ExpenseCategory.DoesNotExist:
-        return False
-    
+        raise ValueError("Категория не найдена")
+
+    # Проверяем дубликаты перед обновлением
+    display_name = f"{icon} {name_without_icon}".strip() if icon else name_without_icon
+    if await sync_to_async(check_category_duplicate)(
+        ExpenseCategory, category.profile, name_without_icon, display_name, exclude_id=category_id
+    ):
+        raise ValueError("Категория с таким названием уже существует")
+
+    # Определяем язык нового названия
+    from bot.utils.category_validators import detect_category_language
+    original_language = detect_category_language(
+        name_without_icon,
+        getattr(category, 'original_language', None) or 'ru',
+    )
+
     # Определяем какое поле обновлять
-    if has_cyrillic and not has_latin:
+    if original_language == 'ru':
         result = await update_category(user_id, category_id,
                                       name_ru=name_without_icon,
                                       icon=icon,
                                       original_language='ru',
                                       is_translatable=False)
-    elif has_latin and not has_cyrillic:
+    elif original_language == 'en':
         result = await update_category(user_id, category_id,
                                       name_en=name_without_icon,
                                       icon=icon,
@@ -486,8 +454,10 @@ async def update_category_name(user_id: int, category_id: int, new_name: str) ->
                                          icon=icon,
                                          original_language='ru',
                                          is_translatable=False)
-    
-    return result is not None
+
+    if result is None:
+        raise ValueError("Категория не найдена")
+    return True
 
 
 @sync_to_async

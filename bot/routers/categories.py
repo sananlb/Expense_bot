@@ -163,6 +163,11 @@ async def _apply_icon_and_finalize(event: types.CallbackQuery | types.Message, s
                 await update_category_name(user_id, category_id, full_name)
             else:
                 await create_category(user_id, name.capitalize(), icon)
+    except ValueError as e:
+        # Бизнес-ошибка (дубликат, пустое название, лимит) — показываем пользователю
+        # event.answer() уже вызван выше (строка 142), повторный show_alert не сработает
+        await send_message_with_cleanup(event, state, f"❌ {str(e)}")
+        return
     finally:
         # Показываем новое меню ПЕРЕД очисткой state, чтобы send_message_with_cleanup
         # могла удалить старое меню выбора иконок из last_menu_message_id
@@ -947,28 +952,28 @@ async def process_edit_category_name(
     # Всегда обновляем категорию с финальным названием
     # Используем сервис, который корректно обновляет иконку и мультиязычные поля
     from bot.services.category import update_category_name as _update_category_name
-    new_category_ok = await _update_category_name(user_id, cat_id, final_name)
-    
-    if new_category_ok:
+    try:
+        await _update_category_name(user_id, cat_id, final_name)
         logger.info(f"Category {cat_id} updated successfully with name: {final_name}")
-        
+
         # Удаляем сообщение пользователя
         await safe_delete_message(message=message)
-        
+
         # Очищаем состояние
         await state.clear()
-        
+
         # Показываем меню категорий трат (не общее меню)
         await show_expense_categories_menu(message, state)
-    else:
+    except ValueError as e:
         lang = await get_user_language(message.from_user.id)
         await message.answer(
-            "❌ Не удалось обновить категорию.",
+            f"❌ {str(e)}",
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="expense_categories_menu")],
                 [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
             ])
         )
+        await state.clear()
 
 
 @router.callback_query(lambda c: c.data == "cancel_category")
