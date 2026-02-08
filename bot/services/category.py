@@ -385,81 +385,71 @@ async def update_category_name(user_id: int, category_id: int, new_name: str) ->
     """Обновить название категории.
 
     Raises:
-        ValueError: если название невалидно или дубликат найден.
+        ValueError: если название невалидно, дубликат найден или категория не существует.
     """
     from bot.utils.category_validators import (
-        validate_category_name, check_category_duplicate,
+        validate_category_name, check_category_duplicate, detect_category_language,
     )
 
     # Извлекаем иконку и текст (поддерживает композитные эмодзи с ZWJ)
     match = EMOJI_PREFIX_RE.match(new_name)
 
     if match:
-        # EMOJI_PREFIX_RE захватывает эмодзи + trailing пробелы
-        icon = match.group(0).strip()  # Только эмодзи без пробелов
+        icon = match.group(0).strip()
         name_without_icon = new_name[len(match.group(0)):].strip()
     else:
         icon = ''
         name_without_icon = new_name.strip()
 
+    # Валидация имени (не требует ORM — можно в async контексте)
     name_without_icon = validate_category_name(name_without_icon)
 
-    # Получаем текущую категорию для определения какие поля обновлять
-    try:
-        category = await sync_to_async(
-            ExpenseCategory.objects.select_related('profile').get
-        )(
-            id=category_id,
-            profile__telegram_id=user_id
+    @sync_to_async
+    def _update_category_name_sync():
+        try:
+            category = ExpenseCategory.objects.get(
+                id=category_id,
+                profile__telegram_id=user_id
+            )
+        except ExpenseCategory.DoesNotExist:
+            raise ValueError("Категория не найдена")
+
+        # Проверяем дубликаты перед обновлением
+        display_name = f"{icon} {name_without_icon}".strip() if icon else name_without_icon
+        if check_category_duplicate(
+            ExpenseCategory, category.profile, name_without_icon, display_name,
+            exclude_id=category_id,
+        ):
+            raise ValueError("Категория с таким названием уже существует")
+
+        # Определяем язык нового названия
+        original_language = detect_category_language(
+            name_without_icon,
+            category.original_language or 'ru',
         )
-    except ExpenseCategory.DoesNotExist:
-        raise ValueError("Категория не найдена")
 
-    # Проверяем дубликаты перед обновлением
-    display_name = f"{icon} {name_without_icon}".strip() if icon else name_without_icon
-    if await sync_to_async(check_category_duplicate)(
-        ExpenseCategory, category.profile, name_without_icon, display_name, exclude_id=category_id
-    ):
-        raise ValueError("Категория с таким названием уже существует")
-
-    # Определяем язык нового названия
-    from bot.utils.category_validators import detect_category_language
-    original_language = detect_category_language(
-        name_without_icon,
-        getattr(category, 'original_language', None) or 'ru',
-    )
-
-    # Определяем какое поле обновлять
-    if original_language == 'ru':
-        result = await update_category(user_id, category_id,
-                                      name_ru=name_without_icon,
-                                      icon=icon,
-                                      original_language='ru',
-                                      is_translatable=False)
-    elif original_language == 'en':
-        result = await update_category(user_id, category_id,
-                                      name_en=name_without_icon,
-                                      icon=icon,
-                                      original_language='en',
-                                      is_translatable=False)
-    else:
-        # Смешанный язык - обновляем поле исходного языка
-        if category.original_language == 'en':
-            result = await update_category(user_id, category_id,
-                                         name_en=name_without_icon,
-                                         icon=icon,
-                                         original_language='en',
-                                         is_translatable=False)
+        # Определяем какое поле обновлять
+        if original_language == 'ru':
+            category.name_ru = name_without_icon
+            category.original_language = 'ru'
+        elif original_language == 'en':
+            category.name_en = name_without_icon
+            category.original_language = 'en'
         else:
-            result = await update_category(user_id, category_id,
-                                         name_ru=name_without_icon,
-                                         icon=icon,
-                                         original_language='ru',
-                                         is_translatable=False)
+            # Смешанный язык — сохраняем в поле текущего языка категории
+            if category.original_language == 'en':
+                category.name_en = name_without_icon
+                category.original_language = 'en'
+            else:
+                category.name_ru = name_without_icon
+                category.original_language = 'ru'
 
-    if result is None:
-        raise ValueError("Категория не найдена")
-    return True
+        category.icon = icon
+        category.is_translatable = False
+        category.save()
+        return True
+
+    return await _update_category_name_sync()
 
 
 @sync_to_async
