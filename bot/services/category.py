@@ -406,7 +406,9 @@ async def update_category_name(user_id: int, category_id: int, new_name: str) ->
 
     # Получаем текущую категорию для определения какие поля обновлять
     try:
-        category = await sync_to_async(ExpenseCategory.objects.get)(
+        category = await sync_to_async(
+            ExpenseCategory.objects.select_related('profile').get
+        )(
             id=category_id,
             profile__telegram_id=user_id
         )
