@@ -61,6 +61,20 @@ class CurrencyConverter:
         'BZD': 'Belize Dollar',
         'XCD': 'East Caribbean Dollar',
         
+        # Middle East currencies
+        'AED': 'UAE Dirham',
+
+        # CIS and nearby currencies
+        'INR': 'Indian Rupee',
+        'UZS': 'Uzbek Som',
+        'AMD': 'Armenian Dram',
+        'TMT': 'Turkmenistan Manat',
+        'AZN': 'Azerbaijani Manat',
+        'KGS': 'Kyrgyz Som',
+        'TJS': 'Tajik Somoni',
+        'MDL': 'Moldovan Leu',
+        'GEL': 'Georgian Lari',
+
         # Major world currencies
         'USD': 'US Dollar',
         'EUR': 'Euro',
