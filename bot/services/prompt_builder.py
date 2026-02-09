@@ -35,11 +35,11 @@ IMPORTANT: The user's interface language is {lang_names.get(user_language, 'Russ
 
 
 AVAILABLE EXPENSE FUNCTIONS:
-1. get_max_expense_day(period='last_week'|'last_month'|'week'|'month') - for "What day did I spend the most last week?"
-2. get_period_total(period='today'|'yesterday'|'day_before_yesterday'|'week'|'last_week'|'month'|'last_month'|'year'|'январь'|...|'декабрь'|'january'|...|'december'|'зима'|'весна'|'лето'|'осень'|'winter'|'spring'|'summer'|'fall') - ONLY for "How much/Сколько" questions: "How much did I spend today?", "Сколько потратил вчера?". Returns TOTAL + categories breakdown.
-3. get_max_single_expense(period='last_week'|'last_month'|'day_before_yesterday'|'week'|'month'|'январь'|'февраль'|...|'декабрь'|'january'|'august'|'зима'|'весна'|'лето'|'осень') - for "What's my biggest expense day before yesterday/last week/last month/in August/in summer?"
-4. get_min_single_expense(period='last_week'|'last_month'|'week'|'month') - for "What's my smallest/cheapest expense last week/last month?"
-5. get_category_statistics(period='month'|'last_month'|'декабрь'|'january'|'зима'|'summer') - for "What do I spend the most on?", "What categories in December?", "На что тратил в ноябре?"
+1. get_max_expense_day(period='last_week'|'last_month'|'last_year'|'week'|'month') - for "What day did I spend the most last week/last year?"
+2. get_period_total(period='today'|'yesterday'|'day_before_yesterday'|'week'|'last_week'|'month'|'last_month'|'year'|'last_year'|'январь'|...|'декабрь'|'january'|...|'december'|'зима'|'весна'|'лето'|'осень'|'winter'|'spring'|'summer'|'fall') - ONLY for "How much/Сколько" questions: "How much did I spend today?", "Сколько потратил вчера?", "Сколько потратил за последний год?". Returns TOTAL + categories breakdown.
+3. get_max_single_expense(period='last_week'|'last_month'|'last_year'|'day_before_yesterday'|'week'|'month'|'январь'|'февраль'|...|'декабрь'|'january'|'august'|'зима'|'весна'|'лето'|'осень') - for "What's my biggest expense day before yesterday/last week/last month/last year/in August/in summer?"
+4. get_min_single_expense(period='last_week'|'last_month'|'last_year'|'week'|'month') - for "What's my smallest/cheapest expense last week/last month/last year?"
+5. get_category_statistics(period='month'|'last_month'|'last_year'|'декабрь'|'january'|'зима'|'summer') - for "What do I spend the most on?", "What categories in December?", "На что тратил в ноябре?", "На что тратил за последний год?"
 6. get_average_expenses() - for "How much do I spend on average?"
 7. get_recent_expenses(limit=10) - for "Show recent expenses"
 8. search_expenses(query='text', period='today'|'yesterday'|'day_before_yesterday'|'week'|'last_week'|'week_before_last'|'month'|'last_month'|'month_before_last'|'year'|'last_year'|'январь'|'февраль'|...|'декабрь'|'january'|...|'december'|'зима'|'весна'|'лето'|'осень'|'winter'|'spring'|'summer'|'fall') - UNIVERSAL SEARCH in categories AND descriptions: "How much did I spend on groceries last week?", "Coffee expenses last month", "Car expenses last year"
@@ -48,14 +48,14 @@ AVAILABLE EXPENSE FUNCTIONS:
 11. compare_periods() - for "Am I spending more or less?"
 12. get_expense_trend() - for "Show expense trend"
 13. get_expenses_by_amount_range(min_amount=1000) - for "Show expenses over 1000"
-14. get_category_total(category='groceries', period='month'|'week'|'январь'|...|'декабрь'|'january'|...|'december'|'зима'|'лето'|'winter'|'summer') - for CATEGORIES: "How much did I spend on groceries this month/in August/in summer?"
+14. get_category_total(category='groceries', period='month'|'last_year'|'week'|'январь'|...|'декабрь'|'january'|...|'december'|'зима'|'лето'|'winter'|'summer') - for CATEGORIES: "How much did I spend on groceries this month/last year/in August/in summer?"
 15. get_expenses_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - for "Show/Покажи expenses", "List expenses", "Expense diary/journal", "What did I spend on yesterday?", "Покажи траты вчера/сегодня". Returns LIST of individual expenses with descriptions. Use for 'today'/'yesterday' by calculating correct dates.
 
 AVAILABLE INCOME FUNCTIONS:
 18. get_max_income_day() - for "What day did I earn the most?"
-19. get_income_period_total(period='today'|'yesterday'|'week'|'month'|'year') - for "How much did I earn today/yesterday/this week?"
-20. get_max_single_income(period='last_week'|'last_month'|'week'|'month'|'январь'|'февраль'|...|'декабрь'|'january'|'august'|'зима'|'весна'|'лето'|'осень') - for "What's my biggest income last week/last month/in August/in summer?"
-21. get_income_category_statistics(period='month'|'last_month'|'декабрь'|'january'|'зима'|'summer') - for "Where does most income come from?", "Income categories in December", "Откуда доходы в ноябре?"
+19. get_income_period_total(period='today'|'yesterday'|'week'|'month'|'year'|'last_year') - for "How much did I earn today/yesterday/this week/last year?"
+20. get_max_single_income(period='last_week'|'last_month'|'last_year'|'week'|'month'|'январь'|'февраль'|...|'декабрь'|'january'|'august'|'зима'|'весна'|'лето'|'осень') - for "What's my biggest income last week/last month/last year/in August/in summer?"
+21. get_income_category_statistics(period='month'|'last_month'|'last_year'|'декабрь'|'january'|'зима'|'summer') - for "Where does most income come from?", "Income categories in December", "Откуда доходы в ноябре?", "Income categories last year"
 22. get_average_incomes() - for "How much do I earn on average?"
 23. get_recent_incomes(limit=10) - for "Show recent income"
 24. search_incomes(query='text', period='today'|'yesterday'|'day_before_yesterday'|'week'|'last_week'|'week_before_last'|'month'|'last_month'|'month_before_last'|'year'|'last_year'|'январь'|'февраль'|...|'декабрь'|'january'|...|'december'|'зима'|'весна'|'лето'|'осень'|'winter'|'spring'|'summer'|'fall') - for "When did I receive...", "Salary incomes last year", "Income from freelance last month"
@@ -65,12 +65,12 @@ AVAILABLE INCOME FUNCTIONS:
 28. compare_income_periods() - for "Am I earning more or less?"
 29. get_income_trend() - for "Show income trend"
 30. get_incomes_by_amount_range(min_amount=10000) - for "Show income over 10000"
-31. get_income_category_total(category='salary', period='month') - for "How much salary do I get?"
+31. get_income_category_total(category='salary', period='month'|'last_year') - for "How much salary do I get?", "How much salary last year?"
 32. get_incomes_list(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD') - for "Show income for period", "Income diary/journal", "List all income"
 
 COMPLEX ANALYSIS FUNCTIONS:
 33. get_all_operations(start_date='YYYY-MM-DD', end_date='YYYY-MM-DD', limit=200) - for "All operations", "Show all transactions", "Complete financial diary"
-34. get_financial_summary(period='month') - for "Financial summary", "Balance", "Month results"
+34. get_financial_summary(period='month'|'last_year') - for "Financial summary", "Balance", "Month results", "Year summary"
 
 UNIVERSAL FUNCTION (USE IF NO SUITABLE FUNCTION ABOVE):
 36. analytics_query(spec_json='<JSON query specification>') - for non-standard analytical queries
@@ -84,9 +84,10 @@ Examples of search_expenses usage:
 - "Transport expenses in August" → search_expenses(query='transport', period='август')
 - "Coffee expenses last month" → search_expenses(query='coffee', period='last_month')
 - "Кофе траты прошлый месяц" → search_expenses(query='кофе', period='last_month')
-- "Car expenses last year" → search_expenses(query='car', period='last_year')
+- "Car expenses last year" → search_expenses(query='car', period='last_year') — last 365 days rolling window
 - "Show all автомобиль expenses for last year" → search_expenses(query='автомобиль', period='last_year')
 - "Автомобиль траты за прошлый год" → search_expenses(query='автомобиль', period='last_year')
+- "Сколько потратил за последний год" → get_period_total(period='last_year') — last 365 days rolling window
 - "Expenses at store X this month" → search_expenses(query='store name', period='month')
 - "Supermarket purchases" → search_expenses(query='supermarket')
 
@@ -117,8 +118,9 @@ SPECIAL CASES:
   "how much did I spend on groceries last week" → search_expenses(query='groceries', period='last_week')
   "coffee expenses last month" → search_expenses(query='coffee', period='last_month')
   "car expenses last year" → search_expenses(query='car', period='last_year')
-  "автомобиль траты за последний год" → search_expenses(query='автомобиль', period='last_year')
-  "автомобиль траты за прошлый год" → search_expenses(query='автомобиль', period='last_year')
+  "автомобиль траты за последний год" → search_expenses(query='автомобиль', period='last_year') — last 365 days
+  "автомобиль траты за прошлый год" → search_expenses(query='автомобиль', period='last_year') — last 365 days
+  "на что тратил за последний год" → get_category_statistics(period='last_year') — last 365 days
   "кофе траты прошлый месяц" → search_expenses(query='кофе', period='last_month')
   "expenses day before yesterday" → search_expenses(query='', period='day_before_yesterday')
   "траты в октябре" → search_expenses(query='', period='октябрь')

@@ -18,7 +18,7 @@ def get_period_dates(period: str, base_date: Optional[date] = None) -> Tuple[dat
             - 'month', 'this_month': текущий месяц
             - 'last_month': прошлый месяц
             - 'year', 'this_year': текущий год
-            - 'last_year': прошлый год
+            - 'last_year': последние 365 дней (скользящее окно)
             - Времена года: 'зима', 'весна', 'лето', 'осень' (или winter, spring, summer, autumn/fall)
             - Названия месяцев: 'январь', 'февраль', ... 'декабрь'
             - Month names: 'january', 'february', ... 'december'
@@ -95,11 +95,10 @@ def get_period_dates(period: str, base_date: Optional[date] = None) -> Tuple[dat
         end = base_date
         return start, end
 
-    # Прошлый год (полный год)
+    # Последний год (скользящее окно — 365 дней назад до сегодня)
     elif period == 'last_year':
-        last_year = base_date.year - 1
-        start = date(last_year, 1, 1)
-        end = date(last_year, 12, 31)
+        start = base_date - timedelta(days=365)
+        end = base_date
         return start, end
 
     # Позавчера
