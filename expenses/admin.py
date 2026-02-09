@@ -393,29 +393,46 @@ class ExpenseCategoryAdmin(admin.ModelAdmin):
 class ExpenseAdmin(admin.ModelAdmin):
     list_display = [
         'profile',
-        'amount',
+        'display_amount',
         'display_category',
-        'expense_date',
         'description_short',
         'was_edited',
         'ai_categorized',
-        'created_at'
+        'created_at',
+        'expense_date',
     ]
     list_filter = ['expense_date', 'ai_categorized', 'category', 'created_at']
     search_fields = ['description', 'profile__username', 'category__name']
     date_hierarchy = 'expense_date'
     list_per_page = 100
-    
+
+    def display_amount(self, obj):
+        """Показывает сумму с конвертацией, если она была."""
+        if obj.was_converted:
+            return format_html(
+                '{} {} <span style="color: #888; font-size: 0.85em;">({}&nbsp;{})</span>',
+                obj.amount, obj.currency,
+                obj.original_amount, obj.original_currency,
+            )
+        return format_html('{} {}', obj.amount, obj.currency)
+    display_amount.short_description = 'Сумма'
+    display_amount.admin_order_field = 'amount'
+
     def display_category(self, obj):
         if obj.category:
             # Используем язык администратора для отображения
             return get_category_display_name(obj.category, 'ru')  # Админка всегда на русском
         return "—"
     display_category.short_description = 'Категория'
-    
+
     fieldsets = (
         ('Основная информация', {
-            'fields': ('profile', 'amount', 'category', 'description')
+            'fields': ('profile', 'amount', 'currency', 'category', 'description')
+        }),
+        ('Конвертация валюты', {
+            'fields': ('original_amount', 'original_currency', 'exchange_rate_used'),
+            'classes': ('collapse',),
+            'description': 'Заполняется автоматически при конвертации из другой валюты',
         }),
         ('Дата и время', {
             'fields': ('expense_date', 'expense_time')
@@ -433,7 +450,7 @@ class ExpenseAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'original_amount', 'original_currency', 'exchange_rate_used']
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('profile', 'category')
@@ -722,11 +739,19 @@ class IncomeAdmin(admin.ModelAdmin):
     list_per_page = 100
     
     def display_amount(self, obj):
-        return format_html('<span style="color: green; font-weight: bold;">+{} {}</span>', 
+        """Показывает сумму дохода с конвертацией, если она была."""
+        if obj.was_converted:
+            return format_html(
+                '<span style="color: green; font-weight: bold;">+{} {}</span>'
+                ' <span style="color: #888; font-size: 0.85em;">({}&nbsp;{})</span>',
+                obj.amount, obj.currency,
+                obj.original_amount, obj.original_currency,
+            )
+        return format_html('<span style="color: green; font-weight: bold;">+{} {}</span>',
                           obj.amount, obj.currency)
     display_amount.short_description = 'Сумма'
     display_amount.admin_order_field = 'amount'
-    
+
     def display_category(self, obj):
         if obj.category:
             # Используем язык администратора для отображения
@@ -755,6 +780,11 @@ class IncomeAdmin(admin.ModelAdmin):
         ('Основная информация', {
             'fields': ('profile', 'amount', 'currency', 'category', 'description')
         }),
+        ('Конвертация валюты', {
+            'fields': ('original_amount', 'original_currency', 'exchange_rate_used'),
+            'classes': ('collapse',),
+            'description': 'Заполняется автоматически при конвертации из другой валюты',
+        }),
         ('Дата и время', {
             'fields': ('income_date', 'income_time')
         }),
@@ -771,7 +801,7 @@ class IncomeAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
-    readonly_fields = ['created_at', 'updated_at']
+    readonly_fields = ['created_at', 'updated_at', 'original_amount', 'original_currency', 'exchange_rate_used']
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related('profile', 'category')
