@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import aiohttp
 import xml.etree.ElementTree as ET
@@ -95,8 +96,46 @@ class CurrencyConverter:
         self._cache_timeout = 3600 * 24  # 24 hours
     
     async def _ensure_session(self):
-        """Ensure aiohttp session exists"""
-        if not self.session:
+        """Ensure aiohttp session exists and is usable.
+
+        Handles the case where session was created in a different event loop
+        (e.g. when called from Celery via async_to_sync, which creates and
+        destroys event loops between invocations).
+
+        Checks three conditions in order:
+        1. session.closed — session was explicitly closed
+        2. connector.closed — connector lost its transport layer
+        3. loop mismatch — session was created in a different (possibly dead) event loop
+        """
+        if self.session is not None:
+            stale = False
+            if self.session.closed:
+                stale = True
+            elif self.session.connector is not None and self.session.connector.closed:
+                stale = True
+            else:
+                # aiohttp stores the loop reference on the connector;
+                # if the original loop is closed or differs from the running one,
+                # any I/O on the session will raise "Event loop is closed".
+                try:
+                    running_loop = asyncio.get_running_loop()
+                    connector = self.session.connector
+                    session_loop = getattr(connector, '_loop', None)
+                    if session_loop is not None and session_loop is not running_loop:
+                        stale = True
+                    elif session_loop is not None and session_loop.is_closed():
+                        stale = True
+                except RuntimeError:
+                    # No running loop — session is unusable anyway
+                    stale = True
+            if stale:
+                # Best-effort close to free resources; ignore errors on dead loop
+                try:
+                    await self.session.close()
+                except Exception:
+                    pass
+                self.session = None
+        if self.session is None:
             self.session = aiohttp.ClientSession()
     
     async def fetch_fawaz_rates(self, base_currency: str = 'rub') -> Dict[str, Dict]:

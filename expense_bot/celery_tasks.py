@@ -1952,20 +1952,34 @@ def prefetch_cbrf_rates():
     """
     Предзагрузка курсов ЦБ РФ.
     Запускается в 23:30 МСК для кеширования на следующий день.
+
+    Использует собственный event loop и свежий экземпляр CurrencyConverter,
+    чтобы избежать проблемы "Event loop is closed" при использовании
+    singleton-сессии из другого (уже закрытого) event loop.
     """
-    from bot.services.currency_conversion import currency_converter
-    from asgiref.sync import async_to_sync
+    import asyncio
+    from bot.services.currency_conversion import CurrencyConverter
 
-    async def _prefetch():
-        rates = await currency_converter.fetch_daily_rates()
-        if rates:
-            logger.info(f"CBRF: Prefetched {len(rates)} rates")
-            return len(rates)
-        else:
-            logger.error("CBRF: Failed to prefetch rates")
-            return 0
+    async def _prefetch() -> int:
+        converter = CurrencyConverter()
+        try:
+            rates = await converter.fetch_daily_rates()
+            if rates:
+                logger.info(f"CBRF: Prefetched {len(rates)} rates")
+                return len(rates)
+            else:
+                logger.error("CBRF: Failed to prefetch rates")
+                return 0
+        finally:
+            if converter.session and not converter.session.closed:
+                await converter.session.close()
 
-    count = async_to_sync(_prefetch)()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        count = loop.run_until_complete(_prefetch())
+    finally:
+        _shutdown_event_loop(loop, label="prefetch_cbrf_rates")
     return f"Prefetched {count} CBRF rates"
 
 
