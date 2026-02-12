@@ -7,7 +7,7 @@
 # Использование: sudo bash scripts/setup_docker_firewall.sh
 #
 # ВАЖНО: Эти правила не переживают перезагрузку сервера!
-# Для постоянного эффекта нужно добавить в /etc/rc.local или systemd unit.
+# Для постоянного эффекта установите systemd unit: docker-firewall.service
 
 set -euo pipefail
 
@@ -29,28 +29,29 @@ echo ""
 EXT_IFACE=$(ip route get 8.8.8.8 | grep -oP 'dev \K\S+' | head -1)
 echo -e "${YELLOW}  Внешний интерфейс: ${EXT_IFACE}${NC}"
 
-# Очищаем старые правила DOCKER-USER (кроме дефолтного RETURN)
-echo -e "${YELLOW}  Очищаю старые правила DOCKER-USER...${NC}"
-iptables -F DOCKER-USER 2>/dev/null || true
+# Удаляем ТОЛЬКО наши правила (если существуют), не трогая чужие
+echo -e "${YELLOW}  Удаляю старые правила для портов 8000/8001...${NC}"
+iptables -D DOCKER-USER -i "$EXT_IFACE" -p tcp --dport 8000 -j DROP 2>/dev/null || true
+iptables -D DOCKER-USER -i "$EXT_IFACE" -p tcp --dport 8001 -j DROP 2>/dev/null || true
+# Повторяем на случай дублей
+iptables -D DOCKER-USER -i "$EXT_IFACE" -p tcp --dport 8000 -j DROP 2>/dev/null || true
+iptables -D DOCKER-USER -i "$EXT_IFACE" -p tcp --dport 8001 -j DROP 2>/dev/null || true
 
-# Правило 1: Блокировать внешний доступ к порту 8000 (web/gunicorn)
+# Добавляем наши правила в начало цепочки
 iptables -I DOCKER-USER -i "$EXT_IFACE" -p tcp --dport 8000 -j DROP
 echo -e "${GREEN}  ✓ Заблокирован внешний доступ к порту 8000 (web)${NC}"
 
-# Правило 2: Блокировать внешний доступ к порту 8001 (bot)
 iptables -I DOCKER-USER -i "$EXT_IFACE" -p tcp --dport 8001 -j DROP
 echo -e "${GREEN}  ✓ Заблокирован внешний доступ к порту 8001 (bot)${NC}"
-
-# Обязательное правило RETURN в конце (разрешить остальной трафик)
-iptables -A DOCKER-USER -j RETURN
-echo -e "${GREEN}  ✓ Добавлено правило RETURN для остального трафика${NC}"
 
 echo ""
 echo -e "${GREEN}✅ DOCKER-USER правила настроены:${NC}"
 iptables -L DOCKER-USER -n -v --line-numbers
 echo ""
 echo -e "${YELLOW}⚠️  Правила действуют до перезагрузки сервера.${NC}"
-echo -e "${YELLOW}   Для постоянного эффекта добавьте в /etc/rc.local или cron @reboot.${NC}"
+echo -e "${YELLOW}   Для постоянного эффекта установите systemd unit:${NC}"
+echo -e "${YELLOW}   sudo cp scripts/docker-firewall.service /etc/systemd/system/${NC}"
+echo -e "${YELLOW}   sudo systemctl daemon-reload && sudo systemctl enable docker-firewall.service${NC}"
 echo ""
 
 # Проверка

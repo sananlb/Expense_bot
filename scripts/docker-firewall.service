@@ -8,10 +8,10 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStart=/bin/bash -c '\
     EXT_IFACE=$(ip route get 8.8.8.8 | grep -oP "dev \\K\\S+" | head -1) && \
-    iptables -F DOCKER-USER 2>/dev/null; \
+    iptables -D DOCKER-USER -i $EXT_IFACE -p tcp --dport 8000 -j DROP 2>/dev/null; \
+    iptables -D DOCKER-USER -i $EXT_IFACE -p tcp --dport 8001 -j DROP 2>/dev/null; \
     iptables -I DOCKER-USER -i $EXT_IFACE -p tcp --dport 8000 -j DROP && \
-    iptables -I DOCKER-USER -i $EXT_IFACE -p tcp --dport 8001 -j DROP && \
-    iptables -A DOCKER-USER -j RETURN'
+    iptables -I DOCKER-USER -i $EXT_IFACE -p tcp --dport 8001 -j DROP'
 
 [Install]
 WantedBy=multi-user.target
