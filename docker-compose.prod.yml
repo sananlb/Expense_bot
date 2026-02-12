@@ -75,6 +75,8 @@ services:
         condition: service_healthy
     restart: unless-stopped
     command: python run_bot.py
+    expose:
+      - "8000"
     networks:
       - expense_bot_network
 

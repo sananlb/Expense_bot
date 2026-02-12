@@ -58,7 +58,7 @@ services:
     restart: unless-stopped
     command: python -m bot.main
     ports:
-      - "8001:8000"
+      - "127.0.0.1:8001:8000"
     logging:
       driver: "json-file"
       options:
@@ -157,7 +157,7 @@ services:
     restart: unless-stopped
     command: gunicorn expense_bot.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 30 --graceful-timeout 30 --worker-class sync --max-requests 1000 --max-requests-jitter 50
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     logging:
       driver: "json-file"
       options:

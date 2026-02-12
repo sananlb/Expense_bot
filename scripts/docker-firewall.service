@@ -1,0 +1,17 @@
+[Unit]
+Description=Docker firewall rules (block external access to 8000/8001)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/bash -c '\
+    EXT_IFACE=$(ip route get 8.8.8.8 | grep -oP "dev \\K\\S+" | head -1) && \
+    iptables -F DOCKER-USER 2>/dev/null; \
+    iptables -I DOCKER-USER -i $EXT_IFACE -p tcp --dport 8000 -j DROP && \
+    iptables -I DOCKER-USER -i $EXT_IFACE -p tcp --dport 8001 -j DROP && \
+    iptables -A DOCKER-USER -j RETURN'
+
+[Install]
+WantedBy=multi-user.target
