@@ -69,8 +69,12 @@ echo -e "${YELLOW}🔒 Проверяю безопасность портов в
 UNSAFE_PORTS=""
 for COMPOSE_FILE in docker-compose.yml docker-compose.override.yml; do
     if [ -f "$COMPOSE_FILE" ]; then
-        # POSIX regex: ловит "PORT:PORT" и "0.0.0.0:PORT:PORT", но НЕ "127.0.0.1:PORT:PORT"
-        FILE_UNSAFE=$(grep -E '^[[:space:]]*-[[:space:]]*"[0-9]' "$COMPOSE_FILE" | grep -v '127\.0\.0\.1' || true)
+        # Ловим все форматы port-маппинга без 127.0.0.1:
+        #   - "8000:8000"         (quoted, без bind)
+        #   - "0.0.0.0:8000:8000" (quoted, явный 0.0.0.0)
+        #   - 8000:8000           (unquoted)
+        #   - "${VAR}:8000"       (с переменными)
+        FILE_UNSAFE=$(grep -E '^[[:space:]]*-[[:space:]]*("|'"'"')?[0-9$]' "$COMPOSE_FILE" | grep -v '127\.0\.0\.1' || true)
         if [ -n "$FILE_UNSAFE" ]; then
             UNSAFE_PORTS="${UNSAFE_PORTS}${COMPOSE_FILE}:\n${FILE_UNSAFE}\n"
         fi
@@ -80,7 +84,7 @@ if [ -n "$UNSAFE_PORTS" ]; then
     echo -e "${RED}❌ ВНИМАНИЕ: Обнаружены порты без привязки к 127.0.0.1!${NC}"
     echo -e "${RED}   Это позволяет обходить Nginx и получать прямой доступ к сервисам.${NC}"
     echo -e "$UNSAFE_PORTS" | sed 's/^/   /'
-    echo -e "${RED}   Исправьте: замените '\"PORT:PORT\"' на '\"127.0.0.1:PORT:PORT\"'${NC}"
+    echo -e "${RED}   Исправьте: замените порты на '\"127.0.0.1:PORT:PORT\"'${NC}"
     echo -e "${RED}   Сборка прервана для безопасности.${NC}"
     exit 1
 fi

@@ -1,7 +1,8 @@
 [Unit]
 Description=Docker firewall rules (block external access to 8000/8001)
-After=docker.service
+After=docker.service network-online.target
 Requires=docker.service
+Wants=network-online.target
 
 [Service]
 Type=oneshot
