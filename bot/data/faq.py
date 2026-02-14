@@ -61,14 +61,14 @@ FAQ_DATA: List[FAQEntry] = [
         "answer_ru": (
             "Просто отправьте сумму и описание: \"500 кофе\", \"такси 450\". "
             "Можно указать валюту: \"50 usd ужин\". "
-            "Запись задним числом: \"12.11 продукты 1200\" (формат ДД.ММ). "
+            "Запись задним числом: \"12.11.24 продукты 1200\" (формат ДД.ММ.ГГ). "
             "Категорию предложу сам, исправления запоминаю. "
             "Голосовой ввод доступен с подпиской/триалом."
         ),
         "answer_en": (
             "Send amount with description: \"500 coffee\", \"taxi 450\". "
             "You can add currency: \"50 usd lunch\". "
-            "Backdate entry: \"12.11 groceries 1200\" (DD.MM format). "
+            "Backdate entry: \"12.11.24 groceries 1200\" (DD.MM.YY format). "
             "I auto-assign category and remember your corrections. "
             "Voice input is available with subscription/trial."
         ),
@@ -89,13 +89,13 @@ FAQ_DATA: List[FAQEntry] = [
         "keywords": ["доход", "income", "прибыль", "зарплата", "record income"],
         "answer_ru": (
             "Используйте знак \"+\": \"+50000 зарплата\", \"+1200 кешбэк\". "
-            "Запись задним числом: \"25.11 +50000 зарплата\" (формат ДД.ММ). "
+            "Запись задним числом: \"25.11.24 +50000 зарплата\" (формат ДД.ММ.ГГ). "
             "Категорию подберу автоматически, можно отредактировать после добавления. "
             "Учет доходов доступен только с активной подпиской или триалом."
         ),
         "answer_en": (
             "Use a \"+\" sign: \"+50000 salary\", \"+1200 cashback\". "
-            "Backdate entry: \"25.11 +50000 salary\" (DD.MM format). "
+            "Backdate entry: \"25.11.24 +50000 salary\" (DD.MM.YY format). "
             "I auto-select category; you can edit it after. "
             "Income tracking is available only with an active subscription or trial."
         ),
