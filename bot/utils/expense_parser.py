@@ -117,7 +117,10 @@ def convert_words_to_numbers(text: str) -> str:
                 result = int(num * mult_value) if num * mult_value == int(num * mult_value) else num * mult_value
                 text = text[:match.start()] + str(result) + text[match.end():]
 
-    processed_text = text.replace('-', ' ')
+    # Защищаем даты с дефисами (DD-MM-YYYY, DD-MM-YY) от замены '-' на пробел:
+    # конвертируем дефисы в датах в точки (формат поддерживается extract_date_from_text)
+    processed_text = re.sub(r'(\d{1,2})-(\d{1,2})-(\d{2,4})', r'\1.\2.\3', text)
+    processed_text = processed_text.replace('-', ' ')
     words = processed_text.split()
     result_words = []
     current_number_chunk = 0
@@ -401,31 +404,26 @@ _NUMBER_ONLY_CURRENCY_RE = (
 
 
 # Паттерны для определения дохода - знак + или слово "плюс"
+# ВАЖНО: знак "+" должен быть на границе слова (начало строки или после пробела),
+# чтобы не ловить "+" внутри слов (C++, G+) или как часть выражений.
 INCOME_PATTERNS = [
-    r'^\+',  # Начинается с +
-    r'^\+\d',  # Начинается с + и сразу цифра (+35000)
-    r'\s\+\d',  # Пробел, затем + и цифры (долг +1200)
-    r'\+\s*\d',  # + и цифры с возможным пробелом
-    r'^плюс\s+\d',  # Начинается со слова "плюс" и цифра (плюс 5000)
+    r'^\+\s*\d',  # Начинается с + и цифра: +5000, + 5000
+    r'(?<=\s)\+\s*\d',  # Пробел перед +, затем цифра: долг +1200, долг + 1200
+    r'^плюс\s*\d',  # Начинается со слова "плюс" и цифра (плюс 5000, плюс5000)
     r'\sплюс\s+\d',  # Пробел, затем "плюс" и цифры (зарплата плюс 1200)
-    r'^плюс\s*\d',  # "плюс" и цифры с возможным пробелом
-    r'^plus\s+\d',  # Начинается со слова "plus" и цифра (plus 5000)
+    r'^plus\s*\d',  # Начинается со слова "plus" и цифра (plus 5000)
     r'\splus\s+\d',  # Пробел, затем "plus" и цифры (bonus plus 1200)
-    r'^plus\s*\d',  # "plus" и цифры с возможным пробелом
 ]
 
 # Паттерны для явного определения траты - знак - или слово "минус"
+# Аналогично INCOME_PATTERNS: "-" должен быть на границе слова.
 EXPENSE_PATTERNS = [
-    r'^\-',  # Начинается с -
-    r'^\-\d',  # Начинается с - и сразу цифра (-500)
-    r'\s\-\d',  # Пробел, затем - и цифры (кофе -200)
-    r'\-\s*\d',  # - и цифры с возможным пробелом
-    r'^минус\s+\d',  # Начинается со слова "минус" и цифра (минус 5000)
+    r'^\-\s*\d',  # Начинается с - и цифра: -500, - 500
+    r'(?<=\s)\-\s*\d',  # Пробел перед -, затем цифра: кофе -200, кофе - 200
+    r'^минус\s*\d',  # Начинается со слова "минус" и цифра (минус 5000)
     r'\sминус\s+\d',  # Пробел, затем "минус" и цифры (кофе минус 200)
-    r'^минус\s*\d',  # "минус" и цифры с возможным пробелом
-    r'^minus\s+\d',  # Начинается со слова "minus" и цифра (minus 5000)
+    r'^minus\s*\d',  # Начинается со слова "minus" и цифра (minus 5000)
     r'\sminus\s+\d',  # Пробел, затем "minus" и цифры (coffee minus 200)
-    r'^minus\s*\d',  # "minus" и цифры с возможным пробелом
 ]
 
 # Импортируем helper функции для работы с категориями
@@ -777,23 +775,65 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     if text_cleaned.startswith('-'):
         text_cleaned = text_cleaned[1:].strip()
 
-    # Сначала извлекаем дату, если она есть
-    expense_date, text_without_date = extract_date_from_text(text_cleaned)
-    date_removed = text_without_date != text_cleaned
+    # --- Извлечение ведущего числа (общая логика с доходами) ---
+    # Если текст начинается с числа + валюта/множитель, это сумма.
+    # Без сигнала (валюты/множителя) — сравниваем с extract_amount_from_patterns, берём большее.
+    leading_amount, leading_remaining, has_signal = _extract_leading_amount(text_cleaned)
+    amount = None
+    text_without_amount = None
+    amount_source = None
+    expense_date = None
+    text_without_date = text_cleaned
 
-    # Используем текст без даты для дальнейшего парсинга
-    text_to_parse = text_without_date
-    
-    # Ищем сумму
-    amount, text_without_amount = extract_amount_from_patterns(text_to_parse)
+    if leading_amount and leading_amount > 0 and has_signal:
+        # Сильный сигнал (валюта/множитель) — используем ведущее число
+        amount = leading_amount
+        text_without_amount = leading_remaining
+        amount_source = 'leading_signal'
+        text_to_parse = text_without_amount or text_cleaned
+        expense_date, text_after_date = extract_date_from_text(text_to_parse)
+        text_without_date = text_after_date
+        if expense_date:
+            text_without_amount = text_after_date
+    else:
+        # Нет сигнала — стандартный поток: дата → extract_amount_from_patterns
+        expense_date, text_without_date = extract_date_from_text(text_cleaned)
+        date_removed = text_without_date != text_cleaned
+        text_to_parse = text_without_date
+        amount, text_without_amount = extract_amount_from_patterns(text_to_parse)
+        amount_source = 'extract_patterns'
 
-    if (not amount or amount <= 0) and date_removed:
-        amount_with_date, text_without_amount_with_date = extract_amount_from_patterns(text_cleaned)
-        if amount_with_date and amount_with_date > 0:
-            amount = amount_with_date
-            text_without_amount = text_without_amount_with_date
-            text_to_parse = text_cleaned
-            expense_date = None
+        # Fallback: если дата съела часть суммы — перепарсить оригинал.
+        # НО: если дата съела ВЕСЬ текст (ничего не осталось) — не перепарсивать,
+        # чтобы не вытаскивать фрагменты даты как сумму (напр. 11.2025 из 25.11.2025)
+        if (not amount or amount <= 0) and date_removed and text_without_date.strip():
+            amount_with_date, text_without_amount_with_date = extract_amount_from_patterns(text_cleaned)
+            if amount_with_date and amount_with_date > 0:
+                amount = amount_with_date
+                text_without_amount = text_without_amount_with_date
+                text_to_parse = text_cleaned
+                expense_date = None
+                amount_source = 'extract_patterns_with_date'
+
+        # Если ведущее число больше найденного — предпочитаем его
+        # (напр. "75000 Кольская 8": leading=75000 > patterns=8)
+        # Исключение: числа 1900-2099 похожи на год — не считаем суммой
+        if leading_amount and leading_amount > 0 and amount and leading_amount > amount:
+            is_year_like = (1900 <= leading_amount <= 2099
+                            and leading_amount == int(leading_amount))
+            if not is_year_like:
+                amount = leading_amount
+                text_without_amount = leading_remaining
+                amount_source = 'leading_larger'
+                # Пересчитаем дату из оставшегося текста
+                text_to_parse = text_without_amount or text_cleaned
+                expense_date, text_after_date = extract_date_from_text(text_to_parse)
+                text_without_date = text_after_date
+                if expense_date:
+                    text_without_amount = text_after_date
+
+    if amount and amount > 0:
+        logger.info(f"Expense amount: source={amount_source}, amount={amount}, original='{original_text}'")
 
     # Если не нашли сумму, возвращаем None
     # Пользователь должен указать сумму явно
@@ -1148,6 +1188,125 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     return result
 
 
+# Regex для валют после ведущего числа (порядок: длинные формы первыми)
+# Используется в _extract_leading_amount для расходов и доходов
+# Символы ($, €, £ и т.д.) вынесены отдельно — для них \b не работает
+_LEADING_CURRENCY_RE = re.compile(
+    r'^(?:'
+    r'[$€£¥₽₸₣₹₺]'                            # символы валют (без \b)
+    r'|(?:рублей|рубля|рубль|руб|р'            # слова — рубли
+    r'|доллар(?:ов|а)?|dollars?|долл|usd'       # доллары
+    r'|euros?|евро|eur'                         # евро
+    r'|pounds?|фунт(?:ов)?|gbp'                # фунты
+    r'|тенге|теньге|тнг|kzt'                    # тенге
+    r'|гривен|гривн[а-я]*|грн|uah'            # гривны
+    r'|сум(?:ов)?|uzs'                          # сумы
+    r'|лари|lari|gel'                           # лари
+    r'|манат(?:ов)?|manat|azn'                  # манаты
+    r'|драм(?:ов)?|dram|amd'                    # драмы
+    r'|сом(?:ов)?|som|kgs'                      # сомы
+    r'|сомони|somoni|tjs'                       # сомони
+    r'|лей|леев|лея|mdl|lei'                    # леи
+    r'|франк(?:ов|а)?|francs?|chf'              # франки
+    r'|лир[аы]?|liras?'                         # лиры
+    r'|юаней|yuan|юан|cny'                      # юани
+    r'|дирхам(?:ов|а)?|dirham|aed'              # дирхамы
+    r')\b)'                                     # \b только для слов
+    r'\s*',
+    re.IGNORECASE,
+)
+
+
+def _extract_leading_amount(text: str) -> Tuple[Optional[Decimal], Optional[str], bool]:
+    """
+    Извлекает сумму из начала текста (для расходов и доходов).
+
+    Используется для предотвращения ошибки, когда extract_amount_from_patterns
+    выбирает число в конце строки (номер дома/квартиры) вместо суммы в начале.
+
+    Returns:
+        (amount, remaining_text, has_signal) — has_signal=True если найдена
+        валюта или множитель после числа (сильный сигнал что число = сумма).
+
+    Примеры:
+    - "75000 руб аренда" → (75000, "аренда", True)  — сигнал: валюта
+    - "5 тыс зарплата" → (5000, "зарплата", True)   — сигнал: множитель
+    - "75000 аренда Кольская 8" → (75000, "аренда Кольская 8", False) — нет сигнала
+    - "аренда 75000" → (None, None, False) — не начинается с числа
+    """
+    if not text:
+        return None, None, False
+
+    # Раннее отклонение: текст начинается с даты DD.MM.YYYY или DD.MM.YY
+    # Покрываем все разделители (. / -) и оба формата года (2- и 4-значный)
+    if re.match(r'^\d{1,2}[./\-]\d{1,2}[./\-]\d{2,4}(?:\s|$)', text):
+        return None, None, False
+
+    # Число в начале строки (с опциональными разделителями тысяч)
+    m = re.match(
+        r'^(\d{1,3}(?:\.\d{3})+'                   # точка-тысячи: 10.000.000
+        r'|\d{1,3}(?:[\s,]\d{3})+(?:[.,]\d+)?'     # пробел/запятая-тысячи: 75 000, 75,000
+        r'|\d+(?:[.,]\d+)?)'                        # без разделителей: 75000, 75000.50
+        r'\s*(.*)',
+        text,
+        re.DOTALL,
+    )
+    if not m:
+        return None, None, False
+
+    amount_str = m.group(1).replace(' ', '')
+    remaining = m.group(2).strip()
+
+    # Partial match: если после числа сразу идёт разделитель + цифра,
+    # значит мы "откусили" часть числа (напр. 31 из 31/12/24 или 25.11 из 25.11.2025)
+    if remaining and re.match(r'^[.,/]\d', remaining):
+        return None, None, False
+
+    # Обработка точек как разделителей тысяч (10.000, 10.000.000)
+    # Паттерн: 1-3 цифры, затем группы по .XXX (ровно 3 цифры после точки)
+    if re.match(r'^\d{1,3}(\.\d{3})+$', amount_str):
+        amount_str = amount_str.replace('.', '')
+
+    # Обработка запятых: тысячи (75,000) vs десятичный разделитель (75,50)
+    if re.match(r'^\d{1,3}(,\d{3})+$', amount_str):
+        # Запятая как разделитель тысяч — удаляем
+        amount_str = amount_str.replace(',', '')
+    else:
+        # Запятая как десятичный разделитель — заменяем на точку
+        amount_str = amount_str.replace(',', '.')
+
+    try:
+        amount = Decimal(amount_str)
+    except (ValueError, InvalidOperation):
+        return None, None, False
+
+    if amount <= 0:
+        return None, None, False
+
+    has_signal = False
+
+    # Проверяем множитель после числа (подстраховка для convert_words_to_numbers)
+    for mult_word, mult_value in sorted(AMOUNT_MULTIPLIERS.items(), key=lambda x: -len(x[0])):
+        mult_m = re.match(rf'{re.escape(mult_word)}\b\s*(.*)', remaining, re.IGNORECASE | re.DOTALL)
+        if mult_m:
+            amount *= mult_value
+            remaining = mult_m.group(1).strip()
+            has_signal = True
+            logger.info(f"Leading amount: multiplier '{mult_word}' ({mult_value}x) → {amount}")
+            break
+
+    # Проверяем валюту после числа/множителя — убираем из описания
+    currency_m = _LEADING_CURRENCY_RE.match(remaining)
+    if currency_m:
+        remaining = remaining[currency_m.end():].strip()
+        has_signal = True
+
+    # Убираем лишние пробелы
+    remaining = ' '.join(remaining.split()) if remaining else ''
+
+    return amount, remaining, has_signal
+
+
 async def parse_income_message(text: str, user_id: Optional[int] = None, profile=None, use_ai: bool = True) -> Optional[Dict[str, Any]]:
     """
     Парсит текстовое сообщение и извлекает информацию о доходе
@@ -1187,21 +1346,47 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     text_for_parsing = re.sub(r'\+\s*(\d)', r'\1', text_for_parsing)
 
     text_for_parsing = ' '.join(text_for_parsing.split())  # Убираем двойные пробелы
-    
-    # Сначала извлекаем дату, если она есть
-    expense_date, text_without_date = extract_date_from_text(text_for_parsing)
-    date_removed = text_without_date != text_for_parsing
 
-    text_to_parse = text_without_date
-    amount, text_without_amount = extract_amount_from_patterns(text_to_parse)
+    # --- Извлечение ведущего числа (общая логика с расходами) ---
+    # Если текст начинается с числа, оно считается суммой. Извлекаем ПЕРЕД датой, чтобы:
+    # 1. extract_amount_from_patterns не подхватил "8" (номер дома) из конца строки
+    # 2. extract_date_from_text не съел "10.000" (тысячи через точку) как дату "10.00"
+    # Для доходов "+" сам является сигналом — всегда используем ведущее число
+    amount, text_without_amount, _has_signal = _extract_leading_amount(text_for_parsing)
+    amount_source = 'leading_number'
+    expense_date = None
+    text_without_date = text_for_parsing  # инициализация для обеих веток
 
-    if (not amount or amount <= 0) and date_removed:
-        amount_with_date, text_without_amount_with_date = extract_amount_from_patterns(text_for_parsing)
-        if amount_with_date and amount_with_date > 0:
-            amount = amount_with_date
-            text_without_amount = text_without_amount_with_date
-            text_to_parse = text_for_parsing
-            expense_date = None
+    if amount and amount > 0:
+        # Ведущее число найдено — ищем дату в оставшемся тексте
+        text_to_parse = text_without_amount or text_for_parsing
+        expense_date, text_after_date = extract_date_from_text(text_to_parse)
+        text_without_date = text_after_date
+        if expense_date:
+            text_without_amount = text_after_date
+    else:
+        # Ведущее число не найдено — стандартный поток: дата → сумма
+        expense_date, text_without_date = extract_date_from_text(text_for_parsing)
+        date_removed = text_without_date != text_for_parsing
+
+        text_to_parse = text_without_date
+        amount, text_without_amount = extract_amount_from_patterns(text_to_parse)
+        amount_source = 'extract_patterns'
+
+        # Fallback: если дата съела часть суммы — перепарсить оригинал.
+        # НО: если дата съела ВЕСЬ текст — не перепарсивать,
+        # чтобы не вытаскивать фрагменты даты как сумму (напр. 11.2025 из 25.11.2025)
+        if (not amount or amount <= 0) and date_removed and text_without_date.strip():
+            amount_with_date, text_without_amount_with_date = extract_amount_from_patterns(text_for_parsing)
+            if amount_with_date and amount_with_date > 0:
+                amount = amount_with_date
+                text_without_amount = text_without_amount_with_date
+                text_to_parse = text_for_parsing
+                expense_date = None
+                amount_source = 'extract_patterns_with_date'
+
+    if amount and amount > 0:
+        logger.info(f"Income amount: source={amount_source}, amount={amount}, original='{original_text}'")
 
     # ВАЖНО: Для поиска ключевых слов используем текст БЕЗ суммы,
     # чтобы числа вроде "95" не совпадали с суммой "9500"

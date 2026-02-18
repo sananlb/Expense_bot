@@ -5,6 +5,7 @@ Based on archived tests and edge cases discovered in production.
 """
 import pytest
 from datetime import date, timedelta
+from decimal import Decimal
 
 import sys
 import os
@@ -18,6 +19,7 @@ from bot.utils.expense_parser import (
     parse_expense_message,
     parse_income_message,
     detect_currency,
+    _extract_leading_amount,
 )
 
 
@@ -255,3 +257,420 @@ class TestEdgeCases:
         assert result["amount"] == pytest.approx(500)
         if result.get("description"):
             assert "🍕" in result["description"] or "Пицца" in result["description"]
+
+
+# =============================================================================
+# Income Leading Amount Extraction Tests
+# Regression: production bug 2026-02-16 — "+75000 аренда Кольская 8" parsed as 8 RUB
+# =============================================================================
+
+class TestExtractLeadingIncomeAmount:
+    """Unit tests for _extract_leading_amount helper."""
+
+    def test_basic_leading_number(self):
+        """Number at start should be extracted, no signal."""
+        amount, remaining, has_signal = _extract_leading_amount("75000 аренда Кольская 8")
+        assert amount == 75000
+        assert remaining == "аренда Кольская 8"
+        assert has_signal is False
+
+    def test_number_with_description(self):
+        """Number followed by description."""
+        amount, remaining, has_signal = _extract_leading_amount("5000 зарплата")
+        assert amount == 5000
+        assert remaining == "зарплата"
+        assert has_signal is False
+
+    def test_number_only(self):
+        """Just a number, no description."""
+        amount, remaining, has_signal = _extract_leading_amount("9128")
+        assert amount == 9128
+        assert remaining == ""
+        assert has_signal is False
+
+    def test_number_with_thousands_separator_space(self):
+        """Number with space as thousands separator."""
+        amount, remaining, _sig = _extract_leading_amount("75 000 аренда")
+        assert amount == 75000
+        assert remaining == "аренда"
+
+    def test_number_with_thousands_separator_comma(self):
+        """Number with comma as thousands separator."""
+        amount, remaining, _sig = _extract_leading_amount("75,000 аренда")
+        assert amount == 75000
+        assert remaining == "аренда"
+
+    def test_decimal_number(self):
+        """Decimal amount."""
+        amount, remaining, _sig = _extract_leading_amount("5000.50 возврат")
+        assert amount == pytest.approx(5000.50)
+        assert remaining == "возврат"
+
+    def test_text_at_start_returns_none(self):
+        """Text at start — not a leading amount."""
+        amount, remaining, has_signal = _extract_leading_amount("аренда 75000")
+        assert amount is None
+        assert remaining is None
+        assert has_signal is False
+
+    def test_empty_text(self):
+        """Empty string."""
+        amount, remaining, has_signal = _extract_leading_amount("")
+        assert amount is None
+        assert remaining is None
+        assert has_signal is False
+
+    def test_currency_suffix_rub(self):
+        """Currency word after number — signal=True, stripped from description."""
+        amount, remaining, has_signal = _extract_leading_amount("75000 руб аренда Кольская 8")
+        assert amount == 75000
+        assert remaining == "аренда Кольская 8"
+        assert has_signal is True
+
+    def test_currency_suffix_rublei(self):
+        """Full currency word — signal=True."""
+        amount, remaining, has_signal = _extract_leading_amount("50000 рублей зарплата")
+        assert amount == 50000
+        assert remaining == "зарплата"
+        assert has_signal is True
+
+    def test_currency_suffix_dollar_sign(self):
+        """Dollar sign — signal=True."""
+        amount, remaining, has_signal = _extract_leading_amount("100 $ фриланс")
+        assert amount == 100
+        assert remaining == "фриланс"
+        assert has_signal is True
+
+    def test_currency_suffix_euro(self):
+        """Euro — signal=True."""
+        amount, remaining, has_signal = _extract_leading_amount("500 евро перевод")
+        assert amount == 500
+        assert remaining == "перевод"
+        assert has_signal is True
+
+    def test_multiplier_tys(self):
+        """Multiplier 'тыс' — signal=True."""
+        amount, remaining, has_signal = _extract_leading_amount("75 тыс аренда")
+        assert amount == 75000
+        assert remaining == "аренда"
+        assert has_signal is True
+
+    def test_multiplier_k(self):
+        """Multiplier 'к' — signal=True."""
+        amount, remaining, has_signal = _extract_leading_amount("75к аренда")
+        assert amount == 75000
+        assert remaining == "аренда"
+        assert has_signal is True
+
+    def test_multiplier_mln(self):
+        """Multiplier 'млн' — signal=True."""
+        amount, remaining, has_signal = _extract_leading_amount("1.5 млн бонус")
+        assert amount == pytest.approx(1500000)
+        assert remaining == "бонус"
+        assert has_signal is True
+
+    def test_multiplier_and_currency(self):
+        """Multiplier + currency — signal=True."""
+        amount, remaining, has_signal = _extract_leading_amount("5 тыс руб аренда")
+        assert amount == 5000
+        assert remaining == "аренда"
+        assert has_signal is True
+
+    def test_zero_returns_none(self):
+        """Zero amount should return None."""
+        amount, remaining, _sig = _extract_leading_amount("0 тест")
+        assert amount is None
+
+    def test_dot_thousands(self):
+        """Dot as thousands separator: 10.000.000 → 10000000."""
+        amount, remaining, _sig = _extract_leading_amount("10.000.000 бонус")
+        assert amount == 10_000_000
+        assert remaining == "бонус"
+
+    def test_dot_thousands_small(self):
+        """Single dot-thousands group: 10.000 → 10000."""
+        amount, remaining, _sig = _extract_leading_amount("10.000 премия")
+        assert amount == 10_000
+        assert remaining == "премия"
+
+    def test_dot_decimal_not_thousands(self):
+        """10.50 is decimal, not thousands (only 2 digits after dot)."""
+        amount, remaining, _sig = _extract_leading_amount("10.50 возврат")
+        assert amount == pytest.approx(10.50)
+        assert remaining == "возврат"
+
+    def test_partial_match_date_rejected(self):
+        """25.11.2025 — partial match (25.11 + .2025), should return None."""
+        amount, remaining, _sig = _extract_leading_amount("25.11.2025")
+        assert amount is None
+
+    def test_partial_match_malformed_dot(self):
+        """10.000.000.5 — partial match after dot-thousands, should return None."""
+        amount, remaining, _sig = _extract_leading_amount("10.000.000.5 бонус")
+        assert amount is None
+
+    def test_partial_match_comma_continuation(self):
+        """25,11,2025 — partial match, should return None."""
+        amount, remaining, _sig = _extract_leading_amount("25,11,2025")
+        assert amount is None
+
+    def test_date_with_year_20xx_rejected(self):
+        """25.11.2025 — date DD.MM.20XX should be rejected early."""
+        amount, remaining, _sig = _extract_leading_amount("25.11.2025")
+        assert amount is None
+
+    def test_date_with_short_year_20_rejected(self):
+        """15.03.20 — date DD.MM.20 (short year) should be rejected."""
+        amount, remaining, _sig = _extract_leading_amount("15.03.20")
+        assert amount is None
+
+    def test_date_with_year_and_text_rejected(self):
+        """25.11.2025 кофе 300 — date at start with text should be rejected."""
+        amount, remaining, _sig = _extract_leading_amount("25.11.2025 кофе 300")
+        assert amount is None
+
+    def test_non_date_dots_not_rejected(self):
+        """10.000 — dot-thousands, NOT a date (should still work)."""
+        amount, remaining, _sig = _extract_leading_amount("10.000")
+        assert amount == Decimal("10000")
+
+    def test_date_with_slash_separator_rejected(self):
+        """31/12/24 — date with / separator should be rejected."""
+        amount, remaining, _sig = _extract_leading_amount("31/12/24 зарплата 5000")
+        assert amount is None
+
+    def test_date_slash_partial_match(self):
+        """31/12/2024 — slash after number triggers partial match."""
+        amount, remaining, _sig = _extract_leading_amount("31/12/2024")
+        assert amount is None
+
+    def test_date_with_short_year_24_rejected(self):
+        """15.03.24 — date DD.MM.YY (non-20xx) should also be rejected."""
+        amount, remaining, _sig = _extract_leading_amount("15.03.24")
+        assert amount is None
+
+
+class TestConvertWordsToNumbers:
+    """Tests for convert_words_to_numbers date protection."""
+
+    def test_date_with_dash_preserved(self):
+        """25-11-2025 should be converted to 25.11.2025, not broken."""
+        from bot.utils.expense_parser import convert_words_to_numbers
+        result = convert_words_to_numbers("25-11-2025 кофе 300")
+        assert "25.11.2025" in result
+        assert "кофе" in result
+        assert "300" in result
+
+    def test_date_with_dash_short_year_preserved(self):
+        """31-12-24 should be converted to 31.12.24."""
+        from bot.utils.expense_parser import convert_words_to_numbers
+        result = convert_words_to_numbers("31-12-24 зарплата 5000")
+        assert "31.12.24" in result
+
+    def test_regular_dash_still_replaced(self):
+        """Non-date dashes should still be replaced with spaces."""
+        from bot.utils.expense_parser import convert_words_to_numbers
+        result = convert_words_to_numbers("кофе-латте 300")
+        # Dash between words (not date) should become space
+        assert "-" not in result
+
+
+class TestIncomeLeadingAmountRegression:
+    """Integration tests: full parse_income_message with leading amount fix."""
+
+    @pytest.mark.asyncio
+    async def test_production_bug_address_number(self):
+        """REGRESSION: +75000 аренда Кольская 8 → should be 75000, NOT 8."""
+        result = await parse_income_message("+75000 аренда Кольская 8", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(75000)
+
+    @pytest.mark.asyncio
+    async def test_apartment_number_not_amount(self):
+        """+50000 зп за январь кв 12 → should be 50000, NOT 12."""
+        result = await parse_income_message("+50000 зп за январь кв 12", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(50000)
+
+    @pytest.mark.asyncio
+    async def test_house_number_not_amount(self):
+        """+3000 возврат дом 5 → should be 3000, NOT 5."""
+        result = await parse_income_message("+3000 возврат дом 5", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(3000)
+
+    @pytest.mark.asyncio
+    async def test_simple_income_still_works(self):
+        """+5000 → basic case should still work."""
+        result = await parse_income_message("+5000", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(5000)
+
+    @pytest.mark.asyncio
+    async def test_income_with_description_still_works(self):
+        """+50000 зарплата → should still work."""
+        result = await parse_income_message("+50000 зарплата", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(50000)
+
+    @pytest.mark.asyncio
+    async def test_income_number_only(self):
+        """+9128 → number-only income."""
+        result = await parse_income_message("+9128", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(9128)
+
+    @pytest.mark.asyncio
+    async def test_income_with_currency(self):
+        """+75000 руб аренда Кольская 8 → amount with currency."""
+        result = await parse_income_message("+75000 руб аренда Кольская 8", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(75000)
+
+    @pytest.mark.asyncio
+    async def test_income_with_multiplier(self):
+        """+75 тыс аренда → multiplier should work."""
+        result = await parse_income_message("+75 тыс аренда", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(75000)
+
+    @pytest.mark.asyncio
+    async def test_income_fractional(self):
+        """+4.5 → fractional still works."""
+        result = await parse_income_message("+4.5", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(4.5)
+
+    @pytest.mark.asyncio
+    async def test_income_dot_thousands(self):
+        """+10.000.000 бонус → dot-thousands should give 10000000."""
+        result = await parse_income_message("+10.000.000 бонус", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(10_000_000)
+
+    @pytest.mark.asyncio
+    async def test_income_dot_thousands_small(self):
+        """+10.000 премия → 10000, not 10."""
+        result = await parse_income_message("+10.000 премия", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(10_000)
+
+    @pytest.mark.asyncio
+    async def test_date_not_parsed_as_amount(self):
+        """+25.11.2025 — date-like input should NOT give garbage amount."""
+        result = await parse_income_message("+25.11.2025", use_ai=False)
+        # Should be None (no valid amount) or at least not a partial number
+        if result is not None:
+            assert result["amount"] != pytest.approx(25.11)
+            assert result["amount"] != pytest.approx(11.2025)
+
+    @pytest.mark.asyncio
+    async def test_malformed_dot_thousands(self):
+        """+10.000.000.5 бонус — malformed number should not give garbage description."""
+        result = await parse_income_message("+10.000.000.5 бонус", use_ai=False)
+        if result is not None:
+            # Description should not start with ".5"
+            desc = result.get("description", "")
+            assert not desc.startswith(".5")
+
+    @pytest.mark.asyncio
+    async def test_expense_not_affected(self):
+        """Expense parsing should NOT be affected — 'кофе 300' still gets 300."""
+        result = await parse_expense_message("кофе 300", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(300)
+
+    @pytest.mark.asyncio
+    async def test_income_date_with_slash(self):
+        """+31/12/24 зарплата 5000 → amount should be 5000, NOT 31."""
+        result = await parse_income_message("+31/12/24 зарплата 5000", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(5000)
+
+    @pytest.mark.asyncio
+    async def test_income_date_with_dash(self):
+        """+31-12-24 зарплата 5000 → amount should be 5000, NOT 31."""
+        result = await parse_income_message("+31-12-24 зарплата 5000", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(5000)
+
+
+class TestExpenseLeadingAmountRegression:
+    """Regression tests: leading amount extraction for expenses (unified with income)."""
+
+    @pytest.mark.asyncio
+    async def test_expense_with_currency_and_trailing_number(self):
+        """75000 руб Кольская 8 — currency signals that 75000 is amount, not 8."""
+        result = await parse_expense_message("75000 руб Кольская 8", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(75000)
+
+    @pytest.mark.asyncio
+    async def test_expense_leading_number_no_currency(self):
+        """75000 Кольская 8 — leading number should be amount, not trailing 8."""
+        result = await parse_expense_message("75000 Кольская 8", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(75000)
+
+    @pytest.mark.asyncio
+    async def test_expense_multiplier_and_trailing_number(self):
+        """75 тыс Кольская 8 — multiplier signals 75000, not trailing 8."""
+        result = await parse_expense_message("75 тыс Кольская 8", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(75000)
+
+    @pytest.mark.asyncio
+    async def test_expense_trailing_amount_still_works(self):
+        """кофе 300 — classic pattern, amount at end still works."""
+        result = await parse_expense_message("кофе 300", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(300)
+
+    @pytest.mark.asyncio
+    async def test_expense_trailing_amount_taxi(self):
+        """такси 250 — amount at end, no leading number."""
+        result = await parse_expense_message("такси 250", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(250)
+
+    @pytest.mark.asyncio
+    async def test_expense_trailing_amount_with_preposition(self):
+        """обед в кафе 1500 — amount at end, description has preposition."""
+        result = await parse_expense_message("обед в кафе 1500", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(1500)
+
+    @pytest.mark.asyncio
+    async def test_expense_leading_number_simple(self):
+        """300 кофе — leading number is the amount."""
+        result = await parse_expense_message("300 кофе", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(300)
+
+    @pytest.mark.asyncio
+    async def test_expense_quantity_not_amount(self):
+        """2 кофе по 150 — 150 is the amount (from patterns), not 2 (quantity)."""
+        result = await parse_expense_message("2 кофе по 150", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(150)
+
+    @pytest.mark.asyncio
+    async def test_expense_year_not_amount(self):
+        """2024 подписка 500 — 500 is the amount, not 2024 (year)."""
+        result = await parse_expense_message("2024 подписка 500", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(500)
+
+    @pytest.mark.asyncio
+    async def test_expense_date_with_slash(self):
+        """31/12/24 кофе 300 — date with / separator, amount=300."""
+        result = await parse_expense_message("31/12/24 кофе 300", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(300)
+
+    @pytest.mark.asyncio
+    async def test_expense_date_with_dash(self):
+        """25-11-2025 кофе 300 — date with - separator, amount=300."""
+        result = await parse_expense_message("25-11-2025 кофе 300", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(300)
