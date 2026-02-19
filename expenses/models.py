@@ -1203,7 +1203,7 @@ class UserAnalytics(models.Model):
     """Ежедневная аналитика активности пользователя"""
     
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='analytics')
-    date = models.DateField(auto_now_add=True)
+    date = models.DateField(default=timezone.localdate)
     
     # Активность
     messages_sent = models.IntegerField(default=0)

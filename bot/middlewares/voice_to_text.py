@@ -71,8 +71,14 @@ class VoiceToTextMiddleware(BaseMiddleware):
 
             if text:
                 text = text.strip()
+
+            if text:
                 logger.info(f"[VoiceToText] User {user_id}: voice transcribed to '{text[:50]}...'")
                 data['voice_text'] = text
+
+                # Инкрементируем счётчик голосовых в UserAnalytics
+                from bot.utils.analytics import increment_analytics_counter
+                await increment_analytics_counter(user_id, 'voice_messages')
             else:
                 logger.warning(f"[VoiceToText] User {user_id}: failed to transcribe voice")
                 data['voice_text'] = None

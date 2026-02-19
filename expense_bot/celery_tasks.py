@@ -472,8 +472,8 @@ def send_daily_admin_report():
         def esc(v) -> str:
             return escape_markdown_v2(str(v))
 
-        yesterday = timezone.now().date() - timedelta(days=1)
-        today = timezone.now().date()
+        yesterday = timezone.localdate() - timedelta(days=1)
+        today = timezone.localdate()
         week_ago = yesterday - timedelta(days=7)
         yesterday_start = timezone.make_aware(datetime.combine(yesterday, datetime.min.time()))
         yesterday_end = timezone.make_aware(datetime.combine(yesterday, datetime.max.time()))
@@ -1215,7 +1215,7 @@ def collect_daily_analytics():
         logger.info("Начинаем сбор ежедневной аналитики")
         
         # Вчерашняя дата (данные за которую собираем)
-        target_date = (timezone.now() - timedelta(days=1)).date()
+        target_date = timezone.localdate() - timedelta(days=1)
         target_start = timezone.make_aware(datetime.combine(target_date, time.min))
         target_end = timezone.make_aware(datetime.combine(target_date, time.max))
         
@@ -1294,10 +1294,11 @@ def collect_daily_analytics():
                 # Budget checks (заглушка)
                 budget_checks = 0
                 
-                # Примерная активность по сообщениям/фото (заглушка)
-                messages_sent = expenses_stats['count'] or 0  # Примерно по количеству расходов
-                voice_messages = 0  # Заглушка
-                photos_sent = 0     # Заглушка
+                # messages_sent — примерно по количеству расходов (заглушка)
+                messages_sent = expenses_stats['count'] or 0
+                # voice_messages и photos_sent инкрементируются в реальном времени
+                # (VoiceToTextMiddleware и handle_photo_expense),
+                # поэтому НЕ перезаписываем их нулями — сохраняем текущее значение из БД
                 
                 # Определяем команды (заглушка)
                 commands_used = {}
@@ -1310,8 +1311,8 @@ def collect_daily_analytics():
                 if existing_analytics:
                     # Обновляем существующую запись
                     existing_analytics.messages_sent = messages_sent
-                    existing_analytics.voice_messages = voice_messages
-                    existing_analytics.photos_sent = photos_sent
+                    # voice_messages и photos_sent НЕ трогаем —
+                    # они инкрементируются в реальном времени из middleware/handlers
                     existing_analytics.commands_used = commands_used
                     existing_analytics.expenses_added = expenses_stats['count'] or 0
                     existing_analytics.incomes_added = incomes_count
@@ -1332,12 +1333,13 @@ def collect_daily_analytics():
                     logger.info(f"Updated analytics for user {profile.telegram_id} for {target_date}")
                 else:
                     # Создаем новую запись
+                    # voice_messages и photos_sent не передаём — используется default=0.
+                    # Если запись уже была создана через increment_analytics_counter,
+                    # она попадёт в existing_analytics выше.
                     UserAnalytics.objects.create(
                         profile=profile,
                         date=target_date,
                         messages_sent=messages_sent,
-                        voice_messages=voice_messages,
-                        photos_sent=photos_sent,
                         commands_used=commands_used,
                         expenses_added=expenses_stats['count'] or 0,
                         incomes_added=incomes_count,
@@ -2045,3 +2047,130 @@ def learn_income_keywords_on_create(income_id: int):
 
     except Exception as e:
         logger.error(f"Error in learn_income_keywords_on_create: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Cross-server monitoring: expense_bot checks nutrition_bot availability
+# ---------------------------------------------------------------------------
+
+REMOTE_SERVER_NAME = "Nutrition Bot"
+REMOTE_SERVER_IP = "45.93.201.222"
+REMOTE_HEALTH_URL = "https://showmefood.duckdns.org/health/"
+REMOTE_CHECK_TIMEOUT = 15  # seconds
+REMOTE_FAILURES_BEFORE_ALERT = 1  # alert on first failure
+
+CACHE_KEY_REMOTE_FAILURES = "remote_server:failures"
+CACHE_KEY_REMOTE_ALERT_SENT = "remote_server:alert_sent"
+CACHE_KEY_REMOTE_DOWN_SINCE = "remote_server:down_since"
+
+
+@shared_task
+def check_remote_server_health():
+    """
+    Периодическая проверка доступности удалённого сервера (Nutrition Bot).
+    Если сервер недоступен REMOTE_FAILURES_BEFORE_ALERT раз подряд — шлёт алерт.
+    При восстановлении — уведомляет о recovery с временем простоя.
+    """
+    import requests as http_requests
+    from django.core.cache import cache
+
+    # 1. Проверяем доступность
+    is_up = False
+    error_detail = ""
+    try:
+        resp = http_requests.get(REMOTE_HEALTH_URL, timeout=REMOTE_CHECK_TIMEOUT)
+        is_up = resp.status_code == 200
+        if not is_up:
+            error_detail = f"HTTP {resp.status_code}"
+    except http_requests.exceptions.Timeout:
+        error_detail = "Timeout"
+    except http_requests.exceptions.ConnectionError:
+        error_detail = "Connection refused"
+    except Exception as e:
+        error_detail = str(e)[:100]
+
+    # 2. Обрабатываем результат
+    if is_up:
+        _handle_remote_server_up(cache)
+    else:
+        _handle_remote_server_down(cache, error_detail)
+
+
+def _handle_remote_server_up(cache) -> None:
+    """Сервер доступен — сбрасываем счётчик, шлём recovery если был алерт."""
+    was_alert_sent = cache.get(CACHE_KEY_REMOTE_ALERT_SENT)
+
+    if was_alert_sent:
+        # Считаем время простоя
+        down_since_iso = cache.get(CACHE_KEY_REMOTE_DOWN_SINCE)
+        downtime_str = "неизвестно"
+        if down_since_iso:
+            try:
+                down_since = datetime.fromisoformat(down_since_iso)
+                delta = datetime.now() - down_since
+                minutes = int(delta.total_seconds() // 60)
+                downtime_str = f"~{minutes} мин" if minutes > 0 else "<1 мин"
+            except (ValueError, TypeError):
+                pass
+
+        _send_remote_alert(
+            f"✅ СЕРВЕР ВОССТАНОВЛЕН\n\n"
+            f"Сервер: {REMOTE_SERVER_NAME} ({REMOTE_SERVER_IP})\n"
+            f"Время простоя: {downtime_str}"
+        )
+        cache.delete(CACHE_KEY_REMOTE_ALERT_SENT)
+        cache.delete(CACHE_KEY_REMOTE_DOWN_SINCE)
+        logger.info(f"[REMOTE_MONITOR] {REMOTE_SERVER_NAME} recovered, downtime={downtime_str}")
+
+    cache.set(CACHE_KEY_REMOTE_FAILURES, 0, 3600)
+
+
+def _handle_remote_server_down(cache, error_detail: str) -> None:
+    """Сервер недоступен — увеличиваем счётчик, шлём алерт если порог превышен."""
+    failures = (cache.get(CACHE_KEY_REMOTE_FAILURES) or 0) + 1
+    cache.set(CACHE_KEY_REMOTE_FAILURES, failures, 3600)
+
+    # Запоминаем момент начала недоступности
+    if failures == 1:
+        cache.set(CACHE_KEY_REMOTE_DOWN_SINCE, datetime.now().isoformat(), 86400)
+
+    logger.warning(
+        f"[REMOTE_MONITOR] {REMOTE_SERVER_NAME} unreachable "
+        f"(attempt {failures}, error: {error_detail})"
+    )
+
+    if failures >= REMOTE_FAILURES_BEFORE_ALERT and not cache.get(CACHE_KEY_REMOTE_ALERT_SENT):
+        import pytz
+        moscow_tz = pytz.timezone('Europe/Moscow')
+        now_msk = datetime.now(moscow_tz).strftime('%H:%M')
+
+        sent = _send_remote_alert(
+            f"🚨 СЕРВЕР НЕДОСТУПЕН\n\n"
+            f"Сервер: {REMOTE_SERVER_NAME} ({REMOTE_SERVER_IP})\n"
+            f"URL: {REMOTE_HEALTH_URL}\n"
+            f"Недоступен с: {now_msk} MSK\n"
+            f"Проверок подряд: {failures}\n"
+            f"Ошибка: {error_detail}\n\n"
+            f"Проверь сервер!"
+        )
+        if sent:
+            cache.set(CACHE_KEY_REMOTE_ALERT_SENT, True, 86400)
+            logger.error(f"[REMOTE_MONITOR] Alert sent: {REMOTE_SERVER_NAME} is DOWN")
+        else:
+            logger.error(f"[REMOTE_MONITOR] Failed to send alert, will retry next check")
+
+
+def _send_remote_alert(message: str) -> bool:
+    """Отправить уведомление админу через async admin_notifier. Возвращает True при успехе."""
+    try:
+        from bot.services.admin_notifier import send_admin_alert
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(send_admin_alert(message))
+        finally:
+            _shutdown_event_loop(loop, label="check_remote_server_health")
+        return True
+    except Exception as e:
+        logger.error(f"[REMOTE_MONITOR] Failed to send alert: {e}")
+        return False

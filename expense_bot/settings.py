@@ -395,6 +395,7 @@ os.makedirs(BASE_DIR / 'logs', exist_ok=True)
 
 # Celery Beat Schedule
 try:
+    from datetime import timedelta
     from celery.schedules import crontab
     
     CELERY_BEAT_SCHEDULE = {
@@ -455,7 +456,12 @@ try:
         'task': 'expenses.tasks.send_expense_reminders',
         'schedule': crontab(hour=20, minute=0),  # 8 PM daily
         'options': {'queue': 'notifications'}
-    }
+    },
+    'check-remote-server': {
+        'task': 'expense_bot.celery_tasks.check_remote_server_health',
+        'schedule': timedelta(minutes=11),  # Every 11 minutes (exact interval)
+        'options': {'queue': 'monitoring', 'priority': 10, 'expires': 600}
+    },
 }
 except ImportError:
     CELERY_BEAT_SCHEDULE = {}

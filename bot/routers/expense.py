@@ -2118,6 +2118,11 @@ async def handle_voice_expense(message: types.Message, state: FSMContext, lang: 
 @rate_limit(max_calls=10, period=60)  # 10 фото в минуту
 async def handle_photo_expense(message: types.Message, state: FSMContext):
     """Обработка фото чеков"""
+    # Инкрементируем счётчик фото в UserAnalytics
+    if message.from_user:
+        from bot.utils.analytics import increment_analytics_counter
+        await increment_analytics_counter(message.from_user.id, 'photos_sent')
+
     await send_message_with_cleanup(message, state, "📸 Обработка чеков будет добавлена в следующей версии.")
 
 
