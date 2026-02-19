@@ -2113,14 +2113,17 @@ def _handle_remote_server_up(cache) -> None:
             except (ValueError, TypeError):
                 pass
 
-        _send_remote_alert(
+        recovery_sent = _send_remote_alert(
             f"✅ СЕРВЕР ВОССТАНОВЛЕН\n\n"
             f"Сервер: {REMOTE_SERVER_NAME} ({REMOTE_SERVER_IP})\n"
             f"Время простоя: {downtime_str}"
         )
-        cache.delete(CACHE_KEY_REMOTE_ALERT_SENT)
-        cache.delete(CACHE_KEY_REMOTE_DOWN_SINCE)
-        logger.info(f"[REMOTE_MONITOR] {REMOTE_SERVER_NAME} recovered, downtime={downtime_str}")
+        if recovery_sent:
+            cache.delete(CACHE_KEY_REMOTE_ALERT_SENT)
+            cache.delete(CACHE_KEY_REMOTE_DOWN_SINCE)
+            logger.info(f"[REMOTE_MONITOR] {REMOTE_SERVER_NAME} recovered, downtime={downtime_str}")
+        else:
+            logger.warning(f"[REMOTE_MONITOR] Recovery message failed to send, keeping alert flag")
 
     cache.set(CACHE_KEY_REMOTE_FAILURES, 0, 3600)
 
@@ -2167,10 +2170,10 @@ def _send_remote_alert(message: str) -> bool:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(send_admin_alert(message))
+            result = loop.run_until_complete(send_admin_alert(message))
         finally:
             _shutdown_event_loop(loop, label="check_remote_server_health")
-        return True
+        return bool(result)
     except Exception as e:
         logger.error(f"[REMOTE_MONITOR] Failed to send alert: {e}")
         return False
