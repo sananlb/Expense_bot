@@ -145,6 +145,15 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
             queue='maintenance',
         )
 
+        # Cleanup stale/deprecated tasks from DB
+        stale_tasks = [
+            'process-held-affiliate-commissions',
+            'expense_bot.celery_tasks.process_held_affiliate_commissions',
+        ]
+        deleted, _ = PeriodicTask.objects.filter(name__in=stale_tasks).delete()
+        if deleted:
+            logger.info("[Beat setup] Removed %d stale PeriodicTask(s)", deleted)
+
         logger.info("[Beat setup] Ensured PeriodicTasks: %s", ", ".join(created_or_updated))
     except Exception as e:
         logger.error("[Beat setup] Error ensuring PeriodicTasks: %s", e)

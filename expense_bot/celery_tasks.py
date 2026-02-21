@@ -1975,6 +1975,7 @@ def prefetch_cbrf_rates():
         finally:
             if converter.session and not converter.session.closed:
                 await converter.session.close()
+                await asyncio.sleep(0)  # let connector cleanup callbacks run
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
