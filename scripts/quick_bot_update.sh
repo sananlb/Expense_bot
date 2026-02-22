@@ -74,7 +74,8 @@ for COMPOSE_FILE in docker-compose.yml docker-compose.override.yml; do
         #   - "0.0.0.0:8000:8000" (quoted, явный 0.0.0.0)
         #   - 8000:8000           (unquoted)
         #   - "${VAR}:8000"       (с переменными)
-        FILE_UNSAFE=$(grep -E '^[[:space:]]*-[[:space:]]*("|'"'"')?[0-9$]' "$COMPOSE_FILE" | grep -v '127\.0\.0\.1' || true)
+        # Требуем наличие ":" (port mapping), чтобы не ловить dns записи вроде "- 8.8.8.8"
+        FILE_UNSAFE=$(grep -E '^[[:space:]]*-[[:space:]]*("|'"'"')?[0-9$]' "$COMPOSE_FILE" | grep ':' | grep -v '127\.0\.0\.1' || true)
         if [ -n "$FILE_UNSAFE" ]; then
             UNSAFE_PORTS="${UNSAFE_PORTS}${COMPOSE_FILE}:\n${FILE_UNSAFE}\n"
         fi
