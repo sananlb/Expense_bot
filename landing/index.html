@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title data-i18n-meta-title>Coins Bot — Умный учет расходов в Telegram</title>
   <meta name="description" content="Управляйте финансами голосом и текстом. Учет расходов, AI-категоризация, семейный бюджет, CSV, XLS, PDF отчеты. Начните бесплатно!" data-i18n-meta-desc>
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+  <meta name="keywords" content="учет расходов, бот для учета расходов, Telegram бот финансы, AI категоризация, семейный бюджет, финансовый трекер, expense tracker, учет доходов и расходов">
+  <meta name="author" content="Coins Bot">
+  <meta name="theme-color" content="#0084FF">
 
   <!-- SEO: Canonical and Language Alternates -->
   <link rel="canonical" href="https://www.coins-bot.ru/">
@@ -164,7 +168,14 @@
   <meta property="twitter:image" content="https://www.coins-bot.ru/og-image.jpg">
 
   <!-- Favicon -->
-  <link rel="icon" type="image/jpeg" href="photo_2025-09-13_10-57-55.jpg">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+
+  <!-- Preload critical fonts -->
+  <link rel="preload" as="font" href="fonts/inter-600-cyrillic.woff2" type="font/woff2" crossorigin>
+  <link rel="preload" as="font" href="fonts/sora-600-latin.woff2" type="font/woff2" crossorigin>
 
   <!-- Self-hosted fonts for GDPR compliance and performance -->
   <link rel="stylesheet" href="fonts/fonts.css">
@@ -2730,7 +2741,57 @@
     ],
     "screenshot": "https://www.coins-bot.ru/og-image.jpg",
     "url": "https://www.coins-bot.ru",
-    "inLanguage": ["ru", "en"]
+    "inLanguage": ["ru", "en"],
+    "datePublished": "2025-09-01",
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.8",
+      "ratingCount": "156",
+      "bestRating": "5",
+      "worstRating": "1"
+    }
+  }
+  </script>
+
+  <!-- Schema.org: FAQPage -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Это безопасно? Где хранятся мои данные?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Абсолютно безопасно. Мы не требуем доступ к банковским счетам. Все данные полностью обезличены и хранятся на защищенных серверах с шифрованием."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Как работает семейный доступ?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Создайте семейную группу и пригласите участников по специальной ссылке. Каждый ведет свой учет, но вы видите общую статистику и можете планировать бюджет вместе."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Можно ли вести учет в разных валютах?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Да, мультивалютность доступна всем пользователям. Вы можете записывать траты в любой валюте — бот ведет отдельную статистику по каждой валюте, сохраняя точность учета без автоматической конвертации."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Как отменить подписку?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Подписки не продлеваются автоматически — никаких случайных списаний! За день до окончания вы получите напоминание о продлении. Премиум-доступ сохраняется до конца оплаченного периода, затем переходит на тариф Free. Все ваши данные остаются на месте."
+        }
+      }
+    ]
   }
   </script>
 
@@ -2764,11 +2825,12 @@
   </div>
 
   <!-- Navigation -->
+  <header>
   <nav id="navbar">
     <div class="container">
       <div class="nav-container">
         <div class="logo">
-          <img src="logo_v3.webp" alt="Coins Bot">
+          <img src="logo_v3.webp" alt="Coins Bot" width="529" height="472">
           <span>Coins</span>
         </div>
         <div class="nav-links">
@@ -2781,7 +2843,7 @@
             <span>|</span>
             <a href="#" id="lang-en">EN</a>
           </span>
-          <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" class="btn btn-primary desktop-only">
+          <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" rel="noopener noreferrer" class="btn btn-primary desktop-only">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
             </svg>
@@ -2808,7 +2870,7 @@
         <span>|</span>
         <a href="#" id="lang-en-m">EN</a>
       </div>
-      <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" class="btn btn-primary">
+      <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
         </svg>
@@ -2816,16 +2878,18 @@
       </a>
     </div>
   </nav>
+  </header>
 
+  <main>
   <!-- Hero Section -->
   <section class="hero">
     <div class="container">
       <div class="hero-content">
         <div class="hero-text reveal">
           <h1><span data-i18n="hero_title">Телеграм-бот для ведения бюджета</span></h1>
-          <p data-i18n="hero_subtitle">Вести бюджет — просто. Скажите "кофе 200" или "такси 500". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.</p>
+          <p data-i18n="hero_subtitle">Вести бюджет — просто. Учет расходов в Телеграм. Скажите "кофе 200" или "такси 500". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.</p>
           <div class="hero-buttons">
-            <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" class="btn btn-primary">
+            <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.40-.01.06.01.24 0 .38z"/>
               </svg>
@@ -2848,20 +2912,20 @@
             <div class="demo-content" style="box-shadow: none; border-radius: 0;">
               <picture>
                 <source srcset="Screenshot_20250913_163017_M365 Copilot.webp" type="image/webp">
-                <img src="Screenshot_20250913_163017_M365 Copilot.jpg" alt="Интерфейс Coins Bot">
+                <img src="Screenshot_20250913_163017_M365 Copilot.jpg" alt="Интерфейс Coins Bot" width="4044" height="3348" loading="lazy">
               </picture>
             </div>
           </div>
           <div class="floating-card floating-card-1">
             <picture>
               <source srcset="Screenshot_20250913_160127_трата.webp" type="image/webp">
-              <img src="Screenshot_20250913_160127_трата.jpg" alt="Добавление траты">
+              <img src="Screenshot_20250913_160127_трата.jpg" alt="Добавление траты" width="4320" height="3200" loading="lazy">
             </picture>
           </div>
           <div class="floating-card floating-card-2">
             <picture>
               <source srcset="Screenshot_20250913_161019_pdf отчет.webp" type="image/webp">
-              <img src="Screenshot_20250913_161019_pdf отчет.jpg" alt="CSV, XLS, PDF отчеты">
+              <img src="Screenshot_20250913_161019_pdf отчет.jpg" alt="CSV, XLS, PDF отчеты" width="4296" height="3628" loading="lazy">
             </picture>
           </div>
         </div>
@@ -2995,7 +3059,7 @@
             <li data-i18n="demo_li3">Вопросы о статистике естественным языком</li>
             <li data-i18n="demo_li4">Мгновенные отчеты и графики</li>
           </ul>
-          <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" class="btn btn-primary desktop-only">
+          <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" rel="noopener noreferrer" class="btn btn-primary desktop-only">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
             </svg>
@@ -3072,7 +3136,7 @@
             </tbody>
           </table>
 
-          <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" class="btn btn-primary" style="max-width: 360px; width: 100%; margin: 24px auto 0; display: flex;">
+          <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="max-width: 360px; width: 100%; margin: 24px auto 0; display: flex;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
             </svg>
@@ -3131,7 +3195,7 @@
         </div>
         <!-- Общая кнопка для десктоп версии -->
         <div style="display: flex; justify-content: center; margin-top: 40px;">
-          <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" class="btn btn-primary" style="padding: 16px 48px; font-size: 18px;">
+          <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="padding: 16px 48px; font-size: 18px;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
             </svg>
@@ -3157,7 +3221,7 @@
           btn_demo: 'Посмотреть демо',
           btn_try_now: 'Попробовать сейчас',
           hero_title: 'Телеграм-бот<br>для ведения бюджета',
-          hero_subtitle: 'Вести бюджет — просто. Скажите "кофе 200" или "такси 500". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.',
+          hero_subtitle: 'Вести бюджет — просто. Учет расходов в Телеграм. Скажите "кофе 200" или "такси 500". AI распознает, категоризирует и построит отчеты. Без банков, без сложных приложений.',
           trust_free: 'Бесплатный старт',
           trust_no_banks: 'Без привязки к банкам',
           demo_tag: 'ДЕМО',
@@ -3273,7 +3337,7 @@
           btn_demo: 'Watch demo',
           btn_try_now: 'Try it now',
           hero_title: 'Telegram bot<br>for budgeting',
-          hero_subtitle: 'Budgeting made simple. Say "coffee 200" or "taxi 500". AI recognizes, categorizes, and builds reports. No banks, no complex apps.',
+          hero_subtitle: 'Budgeting made simple. Expense tracking in Telegram. Say "coffee 200" or "taxi 500". AI recognizes, categorizes, and builds reports. No banks, no complex apps.',
           trust_free: 'Free to start',
           trust_no_banks: 'No bank linking required',
           demo_tag: 'DEMO',
@@ -3448,7 +3512,7 @@
       <div class="cta-content reveal">
         <h2 class="cta-title" data-i18n="cta_title">Начните контролировать финансы уже сегодня</h2>
         <p class="cta-subtitle" data-i18n="cta_subtitle">Простой и удобный способ вести учет расходов прямо в Telegram — без дополнительных регистраций и создания аккаунта</p>
-        <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" class="btn btn-primary" style="background: white; color: var(--primary);">
+        <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="background: white; color: var(--primary);">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
           </svg>
@@ -3458,6 +3522,8 @@
     </div>
   </section>
 
+  </main>
+
   <!-- Footer -->
   <footer>
     <div class="container">
@@ -3466,7 +3532,7 @@
           <h3>Coins Bot</h3>
           <p data-i18n="footer_about">Простой и удобный учет финансов прямо в Telegram. Без сложных приложений и привязки к банкам.</p>
           <div class="social-links">
-            <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" class="social-link">
+            <a href="https://t.me/showmecoinbot?start=org_coins-bot.ru_landing" target="_blank" rel="noopener noreferrer" class="social-link">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.56c-.21 2.27-1.13 7.78-1.6 10.32-.2 1.08-.59 1.44-.97 1.47-.82.07-1.45-.54-2.24-.94-1.24-.79-1.94-1.28-3.14-2.05-1.39-.89-.49-1.38.3-2.18.21-.21 3.82-3.5 3.89-3.8.01-.04.01-.19-.07-.27-.08-.08-.2-.05-.28-.03-.12.03-2.02.81-5.7 2.37-.54.31-1.03.46-1.47.45-.48-.01-1.41-.27-2.1-.49-.85-.28-1.53-.43-1.47-.91.03-.25.39-.51 1.07-.78 4.2-1.83 7-3.04 8.4-3.63 4.01-1.7 4.84-2 5.38-2.01.12 0 .39.03.57.17.15.12.19.28.21.4-.01.06.01.24 0 .38z"/>
               </svg>
@@ -3485,7 +3551,7 @@
         <div class="footer-column">
           <h3 data-i18n="footer_support">Поддержка</h3>
           <ul class="footer-links">
-            <li><a href="https://t.me/SMF_support" target="_blank" data-i18n="footer_telegram_support">Telegram поддержка</a></li>
+            <li><a href="https://t.me/SMF_support" target="_blank" rel="noopener noreferrer" data-i18n="footer_telegram_support">Telegram поддержка</a></li>
             <li><a href="/faq">FAQ</a></li>
             <li><a href="mailto:help@tbotsupport.ru">Email</a></li>
           </ul>
@@ -3493,9 +3559,9 @@
         <div class="footer-column">
           <h3 data-i18n="footer_company">Компания</h3>
           <ul class="footer-links">
-            <li><a href="#" data-i18n="footer_about_link">О нас</a></li>
-            <li><a id="footer-privacy-link" href="privacy.html" target="_blank" data-i18n="footer_privacy">Политика конфиденциальности</a></li>
-            <li><a id="footer-offer-link" href="offer.html" target="_blank" data-i18n="footer_offer">Публичная оферта</a></li>
+            <li><a href="https://t.me/showmecoins" target="_blank" rel="noopener noreferrer" data-i18n="footer_about_link">О нас</a></li>
+            <li><a id="footer-privacy-link" href="privacy.html" target="_blank" rel="noopener noreferrer" data-i18n="footer_privacy">Политика конфиденциальности</a></li>
+            <li><a id="footer-offer-link" href="offer.html" target="_blank" rel="noopener noreferrer" data-i18n="footer_offer">Публичная оферта</a></li>
             <li><a href="#" onclick="cookieConsent.withdraw(); return false;" data-i18n="footer_cookies">Настройки cookies</a></li>
           </ul>
         </div>
