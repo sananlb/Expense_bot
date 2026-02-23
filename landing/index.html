@@ -2911,21 +2911,21 @@
           <div class="demo-window" style="background: transparent; border: none; box-shadow: none; padding: 0;">
             <div class="demo-content" style="box-shadow: none; border-radius: 0;">
               <picture>
-                <source srcset="Screenshot_20250913_163017_M365 Copilot.webp" type="image/webp">
-                <img src="Screenshot_20250913_163017_M365 Copilot.jpg" alt="Интерфейс Coins Bot" width="4044" height="3348" loading="lazy">
+                <source srcset="Screenshot_20250913_163017_M365%20Copilot.webp" type="image/webp">
+                <img src="Screenshot_20250913_163017_M365%20Copilot.jpg" alt="Интерфейс Coins Bot" width="4044" height="3348" loading="lazy">
               </picture>
             </div>
           </div>
           <div class="floating-card floating-card-1">
             <picture>
-              <source srcset="Screenshot_20250913_160127_трата.webp" type="image/webp">
-              <img src="Screenshot_20250913_160127_трата.jpg" alt="Добавление траты" width="4320" height="3200" loading="lazy">
+              <source srcset="Screenshot_20250913_160127_%D1%82%D1%80%D0%B0%D1%82%D0%B0.webp" type="image/webp">
+              <img src="Screenshot_20250913_160127_%D1%82%D1%80%D0%B0%D1%82%D0%B0.jpg" alt="Добавление траты" width="4320" height="3200" loading="lazy">
             </picture>
           </div>
           <div class="floating-card floating-card-2">
             <picture>
-              <source srcset="Screenshot_20250913_161019_pdf отчет.webp" type="image/webp">
-              <img src="Screenshot_20250913_161019_pdf отчет.jpg" alt="CSV, XLS, PDF отчеты" width="4296" height="3628" loading="lazy">
+              <source srcset="Screenshot_20250913_161019_pdf%20%D0%BE%D1%82%D1%87%D0%B5%D1%82.webp" type="image/webp">
+              <img src="Screenshot_20250913_161019_pdf%20%D0%BE%D1%82%D1%87%D0%B5%D1%82.jpg" alt="CSV, XLS, PDF отчеты" width="4296" height="3628" loading="lazy">
             </picture>
           </div>
         </div>
@@ -3433,7 +3433,7 @@
           faq_q3: 'Can I track in multiple currencies?',
           faq_a3: 'Yes, multi‑currency is available to all users. Record expenses in any currency — the bot keeps separate stats per currency without automatic conversion.',
           faq_q4: 'How do I cancel a subscription?',
-          faq_a4: 'Subscriptions are not auto‑renewed — no accidental charges! One day before the end you'll get a reminder to renew. Premium access remains until the end of the paid period, then switches to Free. Your data stays intact.',
+          faq_a4: 'Subscriptions are not auto‑renewed — no accidental charges! One day before the end you\u0027ll get a reminder to renew. Premium access remains until the end of the paid period, then switches to Free. Your data stays intact.',
           cookie_title: 'Cookies',
           cookie_text: 'We use cookies for analytics and advertising.',
           cookie_link: 'Learn more',
@@ -3636,8 +3636,10 @@
     // Smooth scrolling for anchor links
     document.querySelectorAll('a[href^="#"]').forEach(anchor => {
       anchor.addEventListener('click', function (e) {
+        const href = this.getAttribute('href');
+        if (!href || href === '#') return;
         e.preventDefault();
-        const target = document.querySelector(this.getAttribute('href'));
+        const target = document.querySelector(href);
         if (target) {
           target.scrollIntoView({
             behavior: 'smooth',
