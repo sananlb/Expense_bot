@@ -96,3 +96,7 @@ nul
 # Local development entry point (not for server)
 run_bot.py
 archive_20260128/
+
+# Codex review session files
+.codex-plan-session
+.codex-code-session
