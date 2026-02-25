@@ -74,7 +74,7 @@ new-feature-plan.md
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/codex-session-cleanup.sh\"",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/codex-session-cleanup.sh\"",
             "timeout": 5
           }
         ]
@@ -86,7 +86,7 @@ new-feature-plan.md
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/codex-review-hook.sh\"",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/codex-review-hook.sh\"",
             "timeout": 120
           }
         ]
@@ -97,7 +97,7 @@ new-feature-plan.md
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/codex-code-review-hook.sh\"",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/codex-code-review-hook.sh\"",
             "timeout": 180
           }
         ]
@@ -122,13 +122,13 @@ new-feature-plan.md
 
 ### 3.4 Файлы скриптов
 
-Все скрипты в `scripts/`:
+Все скрипты в `.claude/hooks/`:
 
 | Файл | Назначение |
 |---|---|
-| `scripts/codex-session-cleanup.sh` | Очистка session-файлов при старте |
-| `scripts/codex-review-hook.sh` | Ревью файлов планов (`*plan*.md`) |
-| `scripts/codex-code-review-hook.sh` | Ревью кода (git diff) при Stop |
+| `.claude/hooks/codex-session-cleanup.sh` | Очистка session-файлов при старте |
+| `.claude/hooks/codex-review-hook.sh` | Ревью файлов планов (`*plan*.md`) |
+| `.claude/hooks/codex-code-review-hook.sh` | Ревью кода (git diff) при Stop |
 
 Session-файлы (в `.gitignore`):
 - `.codex-plan-session` — ID сессии ревью плана
