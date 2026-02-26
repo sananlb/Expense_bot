@@ -2,7 +2,7 @@
 
 > Дата создания: 2026-02-26
 > Последнее обновление: 2026-02-26
-> Версия: 2.0 (проверено в реальном цикле ревью)
+> Версия: 3.0 (PreToolUse + additionalContext)
 
 ---
 
@@ -24,7 +24,8 @@
 .claude/
   settings.json                  ← конфигурация hooks
   hooks/
-    codex-review-hook.sh         ← PostToolUse: ревью планов
+    codex-inject-review.sh       ← PreToolUse: инжекция замечаний в контекст Claude
+    codex-review-hook.sh         ← PostToolUse: ревью планов через Codex
     codex-code-review-hook.sh    ← Stop: ревью кода (git diff)
     codex-session-cleanup.sh     ← SessionStart: очистка сессий
 
@@ -39,7 +40,10 @@ Runtime-файлы (НЕ в git, создаются автоматически):
 ```
 .codex-plan-session              ← thread_id сессии ревью планов
 .codex-code-session              ← thread_id сессии ревью кода
-.codex-review-result.md          ← результат последнего ревью
+.codex-review-result.md          ← результат ревью (создаётся PostToolUse/Stop, читается PreToolUse)
+.codex-review-result.md.injected ← прочитанный результат (удаляется при старте сессии)
+.codex-plan-review-count         ← счётчик итераций ревью плана (макс 5)
+.codex-code-review-count         ← счётчик итераций ревью кода (макс 5)
 /tmp/codex-hook-debug.log        ← debug-лог хуков
 ```
 
@@ -61,37 +65,62 @@ Runtime-файлы (НЕ в git, создаются автоматически):
 │     │  codex-review-hook.sh запускает Codex CLI              │
 │     │  Codex ревьюит план → пишет .codex-review-result.md   │
 │     │                                                        │
-│  3. Claude читает .codex-review-result.md                    │
+│  3. Claude делает следующее действие (любой tool call)        │
 │     │                                                        │
-│     ├── Status: APPROVED → переход к реализации              │
+│     ▼ ─── PreToolUse HOOK (мгновенно) ─────────────────     │
+│     │  codex-inject-review.sh проверяет файл результата      │
+│     │  Если есть → инжектит содержимое как additionalContext  │
+│     │  Claude АВТОМАТИЧЕСКИ видит замечания в контексте       │
+│     │                                                        │
+│     ├── Status: APPROVED → Claude ОСТАНАВЛИВАЕТСЯ             │
+│     │   и СПРАШИВАЕТ пользователя: "Приступить к реализации?" │
+│     │                                                        │
+│     ├── Status: MAX_ITERATIONS (>5) → Claude сообщает лимит  │
+│     │   и показывает оставшиеся замечания пользователю        │
 │     │                                                        │
 │     └── Status: ISSUES FOUND →                               │
 │         4. Claude показывает замечания, принимает/отклоняет   │
 │         5. Claude правит план (Edit) → GOTO шаг 2            │
 │                                                              │
-│  6. План одобрен → параллельная реализация (субагенты)       │
+│  6. Пользователь подтвердил → реализация (субагенты)         │
 │     │                                                        │
 │     ▼ ─── Stop HOOK (при завершении) ────────────────────    │
 │     │  codex-code-review-hook.sh ревьюит git diff            │
 │     │  Resume план-сессии → Codex знает план + видит код     │
+│     │  Пишет .codex-review-result.md                         │
 │     │                                                        │
-│  7. Если CRITICAL/HIGH → Claude исправляет                   │
-│  8. Готово                                                   │
+│     ├── CRITICAL/HIGH → exit 2 (БЛОКИРУЕТ остановку!)        │
+│     │   Claude ВЫНУЖДЕН продолжить → исправляет →            │
+│     │   Снова пытается остановиться → GOTO Stop HOOK         │
+│     │                                                        │
+│     ├── MAX_ITERATIONS (>5) → exit 0, не блокирует           │
+│     │   Claude сообщает оставшиеся замечания пользователю     │
+│     │                                                        │
+│     ├── MEDIUM/LOW → exit 0, Claude решает сам               │
+│     │                                                        │
+│     └── NO_FINDINGS → exit 0, код одобрен ✅                 │
+│                                                              │
+│  7. Готово                                                   │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 Ключевой механизм: файл результата
+### 2.2 Ключевой механизм: PreToolUse + additionalContext
 
 **Проблема:** PostToolUse hook stdout НЕ попадает в контекст Claude (by design Claude Code).
 
-**Решение:** Hook записывает результат Codex в файл `.codex-review-result.md`. Claude читает этот файл после каждого Edit/Write план-файла.
+**Решение v3 (текущее):** Два хука работают в паре:
+1. **PostToolUse** (`codex-review-hook.sh`) — запускает Codex, записывает результат в `.codex-review-result.md`
+2. **PreToolUse** (`codex-inject-review.sh`) — перед следующим tool call проверяет файл и инжектит содержимое в контекст Claude через `additionalContext`
 
 ```
-Edit *plan*.md → Hook запускается → Codex думает (1-4 мин) →
+Edit *plan*.md → PostToolUse Hook → Codex думает (1-4 мин) →
 Hook пишет .codex-review-result.md → Edit возвращается Claude →
-Claude делает Read .codex-review-result.md → анализирует →
-правит план → снова Edit → снова Hook → ...
+Claude делает следующее действие → PreToolUse Hook срабатывает →
+Замечания автоматически появляются в контексте Claude →
+Claude анализирует → правит план → снова Edit → снова PostToolUse Hook → ...
 ```
+
+**Преимущество перед v2 (файл + ручной Read):** Claude не может пропустить замечания — они инжектятся принудительно. Не зависит от инструкций в CLAUDE.md.
 
 Инструкция для Claude зашита в CLAUDE.md (раздел "АВТОЦИКЛ CODEX REVIEW").
 
@@ -165,7 +194,7 @@ claude
 | Hook не срабатывает | `cat /tmp/codex-hook-debug.log` | Проверить `.claude/settings.json` |
 | Codex выдаёт ошибку | `codex exec --full-auto "test" 2>&1` | `codex login` заново |
 | Результат не записался | `ls -la .codex-review-result.md` | Проверить permissions на запись |
-| Claude не читает файл | Нет Read после Edit | Проверить раздел CLAUDE.md про автоцикл |
+| Замечания не инжектятся | `ls -la .codex-review-result.md*` | Проверить codex-inject-review.sh |
 | Timeout (>5 мин) | Лог: `Codex finished` отсутствует | Увеличить timeout в settings.json |
 
 ---
@@ -184,6 +213,17 @@ claude
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/codex-session-cleanup.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/codex-inject-review.sh\"",
             "timeout": 5
           }
         ]
@@ -218,6 +258,7 @@ claude
 
 **Таймауты:**
 - SessionStart: 5 сек (просто rm файлов)
+- PreToolUse: 5 сек (проверка файла + JSON вывод)
 - PostToolUse: 300 сек (5 мин — Codex думает 30с-4мин)
 - Stop: 180 сек (3 мин — ревью git diff)
 

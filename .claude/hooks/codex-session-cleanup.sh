@@ -9,6 +9,9 @@ if [ -z "$PROJECT_ROOT" ]; then
 fi
 
 # Remove old session and result files so next Codex call starts fresh
-rm -f "$PROJECT_ROOT/.codex-plan-session" "$PROJECT_ROOT/.codex-code-session" "$PROJECT_ROOT/.codex-review-result.md" 2>/dev/null
+# Remove session files, review results, and iteration counters
+rm -f "$PROJECT_ROOT/.codex-plan-session" "$PROJECT_ROOT/.codex-code-session" \
+    "$PROJECT_ROOT/.codex-review-result.md" "$PROJECT_ROOT/.codex-review-result.md.injected" \
+    "$PROJECT_ROOT/.codex-plan-review-count" "$PROJECT_ROOT/.codex-code-review-count" 2>/dev/null
 
 exit 0

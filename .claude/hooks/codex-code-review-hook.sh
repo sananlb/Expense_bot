@@ -1,7 +1,14 @@
 #!/bin/bash
 # Hook: auto code review via Codex on Stop
 # Reviews git diff when Claude finishes work
+# Only runs in plan sessions (when .codex-plan-session exists)
 # Resumes plan session so Codex has full context
+# Exit 2 on CRITICAL/HIGH → blocks stop, forces Claude to fix
+# Max 5 iterations — after that, does not block stop
+
+MAX_ITERATIONS=5
+DEBUG_LOG="/tmp/codex-hook-debug.log"
+log() { echo "$(date '+%Y-%m-%d %H:%M:%S') [code-review] $1" >> "$DEBUG_LOG"; }
 
 INPUT=$(cat)
 
@@ -12,14 +19,57 @@ fi
 
 cd "$PROJECT_ROOT" || exit 0
 
-# Check for code changes (exclude .md files)
-CODE_DIFF=$(git diff --name-only HEAD 2>/dev/null | grep -v '\.md$')
-STAGED_DIFF=$(git diff --cached --name-only 2>/dev/null | grep -v '\.md$')
-UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null | grep -v '\.md$')
+# Only run in plan sessions (plan was reviewed in this session)
+if [ ! -f "$PROJECT_ROOT/.codex-plan-session" ]; then
+    log "SKIP: no plan session found, not a plan-based session"
+    exit 0
+fi
+
+log "TRIGGERED: plan session exists, reviewing code changes"
+
+# Check for code changes FIRST (exclude non-code files: .md, images, backup .sql)
+EXCLUDE_PATTERN='\.(md|jpeg|jpg|png|gif|svg)$|backup.*\.sql$|.*_backup_.*\.sql$'
+CODE_DIFF=$(git diff --name-only HEAD 2>/dev/null | grep -vE "$EXCLUDE_PATTERN")
+STAGED_DIFF=$(git diff --cached --name-only 2>/dev/null | grep -vE "$EXCLUDE_PATTERN")
+UNTRACKED=$(git ls-files --others --exclude-standard 2>/dev/null | grep -vE "$EXCLUDE_PATTERN")
 
 ALL_CHANGES=$(printf "%s\n%s\n%s" "$CODE_DIFF" "$STAGED_DIFF" "$UNTRACKED" | sort -u | sed '/^$/d')
 
 if [ -z "$ALL_CHANGES" ]; then
+    log "SKIP: no code changes found"
+    exit 0
+fi
+
+# Increment iteration counter ONLY when there are real changes to review
+COUNTER_FILE="$PROJECT_ROOT/.codex-code-review-count"
+CURRENT_COUNT=0
+if [ -f "$COUNTER_FILE" ]; then
+    RAW_COUNT=$(cat "$COUNTER_FILE")
+    if [[ "$RAW_COUNT" =~ ^[0-9]+$ ]]; then
+        CURRENT_COUNT=$RAW_COUNT
+    fi
+fi
+CURRENT_COUNT=$((CURRENT_COUNT + 1))
+echo "$CURRENT_COUNT" > "$COUNTER_FILE"
+
+log "Code review iteration: $CURRENT_COUNT / $MAX_ITERATIONS"
+
+# Check iteration limit
+if [ "$CURRENT_COUNT" -gt "$MAX_ITERATIONS" ]; then
+    log "MAX_ITERATIONS reached ($MAX_ITERATIONS). Not blocking stop."
+    REVIEW_FILE="$PROJECT_ROOT/.codex-review-result.md"
+    {
+        echo "# Codex Code Review Result"
+        echo ""
+        echo "**Iteration:** $CURRENT_COUNT / $MAX_ITERATIONS"
+        echo "**Time:** $(date '+%Y-%m-%d %H:%M:%S')"
+        echo ""
+        echo "## Status: MAX_ITERATIONS_REACHED"
+        echo ""
+        echo "MAX_ITERATIONS: Достигнут лимит в $MAX_ITERATIONS итераций ревью кода."
+        echo "Codex больше не вызывается. Сообщи пользователю какие замечания остались нерешёнными."
+    } > "$REVIEW_FILE"
+    echo "MAX_ITERATIONS: Code review limit ($MAX_ITERATIONS) reached. Report remaining findings to user."
     exit 0
 fi
 
@@ -111,16 +161,44 @@ if [ -z "$REVIEW_OUTPUT" ]; then
     REVIEW_OUTPUT=$(echo "$RAW_OUTPUT" | grep -v '^{' | grep -v '^OpenAI' | grep -v '^---' | grep -v '^$')
 fi
 
+# Save review output to file for PreToolUse injection (backup mechanism)
+REVIEW_FILE="$PROJECT_ROOT/.codex-review-result.md"
+{
+    echo "# Codex Code Review Result"
+    echo ""
+    echo "**Changes:** $CHANGED_COUNT files"
+    echo "**Time:** $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "**Session:** $(cat "$CODE_SESSION_FILE" 2>/dev/null || echo 'new')"
+    echo ""
+    if echo "$REVIEW_OUTPUT" | grep -qi "NO_FINDINGS"; then
+        echo "## Status: APPROVED"
+    elif echo "$REVIEW_OUTPUT" | grep -qi "CRITICAL\|HIGH"; then
+        echo "## Status: CRITICAL/HIGH ISSUES FOUND"
+    else
+        echo "## Status: FINDINGS TO REVIEW"
+    fi
+    echo ""
+    echo "## Findings"
+    echo ""
+    echo "$REVIEW_OUTPUT"
+} > "$REVIEW_FILE"
+
+log "Review saved to: $REVIEW_FILE"
+
 echo "$REVIEW_OUTPUT"
 echo ""
 echo "============================================"
 
 if echo "$REVIEW_OUTPUT" | grep -qi "CRITICAL\|HIGH"; then
-    echo ">>> Claude: Codex found CRITICAL/HIGH issues. Fix them before finishing."
+    log "RESULT: CRITICAL/HIGH — blocking stop (exit 2)"
+    echo "Codex found CRITICAL/HIGH issues in code. Fix them before finishing." >&2
+    exit 2
 elif echo "$REVIEW_OUTPUT" | grep -qi "NO_FINDINGS"; then
-    echo ">>> Claude: Code passed Codex review. All clean."
+    log "RESULT: Code approved"
+    echo ">>> Code passed Codex review. All clean."
+    exit 0
 else
-    echo ">>> Claude: Review Codex findings and fix what is needed."
+    log "RESULT: Findings to review"
+    echo ">>> Review Codex findings and fix what is needed."
+    exit 0
 fi
-
-exit 0

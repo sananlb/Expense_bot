@@ -2,7 +2,9 @@
 # Hook: auto review plan files via Codex CLI
 # Triggers on any *plan*.md file
 # Maintains session continuity via .codex-plan-session file
+# Max 5 iterations per session — after that, skips Codex
 
+MAX_ITERATIONS=5
 DEBUG_LOG="/tmp/codex-hook-debug.log"
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') [plan-review] $1" >> "$DEBUG_LOG"; }
 
@@ -36,6 +38,42 @@ fi
 
 FILENAME=$(basename "$FILE_PATH")
 SESSION_FILE="$PROJECT_ROOT/.codex-plan-session"
+COUNTER_FILE="$PROJECT_ROOT/.codex-plan-review-count"
+
+# Increment iteration counter (validate as integer)
+CURRENT_COUNT=0
+if [ -f "$COUNTER_FILE" ]; then
+    RAW_COUNT=$(cat "$COUNTER_FILE")
+    if [[ "$RAW_COUNT" =~ ^[0-9]+$ ]]; then
+        CURRENT_COUNT=$RAW_COUNT
+    fi
+fi
+CURRENT_COUNT=$((CURRENT_COUNT + 1))
+echo "$CURRENT_COUNT" > "$COUNTER_FILE"
+
+log "Plan review iteration: $CURRENT_COUNT / $MAX_ITERATIONS"
+
+# Check iteration limit
+if [ "$CURRENT_COUNT" -gt "$MAX_ITERATIONS" ]; then
+    log "MAX_ITERATIONS reached ($MAX_ITERATIONS). Skipping Codex."
+    REVIEW_FILE="$PROJECT_ROOT/.codex-review-result.md"
+    {
+        echo "# Codex Review Result"
+        echo ""
+        echo "**File:** $FILENAME"
+        echo "**Time:** $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "**Iteration:** $CURRENT_COUNT / $MAX_ITERATIONS"
+        echo ""
+        echo "## Status: MAX_ITERATIONS_REACHED"
+        echo ""
+        echo "## Findings"
+        echo ""
+        echo "MAX_ITERATIONS: Достигнут лимит в $MAX_ITERATIONS итераций ревью плана."
+        echo "Codex больше не вызывается. Сообщи пользователю какие замечания остались нерешёнными."
+    } > "$REVIEW_FILE"
+    echo "MAX_ITERATIONS: Plan review limit ($MAX_ITERATIONS) reached. Report remaining findings to user."
+    exit 0
+fi
 
 echo ""
 echo "============================================"
@@ -149,7 +187,7 @@ if echo "$REVIEW_OUTPUT" | grep -qi "CRITICAL\|HIGH"; then
     echo ">>> Claude: Codex found CRITICAL/HIGH issues. Analyze each and fix the plan."
     log "RESULT: CRITICAL/HIGH issues found"
 elif echo "$REVIEW_OUTPUT" | grep -qi "NO_FINDINGS"; then
-    echo ">>> Claude: Plan passed Codex review. Ready to implement."
+    echo ">>> Claude: Plan APPROVED by Codex. STOP and ask user before implementing code."
     log "RESULT: Plan approved"
 else
     echo ">>> Claude: Review Codex findings and decide what to address."
