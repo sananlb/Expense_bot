@@ -8,7 +8,7 @@ if [ -z "$PROJECT_ROOT" ]; then
     exit 0
 fi
 
-# Remove old session files so next Codex call starts fresh
-rm -f "$PROJECT_ROOT/.codex-plan-session" "$PROJECT_ROOT/.codex-code-session" 2>/dev/null
+# Remove old session and result files so next Codex call starts fresh
+rm -f "$PROJECT_ROOT/.codex-plan-session" "$PROJECT_ROOT/.codex-code-session" "$PROJECT_ROOT/.codex-review-result.md" 2>/dev/null
 
 exit 0
