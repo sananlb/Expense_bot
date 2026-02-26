@@ -97,6 +97,7 @@ nul
 run_bot.py
 archive_20260128/
 
-# Codex review session files
+# Codex review session and result files
 .codex-plan-session
 .codex-code-session
+.codex-review-result.md

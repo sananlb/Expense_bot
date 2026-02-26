@@ -117,6 +117,30 @@ if [ -z "$REVIEW_OUTPUT" ]; then
     exit 0
 fi
 
+# Save review output to file for Claude to read after Edit/Write returns
+REVIEW_FILE="$PROJECT_ROOT/.codex-review-result.md"
+{
+    echo "# Codex Review Result"
+    echo ""
+    echo "**File:** $FILENAME"
+    echo "**Time:** $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "**Session:** $(cat "$SESSION_FILE" 2>/dev/null || echo 'new')"
+    echo ""
+    if echo "$REVIEW_OUTPUT" | grep -qi "NO_FINDINGS"; then
+        echo "## Status: APPROVED"
+    elif echo "$REVIEW_OUTPUT" | grep -qi "CRITICAL\|HIGH"; then
+        echo "## Status: CRITICAL/HIGH ISSUES FOUND"
+    else
+        echo "## Status: FINDINGS TO REVIEW"
+    fi
+    echo ""
+    echo "## Findings"
+    echo ""
+    echo "$REVIEW_OUTPUT"
+} > "$REVIEW_FILE"
+
+log "Review saved to: $REVIEW_FILE"
+
 echo "$REVIEW_OUTPUT"
 echo ""
 echo "============================================"
