@@ -79,15 +79,16 @@ NEGATIVE_WORDS = {'минус', 'minus'}
 
 def convert_words_to_numbers(text: str) -> str:
     """
-    Конвертирует числа словами в цифры, поддерживая составные числа.
+    Конвертирует числа словами в цифры ТОЛЬКО если есть множитель (тысяч/миллионов/млрд).
     Также обрабатывает комбинации цифр + множитель (50 тыс -> 50000).
     Примеры:
-    - "two hundred" -> "200"
-    - "twenty five thousand" -> "25000"
-    - "Apple minus two" -> "Apple -2"
-    - "двести пятьдесят" -> "250"
-    - "50 тыс" -> "50000"
-    - "10к" -> "10000"
+    - "пять тысяч" -> "5000"       ✅ есть множитель
+    - "два миллиона" -> "2000000"  ✅ есть множитель
+    - "50 тыс" -> "50000"          ✅ цифра + множитель
+    - "10к" -> "10000"             ✅ цифра + множитель
+    - "сто" -> "сто"               ❌ без множителя — не конвертируем
+    - "двести пятьдесят" -> "двести пятьдесят"  ❌ без множителя
+    - "twenty five" -> "twenty five"            ❌ без множителя
     """
     if not text:
         return text
@@ -129,6 +130,8 @@ def convert_words_to_numbers(text: str) -> str:
     number_sequence_started = False
     last_was_hundred = False  # Track if last word was 'hundred' to prevent repeated multiplication
     trailing_punctuation = ""  # Store punctuation from the last number word
+    sequence_has_multiplier = False  # Конвертируем ТОЛЬКО если был множитель (тысяч/млн/млрд)
+    sequence_original_words = []  # Оригинальные слова последовательности (для отката)
 
     i = 0
     while i < len(words):
@@ -143,6 +146,7 @@ def convert_words_to_numbers(text: str) -> str:
             if i + 1 < len(words):
                 next_word = words[i+1].rstrip('.,!?;:()').lower()
                 if next_word in WORD_TO_NUMBER or next_word in MULTIPLIERS:
+                    sequence_original_words.append(original_word)
                     i += 1
                     continue
 
@@ -152,12 +156,14 @@ def convert_words_to_numbers(text: str) -> str:
                 next_word = words[i+1].rstrip('.,!?;:()').lower()
                 if next_word in WORD_TO_NUMBER or next_word in MULTIPLIERS:
                     is_negative = True
+                    sequence_original_words.append(original_word)
                     i += 1
                     continue
 
         # Process number words
         if clean_word in WORD_TO_NUMBER:
             number_sequence_started = True
+            sequence_original_words.append(original_word)
             val = WORD_TO_NUMBER[clean_word]
 
             if val == 100:
@@ -182,6 +188,8 @@ def convert_words_to_numbers(text: str) -> str:
 
         elif clean_word in MULTIPLIERS:
             number_sequence_started = True
+            sequence_has_multiplier = True  # Множитель встречен — конвертация разрешена
+            sequence_original_words.append(original_word)
             multiplier = MULTIPLIERS[clean_word]
 
             if current_number_chunk > 0:
@@ -197,17 +205,27 @@ def convert_words_to_numbers(text: str) -> str:
         else:
             # Non-number word: emit accumulated number if any
             if number_sequence_started:
-                final_number = current_total + current_number_chunk
-                if is_negative:
-                    final_number = -final_number
-                    is_negative = False
+                if sequence_has_multiplier:
+                    # Множитель был — конвертируем в число
+                    final_number = current_total + current_number_chunk
+                    if is_negative:
+                        final_number = -final_number
+                        is_negative = False
+                    result_words.append(str(final_number) + trailing_punctuation)
+                else:
+                    # Множителя не было (например "сто", "двести пятьдесят") — возвращаем слова как есть
+                    if is_negative:
+                        result_words.append("минус")
+                        is_negative = False
+                    result_words.extend(sequence_original_words)
 
-                result_words.append(str(final_number) + trailing_punctuation)
                 trailing_punctuation = ""
                 current_total = 0
                 current_number_chunk = 0
                 number_sequence_started = False
                 last_was_hundred = False
+                sequence_has_multiplier = False
+                sequence_original_words = []
 
             # Handle hanging negative
             if is_negative:
@@ -220,10 +238,16 @@ def convert_words_to_numbers(text: str) -> str:
 
     # Emit final number if sequence ended with a number
     if number_sequence_started:
-        final_number = current_total + current_number_chunk
-        if is_negative:
-            final_number = -final_number
-        result_words.append(str(final_number) + trailing_punctuation)
+        if sequence_has_multiplier:
+            final_number = current_total + current_number_chunk
+            if is_negative:
+                final_number = -final_number
+            result_words.append(str(final_number) + trailing_punctuation)
+        else:
+            # Без множителя — возвращаем оригинальные слова
+            if is_negative:
+                result_words.append("минус")
+            result_words.extend(sequence_original_words)
 
     return ' '.join(result_words)
 
