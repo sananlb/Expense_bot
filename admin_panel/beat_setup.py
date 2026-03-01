@@ -97,11 +97,13 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
         )
 
         # 12:00 on 1st day of month — Send monthly reports to users
+        # TEMPORARILY DISABLED: insights have bug (primary_currency undefined in fallback)
         upsert(
             name='send-monthly-reports',
             task='expense_bot.celery_tasks.send_monthly_reports',
             schedule=crontab(minute='0', hour='12', day_of_month='1'),
             queue='reports',
+            enabled=False,
         )
 
         # Sunday 03:00 — Cleanup

@@ -624,7 +624,8 @@ IMPORTANT:
                     message=prompt,
                     context=[],
                     user_context={'user_id': profile.telegram_id},
-                    disable_functions=True  # IMPORTANT: Skip function calling for JSON response
+                    disable_functions=True,  # IMPORTANT: Skip function calling for JSON response
+                    timeout=60.0  # Increased timeout for large prompts with historical data
                 )
 
                 # Check if response is an error message
@@ -678,7 +679,6 @@ IMPORTANT:
             return {
                 'summary': result['summary'],
                 'analysis': result['analysis'],
-                'recommendations': ''  # Empty string for backwards compatibility
             }
 
         except (json.JSONDecodeError, ValueError) as e:
@@ -725,7 +725,6 @@ IMPORTANT:
         sections = {
             'summary': '',
             'analysis': '',
-            'recommendations': ''
         }
 
         lines = response.split('\n')
@@ -736,10 +735,8 @@ IMPORTANT:
 
             if any(marker in line_lower for marker in ['резюме', 'summary', 'итог']):
                 current_section = 'summary'
-            elif any(marker in line_lower for marker in ['анализ', 'analysis', 'разбор']):
+            elif any(marker in line_lower for marker in ['анализ', 'analysis', 'разбор', 'рекоменд', 'recommend', 'совет']):
                 current_section = 'analysis'
-            elif any(marker in line_lower for marker in ['рекоменд', 'recommend', 'совет']):
-                current_section = 'recommendations'
             elif current_section and line.strip():
                 sections[current_section] += line + '\n'
 
@@ -747,7 +744,6 @@ IMPORTANT:
         if not sections['summary'] and not sections['analysis']:
             sections['summary'] = response[:500]
             sections['analysis'] = response[500:1500] if len(response) > 500 else ''
-            sections['recommendations'] = response[1500:] if len(response) > 1500 else ''
 
         return sections
 
@@ -835,7 +831,6 @@ IMPORTANT:
         return {
             'summary': summary,
             'analysis': analysis,
-            'recommendations': ''  # Empty for backwards compatibility
         }
 
     async def generate_insight(
@@ -864,20 +859,6 @@ IMPORTANT:
             now = timezone.now()
             year = year or now.year
             month = month or now.month
-
-        # Check if user has active subscription
-        from expenses.models import Subscription
-        has_active_subscription = await asyncio.to_thread(
-            lambda: Subscription.objects.filter(
-                profile=profile,
-                is_active=True,
-                end_date__gt=timezone.now()
-            ).exists()
-        )
-
-        if not has_active_subscription:
-            logger.info(f"User {profile.telegram_id} doesn't have active subscription, skipping insight generation")
-            return None
 
         # Check if insight already exists
         existing_insight = await asyncio.to_thread(
@@ -981,7 +962,7 @@ IMPORTANT:
                 existing_insight.top_categories = month_data['top_categories']
                 existing_insight.ai_summary = ai_insights['summary']
                 existing_insight.ai_analysis = ai_insights['analysis']
-                existing_insight.ai_recommendations = ai_insights['recommendations']
+                existing_insight.ai_recommendations = ''
                 existing_insight.ai_model_used = self.ai_model
                 existing_insight.ai_provider = provider
                 existing_insight.regeneration_count += 1
@@ -1004,7 +985,7 @@ IMPORTANT:
                     top_categories=month_data['top_categories'],
                     ai_summary=ai_insights['summary'],
                     ai_analysis=ai_insights['analysis'],
-                    ai_recommendations=ai_insights['recommendations'],
+                    ai_recommendations='',
                     ai_model_used=self.ai_model,
                     ai_provider=provider
                 )

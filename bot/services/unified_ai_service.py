@@ -364,7 +364,8 @@ class UnifiedAIService(AIBaseService):
         message: str,
         context: List[Dict[str, str]],
         user_context: Optional[Dict[str, Any]] = None,
-        disable_functions: bool = False
+        disable_functions: bool = False,
+        timeout: Optional[float] = None
     ) -> str:
         """
         Чат с поддержкой вызова функций (через эмуляцию FUNCTION_CALL)
@@ -374,6 +375,7 @@ class UnifiedAIService(AIBaseService):
             context: Conversation context
             user_context: User metadata (user_id, language)
             disable_functions: If True, skip function calling and use simple chat
+            timeout: Custom timeout in seconds (overrides default 15s). Use for long tasks like insights.
         """
         user_id = user_context.get('user_id') if user_context else None
         user_language = user_context.get('language', 'ru') if user_context else 'ru'
@@ -383,7 +385,7 @@ class UnifiedAIService(AIBaseService):
             # Skip function calling if disabled
             if disable_functions:
                 # Direct chat without function calling
-                return await self._simple_chat(message, context, user_id, faq_context=faq_context)
+                return await self._simple_chat(message, context, user_id, faq_context=faq_context, timeout=timeout)
 
             # 1. Попытка определить функцию (Intent Recognition)
             from bot.services.prompt_builder import build_function_call_prompt
@@ -505,7 +507,8 @@ class UnifiedAIService(AIBaseService):
         message: str,
         context: List[Dict[str, str]],
         user_id: Optional[int] = None,
-        faq_context: Optional[str] = None
+        faq_context: Optional[str] = None,
+        timeout: Optional[float] = None
     ) -> str:
         """
         Simple chat without function calling - just direct AI response
@@ -514,6 +517,7 @@ class UnifiedAIService(AIBaseService):
             message: User message
             context: Conversation context
             user_id: Optional user ID for logging
+            timeout: Custom timeout in seconds (overrides default)
 
         Returns:
             AI response text
@@ -541,13 +545,17 @@ class UnifiedAIService(AIBaseService):
         messages.append({"role": "user", "content": message})
 
         # Создаем функцию для API вызова
+        call_kwargs = dict(
+            model=model_name,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=2000
+        )
+        if timeout is not None:
+            call_kwargs['timeout'] = timeout
+
         async def create_call(client):
-            return await client.chat.completions.create(
-                model=model_name,
-                messages=messages,
-                temperature=0.7,
-                max_tokens=2000
-            )
+            return await client.chat.completions.create(**call_kwargs)
 
         try:
             # Выполняем запрос с поддержкой прокси fallback
