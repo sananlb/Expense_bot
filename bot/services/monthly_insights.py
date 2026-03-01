@@ -337,6 +337,7 @@ class MonthlyInsightsService:
         months_dict = months_en if user_lang == 'en' else months_ru
 
         # Helper функция для форматирования сумм в валюте пользователя
+        primary_currency = month_data.get('currency', 'RUB')
         def format_amount(amount):
             return format_currency(amount, primary_currency)
 
