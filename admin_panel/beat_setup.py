@@ -88,19 +88,19 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
             queue='recurring',
         )
 
-        # 11:00 on 1st day of month — Generate monthly AI insights
+        # 06:00 on 1st day of month — Generate monthly AI insights
         upsert(
             name='generate-monthly-insights',
             task='expense_bot.celery_tasks.generate_monthly_insights',
-            schedule=crontab(minute='0', hour='11', day_of_month='1'),
+            schedule=crontab(minute='0', hour='6', day_of_month='1'),
             queue='reports',
         )
 
-        # 12:00 on 1st day of month — Send monthly reports to users
+        # 11:00 on 1st day of month — Send monthly reports to users
         upsert(
             name='send-monthly-reports',
             task='expense_bot.celery_tasks.send_monthly_reports',
-            schedule=crontab(minute='0', hour='12', day_of_month='1'),
+            schedule=crontab(minute='0', hour='11', day_of_month='1'),
             queue='reports',
         )
 
