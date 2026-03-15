@@ -282,9 +282,9 @@ def words_match_with_inflection(word1: str, word2: str) -> bool:
     if len(word1) < 2 or len(word2) < 2:
         return False
 
-    # Для 2-буквенных слов — только exact match, без ±1 буквы
-    # Это защита от ложных срабатываний: "кб" не должен матчить "ка", "кв" и т.д.
-    if len(word1) == 2 or len(word2) == 2:
+    # Для слов до 3 букв включительно — только exact match, без ±1 буквы
+    # Это защита от ложных срабатываний: "лор" не должен матчить "лар", "кб" не должен матчить "кв" и т.д.
+    if len(word1) <= 3 or len(word2) <= 3:
         return False  # Уже проверили exact match выше
 
     diff = abs(len(word1) - len(word2))
