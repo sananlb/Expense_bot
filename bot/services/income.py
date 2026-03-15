@@ -174,20 +174,21 @@ def create_income(
                 raise ValueError(f"Категория дохода с ID {category_id} не существует")
         
         # Создаем доход
-        income = Income.objects.create(
-            profile=profile,
-            amount=amount,
-            category=category,
-            description=description or '',
-            income_date=income_date,
-            income_time=income_time,
-            ai_categorized=ai_categorized,
-            ai_confidence=ai_confidence,
-            currency=currency.upper(),
-            original_amount=original_amount,
-            original_currency=original_currency,
-            exchange_rate_used=exchange_rate_used,
-        )
+        with transaction.atomic():
+            income = Income.objects.create(
+                profile=profile,
+                amount=amount,
+                category=category,
+                description=description or '',
+                income_date=income_date,
+                income_time=income_time,
+                ai_categorized=ai_categorized,
+                ai_confidence=ai_confidence,
+                currency=currency.upper(),
+                original_amount=original_amount,
+                original_currency=original_currency,
+                exchange_rate_used=exchange_rate_used,
+            )
 
         # Если была AI-категоризация, обучаем систему
         if ai_categorized and category and learn_income_keywords_on_create:
@@ -203,7 +204,15 @@ def create_income(
 
         # Сбрасываем флаг напоминания о внесении операций
         from expenses.tasks import clear_expense_reminder
-        clear_expense_reminder(user_id)
+        try:
+            clear_expense_reminder(user_id)
+        except Exception as reminder_error:
+            logger.warning(
+                "Failed to clear reminder after creating income %s for %s: %s",
+                income.id,
+                log_safe_id(user_id, "user"),
+                reminder_error,
+            )
 
         logger.info("Created income %s for %s", income.id, log_safe_id(user_id, "user"))
         return income

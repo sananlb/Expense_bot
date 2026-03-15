@@ -1,6 +1,6 @@
 # Code Quality Review Plan - Expense Bot
 
-**Дата:** 2026-03-15 (v5.5 - conservative / safety-first, execution status updated)
+**Дата:** 2026-03-15 (v5.6 - conservative / safety-first, execution status updated)
 **Проект:** expense_bot (~58,500 строк, ~240 Python файлов)
 **Исходная оценка по аудиту:** 5.2/10
 
@@ -39,6 +39,7 @@
   - `tests/test_safety_fallbacks.py`
   - `tests/test_smoke_critical_flows.py`
   - `tests/test_logging_safety.py`
+  - `tests/test_service_create_characterization.py`
 - Стабилизирован test contour:
   - убран ручной `django.setup()` из тестов
   - отключён DB side-effect hook `admin_panel` во время тестов
@@ -55,7 +56,9 @@
   - выполнена финальная repo-wide сверка `INFO+` по типовым утечкам (`telegram_id/chat_id`, raw text, callback payload, referral/utm, суммы)
 - Начат inventory по производительности:
   - найдены и исправлены low-risk `N+1` точки в `bot/services/top5.py`, `bot/services/analytics_query.py`, `bot/services/cashback.py`, `bot/services/utm_tracking.py`
-  - transaction-hotspots `create_expense` / `create_income` выделены отдельно для следующего безопасного батча
+  - transaction-hotspots `create_expense` / `create_income` покрыты characterization-тестами и частично стабилизированы
+  - `create_expense` / `create_income` переведены на локальный `transaction.atomic()` вокруг основной записи
+  - non-critical side effect `clear_expense_reminder()` больше не ломает успешное создание операции
 - Начат безопасный вынос реально общих констант:
   - `bot/constants.py` дополнен бизнес-лимитами без нарушения старого import-contract
   - повторяющиеся лимиты и fallback-значения переведены на константы в `bot/services/income.py` и `bot/services/expense.py`
@@ -63,7 +66,7 @@
 
 ### Текущий подтверждённый результат
 
-- Полный прогон тестов на чистой test DB: `167 passed, 1 skipped`
+- Полный прогон тестов на чистой test DB: `171 passed, 1 skipped`
 - Единственный skip ожидаемый: отсутствуют native-библиотеки WeasyPrint в локальном окружении
 - Известных регрессий после выполненных изменений не обнаружено
 - Проект находится в состоянии `baseline stabilized`
@@ -74,7 +77,7 @@
 ### Следующие действия
 
 1. Формально закрыть Фазу 1.5 в плане как выполненную по logging-части и оставить открытым только performance inventory
-2. Завершить inventory по `N+1` и transaction hotspots: добрать оставшиеся сервисные кандидаты и отдельно принять решение по `create_expense` / `create_income`
+2. Завершить inventory по `N+1` и transaction hotspots: добрать оставшиеся сервисные кандидаты и проверить, есть ли ещё критичные денежные операции вне `create_expense` / `create_income`
 3. Продолжить Фазу 1.3: точечно вынести ещё только действительно общие константы (`DEFAULT_TIMEZONE` и аналогичные), без расширения scope на локальные числа
 4. Фаза 3: ввести quality gates в CI без агрессивного включения всех ошибок сразу
 5. Расширить smoke/characterization coverage перед любыми изменениями в крупных функциях
@@ -239,6 +242,7 @@ except Exception as e:
   - `show_recurring_menu`
   - `show_expenses_summary`
 - [x] Добавить safety fallback tests для критичных обработчиков форматирования/аналитики/PDF
+- [x] Добавить characterization tests для `create_expense()` / `create_income()` перед review transaction-hotspots
 - [ ] Настроить CI с этими тестами как quality gate перед изменениями в критичном коде
 - [ ] **Правило:** НЕ рефакторить функцию, пока нет хотя бы characterization теста или воспроизводимого smoke-сценария
 
@@ -246,7 +250,7 @@ except Exception as e:
 
 **Проблема:** CLAUDE.md требует PII-safe логирование, оптимизацию запросов, кеширование. Ниже — формализованные задачи и критерии приёмки.
 
-**Статус:** `практически завершено` — основные high/noisy points в middleware, reports, income, expense, tasks, onboarding/privacy flow, chat, affiliate, subscription notifications, monthly insights, voice/AI chain и оставшихся service/router хвостах уже очищены; финальная repo-wide сверка выполнена, low-risk `N+1` уже частично устранены, остаются финальная фиксация результатов и review transaction-hotspots.
+**Статус:** `практически завершено` — основные high/noisy points в middleware, reports, income, expense, tasks, onboarding/privacy flow, chat, affiliate, subscription notifications, monthly insights, voice/AI chain и оставшихся service/router хвостах уже очищены; финальная repo-wide сверка выполнена, low-risk `N+1` частично устранены, `create_expense` / `create_income` покрыты characterization-тестами и стабилизированы по side effects; остаётся дочистить performance inventory.
 
 **Безопасность:**
 - [ ] Аудит логов на PII: убедиться что telegram_id, имена, суммы, referral/utm payload'ы не логируются на уровне INFO и выше
@@ -257,7 +261,7 @@ except Exception as e:
 - [ ] Аудит N+1 запросов: проверить все циклы с ORM-запросами в `bot/services/`
 - [~] Добавить `select_related`/`prefetch_related` где отсутствует
 - [ ] Проверить Redis-кеширование: что кешируется, что нет, TTL-политика
-- [ ] Обернуть критичные операции в `transaction.atomic()` (create_expense, create_income)
+- [~] Обернуть критичные операции в `transaction.atomic()` (create_expense, create_income)
 
 **Критерии приёмки:**
 - Ноль PII в логах уровня INFO+
@@ -545,7 +549,7 @@ except Exception as e:
 ```
 Неделя 1:   [Фаза 1.1-1.2] Baseline линтеров + исправление bare except + стабилизация test contour  [выполнено]
 Неделя 2:   [Фаза 1.4] Safety fallback tests + первые smoke tests + очистка test suite            [выполнено]
-Неделя 3:   [Фаза 1.5 + 1.3] PII audit логов + первые общие константы + inventory N+1 hotspots    [практически завершено]
+Неделя 3:   [Фаза 1.5 + 1.3] PII audit логов + первые общие константы + inventory N+1 hotspots    [почти закрыто]
 Неделя 4:   [Фаза 3] CI/CD и quality gates
 Неделя 4-5: [Фаза 2.1] Не более 1-2 рефакторингов Tier 1 или Tier 2, только при наличии бизнес-причины
 Неделя 6:   [Фаза 2.4-2.5] Безопасные устранения дублей + импорты без circular regressions
@@ -564,7 +568,7 @@ except Exception as e:
 | Метрика | Сейчас | Цель (фазы 1-5) | Цель (с 2C) |
 |---------|--------|:---:|:---:|
 | bare except | 0 | 0 | 0 |
-| Покрытие тестами | smoke + safety batch, `167 passed / 1 skipped` | Критичные сценарии покрыты | 40-60% |
+| Покрытие тестами | smoke + safety + characterization batch, `171 passed / 1 skipped` | Критичные сценарии покрыты | 40-60% |
 | Линтер ошибки | tooling baseline настроен, полный baseline ещё не зафиксирован | baseline зафиксирован, новые не добавляются | 0 warnings |
 | Функции >500 строк | 4 | 2-4 (только если безопасно) | 0-2 |
 | Функции 200-500 строк | 16 | без обязательной цели | по мере касания |
@@ -573,7 +577,7 @@ except Exception as e:
 | CI/CD pipelines | 0 обязательных gate'ов | 3 (lint, test, typecheck) | 3 |
 | PII в логах INFO+ | основной audit batched cleanup выполнен, финальная repo-wide сверка пройдена | 0 | 0 |
 | N+1 запросы | low-risk точки в `top5` / `analytics_query` / `cashback` / `utm_tracking` уже сняты; полный inventory не завершён | 0 подтверждённых в основных сценариях | 0 |
-| Денежные операции в транзакциях | частично, `create_expense` / `create_income` выделены как hotspots для отдельного review | 100% | 100% |
+| Денежные операции в транзакциях | частично: `create_expense` / `create_income` уже под локальным `atomic()`, остальные hotspots ещё не проверены | 100% | 100% |
 | Регрессии в основных сценариях | 0 известных после текущего батча | 0 известных регрессий | 0 |
 
 ---

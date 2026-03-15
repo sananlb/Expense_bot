@@ -8,6 +8,7 @@ from typing import List, Optional, Dict, Any
 import logging
 
 from expenses.models import Expense, Profile, ExpenseCategory, Cashback
+from django.db import transaction
 from django.db.models import Sum, Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
@@ -157,20 +158,21 @@ def create_expense(
         else:
             expense_time = datetime.now().time()  # Текущее время для сегодняшних трат
             
-        expense = Expense.objects.create(
-            profile=profile,
-            category_id=category_id,
-            amount=amount,
-            currency=currency,
-            description=description,
-            expense_date=expense_date,
-            expense_time=expense_time,
-            ai_categorized=ai_categorized,
-            ai_confidence=ai_confidence,
-            original_amount=original_amount,
-            original_currency=original_currency,
-            exchange_rate_used=exchange_rate_used,
-        )
+        with transaction.atomic():
+            expense = Expense.objects.create(
+                profile=profile,
+                category_id=category_id,
+                amount=amount,
+                currency=currency,
+                description=description,
+                expense_date=expense_date,
+                expense_time=expense_time,
+                ai_categorized=ai_categorized,
+                ai_confidence=ai_confidence,
+                original_amount=original_amount,
+                original_currency=original_currency,
+                exchange_rate_used=exchange_rate_used,
+            )
 
         # Обновляем объект с загруженным profile для корректной работы
         expense.profile = profile
@@ -189,7 +191,15 @@ def create_expense(
 
         # Сбрасываем флаг напоминания о внесении трат
         from expenses.tasks import clear_expense_reminder
-        clear_expense_reminder(user_id)
+        try:
+            clear_expense_reminder(user_id)
+        except Exception as reminder_error:
+            logger.warning(
+                "Failed to clear expense reminder after creating expense %s for %s: %s",
+                expense.id,
+                log_safe_id(user_id, "user"),
+                reminder_error,
+            )
 
         logger.info("Created expense %s for %s", expense.id, log_safe_id(user_id, "user"))
         return expense

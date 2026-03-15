@@ -191,49 +191,33 @@ def calculate_expense_cashback_sync(user_id: int, category_id: int, amount: Deci
                 return Decimal('0')
     except Profile.DoesNotExist:
         return Decimal('0')
-    
-    # Сначала проверяем кешбэк для конкретной категории
-    category_cashbacks = Cashback.objects.filter(
-        profile=profile,
-        category_id=category_id,
-        month=month
+
+    matching_cashbacks = list(
+        Cashback.objects.filter(
+            profile=profile,
+            month=month
+        ).filter(
+            Q(category_id=category_id) | Q(category_id__isnull=True)
+        )
     )
-    
-    # Если есть кешбэк для конкретной категории - используем максимальный из них
-    if category_cashbacks.exists():
-        max_cashback_amount = Decimal('0')
-        for cashback in category_cashbacks:
-            # Преобразуем amount в Decimal для корректного умножения
-            cashback_amount = Decimal(str(amount)) * (cashback.cashback_percent / 100)
-            
-            # Учитываем лимит
-            if cashback.limit_amount:
-                cashback_amount = min(cashback_amount, cashback.limit_amount)
-            
-            # Берем максимальный кешбэк
-            max_cashback_amount = max(max_cashback_amount, cashback_amount)
-        return max_cashback_amount
-    
-    # Если нет кешбэка для конкретной категории, проверяем кешбэк на все категории
-    all_categories_cashbacks = Cashback.objects.filter(
-        profile=profile,
-        category_id=None,  # None означает все категории
-        month=month
-    )
-    
-    # Выбираем максимальный кешбэк из доступных
+
+    category_cashbacks = [cashback for cashback in matching_cashbacks if cashback.category_id == category_id]
+    applicable_cashbacks = category_cashbacks or [
+        cashback for cashback in matching_cashbacks if cashback.category_id is None
+    ]
+
     max_cashback_amount = Decimal('0')
-    for cashback in all_categories_cashbacks:
+    for cashback in applicable_cashbacks:
         # Преобразуем amount в Decimal для корректного умножения
         cashback_amount = Decimal(str(amount)) * (cashback.cashback_percent / 100)
-        
+
         # Учитываем лимит
         if cashback.limit_amount:
             cashback_amount = min(cashback_amount, cashback.limit_amount)
-        
+
         # Берем максимальный кешбэк
         max_cashback_amount = max(max_cashback_amount, cashback_amount)
-    
+
     return max_cashback_amount
 
 
