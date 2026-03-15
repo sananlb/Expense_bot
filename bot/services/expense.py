@@ -11,8 +11,16 @@ from expenses.models import Expense, Profile, ExpenseCategory, Cashback
 from django.db.models import Sum, Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
+from bot.constants import (
+    DEFAULT_CURRENCY_CODE,
+    MAX_DAILY_OPERATIONS,
+    MAX_OPERATION_DESCRIPTION_LENGTH,
+    MAX_TRANSACTION_AMOUNT,
+    ONE_YEAR_DAYS,
+)
 from bot.utils.db_utils import get_or_create_user_profile_sync
 from bot.utils.category_helpers import get_category_display_name
+from bot.utils.logging_safe import log_safe_id, summarize_text
 
 # Предзагрузка Celery задач для устранения "холодного старта"
 # Импортируем заранее, чтобы при первом вызове не было задержки 6+ секунд
@@ -60,27 +68,32 @@ def create_expense(
     
     try:
         # Обрабатываем валюту (по умолчанию валюта профиля)
-        currency = currency or profile.currency or 'RUB'
+        currency = currency or profile.currency or DEFAULT_CURRENCY_CODE
 
         if expense_date is None:
             expense_date = date.today()
         
         # Проверка 1: Не вносить траты в будущем
         if expense_date > date.today():
-            logger.warning(f"User {user_id} tried to add expense in future: {expense_date}")
+            logger.warning("Future expense rejected for %s on %s", log_safe_id(user_id, "user"), expense_date)
             raise ValueError("Нельзя вносить траты в будущем")
         
         # Проверка 2: Не вносить траты старше 1 года
-        one_year_ago = date.today() - timedelta(days=365)
+        one_year_ago = date.today() - timedelta(days=ONE_YEAR_DAYS)
         if expense_date < one_year_ago:
-            logger.warning(f"User {user_id} tried to add expense older than 1 year: {expense_date}")
+            logger.warning("Old expense rejected for %s on %s", log_safe_id(user_id, "user"), expense_date)
             raise ValueError("Нельзя вносить траты старше 1 года")
         
         # Проверка 3: Не вносить траты до даты регистрации пользователя
         # Используем дату создания профиля как дату регистрации
         profile_created_date = profile.created_at.date() if profile.created_at else date.today()
         if expense_date < profile_created_date:
-            logger.warning(f"User {user_id} tried to add expense before registration: {expense_date}, registered: {profile_created_date}")
+            logger.warning(
+                "Expense before registration rejected for %s: expense_date=%s, profile_created=%s",
+                log_safe_id(user_id, "user"),
+                expense_date,
+                profile_created_date,
+            )
             raise ValueError(f"Нельзя вносить траты до даты регистрации ({profile_created_date.strftime('%d.%m.%Y')})")
         
         # Проверяем лимит расходов в день (максимум 100)
@@ -89,19 +102,22 @@ def create_expense(
             expense_date=expense_date
         ).count()
         
-        if today_expenses_count >= 100:
-            logger.warning(f"User {user_id} reached daily expenses limit (100)")
+        if today_expenses_count >= MAX_DAILY_OPERATIONS:
+            logger.warning("Daily expenses limit reached for %s", log_safe_id(user_id, "user"))
             raise ValueError("Достигнут лимит записей в день (максимум 100). Попробуйте завтра.")
         
         # Проверяем длину описания (максимум 500 символов)
-        if description and len(description) > 500:
-            logger.warning(f"User {user_id} provided too long description: {len(description)} chars")
+        if description and len(description) > MAX_OPERATION_DESCRIPTION_LENGTH:
+            logger.warning(
+                "Expense description too long for %s: length=%s",
+                log_safe_id(user_id, "user"),
+                len(description),
+            )
             raise ValueError("Описание слишком длинное (максимум 500 символов)")
 
         # Проверка максимальной суммы (лимит БД: NUMERIC(12,2))
-        MAX_AMOUNT = Decimal('9999999999.99')
-        if amount > MAX_AMOUNT:
-            logger.warning(f"User {user_id} tried to add expense with amount too large: {amount}")
+        if amount > MAX_TRANSACTION_AMOUNT:
+            logger.warning("Expense amount too large for %s", log_safe_id(user_id, "user"))
             raise ValueError("⚠️ Сумма слишком велика")
 
         # Проверка 4: Валидация category_id (защита от использования чужих категорий)
@@ -120,17 +136,18 @@ def create_expense(
                     # Проверяем что категория от члена той же семьи
                     if category.profile.household_id == profile.household_id:
                         is_valid_category = True
-                        logger.debug(f"Category {category_id} belongs to household member, allowed")
+                        logger.debug("Expense category %s belongs to household member", category_id)
 
                 if not is_valid_category:
                     logger.warning(
-                        f"User {user_id} (profile {profile.id}) tried to use category {category_id} "
-                        f"belonging to another user (profile {category.profile_id})"
+                        "Expense category ownership mismatch for %s: category=%s",
+                        log_safe_id(user_id, "user"),
+                        category_id,
                     )
                     raise ValueError("Нельзя использовать категорию другого пользователя")
 
             except ExpenseCategory.DoesNotExist:
-                logger.warning(f"User {user_id} tried to use non-existent category {category_id}")
+                logger.warning("Expense category %s not found for %s", category_id, log_safe_id(user_id, "user"))
                 raise ValueError(f"Категория с ID {category_id} не существует")
 
         # Если дата указана вручную (не сегодня), устанавливаем время 12:00
@@ -166,20 +183,20 @@ def create_expense(
                     args=(expense.id, category_id),
                     countdown=0
                 )
-                logger.info(f"Triggered async keywords learning for new expense {expense.id}")
+                logger.info("Triggered async keywords learning for expense %s", expense.id)
             except Exception as e:
-                logger.warning(f"Failed to trigger keywords learning task: {e}")
+                logger.warning("Failed to trigger keywords learning task: %s", e)
 
         # Сбрасываем флаг напоминания о внесении трат
         from expenses.tasks import clear_expense_reminder
         clear_expense_reminder(user_id)
 
-        logger.info(f"Created expense {expense.id} for user {user_id}")
+        logger.info("Created expense %s for %s", expense.id, log_safe_id(user_id, "user"))
         return expense
     except ValueError:
         raise  # Пробрасываем ValueError дальше
     except Exception as e:
-        logger.error(f"Error creating expense: {e}")
+        logger.error("Error creating expense for %s: %s", log_safe_id(user_id, "user"), e)
         return None
 
 
@@ -282,7 +299,7 @@ def get_user_expenses(
             
         return list(queryset.select_related('category').order_by('-expense_date', '-created_at')[:limit])
     except Exception as e:
-        logger.error(f"Error getting expenses: {e}")
+        logger.error("Error getting expenses for %s: %s", log_safe_id(user_id, "user"), e)
         return []
 
 
@@ -336,7 +353,7 @@ def _group_expenses_by_category(
     total_count = 0
 
     for expense in expenses:
-        currency = expense.currency or expense.profile.currency or 'RUB'
+        currency = expense.currency or expense.profile.currency or DEFAULT_CURRENCY_CODE
 
         # Currency statistics
         if currency not in expenses_by_currency:
@@ -496,7 +513,7 @@ def _calculate_household_cashback(
     # Collect totals by category for each household member
     member_totals: Dict[int, Dict[int, Decimal]] = {}
     for exp in expenses:
-        if (exp.currency or exp.profile.currency or 'RUB') != main_currency:
+        if (exp.currency or exp.profile.currency or DEFAULT_CURRENCY_CODE) != main_currency:
             continue
         if not exp.category_id:
             continue
@@ -546,7 +563,7 @@ def _build_empty_summary() -> Dict:
         'total': Decimal('0'),
         'count': 0,
         'by_category': [],
-        'currency': 'RUB',
+        'currency': DEFAULT_CURRENCY_CODE,
         'potential_cashback': Decimal('0'),
         'currency_totals': {},
         'income_total': Decimal('0'),
@@ -582,9 +599,15 @@ def get_expenses_summary(
             'potential_cashback': Decimal
         }
     """
-    logger.info(f"get_expenses_summary called: user_id={user_id}, start={start_date}, end={end_date}, household={household_mode}")
+    logger.debug(
+        "get_expenses_summary called for %s: start=%s, end=%s, household=%s",
+        log_safe_id(user_id, "user"),
+        start_date,
+        end_date,
+        household_mode,
+    )
     profile = get_or_create_user_profile_sync(user_id)
-    logger.info(f"Profile found/created: {profile.id} for telegram_id={profile.telegram_id}")
+    logger.debug("Profile resolved for %s: profile_id=%s", log_safe_id(user_id, "user"), profile.id)
 
     try:
         # Get user language for multilingual categories
@@ -597,8 +620,20 @@ def get_expenses_summary(
             profile, start_date, end_date, household_mode
         )
         if household_profiles:
-            logger.info(f"Household mode: found {household_profiles.count()} members, {expenses.count()} expenses")
-        logger.info(f"Query: profile={profile.id}, date>={start_date}, date<={end_date}, found={expenses.count()} expenses")
+            logger.debug(
+                "Household mode summary for %s: members=%s, expenses=%s",
+                log_safe_id(user_id, "user"),
+                household_profiles.count(),
+                expenses.count(),
+            )
+        logger.debug(
+            "Expense summary query for %s: profile_id=%s, start=%s, end=%s, expenses=%s",
+            log_safe_id(user_id, "user"),
+            profile.id,
+            start_date,
+            end_date,
+            expenses.count(),
+        )
 
         # Group expenses by category and currency
         expenses_by_currency, categories, total_count = _group_expenses_by_category(
@@ -612,7 +647,7 @@ def get_expenses_summary(
                 key=lambda x: sum(x['amounts'].values()),
                 reverse=True
             )
-            logger.info(f"Categories with all currencies: {[(c['name'], c['amounts']) for c in categories_list]}")
+            logger.debug("Expense summary prepared %s categories for %s", len(categories_list), log_safe_id(user_id, "user"))
         else:
             categories_list = []
 
@@ -625,7 +660,7 @@ def get_expenses_summary(
             total = expenses_by_currency[main_currency]['total']
             count = total_count
         else:
-            main_currency = profile.currency or 'RUB'
+            main_currency = profile.currency or DEFAULT_CURRENCY_CODE
             total = Decimal('0')
             count = 0
 
@@ -660,7 +695,7 @@ def get_expenses_summary(
         }
 
     except Exception as e:
-        logger.error(f"Error getting expenses summary: {e}")
+        logger.error("Error getting expenses summary for %s: %s", log_safe_id(user_id, "user"), e)
         return _build_empty_summary()
 
 
@@ -720,7 +755,7 @@ def update_expense(
     try:
         profile = Profile.objects.get(telegram_id=user_id)
     except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {user_id}")
+        logger.error("Profile not found for %s", log_safe_id(user_id, "user"))
         return False
     
     try:
@@ -741,7 +776,7 @@ def update_expense(
                 setattr(expense, field, value)
                 
         expense.save()
-        logger.info(f"Updated expense {expense_id} for user {user_id}")
+        logger.info("Updated expense %s for %s", expense_id, log_safe_id(user_id, "user"))
         
         # Если категория изменилась, пересчитываем кешбек
         if category_changed:
@@ -766,7 +801,7 @@ def update_expense(
                 # Обновляем поле cashback_amount в трате
                 expense.cashback_amount = new_cashback
                 expense.save()
-                logger.info(f"Updated cashback for expense {expense_id}: {new_cashback}")
+                logger.debug("Updated cashback for expense %s", expense_id)
         
         # Если категория изменилась, запускаем фоновую задачу для обновления весов
         if category_changed and old_category_id and update_keywords_weights:
@@ -777,17 +812,17 @@ def update_expense(
                     args=(expense_id, old_category_id, new_category_id),
                     countdown=0
                 )
-                logger.info(f"Triggered keywords weights update for expense {expense_id}")
+                logger.info("Triggered keywords weights update for expense %s", expense_id)
             except Exception as e:
-                logger.warning(f"Failed to trigger keywords update task: {e}")
+                logger.warning("Failed to trigger keywords update task: %s", e)
         
         return True
         
     except Expense.DoesNotExist:
-        logger.error(f"Expense {expense_id} not found for user {user_id}")
+        logger.warning("Expense %s not found for %s", expense_id, log_safe_id(user_id, "user"))
         return False
     except Exception as e:
-        logger.error(f"Error updating expense: {e}")
+        logger.error("Error updating expense %s for %s: %s", expense_id, log_safe_id(user_id, "user"), e)
         return False
 
 
@@ -809,7 +844,7 @@ def get_expense_by_id(expense_id: int, telegram_id: int) -> Optional[Expense]:
     except (Profile.DoesNotExist, Expense.DoesNotExist):
         return None
     except Exception as e:
-        logger.error(f"Error getting expense by id: {e}")
+        logger.error("Error getting expense %s for %s: %s", expense_id, log_safe_id(telegram_id, "user"), e)
         return None
 
 
@@ -849,10 +884,10 @@ def get_user_expenses(
         return list(queryset.select_related('category').order_by('-expense_date', '-expense_time')[:limit])
         
     except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {telegram_id}")
+        logger.error("Profile not found for %s", log_safe_id(telegram_id, "user"))
         return []
     except Exception as e:
-        logger.error(f"Error getting user expenses: {e}")
+        logger.error("Error getting user expenses for %s: %s", log_safe_id(telegram_id, "user"), e)
         return []
 
 
@@ -1000,9 +1035,12 @@ def find_similar_expenses(
                         similarity = _calculate_similarity(search_word, exp_word)
                         if similarity >= SIMILARITY_THRESHOLD:
                             word_matched = True
-                            logger.info(
-                                f"[SIMILAR EXPENSE] Match: '{search_word}' ~ '{exp_word}' "
-                                f"(similarity: {similarity:.2%})"
+                            logger.debug(
+                                "[SIMILAR EXPENSE] Candidate match for %s: query=%s, expense=%s, similarity=%.2f",
+                                log_safe_id(telegram_id, "user"),
+                                summarize_text(description),
+                                summarize_text(expense.description),
+                                similarity,
                             )
                             break
 
@@ -1022,7 +1060,7 @@ def find_similar_expenses(
         unique_amounts = {}
         for expense in similar_expenses:
             category_display = expense.category.get_display_name(user_lang) if expense.category else ('Прочие расходы' if user_lang == 'ru' else 'Other Expenses')
-            currency = expense.currency or expense.profile.currency or 'RUB'
+            currency = expense.currency or expense.profile.currency or DEFAULT_CURRENCY_CODE
             key = (float(expense.amount), currency, category_display)
             if key not in unique_amounts:
                 unique_amounts[key] = {
@@ -1047,10 +1085,10 @@ def find_similar_expenses(
         return result[:5]  # Возвращаем топ-5 вариантов
         
     except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {telegram_id}")
+        logger.error("Profile not found for %s", log_safe_id(telegram_id, "user"))
         return []
     except Exception as e:
-        logger.error(f"Error finding similar expenses: {e}")
+        logger.error("Error finding similar expenses for %s: %s", log_safe_id(telegram_id, "user"), e)
         return []
 
 
@@ -1069,21 +1107,21 @@ def delete_expense(telegram_id: int, expense_id: int) -> bool:
     try:
         profile = Profile.objects.get(telegram_id=telegram_id)
     except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {telegram_id}")
+        logger.error("Profile not found for %s", log_safe_id(telegram_id, "user"))
         return False
     
     try:
         expense = Expense.objects.get(id=expense_id, profile=profile)
         expense.delete()
         
-        logger.info(f"Deleted expense {expense_id} for user {telegram_id}")
+        logger.info("Deleted expense %s for %s", expense_id, log_safe_id(telegram_id, "user"))
         return True
         
     except Expense.DoesNotExist:
-        logger.error(f"Expense {expense_id} not found for user {telegram_id}")
+        logger.warning("Expense %s not found for %s", expense_id, log_safe_id(telegram_id, "user"))
         return False
     except Exception as e:
-        logger.error(f"Error deleting expense: {e}")
+        logger.error("Error deleting expense %s for %s: %s", expense_id, log_safe_id(telegram_id, "user"), e)
         return False
 
 
@@ -1098,12 +1136,12 @@ def get_last_expense(telegram_id: int) -> Optional[Expense]:
     Returns:
         Expense instance или None
     """
-    profile = get_or_create_user_profile_sync(user_id)
+    profile = get_or_create_user_profile_sync(telegram_id)
     
     try:
         return Expense.objects.filter(profile=profile).order_by('-created_at').first()
     except Exception as e:
-        logger.error(f"Error getting last expense: {e}")
+        logger.error("Error getting last expense for %s: %s", log_safe_id(telegram_id, "user"), e)
         return None
 
 
@@ -1114,7 +1152,7 @@ async def get_today_summary(user_id: int) -> Dict[str, Any]:
     try:
         profile = await Profile.objects.aget(telegram_id=user_id)
         today = date.today()
-        default_currency = profile.currency or 'RUB'
+        default_currency = profile.currency or DEFAULT_CURRENCY_CODE
         
         @sync_to_async
         def get_today_expenses():
@@ -1190,10 +1228,10 @@ async def get_today_summary(user_id: int) -> Dict[str, Any]:
         }
         
     except Profile.DoesNotExist:
-        return {'total': 0, 'count': 0, 'categories': [], 'currency': 'RUB', 'currency_totals': {}, 'single_currency': True}
+        return {'total': 0, 'count': 0, 'categories': [], 'currency': DEFAULT_CURRENCY_CODE, 'currency_totals': {}, 'single_currency': True}
     except Exception as e:
-        logger.error(f"Error getting today summary: {e}")
-        return {'total': 0, 'count': 0, 'categories': [], 'currency': 'RUB', 'currency_totals': {}, 'single_currency': True}
+        logger.error("Error getting today summary for %s: %s", log_safe_id(user_id, "user"), e)
+        return {'total': 0, 'count': 0, 'categories': [], 'currency': DEFAULT_CURRENCY_CODE, 'currency_totals': {}, 'single_currency': True}
 
 
 async def get_date_summary(user_id: int, target_date: date) -> Dict[str, Any]:
@@ -1213,7 +1251,7 @@ async def get_date_summary(user_id: int, target_date: date) -> Dict[str, Any]:
             )
         
         expenses = await get_date_expenses()
-        default_currency = profile.currency or 'RUB'
+        default_currency = profile.currency or DEFAULT_CURRENCY_CODE
         
         # Group by currency
         currency_totals = {}
@@ -1276,10 +1314,10 @@ async def get_date_summary(user_id: int, target_date: date) -> Dict[str, Any]:
         }
         
     except Profile.DoesNotExist:
-        return {'total': 0, 'count': 0, 'categories': [], 'currency': 'RUB', 'currency_totals': {}, 'single_currency': True}
+        return {'total': 0, 'count': 0, 'categories': [], 'currency': DEFAULT_CURRENCY_CODE, 'currency_totals': {}, 'single_currency': True}
     except Exception as e:
-        logger.error(f"Error getting date summary for {target_date}: {e}")
-        return {'total': 0, 'count': 0, 'categories': [], 'currency': 'RUB', 'currency_totals': {}, 'single_currency': True}
+        logger.error("Error getting date summary for %s on %s: %s", log_safe_id(user_id, "user"), target_date, e)
+        return {'total': 0, 'count': 0, 'categories': [], 'currency': DEFAULT_CURRENCY_CODE, 'currency_totals': {}, 'single_currency': True}
 
 
 @sync_to_async
@@ -1301,6 +1339,6 @@ def get_last_expenses(telegram_id: int, limit: int = 30) -> List[Expense]:
     except Profile.DoesNotExist:
         return []
     except Exception as e:
-        logger.error(f"Error getting last expenses: {e}")
+        logger.error("Error getting last expenses for %s: %s", log_safe_id(telegram_id, "user"), e)
         return []
 

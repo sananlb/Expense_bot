@@ -16,6 +16,7 @@ from aiogram import Bot
 from bot.keyboards import expenses_summary_keyboard
 from bot.utils import get_text, format_amount, get_month_name, get_currency_symbol
 from bot.utils.category_helpers import get_category_display_name
+from bot.utils.logging_safe import log_safe_id
 from bot.services.expense import get_expenses_summary, get_expenses_by_period, get_last_expenses
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
@@ -118,7 +119,11 @@ async def toggle_view_scope_expenses(callback: CallbackQuery, state: FSMContext,
         )
         await callback.answer()
     except Exception as e:
-        logger.error(f"Error toggling scope from expenses: {e}")
+        logger.error(
+            "Error toggling scope from expenses for %s: %s",
+            log_safe_id(callback.from_user.id, "user"),
+            e,
+        )
         await callback.answer(get_text('error_occurred', lang))
 
 
@@ -146,7 +151,12 @@ async def show_expenses_summary(
             logger.error("No callback provided for edit mode!")
             user_id = message.chat.id
         
-        logger.info(f"Getting expenses summary for user {user_id}, period: {start_date} to {end_date}")
+        logger.debug(
+            "Getting expenses summary for %s, period: %s to %s",
+            log_safe_id(user_id, "user"),
+            start_date,
+            end_date,
+        )
         
         # Определяем режим отображения (личный/семья)
         from bot.services.profile import get_or_create_profile, get_user_settings
@@ -210,7 +220,11 @@ async def show_expenses_summary(
             household_mode=household_mode
         )
         
-        logger.info(f"Summary result: total={summary.get('total', 0)}, count={summary.get('count', 0)}, categories={len(summary.get('by_category', []))}")
+        logger.debug(
+            "Summary result prepared: count=%s, categories=%s",
+            summary.get('count', 0),
+            len(summary.get('by_category', [])),
+        )
 
         # Определяем период для правильного заголовка и клавиатуры
         today = date.today()
@@ -227,7 +241,7 @@ async def show_expenses_summary(
         else:
             period = 'custom'
 
-        logger.info(f"Period determination: start_date={start_date}, end_date={end_date}, today={today}, is_today={is_today}, period={period}")
+        logger.debug("Summary period determined: period=%s, is_today=%s", period, is_today)
 
         # Формируем текст периода
         if start_date == end_date:
@@ -430,7 +444,11 @@ async def show_expenses_summary(
             )
             
     except Exception as e:
-        logger.error(f"Error showing expenses summary: {e}")
+        logger.error(
+            "Error showing expenses summary for %s: %s",
+            log_safe_id(user_id, "user"),
+            e,
+        )
         error_text = get_text('error_occurred', lang)
         if edit and original_message:
             await original_message.edit_text(error_text)
@@ -799,7 +817,7 @@ async def callback_show_diary(callback: CallbackQuery, state: FSMContext, lang: 
         await callback.answer()
         
     except Exception as e:
-        logger.error(f"Error showing expense diary: {e}")
+        logger.error("Error showing expense diary for %s: %s", log_safe_id(user_id, "user"), e)
         await callback.answer("Произошла ошибка при загрузке дневника", show_alert=True)
 
 
@@ -912,7 +930,7 @@ async def callback_export_month_csv(callback: CallbackQuery, state: FSMContext, 
                 timeout=10.0  # 10 секунд максимум для CSV
             )
         except asyncio.TimeoutError:
-            logger.error(f"CSV generation timeout for user {user_id}, {year}/{month}")
+            logger.error("CSV generation timeout for %s, %s/%s", log_safe_id(user_id, "user"), year, month)
             await callback.message.answer(
                 "❌ Превышено время ожидания при генерации отчета. Попробуйте позже." if lang == 'ru'
                 else "❌ Report generation timeout. Please try again later.",
@@ -945,7 +963,14 @@ async def callback_export_month_csv(callback: CallbackQuery, state: FSMContext, 
         )
 
     except Exception as e:
-        logger.error(f"Error exporting CSV: {e}", exc_info=True)
+        logger.error(
+            "Error exporting CSV for %s, %s/%s: %s",
+            log_safe_id(user_id, "user"),
+            year,
+            month,
+            e,
+            exc_info=True,
+        )
         await callback.message.answer(
             get_text('export_error', lang),
             parse_mode="HTML"
@@ -1061,7 +1086,7 @@ async def callback_export_month_excel(callback: CallbackQuery, state: FSMContext
                 timeout=30.0  # 30 секунд для XLSX (графики требуют больше времени)
             )
         except asyncio.TimeoutError:
-            logger.error(f"XLSX generation timeout for user {user_id}, {year}/{month}")
+            logger.error("XLSX generation timeout for %s, %s/%s", log_safe_id(user_id, "user"), year, month)
             await callback.message.answer(
                 "❌ Превышено время ожидания при генерации отчета. Попробуйте позже." if lang == 'ru'
                 else "❌ Report generation timeout. Please try again later.",
@@ -1094,7 +1119,14 @@ async def callback_export_month_excel(callback: CallbackQuery, state: FSMContext
         )
 
     except Exception as e:
-        logger.error(f"Error exporting XLSX: {e}", exc_info=True)
+        logger.error(
+            "Error exporting XLSX for %s, %s/%s: %s",
+            log_safe_id(user_id, "user"),
+            year,
+            month,
+            e,
+            exc_info=True,
+        )
         await callback.message.answer(
             get_text('export_error', lang),
             parse_mode="HTML"
@@ -1180,7 +1212,7 @@ async def callback_monthly_report_csv(callback: CallbackQuery, state: FSMContext
                 timeout=10.0  # 10 секунд максимум для CSV
             )
         except asyncio.TimeoutError:
-            logger.error(f"CSV generation timeout for user {user_id}, {year}/{month}")
+            logger.error("CSV generation timeout for %s, %s/%s", log_safe_id(user_id, "user"), year, month)
             await callback.message.answer(
                 "❌ Превышено время ожидания при генерации отчета. Попробуйте позже." if lang == 'ru'
                 else "❌ Report generation timeout. Please try again later.",
@@ -1213,7 +1245,14 @@ async def callback_monthly_report_csv(callback: CallbackQuery, state: FSMContext
         )
 
     except Exception as e:
-        logger.error(f"Error generating monthly CSV report: {e}", exc_info=True)
+        logger.error(
+            "Error generating monthly CSV report for %s, %s/%s: %s",
+            log_safe_id(user_id, "user"),
+            year,
+            month,
+            e,
+            exc_info=True,
+        )
         await callback.message.answer(
             get_text('export_error', lang),
             parse_mode="HTML"
@@ -1299,7 +1338,7 @@ async def callback_monthly_report_xlsx(callback: CallbackQuery, state: FSMContex
                 timeout=30.0  # 30 секунд для XLSX (графики требуют больше времени)
             )
         except asyncio.TimeoutError:
-            logger.error(f"XLSX generation timeout for user {user_id}, {year}/{month}")
+            logger.error("XLSX generation timeout for %s, %s/%s", log_safe_id(user_id, "user"), year, month)
             await callback.message.answer(
                 "❌ Превышено время ожидания при генерации отчета. Попробуйте позже." if lang == 'ru'
                 else "❌ Report generation timeout. Please try again later.",
@@ -1332,7 +1371,14 @@ async def callback_monthly_report_xlsx(callback: CallbackQuery, state: FSMContex
         )
 
     except Exception as e:
-        logger.error(f"Error generating monthly XLSX report: {e}", exc_info=True)
+        logger.error(
+            "Error generating monthly XLSX report for %s, %s/%s: %s",
+            log_safe_id(user_id, "user"),
+            year,
+            month,
+            e,
+            exc_info=True,
+        )
         await callback.message.answer(
             get_text('export_error', lang),
             parse_mode="HTML"
@@ -1366,7 +1412,7 @@ async def _generate_and_send_pdf_from_monthly_notification(
 
     try:
         # Логируем начало генерации
-        logger.info(f"[PDF_START] user={user_id}, period={year}/{month}, source=reports.py")
+        logger.info("[PDF_START] user=%s, period=%s/%s, source=reports.py", log_safe_id(user_id, "user"), year, month)
 
         # Создаем экземпляр бота для фоновой отправки
         bot = Bot(token=os.getenv('BOT_TOKEN'))
@@ -1385,7 +1431,13 @@ async def _generate_and_send_pdf_from_monthly_notification(
 
         if not pdf_bytes:
             # Нет данных для отчета
-            logger.warning(f"[PDF_NO_DATA] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
+            logger.warning(
+                "[PDF_NO_DATA] user=%s, period=%s/%s, duration=%.2fs",
+                log_safe_id(user_id, "user"),
+                year,
+                month,
+                duration,
+            )
             # Редактируем progress message
             if progress_msg_id:
                 await bot.edit_message_text(
@@ -1404,8 +1456,12 @@ async def _generate_and_send_pdf_from_monthly_notification(
 
         # Логируем успешную генерацию
         logger.info(
-            f"[PDF_SUCCESS] user={user_id}, period={year}/{month}, "
-            f"duration={duration:.2f}s, size={len(pdf_bytes)}"
+            "[PDF_SUCCESS] user=%s, period=%s/%s, duration=%.2fs, size=%s",
+            log_safe_id(user_id, "user"),
+            year,
+            month,
+            duration,
+            len(pdf_bytes),
         )
 
         # Алерт если генерация заняла > 30 секунд
@@ -1413,7 +1469,7 @@ async def _generate_and_send_pdf_from_monthly_notification(
             from bot.services.admin_notifier import send_admin_alert
             await send_admin_alert(
                 f"⚠️ Slow PDF generation\n"
-                f"User: {user_id}\n"
+                f"User: {log_safe_id(user_id, 'user')}\n"
                 f"Period: {year}/{month}\n"
                 f"Duration: {duration:.2f}s\n"
                 f"Size: {len(pdf_bytes)} bytes\n"
@@ -1451,11 +1507,17 @@ async def _generate_and_send_pdf_from_monthly_notification(
             try:
                 await bot.delete_message(chat_id=chat_id, message_id=progress_msg_id)
             except Exception as e:
-                logger.debug(f"Could not delete progress message: {e}")
+                logger.debug("Could not delete progress message for %s: %s", log_safe_id(user_id, "user"), e)
 
     except asyncio.TimeoutError:
         duration = time.time() - start_time
-        logger.error(f"[PDF_TIMEOUT] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
+        logger.error(
+            "[PDF_TIMEOUT] user=%s, period=%s/%s, duration=%.2fs",
+            log_safe_id(user_id, "user"),
+            year,
+            month,
+            duration,
+        )
 
         # Уведомляем пользователя
         if bot:
@@ -1481,7 +1543,7 @@ async def _generate_and_send_pdf_from_monthly_notification(
         from bot.services.admin_notifier import send_admin_alert
         await send_admin_alert(
             f"🔴 PDF Timeout\n"
-            f"User: {user_id}\n"
+            f"User: {log_safe_id(user_id, 'user')}\n"
             f"Period: {year}/{month}\n"
             f"Duration: {duration:.2f}s\n"
             f"Source: reports.py"
@@ -1490,8 +1552,12 @@ async def _generate_and_send_pdf_from_monthly_notification(
     except Exception as e:
         duration = time.time() - start_time
         logger.error(
-            f"[PDF_ERROR] user={user_id}, period={year}/{month}, "
-            f"duration={duration:.2f}s, error={str(e)}"
+            "[PDF_ERROR] user=%s, period=%s/%s, duration=%.2fs, error=%s",
+            log_safe_id(user_id, "user"),
+            year,
+            month,
+            duration,
+            str(e),
         )
 
         # Уведомляем пользователя
@@ -1517,7 +1583,7 @@ async def _generate_and_send_pdf_from_monthly_notification(
     finally:
         # Всегда снимаем lock
         cache.delete(lock_key)
-        logger.info(f"Released PDF lock for user {user_id}, {year}/{month}")
+        logger.info("Released PDF lock for %s, %s/%s", log_safe_id(user_id, "user"), year, month)
 
         # Закрываем сессию бота
         if bot:
@@ -1590,7 +1656,13 @@ async def callback_monthly_report_pdf(callback: CallbackQuery, state: FSMContext
     except Exception as e:
         # Снимаем lock при ошибке
         cache.delete(lock_key)
-        logger.error(f"Error creating PDF background task: {e}")
+        logger.error(
+            "Error creating PDF background task for %s, %s/%s: %s",
+            log_safe_id(user_id, "user"),
+            year,
+            month,
+            e,
+        )
         raise
 
 

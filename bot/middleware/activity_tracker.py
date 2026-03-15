@@ -10,6 +10,8 @@ from django.core.cache import cache
 from django.conf import settings
 import asyncio
 
+from bot.utils.logging_safe import log_safe_id, sanitize_callback_action
+
 logger = logging.getLogger(__name__)
 
 
@@ -42,7 +44,8 @@ class ActivityTrackerMiddleware(BaseMiddleware):
                 command = event.text.split()[0]
         elif isinstance(event, CallbackQuery):
             user = event.from_user
-            command = f"callback:{event.data.split(':')[0] if ':' in event.data else event.data}"
+            callback_action, _ = sanitize_callback_action(event.data)
+            command = f"callback:{callback_action}"
             
         if user:
             # Обновляем статистику
@@ -62,7 +65,7 @@ class ActivityTrackerMiddleware(BaseMiddleware):
             # Логируем ошибку
             error_info = {
                 'time': datetime.now().isoformat(),
-                'user_id': user.id if user else None,
+                'user_ref': log_safe_id(user.id, 'user') if user else None,
                 'error': str(e),
                 'command': command
             }
@@ -213,17 +216,17 @@ class RateLimitMiddleware(BaseMiddleware):
         
         # Проверяем лимиты
         if minute_count >= self.messages_per_minute:
-            logger.warning(f"Rate limit превышен для пользователя {user_id} (минутный)")
+            logger.warning("Rate limit превышен для %s (минутный)", log_safe_id(user_id, "user"))
             return False
             
         if hour_count >= self.messages_per_hour:
-            logger.warning(f"Rate limit превышен для пользователя {user_id} (часовой)")
+            logger.warning("Rate limit превышен для %s (часовой)", log_safe_id(user_id, "user"))
             
             # Отправляем уведомление админу о блокировке
             from bot.services.admin_notifier import send_admin_alert
             message = (
                 f"🚫 *\\[Coins\\] Пользователь заблокирован rate limiter*\n\n"
-                f"User ID: `{user_id}`\n"
+                f"User: `{log_safe_id(user_id, 'user')}`\n"
                 f"Превышен часовой лимит: {hour_count}/{self.messages_per_hour}\n"
                 f"Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             )

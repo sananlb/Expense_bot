@@ -22,6 +22,7 @@ from ..utils import get_text, get_user_language
 from ..utils.category_helpers import get_category_display_name
 from ..utils.formatters import format_currency
 from ..utils.expense_parser import convert_words_to_numbers
+from ..utils.logging_safe import log_safe_id
 import logging
 
 logger = logging.getLogger(__name__)
@@ -235,7 +236,11 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
             chat_id = message.message.chat.id if hasattr(message.message, 'chat') else None
         
         if not bot or not chat_id:
-            logger.error(f"Bot or chat_id is None: bot={bot}, chat_id={chat_id}")
+            logger.error(
+                "Bot or chat_id is None: bot_present=%s, chat=%s",
+                bool(bot),
+                log_safe_id(chat_id, "chat"),
+            )
             return
         
         # НЕ удаляем старое меню кешбека - оно должно оставаться на экране
@@ -252,7 +257,7 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
                 sent_message = message.message
             except Exception as e:
                 # Если не удалось отредактировать, отправляем новое
-                logger.warning(f"Failed to edit message: {e}")
+                logger.warning("Failed to edit cashback message: %s", e)
                 sent_message = await bot.send_message(
                     chat_id=chat_id,
                     text=text,
@@ -630,7 +635,7 @@ async def process_percent_text(message: types.Message, state: FSMContext, voice_
         await show_cashback_menu(message, state)
 
     except Exception as e:
-        logger.error(f"Error saving cashback for user {message.from_user.id}: {e}")
+        logger.error("Error saving cashback for %s: %s", log_safe_id(message.from_user.id, "user"), e)
         await message.answer(get_text('cashback_save_error', lang))
         await state.clear()
 
@@ -910,7 +915,7 @@ async def process_edit_percent(message: types.Message, state: FSMContext, voice_
         await show_cashback_menu(message, state)
 
     except Exception as e:
-        logger.error(f"Error saving cashback for user {message.from_user.id}: {e}")
+        logger.error("Error saving cashback for %s: %s", log_safe_id(message.from_user.id, "user"), e)
         await message.answer(get_text('cashback_save_error', lang))
         await state.clear()
 
@@ -925,13 +930,17 @@ async def process_edit_percent(message: types.Message, state: FSMContext, voice_
 @router.callback_query(F.data == "cashback_remove")
 async def handle_cashback_remove(callback: types.CallbackQuery, state: FSMContext):
     """Обработчик кнопки удаления"""
-    logger.info(f"handle_cashback_remove called for user {callback.from_user.id}")
+    logger.info("handle_cashback_remove called for %s", log_safe_id(callback.from_user.id, "user"))
     user_id = callback.from_user.id
     lang = await get_user_language(user_id)
     current_month = date.today().month
 
     cashbacks = await get_user_cashbacks(user_id, current_month)
-    logger.info(f"Found {len(cashbacks) if cashbacks else 0} cashbacks for user {user_id}")
+    logger.info(
+        "Found %s cashbacks for %s",
+        len(cashbacks) if cashbacks else 0,
+        log_safe_id(user_id, "user"),
+    )
 
     if not cashbacks:
         await callback.answer(get_text('cashback_no_to_remove', lang), show_alert=True)
@@ -958,7 +967,7 @@ async def handle_cashback_remove(callback: types.CallbackQuery, state: FSMContex
 @router.callback_query(F.data == "cashback_remove_all")
 async def handle_cashback_remove_all(callback: types.CallbackQuery):
     """Обработчик кнопки удаления всех"""
-    logger.info(f"handle_cashback_remove_all called for user {callback.from_user.id}")
+    logger.info("handle_cashback_remove_all called for %s", log_safe_id(callback.from_user.id, "user"))
     lang = await get_user_language(callback.from_user.id)
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[

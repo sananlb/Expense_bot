@@ -206,7 +206,7 @@ async def process_description(message: types.Message, state: FSMContext, voice_t
         amount = parsed['amount']
         is_income = parsed.get('is_income', False)
     except ValueError as e:
-        logger.warning(f"Invalid recurring payment input from user {message.from_user.id}: {e}")
+        logger.warning("Invalid recurring payment input from %s: %s", log_safe_id(message.from_user.id, "user"), e)
         await send_message_with_cleanup(message, state, "❌ Некорректный формат ввода. Укажите описание и сумму.")
         return
 
@@ -349,8 +349,8 @@ async def process_day_button(callback: types.CallbackQuery, state: FSMContext, l
         # Удаляем старое сообщение с выбором даты
         try:
             await safe_delete_message(message=callback.message)
-        except:
-            pass
+        except Exception as delete_error:
+            logger.debug("Failed to delete recurring date selection message: %s", delete_error)
         
         # Показываем меню регулярных платежей
         await show_recurring_menu(callback, state, lang)
@@ -400,8 +400,8 @@ async def process_day_text(
             # Просто удаляем сообщение пользователя, меню с кнопками остается
             try:
                 await safe_delete_message(message=message)
-            except Exception:
-                pass
+            except Exception as delete_error:
+                logger.debug("Failed to delete invalid recurring day message: %s", delete_error)
             return
 
         # Создаем регулярный платеж
@@ -423,8 +423,8 @@ async def process_day_text(
         # Просто удаляем сообщение пользователя, меню с кнопками остается
         try:
             await safe_delete_message(message=message)
-        except Exception:
-            pass
+        except Exception as delete_error:
+            logger.debug("Failed to delete non-numeric recurring day message: %s", delete_error)
 
 
 @router.callback_query(lambda c: c.data == "edit_recurring")
@@ -752,8 +752,8 @@ async def process_edit_amount(message: types.Message, state: FSMContext, lang: s
                 chat_id=message.chat.id,
                 message_id=prompt_message_id
             )
-        except Exception:
-            pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
+        except Exception as delete_error:
+            logger.debug("Failed to delete recurring edit prompt message: %s", delete_error)
 
 
 @router.message(RecurringForm.editing_description)
@@ -808,8 +808,8 @@ async def process_edit_description(message: types.Message, state: FSMContext, la
                 chat_id=message.chat.id,
                 message_id=prompt_message_id
             )
-        except Exception:
-            pass  # Игнорируем ошибки удаления (сообщение могло быть уже удалено)
+        except Exception as delete_error:
+            logger.debug("Failed to delete recurring description prompt message: %s", delete_error)
 
 
 @router.message(RecurringForm.editing_day)
@@ -870,8 +870,8 @@ async def process_edit_data(message: types.Message, state: FSMContext, lang: str
     # Просто удаляем сообщение пользователя, меню редактирования остается
     try:
         await safe_delete_message(message=message)
-    except Exception:
-        pass  # Игнорируем ошибки удаления
+    except Exception as delete_error:
+        logger.debug("Failed to delete recurring free-text edit message: %s", delete_error)
 
 
 @router.callback_query(lambda c: c.data == "delete_recurring")

@@ -7,6 +7,8 @@ from aiogram.types import Message, CallbackQuery
 from datetime import datetime, timedelta
 import logging
 
+from bot.utils.logging_safe import log_safe_id
+
 logger = logging.getLogger(__name__)
 
 
@@ -47,7 +49,7 @@ class RateLimitMiddleware(BaseMiddleware):
         # Проверяем лимит
         if len(self.user_requests[user_id]) >= self.rate_limit:
             # Превышен лимит
-            logger.warning(f"Rate limit exceeded for user {user_id}")
+            logger.warning("Rate limit exceeded for %s", log_safe_id(user_id, "user"))
             
             if isinstance(event, Message):
                 await event.answer(
@@ -126,7 +128,11 @@ class CommandRateLimitMiddleware(BaseMiddleware):
         
         # Проверяем лимит
         if len(self.user_commands[user_id][command]) >= rate_limit:
-            logger.warning(f"Command rate limit exceeded for user {user_id}, command {command}")
+            logger.warning(
+                "Command rate limit exceeded for %s, command %s",
+                log_safe_id(user_id, "user"),
+                command,
+            )
             
             if command == '/add':
                 await event.answer(

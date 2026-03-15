@@ -9,6 +9,7 @@ import time
 import aiohttp
 from typing import Optional
 from django.conf import settings
+from bot.utils.logging_safe import summarize_text
 
 logger = logging.getLogger(__name__)
 
@@ -67,23 +68,28 @@ class YandexSpeechKit:
 
                         if text:
                             text = cls._postprocess_text(text)
-                            logger.info(f"[YANDEX] Распознал за {elapsed:.2f}s: {text}")
+                            logger.info("[YANDEX] Распознал за %.2fs: %s", elapsed, summarize_text(text))
                             return text
                         else:
-                            logger.warning(f"[YANDEX] Пустой результат за {elapsed:.2f}s")
+                            logger.warning("[YANDEX] Пустой результат за %.2fs", elapsed)
                             return None
                     else:
                         error_text = await response.text()
-                        logger.error(f"[YANDEX] Ошибка {response.status} за {elapsed:.2f}s: {error_text}")
+                        logger.error(
+                            "[YANDEX] Ошибка %s за %.2fs: %s",
+                            response.status,
+                            elapsed,
+                            summarize_text(error_text),
+                        )
                         return None
 
         except aiohttp.ClientError as e:
             elapsed = time.time() - start_time
-            logger.error(f"[YANDEX] Network error за {elapsed:.2f}s: {e}")
+            logger.error("[YANDEX] Network error за %.2fs: %s", elapsed, e)
             return None
         except Exception as e:
             elapsed = time.time() - start_time
-            logger.error(f"[YANDEX] Exception за {elapsed:.2f}s: {e}")
+            logger.error("[YANDEX] Exception за %.2fs: %s", elapsed, e)
             return None
 
     @staticmethod

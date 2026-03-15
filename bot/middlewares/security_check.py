@@ -239,7 +239,7 @@ class SecurityCheckMiddleware(BaseMiddleware):
             )
             return True
         except Exception as e:
-            logger.warning(f"Invalid photo upload from user {user_id}: {e}")
+            logger.warning("Invalid photo upload from %s: %s", log_safe_id(user_id, "user"), e)
             await message.answer("❌ Некорректное фото. Проверьте размер и формат файла.")
             log_security_event(
                 'invalid_photo_upload',
@@ -259,7 +259,7 @@ class SecurityCheckMiddleware(BaseMiddleware):
             )
             return True
         except Exception as e:
-            logger.warning(f"Invalid voice upload from user {user_id}: {e}")
+            logger.warning("Invalid voice upload from %s: %s", log_safe_id(user_id, "user"), e)
             await message.answer("❌ Некорректное голосовое сообщение. Проверьте длительность и размер.")
             log_security_event(
                 'invalid_voice_upload',

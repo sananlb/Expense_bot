@@ -9,6 +9,7 @@ from bot.telegram_utils import send_telegram_message
 from django.db import transaction
 
 from expenses.models import AffiliateCommission
+from bot.utils.logging_safe import log_safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,11 @@ def send_broadcast_message(broadcast_id):
             time.sleep(0.05)  # 50ms между сообщениями
             
         except Exception as e:
-            logger.error(f"Error sending message to {recipient.profile.telegram_id}: {e}")
+            logger.error(
+                "Error sending broadcast message to %s: %s",
+                log_safe_id(recipient.profile.telegram_id, "user"),
+                e,
+            )
             recipient.status = 'failed'
             recipient.error_message = str(e)
             recipient.save()
@@ -170,7 +175,9 @@ def _notify_commission_paid(commission):
         )
     except Exception as exc:
         logger.error(
-            f"Failed to send notification to {commission.referrer.telegram_id}: {exc}"
+            "Failed to send commission notification to %s: %s",
+            log_safe_id(commission.referrer.telegram_id, "user"),
+            exc,
         )
 
 
@@ -193,7 +200,7 @@ def _finalize_commission(commission: AffiliateCommission, *, now=None):
         "[COMMISSION] Released commission %s: %s stars to %s",
         commission.id,
         commission.commission_amount,
-        commission.referrer.telegram_id,
+        log_safe_id(commission.referrer.telegram_id, "user"),
     )
 
     _notify_commission_paid(commission)
@@ -430,20 +437,25 @@ def send_expense_reminders():
                 # Проверяем, что прошло от 24 до 48 часов с регистрации
                 if profile.created_at and two_days_ago < profile.created_at < yesterday:
                     should_remind = True
-                    logger.info(f"[REMINDER] New user {profile.telegram_id} needs reminder (no operations, registered 24-48h ago)")
+                    logger.info(
+                        "[REMINDER] New user %s needs reminder (no operations, registered 24-48h ago)",
+                        log_safe_id(profile.telegram_id, "user"),
+                    )
             else:
                 # Пользователь с операциями - проверяем что последняя операция была 24-48 часов назад
                 if two_days_ago < last_operation.created_at < yesterday:
                     should_remind = True
                     logger.info(
-                        f"[REMINDER] User {profile.telegram_id} needs reminder "
-                        f"(last {last_operation_type} 24-48h ago: {last_operation.created_at})"
+                        "[REMINDER] User %s needs reminder (last %s 24-48h ago: %s)",
+                        log_safe_id(profile.telegram_id, "user"),
+                        last_operation_type,
+                        last_operation.created_at,
                     )
 
             if should_remind:
                 # Проверяем не заблокирован ли бот ПЕРЕД попыткой отправки
                 if profile.bot_blocked:
-                    logger.debug(f"[REMINDER] Skipping user {profile.telegram_id} (bot blocked)")
+                    logger.debug("[REMINDER] Skipping %s (bot blocked)", log_safe_id(profile.telegram_id, "user"))
                     skipped_count += 1
                     continue
 
@@ -468,7 +480,7 @@ def send_expense_reminders():
                     cache.set(reminder_key, True, timeout=None)  # Бессрочно
 
                     sent_count += 1
-                    logger.info(f"[REMINDER] Sent reminder to user {profile.telegram_id}")
+                    logger.info("[REMINDER] Sent reminder to %s", log_safe_id(profile.telegram_id, "user"))
 
                     # Небольшая задержка между отправками
                     time.sleep(0.05)
@@ -481,15 +493,22 @@ def send_expense_reminders():
                         profile.bot_blocked = True
                         profile.bot_blocked_at = timezone.now()
                         profile.save(update_fields=['bot_blocked', 'bot_blocked_at'])
-                        logger.info(f"[REMINDER] User {profile.telegram_id} has blocked the bot. Profile marked.")
+                        logger.info(
+                            "[REMINDER] %s has blocked the bot. Profile marked.",
+                            log_safe_id(profile.telegram_id, "user"),
+                        )
                     else:
                         # Другие ошибки логируем как ERROR
-                        logger.error(f"[REMINDER] Failed to send reminder to {profile.telegram_id}: {e}")
+                        logger.error(
+                            "[REMINDER] Failed to send reminder to %s: %s",
+                            log_safe_id(profile.telegram_id, "user"),
+                            e,
+                        )
             else:
                 skipped_count += 1
 
         except Exception as e:
-            logger.error(f"[REMINDER] Error processing user {profile.telegram_id}: {e}")
+            logger.error("[REMINDER] Error processing %s: %s", log_safe_id(profile.telegram_id, "user"), e)
             continue
 
     logger.info(
@@ -523,4 +542,4 @@ def clear_expense_reminder(telegram_id: int):
     reminder_key = f"expense_reminder_sent:{telegram_id}"
     cache.delete(reminder_key)
 
-    logger.debug(f"[REMINDER] Cleared reminder flag for user {telegram_id}")
+    logger.debug("[REMINDER] Cleared reminder flag for %s", log_safe_id(telegram_id, "user"))

@@ -22,6 +22,7 @@ from jinja2 import Template
 from django.conf import settings
 from django.db.models import Sum, Count, Q
 from dateutil.relativedelta import relativedelta
+from bot.utils.logging_safe import log_safe_id
 
 from expenses.models import Expense, ExpenseCategory, Profile, Cashback
 
@@ -63,7 +64,12 @@ class PDFReportService:
             # Получаем данные из БД
             report_data = await self._prepare_report_data(user_id, year, month)
             if not report_data:
-                logger.warning(f"No data for report: user_id={user_id}, year={year}, month={month}")
+                logger.warning(
+                    "No data for report: %s period=%s/%s",
+                    log_safe_id(user_id, "user"),
+                    year,
+                    month,
+                )
                 return None
             
             # Генерируем графики
@@ -657,7 +663,7 @@ class PDFReportService:
             return report_data
             
         except Profile.DoesNotExist:
-            logger.error(f"Profile not found for user_id: {user_id}")
+            logger.error("Profile not found for %s", log_safe_id(user_id, "user"))
             return None
         except Exception as e:
             logger.error(f"Error preparing report data: {e}")
@@ -669,5 +675,6 @@ class PDFReportService:
             with open(self.LOGO_PATH, 'rb') as f:
                 logo_bytes = f.read()
             return base64.b64encode(logo_bytes).decode('utf-8')
-        except:
+        except OSError as logo_error:
+            logger.debug("Failed to read WeasyPrint PDF logo from %s: %s", self.LOGO_PATH, logo_error)
             return ""

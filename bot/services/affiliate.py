@@ -12,6 +12,8 @@ from django.db.models import Sum, F
 from django.utils import timezone
 from asgiref.sync import sync_to_async
 
+from bot.utils.logging_safe import log_safe_id, summarize_text
+
 from expenses.models import (
     Profile, 
     Subscription,
@@ -148,12 +150,16 @@ def process_referral_link(new_user_id: int, referral_code: str) -> Optional[Affi
     Returns:
         AffiliateReferral или None если ссылка невалидна
     """
-    logger.info(f"[AFFILIATE] Processing referral link for user {new_user_id} with code: {referral_code}")
+    logger.info(
+        "[AFFILIATE] Processing referral link for %s code=%s",
+        log_safe_id(new_user_id, "user"),
+        summarize_text(referral_code),
+    )
     
     # Удаляем префикс ref_ если есть
     if referral_code.startswith('ref_'):
         referral_code = referral_code[4:]
-        logger.info(f"[AFFILIATE] Cleaned referral code: {referral_code}")
+        logger.debug("[AFFILIATE] Referral code normalized: %s", summarize_text(referral_code))
     
     try:
         # Находим реферальную ссылку
@@ -161,15 +167,24 @@ def process_referral_link(new_user_id: int, referral_code: str) -> Optional[Affi
             affiliate_code=referral_code,
             is_active=True
         )
-        logger.info(f"[AFFILIATE] Found affiliate link for referrer: {affiliate_link.profile.telegram_id}")
+        logger.info(
+            "[AFFILIATE] Found affiliate link for %s",
+            log_safe_id(affiliate_link.profile.telegram_id, "referrer"),
+        )
         
         # Получаем профиль нового пользователя
         new_profile = Profile.objects.get(telegram_id=new_user_id)
-        logger.info(f"[AFFILIATE] Found profile for new user: {new_profile.telegram_id}")
+        logger.debug(
+            "[AFFILIATE] Found profile for %s",
+            log_safe_id(new_profile.telegram_id, "user"),
+        )
         
         # Проверяем, что пользователь не приглашает сам себя
         if affiliate_link.profile.telegram_id == new_user_id:
-            logger.warning(f"[AFFILIATE] User {new_user_id} trying to refer themselves")
+            logger.warning(
+                "[AFFILIATE] Self-referral rejected for %s",
+                log_safe_id(new_user_id, "user"),
+            )
             return None
         
         # Проверяем, не был ли пользователь уже приглашён кем-то
@@ -178,7 +193,11 @@ def process_referral_link(new_user_id: int, referral_code: str) -> Optional[Affi
         ).first()
         
         if existing_referral:
-            logger.info(f"[AFFILIATE] User {new_user_id} already has referrer: {existing_referral.referrer.telegram_id}")
+            logger.info(
+                "[AFFILIATE] Existing referrer found for %s -> %s",
+                log_safe_id(new_user_id, "user"),
+                log_safe_id(existing_referral.referrer.telegram_id, "referrer"),
+            )
             return existing_referral
         
         # Создаём связь реферер-реферал
@@ -194,18 +213,33 @@ def process_referral_link(new_user_id: int, referral_code: str) -> Optional[Affi
                 referred=new_profile,
                 affiliate_link=affiliate_link
             )
-            logger.info(f"[AFFILIATE] Created referral: {affiliate_link.profile.telegram_id} -> {new_user_id}")
+            logger.info(
+                "[AFFILIATE] Created referral %s -> %s",
+                log_safe_id(affiliate_link.profile.telegram_id, "referrer"),
+                log_safe_id(new_user_id, "user"),
+            )
         
         return referral
         
     except AffiliateLink.DoesNotExist:
-        logger.warning(f"[AFFILIATE] Affiliate link not found for code: {referral_code}")
+        logger.warning(
+            "[AFFILIATE] Affiliate link not found code=%s",
+            summarize_text(referral_code),
+        )
         return None
     except Profile.DoesNotExist:
-        logger.error(f"[AFFILIATE] Profile not found for user: {new_user_id}")
+        logger.error(
+            "[AFFILIATE] Profile not found for %s",
+            log_safe_id(new_user_id, "user"),
+        )
         return None
     except Exception as e:
-        logger.error(f"[AFFILIATE] Unexpected error in process_referral_link: {e}")
+        logger.error(
+            "[AFFILIATE] Unexpected error in process_referral_link for %s: %s",
+            log_safe_id(new_user_id, "user"),
+            e,
+            exc_info=True,
+        )
         return None
 
 
@@ -217,18 +251,18 @@ def process_referral_link(new_user_id: int, referral_code: str) -> Optional[Affi
 def reward_referrer_subscription_extension(subscription: Subscription) -> Optional[Dict[str, Any]]:
     """Продлить подписку рефереру при первой оплате реферала"""
     logger.info(
-        "[AFFILIATE] Checking referral reward for subscription %s (user %s)",
+        "[AFFILIATE] Checking referral reward for subscription %s (%s)",
         subscription.id,
-        subscription.profile.telegram_id
+        log_safe_id(subscription.profile.telegram_id, "user"),
     )
 
     # Учитываем только оплаченные подписки в Stars
     if subscription.payment_method != 'stars' or subscription.amount <= 0:
         logger.info(
-            "[AFFILIATE] Subscription %s is not eligible for reward (method=%s, amount=%s)",
+            "[AFFILIATE] Subscription %s is not eligible for reward (method=%s, has_positive_amount=%s)",
             subscription.id,
             subscription.payment_method,
-            subscription.amount
+            subscription.amount > 0,
         )
         return None
 
@@ -250,8 +284,8 @@ def reward_referrer_subscription_extension(subscription: Subscription) -> Option
         )
     except AffiliateReferral.DoesNotExist:
         logger.info(
-            "[AFFILIATE] No referral relationship found for user %s",
-            subscription.profile.telegram_id
+            "[AFFILIATE] No referral relationship found for %s",
+            log_safe_id(subscription.profile.telegram_id, "user"),
         )
         return None
 
@@ -288,7 +322,7 @@ def reward_referrer_subscription_extension(subscription: Subscription) -> Option
             logger.debug(
                 "[AFFILIATE] Marked %s expired subscriptions inactive for referrer %s",
                 expired,
-                referrer_profile.telegram_id
+                log_safe_id(referrer_profile.telegram_id, "referrer"),
             )
 
         latest_subscription = Subscription.objects.filter(
@@ -314,9 +348,9 @@ def reward_referrer_subscription_extension(subscription: Subscription) -> Option
         )
 
         logger.info(
-            "[AFFILIATE] Created referral reward subscription %s for referrer %s: %s → %s",
+            "[AFFILIATE] Created referral reward subscription %s for %s: %s -> %s",
             reward_subscription.id,
-            referrer_profile.telegram_id,
+            log_safe_id(referrer_profile.telegram_id, "referrer"),
             reward_start,
             reward_end
         )

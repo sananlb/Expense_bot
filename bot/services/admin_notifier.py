@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from django.core.cache import cache
 import os
 from bot.utils.language import get_text
+from bot.utils.logging_safe import log_safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -150,8 +151,14 @@ async def send_admin_alert(
         logger.warning("ADMIN_TELEGRAM_ID не настроен")
         return False
 
-    logger.info(f"Попытка отправки админского уведомления. ADMIN_TELEGRAM_ID: {admin_id}")
-    logger.info(f"Используется токен бота: {'MONITORING_BOT_TOKEN' if os.getenv('MONITORING_BOT_TOKEN') else 'TELEGRAM_BOT_TOKEN'}")
+    logger.info(
+        "Попытка отправки админского уведомления для %s",
+        log_safe_id(admin_id, "admin"),
+    )
+    logger.info(
+        "Используется токен бота: %s",
+        'MONITORING_BOT_TOKEN' if os.getenv('MONITORING_BOT_TOKEN') else 'TELEGRAM_BOT_TOKEN',
+    )
 
     try:
         # Экранируем только если явно запрошено (для ненадежных данных)
@@ -174,9 +181,14 @@ async def send_admin_alert(
         logger.info("Админское уведомление отправлено успешно")
         return True
 
-    except Exception as e:
-        logger.error(f"Ошибка отправки админского алерта: {e}")
-        logger.error(f"Детали ошибки: chat_id={admin_id}, message_length={len(message)}, parse_mode={parse_mode}")
+    except Exception:
+        logger.error("Ошибка отправки админского алерта", exc_info=True)
+        logger.error(
+            "Детали ошибки: admin=%s, message_length=%s, parse_mode=%s",
+            log_safe_id(admin_id, "admin"),
+            len(message),
+            parse_mode,
+        )
 
         # Fallback: пробуем отправить без форматирования
         if parse_mode is not None:
@@ -190,8 +202,8 @@ async def send_admin_alert(
                 )
                 logger.info("Админское уведомление отправлено без форматирования (fallback)")
                 return True
-            except Exception as fallback_error:
-                logger.error(f"Fallback тоже упал: {fallback_error}")
+            except Exception:
+                logger.error("Fallback отправки админского алерта тоже упал", exc_info=True)
 
         return False
 

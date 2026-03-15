@@ -19,12 +19,6 @@ import pytest
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Django setup
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'expense_bot.settings')
-
-import django
-django.setup()
-
 from django.utils import timezone
 
 

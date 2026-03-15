@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.db import transaction
 from expenses.models import Profile, Household, FamilyInvite, Expense, Income
 import logging
+from bot.utils.logging_safe import log_safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -74,11 +75,11 @@ class HouseholdService:
             profile.household = household
             profile.save()
             
-            logger.info(f"Created household {household.id} by user {profile.telegram_id}")
+            logger.info("Created household %s by %s", household.id, log_safe_id(profile.telegram_id, "user"))
             return True, "Семейный бюджет успешно создан", household
             
         except Exception as e:
-            logger.error(f"Error creating household: {e}")
+            logger.error("Error creating household: %s", e)
             return False, "Ошибка при создании семейного бюджета", None
     
     @staticmethod
@@ -127,11 +128,11 @@ class HouseholdService:
             # Формируем ссылку
             invite_link = f"https://t.me/{bot_username}?start=family_{invite.token}"
             
-            logger.info(f"Generated invite for household {household.id} by user {profile.telegram_id}")
+            logger.info("Generated invite for household %s by %s", household.id, log_safe_id(profile.telegram_id, "user"))
             return True, invite_link
             
         except Exception as e:
-            logger.error(f"Error generating invite link: {e}")
+            logger.error("Error generating invite link: %s", e)
             return False, "Ошибка при создании приглашения"
     
     @staticmethod
@@ -190,13 +191,13 @@ class HouseholdService:
             profile.household = household
             profile.save()
             
-            logger.info(f"User {profile.telegram_id} joined household {household.id}")
+            logger.info("User %s joined household %s", log_safe_id(profile.telegram_id, "user"), household.id)
             
             household_name = household.name or "семейному бюджету"
             return True, f"Вы успешно присоединились к {household_name}"
             
         except Exception as e:
-            logger.error(f"Error joining household: {e}")
+            logger.error("Error joining household: %s", e)
             return False, "Ошибка при присоединении к семейному бюджету"
     
     @staticmethod
@@ -234,7 +235,7 @@ class HouseholdService:
                 household.save()
                 # Деактивируем все приглашения
                 FamilyInvite.objects.filter(household=household, is_active=True).update(is_active=False)
-                logger.info(f"Household {household.id} disbanded by creator {profile.telegram_id}")
+                logger.info("Household %s disbanded by creator %s", household.id, log_safe_id(profile.telegram_id, "user"))
                 return True, f"Домохозяйство '{household_name}' расформировано"
 
             # Иначе — обычный выход участника
@@ -251,13 +252,13 @@ class HouseholdService:
                 household.save()
                 # Деактивируем все приглашения
                 FamilyInvite.objects.filter(household=household, is_active=True).update(is_active=False)
-                logger.info(f"Household {household.id} deactivated (no members)")
+                logger.info("Household %s deactivated (no members)", household.id)
 
-            logger.info(f"User {profile.telegram_id} left household {household.id}")
+            logger.info("User %s left household %s", log_safe_id(profile.telegram_id, "user"), household.id)
             return True, f"Вы вышли из {household_name}"
 
         except Exception as e:
-            logger.error(f"Error leaving household: {e}")
+            logger.error("Error leaving household: %s", e)
             return False, "Ошибка при выходе из семейного бюджета"
     
     @staticmethod

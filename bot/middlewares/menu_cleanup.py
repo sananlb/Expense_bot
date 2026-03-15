@@ -6,6 +6,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from ..utils.message_utils import delete_message_with_effect
+from ..utils.logging_safe import log_safe_id, summarize_text
 from ..routers.recurring import RecurringForm
 import asyncio
 import logging
@@ -51,7 +52,11 @@ class MenuCleanupMiddleware(BaseMiddleware):
                         )
                     )
                     await state.update_data(clarification_message_id=None)
-                    logger.info(f"Scheduled deletion of clarification message {old_clarification_id} (callback) for user {event.from_user.id}")
+                    logger.debug(
+                        "Scheduled deletion of clarification message %s (callback) for %s",
+                        old_clarification_id,
+                        log_safe_id(event.from_user.id, "user"),
+                    )
                 except Exception as e:
                     logger.debug(f"Failed to delete clarification message in callback: {e}")
 
@@ -67,7 +72,12 @@ class MenuCleanupMiddleware(BaseMiddleware):
             state_data = await state.get_data()
             old_menu_id = state_data.get('last_menu_message_id')
             old_clarification_id = state_data.get('clarification_message_id')
-            logger.info(f"MenuCleanup: Found old_menu_id={old_menu_id}, clarification_id={old_clarification_id} for user {event.from_user.id}")
+            logger.debug(
+                "MenuCleanup state loaded: old_menu=%s, clarification_id=%s, user=%s",
+                old_menu_id,
+                old_clarification_id,
+                log_safe_id(event.from_user.id, "user"),
+            )
         
         # Сначала вызываем обработчик (он отправит новое меню)
         result = await handler(event, data)
@@ -81,11 +91,17 @@ class MenuCleanupMiddleware(BaseMiddleware):
                 cashback_menu_ids = state_data.get('cashback_menu_ids', [])
                 
                 # ВАЖНОЕ ЛОГИРОВАНИЕ для отладки
-                logger.info(f"MenuCleanup AFTER handler: old_menu={old_menu_id}, current_menu={current_menu_id}, cashback_ids={cashback_menu_ids}, text={event.text[:20] if event.text else None}")
+                logger.debug(
+                    "MenuCleanup after handler: old_menu=%s, current_menu=%s, cashback_count=%s, text=%s",
+                    old_menu_id,
+                    current_menu_id,
+                    len(cashback_menu_ids),
+                    summarize_text(event.text),
+                )
                 
                 # НЕ удаляем ТОЛЬКО если это меню кешбека из списка
                 if old_menu_id in cashback_menu_ids:
-                    logger.info(f"SKIPPING deletion - this is a cashback menu! old_menu={old_menu_id}")
+                    logger.debug("Skipping deletion for cashback menu old_menu=%s", old_menu_id)
                     return result
 
                 # НЕ удаляем меню если пользователь в защищённом состоянии FSM
@@ -93,7 +109,7 @@ class MenuCleanupMiddleware(BaseMiddleware):
                 if current_state:
                     for protected_state in PROTECTED_STATES:
                         if current_state == protected_state.state:
-                            logger.info(f"SKIPPING deletion - user in protected state: {current_state}")
+                            logger.debug("Skipping deletion for protected state: %s", current_state)
                             return result
 
                 # Проверяем, является ли сообщение потенциальной тратой
@@ -111,7 +127,7 @@ class MenuCleanupMiddleware(BaseMiddleware):
 
                         if has_digits and is_not_command:
                             is_potential_expense = True
-                            logger.info(f"Detected potential expense: '{text[:30]}...' (has_digits={has_digits})")
+                            logger.debug("Detected potential expense message: %s", summarize_text(text))
 
                 # Удаляем старое меню если:
                 # 1. ID изменился (было отправлено новое меню)
@@ -120,11 +136,11 @@ class MenuCleanupMiddleware(BaseMiddleware):
                 if current_menu_id != old_menu_id:
                     # Меню изменилось - удаляем старое
                     should_delete = True
-                    logger.info(f"Menu changed: old={old_menu_id}, new={current_menu_id}")
+                    logger.debug("Menu changed: old=%s, new=%s", old_menu_id, current_menu_id)
                 elif is_potential_expense and old_menu_id:
                     # Это трата и есть старое меню - удаляем его
                     should_delete = True
-                    logger.info(f"Expense detected with old menu: {old_menu_id}")
+                    logger.debug("Expense detected with old menu: %s", old_menu_id)
                     # Очищаем ID из состояния, так как меню будет удалено
                     await state.update_data(last_menu_message_id=None)
 
@@ -137,7 +153,11 @@ class MenuCleanupMiddleware(BaseMiddleware):
                             delay=0.1  # Уменьшаем задержку для более быстрого удаления
                         )
                     )
-                    logger.info(f"Scheduled deletion of old menu {old_menu_id} for user {event.from_user.id}")
+                    logger.debug(
+                        "Scheduled deletion of old menu %s for %s",
+                        old_menu_id,
+                        log_safe_id(event.from_user.id, "user"),
+                    )
             except Exception as e:
                 logger.debug(f"Failed to delete old menu: {e}")
 
@@ -160,7 +180,11 @@ class MenuCleanupMiddleware(BaseMiddleware):
                     )
                     # Очищаем ID из состояния
                     await state.update_data(clarification_message_id=None)
-                    logger.info(f"Scheduled deletion of clarification message {old_clarification_id} for user {event.from_user.id}")
+                    logger.debug(
+                        "Scheduled deletion of clarification message %s for %s",
+                        old_clarification_id,
+                        log_safe_id(event.from_user.id, "user"),
+                    )
             except Exception as e:
                 logger.debug(f"Failed to delete clarification message: {e}")
 

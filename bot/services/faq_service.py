@@ -11,6 +11,7 @@ from typing import Optional, Tuple, List, Dict, Set
 
 from bot.data.faq import FAQ_DATA, FAQEntry, get_faq_for_ai_context
 from bot.routers.start import get_welcome_message
+from bot.utils.logging_safe import summarize_text
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,12 @@ class FAQMatcher:
                 # Answer in user's preferred language
                 raw_answer = entry.get(f"answer_{lang}") or entry.get("answer_ru")
                 answer = _resolve_answer(raw_answer, lang)
-                logger.info(f"[FAQ] Exact match ({idx_lang}): '{text_norm}' -> {entry['id']}")
+                logger.info(
+                    "[FAQ] Exact match lang=%s input=%s faq_id=%s",
+                    idx_lang,
+                    summarize_text(text_norm),
+                    entry["id"],
+                )
                 return answer, 1.0, entry["id"]
 
         # 2) Fuzzy match in any language - find best match across both
@@ -112,7 +118,13 @@ class FAQMatcher:
             matched_q, entry, ratio, idx_lang = best_match
             raw_answer = entry.get(f"answer_{lang}") or entry.get("answer_ru")
             answer = _resolve_answer(raw_answer, lang)
-            logger.info(f"[FAQ] Fuzzy match ({idx_lang}): '{text_norm}' -> '{matched_q}' (ratio={ratio:.2f})")
+            logger.info(
+                "[FAQ] Fuzzy match lang=%s input=%s matched=%s ratio=%.2f",
+                idx_lang,
+                summarize_text(text_norm),
+                summarize_text(matched_q),
+                ratio,
+            )
             return answer, ratio, entry["id"]
 
         # 3) Keyword overlap (need at least 2 common keywords)
@@ -132,10 +144,15 @@ class FAQMatcher:
             raw_answer = best_entry.get(f"answer_{lang}") or best_entry.get("answer_ru")
             answer = _resolve_answer(raw_answer, lang)
             confidence = min(0.7, 0.4 + best_count * 0.15)
-            logger.info(f"[FAQ] Keyword match: '{text_norm}' -> {best_entry['id']} (kw={best_count})")
+            logger.info(
+                "[FAQ] Keyword match input=%s faq_id=%s keyword_overlap=%s",
+                summarize_text(text_norm),
+                best_entry["id"],
+                best_count,
+            )
             return answer, confidence, best_entry["id"]
 
-        logger.info(f"[FAQ] No match for: '{text_norm}'")
+        logger.info("[FAQ] No match for input=%s", summarize_text(text_norm))
         return None, 0.0, None
 
     def get_faq_context_for_ai(self) -> str:

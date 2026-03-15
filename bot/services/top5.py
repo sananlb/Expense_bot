@@ -132,6 +132,15 @@ def calculate_top5_sync(profile: Profile, window_start: date, window_end: date) 
         kk = (it['title_norm'], str(it['amount_norm']), it['currency'], it['op_type'])
         it['needs_category_hint'] = key_counts[kk] > 1
 
+    expense_category_ids = {
+        it['category_id'] for it in final if it['category_kind'] == 'expense' and it['category_id']
+    }
+    income_category_ids = {
+        it['category_id'] for it in final if it['category_kind'] == 'income' and it['category_id']
+    }
+    expense_categories = ExpenseCategory.objects.in_bulk(expense_category_ids)
+    income_categories = IncomeCategory.objects.in_bulk(income_category_ids)
+
     # Подготовка к сериализации для JSONField с предзагрузкой эмодзи категорий
     user_lang = profile.language_code or 'ru'
     serialized: List[Dict] = []
@@ -141,9 +150,9 @@ def calculate_top5_sync(profile: Profile, window_start: date, window_end: date) 
         category_name = None
         try:
             if it['category_kind'] == 'expense' and it['category_id']:
-                cat = ExpenseCategory.objects.filter(id=it['category_id']).first()
+                cat = expense_categories.get(it['category_id'])
             elif it['category_kind'] == 'income' and it['category_id']:
-                cat = IncomeCategory.objects.filter(id=it['category_id']).first()
+                cat = income_categories.get(it['category_id'])
             else:
                 cat = None
             if cat:

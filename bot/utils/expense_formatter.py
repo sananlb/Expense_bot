@@ -1,10 +1,14 @@
 """
 Форматирование трат в стиле дневника
 """
+import logging
 from typing import List, Dict, Any
 from datetime import date, datetime
 from decimal import Decimal
 from . import get_text
+
+
+logger = logging.getLogger(__name__)
 
 
 def format_expenses_diary_style(
@@ -228,7 +232,8 @@ def format_expenses_from_dict_list(
         date_str = exp_data.get('date', '2024-01-01')
         try:
             expense_date = datetime.fromisoformat(date_str).date()
-        except:
+        except (TypeError, ValueError) as parse_error:
+            logger.debug("Failed to parse expense date '%s', using today fallback: %s", date_str, parse_error)
             expense_date = datetime.now().date()
 
         grouped_expenses[expense_date].append(exp_data)

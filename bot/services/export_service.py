@@ -28,6 +28,7 @@ except ImportError:
 
 from expenses.models import Expense, Income, Cashback, Profile
 from bot.utils.language import get_text
+from bot.utils.logging_safe import log_safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -2337,9 +2338,12 @@ class ExportService:
                 household_id=household_id
             )
         except Profile.DoesNotExist:
-            logger.warning(f"Profile not found for user_id={user_id}, skipping summary sheet")
+            logger.warning(
+                "Profile not found for user=%s, skipping summary sheet",
+                log_safe_id(user_id, "user"),
+            )
         except Exception as e:
-            logger.error(f"Error adding summary sheet: {e}")
+            logger.error("Error adding summary sheet", exc_info=True)
 
         # Сохранить в BytesIO
         output = BytesIO()

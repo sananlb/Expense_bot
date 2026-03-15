@@ -12,6 +12,13 @@ from django.db.models import Q, Sum, Count
 from django.utils import timezone
 
 from expenses.models import Income, IncomeCategory, Profile
+from bot.constants import (
+    DEFAULT_CURRENCY_CODE,
+    MAX_DAILY_OPERATIONS,
+    MAX_OPERATION_DESCRIPTION_LENGTH,
+    MAX_TRANSACTION_AMOUNT,
+    ONE_YEAR_DAYS,
+)
 from bot.utils.db_utils import get_or_create_user_profile_sync
 from bot.utils.category_helpers import get_category_display_name, get_category_name_without_emoji
 from bot.utils.category_validators import (
@@ -20,6 +27,7 @@ from bot.utils.category_validators import (
 )
 from bot.utils.language import get_text
 from bot.utils.emoji_utils import EMOJI_PREFIX_RE
+from bot.utils.logging_safe import log_safe_id, summarize_text
 
 # Предзагрузка Celery задач для устранения "холодного старта"
 # Импортируем заранее, чтобы при первом вызове не было задержки 6+ секунд
@@ -69,7 +77,7 @@ def create_income(
         profile = get_or_create_user_profile_sync(user_id)
         
         # Обрабатываем валюту (по умолчанию валюта профиля)
-        currency = currency or profile.currency or 'RUB'
+        currency = currency or profile.currency or DEFAULT_CURRENCY_CODE
 
         # Обрабатываем дату
         if income_date is None:
@@ -77,19 +85,24 @@ def create_income(
         
         # Проверка 1: Не вносить доходы в будущем
         if income_date > date.today():
-            logger.warning(f"User {user_id} tried to add income in future: {income_date}")
+            logger.warning("Future income rejected for %s on %s", log_safe_id(user_id, "user"), income_date)
             raise ValueError("Нельзя вносить доходы в будущем")
         
         # Проверка 2: Не вносить доходы старше 1 года
-        one_year_ago = date.today() - timedelta(days=365)
+        one_year_ago = date.today() - timedelta(days=ONE_YEAR_DAYS)
         if income_date < one_year_ago:
-            logger.warning(f"User {user_id} tried to add income older than 1 year: {income_date}")
+            logger.warning("Old income rejected for %s on %s", log_safe_id(user_id, "user"), income_date)
             raise ValueError("Нельзя вносить доходы старше 1 года")
         
         # Проверка 3: Не вносить доходы до даты регистрации пользователя
         profile_created_date = profile.created_at.date() if profile.created_at else date.today()
         if income_date < profile_created_date:
-            logger.warning(f"User {user_id} tried to add income before registration: {income_date}, registered: {profile_created_date}")
+            logger.warning(
+                "Income before registration rejected for %s: income_date=%s, profile_created=%s",
+                log_safe_id(user_id, "user"),
+                income_date,
+                profile_created_date,
+            )
             raise ValueError(f"Нельзя вносить доходы до даты регистрации ({profile_created_date.strftime('%d.%m.%Y')})")
         
         # Проверяем общий лимит операций (доходы + расходы) в 100 записей в день
@@ -107,18 +120,17 @@ def create_income(
         
         total_operations = today_incomes_count + today_expenses_count
         
-        if total_operations >= 100:
-            logger.warning(f"User {user_id} reached daily operations limit (100)")
+        if total_operations >= MAX_DAILY_OPERATIONS:
+            logger.warning("Daily operations limit reached for %s", log_safe_id(user_id, "user"))
             raise ValueError("Достигнут лимит записей в день (максимум 100). Попробуйте завтра.")
         
         # Проверяем длину описания
-        if description and len(description) > 500:
-            description = description[:500]
+        if description and len(description) > MAX_OPERATION_DESCRIPTION_LENGTH:
+            description = description[:MAX_OPERATION_DESCRIPTION_LENGTH]
 
         # Проверка максимальной суммы (лимит БД: NUMERIC(12,2))
-        MAX_AMOUNT = Decimal('9999999999.99')
-        if amount > MAX_AMOUNT:
-            logger.warning(f"User {user_id} tried to add income with amount too large: {amount}")
+        if amount > MAX_TRANSACTION_AMOUNT:
+            logger.warning("Income amount too large for %s", log_safe_id(user_id, "user"))
             raise ValueError("⚠️ Сумма слишком велика")
 
         # Определяем время для дохода
@@ -151,13 +163,14 @@ def create_income(
 
                 if not is_valid_category:
                     logger.warning(
-                        f"User {user_id} (profile {profile.id}) tried to use income category {category_id} "
-                        f"belonging to another user (profile {category.profile_id})"
+                        "Income category ownership mismatch for %s: category=%s",
+                        log_safe_id(user_id, "user"),
+                        category_id,
                     )
                     raise ValueError("Нельзя использовать категорию другого пользователя")
 
             except IncomeCategory.DoesNotExist:
-                logger.warning(f"Income category {category_id} not found for user {user_id}")
+                logger.warning("Income category %s not found for %s", category_id, log_safe_id(user_id, "user"))
                 raise ValueError(f"Категория дохода с ID {category_id} не существует")
         
         # Создаем доход
@@ -184,10 +197,7 @@ def create_income(
                     args=(income.id,),
                     countdown=0
                 )
-                logger.info(
-                    f"Scheduled background keyword learning for AI-categorized income "
-                    f"{income.id} (category: {category.name})"
-                )
+                logger.info("Scheduled background keyword learning for AI-categorized income %s", income.id)
             except Exception as e:
                 logger.warning(f"Could not schedule income keyword learning task: {e}")
 
@@ -195,13 +205,13 @@ def create_income(
         from expenses.tasks import clear_expense_reminder
         clear_expense_reminder(user_id)
 
-        logger.info(f"Created income {income.id} for user {user_id}: {amount} {currency}")
+        logger.info("Created income %s for %s", income.id, log_safe_id(user_id, "user"))
         return income
         
     except ValueError:
         raise  # Пробрасываем ValueError дальше для обработки в роутере
     except Exception as e:
-        logger.error(f"Error creating income for user {user_id}: {e}")
+        logger.error("Error creating income for %s: %s", log_safe_id(user_id, "user"), e)
         return None
 
 
@@ -314,7 +324,7 @@ def get_user_incomes(
         return list(incomes)
         
     except Exception as e:
-        logger.error(f"Error getting incomes for user {user_id}: {e}")
+        logger.error("Error getting incomes for %s: %s", log_safe_id(user_id, "user"), e)
         return []
 
 
@@ -395,7 +405,7 @@ def get_incomes_summary(
         }
         
     except Exception as e:
-        logger.error(f"Error getting incomes summary for user {user_id}: {e}")
+        logger.error("Error getting incomes summary for %s: %s", log_safe_id(user_id, "user"), e)
         return {
             'total': 0,
             'count': 0,
@@ -419,7 +429,7 @@ async def get_today_income_summary(user_id: int) -> Dict:
     try:
         profile = await Profile.objects.aget(telegram_id=user_id)
         today = date.today()
-        default_currency = profile.currency or 'RUB'
+        default_currency = profile.currency or DEFAULT_CURRENCY_CODE
 
         @sync_to_async
         def get_today_incomes():
@@ -448,7 +458,7 @@ async def get_today_income_summary(user_id: int) -> Dict:
     except Profile.DoesNotExist:
         return {'currency_totals': {}, 'count': 0}
     except Exception as e:
-        logger.error(f"Error getting today income summary for user {user_id}: {e}")
+        logger.error("Error getting today income summary for %s: %s", log_safe_id(user_id, "user"), e)
         return {'currency_totals': {}, 'count': 0}
 
 
@@ -478,7 +488,7 @@ async def get_date_income_summary(user_id: int, target_date: date) -> Dict:
             )
 
         incomes = await get_incomes_for_date()
-        default_currency = profile.currency or 'RUB'
+        default_currency = profile.currency or DEFAULT_CURRENCY_CODE
 
         # Группируем по валютам
         currency_totals = {}
@@ -496,7 +506,12 @@ async def get_date_income_summary(user_id: int, target_date: date) -> Dict:
     except Profile.DoesNotExist:
         return {'currency_totals': {}, 'count': 0}
     except Exception as e:
-        logger.error(f"Error getting income summary for user {user_id} on {target_date}: {e}")
+        logger.error(
+            "Error getting income summary for %s on %s: %s",
+            log_safe_id(user_id, "user"),
+            target_date,
+            e,
+        )
         return {'currency_totals': {}, 'count': 0}
 
 
@@ -565,7 +580,7 @@ def get_incomes_by_period(
         }
         
     except Exception as e:
-        logger.error(f"Error getting incomes by period for user {user_id}: {e}")
+        logger.error("Error getting incomes by period for %s: %s", log_safe_id(user_id, "user"), e)
         return {
             'total': 0,
             'count': 0,
@@ -617,7 +632,11 @@ def update_income(
                         )
                         setattr(income, 'category', category_obj)
                     except IncomeCategory.DoesNotExist:
-                        logger.warning(f"Income category {value} not found for user {user_id}")
+                        logger.warning(
+                            "Income category %s not found for %s",
+                            value,
+                            log_safe_id(user_id, "user"),
+                        )
                         continue
                 else:
                     setattr(income, field, value)
@@ -640,20 +659,20 @@ def update_income(
                 )
 
                 logger.info(
-                    f"Scheduled background learning for income category change: "
-                    f"{old_category} -> {income.category} (income {income_id})"
+                    "Scheduled background learning for income category change on income %s",
+                    income_id,
                 )
             except Exception as e:
                 logger.warning(f"Could not schedule income keyword learning task: {e}")
         
-        logger.info(f"Updated income {income_id} for user {user_id}")
+        logger.info("Updated income %s for %s", income_id, log_safe_id(user_id, "user"))
         return True
         
     except Income.DoesNotExist:
-        logger.warning(f"Income {income_id} not found for user {user_id}")
+        logger.warning("Income %s not found for %s", income_id, log_safe_id(user_id, "user"))
         return False
     except Exception as e:
-        logger.error(f"Error updating income {income_id} for user {user_id}: {e}")
+        logger.error("Error updating income %s for %s: %s", income_id, log_safe_id(user_id, "user"), e)
         return False
 
 
@@ -683,7 +702,7 @@ def get_income_by_id(
         return income
         
     except Exception as e:
-        logger.error(f"Error getting income {income_id} for user {telegram_id}: {e}")
+        logger.error("Error getting income %s for %s: %s", income_id, log_safe_id(telegram_id, "user"), e)
         return None
 
 
@@ -712,14 +731,14 @@ def delete_income(
         ).delete()
         
         if deleted_count > 0:
-            logger.info(f"Deleted income {income_id} for user {telegram_id}")
+            logger.info("Deleted income %s for %s", income_id, log_safe_id(telegram_id, "user"))
             return True
         else:
-            logger.warning(f"Income {income_id} not found for user {telegram_id}")
+            logger.warning("Income %s not found for %s", income_id, log_safe_id(telegram_id, "user"))
             return False
             
     except Exception as e:
-        logger.error(f"Error deleting income {income_id} for user {telegram_id}: {e}")
+        logger.error("Error deleting income %s for %s: %s", income_id, log_safe_id(telegram_id, "user"), e)
         return False
 
 
@@ -746,7 +765,7 @@ def get_last_income(telegram_id: int) -> Optional[Income]:
         return income
         
     except Exception as e:
-        logger.error(f"Error getting last income for user {telegram_id}: {e}")
+        logger.error("Error getting last income for %s: %s", log_safe_id(telegram_id, "user"), e)
         return None
 
 
@@ -779,13 +798,18 @@ def get_last_income_by_description(telegram_id: int, description: str) -> Option
                 income_desc = income.description.strip().lower()
                 # Проверяем точное совпадение или вхождение
                 if income_desc == search_desc or search_desc in income_desc or income_desc in search_desc:
-                    logger.info(f"Found similar income: '{income.description}' for search: '{description}'")
+                    logger.debug(
+                        "Found similar income by description for %s (%s -> %s)",
+                        log_safe_id(telegram_id, "user"),
+                        summarize_text(income.description),
+                        summarize_text(description),
+                    )
                     return income
         
-        logger.debug(f"No similar income found for: '{description}'")
+        logger.debug("No similar income found for description (%s)", summarize_text(description))
         return None
     except Exception as e:
-        logger.error(f"Error finding income by description: {e}")
+        logger.error("Error finding income by description for %s: %s", log_safe_id(telegram_id, "user"), e)
         return None
 
 
@@ -869,7 +893,7 @@ def get_today_incomes_summary(user_id: int) -> Dict:
         }
         
     except Exception as e:
-        logger.error(f"Error getting today incomes summary for user {user_id}: {e}")
+        logger.error("Error getting today incomes summary for %s: %s", log_safe_id(user_id, "user"), e)
         return {
             'totals': {},
             'categories': [],
@@ -967,7 +991,7 @@ def get_month_incomes_summary(
         }
         
     except Exception as e:
-        logger.error(f"Error getting month incomes summary for user {user_id}: {e}")
+        logger.error("Error getting month incomes summary for %s: %s", log_safe_id(user_id, "user"), e)
         return {
             'totals': {},
             'categories': [],
@@ -1004,7 +1028,7 @@ def get_last_incomes(
         return list(incomes)
         
     except Exception as e:
-        logger.error(f"Error getting last incomes for user {telegram_id}: {e}")
+        logger.error("Error getting last incomes for %s: %s", log_safe_id(telegram_id, "user"), e)
         return []
 
 
@@ -1080,7 +1104,7 @@ def find_similar_incomes(
         return sorted_amounts
         
     except Exception as e:
-        logger.error(f"Error finding similar incomes for user {telegram_id}: {e}")
+        logger.error("Error finding similar incomes for %s: %s", log_safe_id(telegram_id, "user"), e)
         return []
 
 
@@ -1106,7 +1130,7 @@ def get_recurring_incomes(telegram_id: int) -> List[Income]:
         return list(incomes)
         
     except Exception as e:
-        logger.error(f"Error getting recurring incomes for user {telegram_id}: {e}")
+        logger.error("Error getting recurring incomes for %s: %s", log_safe_id(telegram_id, "user"), e)
         return []
 
 
@@ -1141,7 +1165,7 @@ def get_user_income_categories(telegram_id: int) -> List[IncomeCategory]:
         return categories_list
         
     except Exception as e:
-        logger.error(f"Error getting income categories for user {telegram_id}: {e}")
+        logger.error("Error getting income categories for %s: %s", log_safe_id(telegram_id, "user"), e)
         return []
 
 
@@ -1210,13 +1234,13 @@ async def create_income_category(
                 # когда пользователь вручную меняет категорию у дохода (см. update_income()).
                 # Это такой же паттерн как для категорий расходов.
 
-                logger.info(f"Created income category '{category.name}' for user {telegram_id}")
+                logger.info("Created income category %s for %s", category.id, log_safe_id(telegram_id, "user"))
                 return category
             
         except ValueError:
             raise
         except Exception as e:
-            logger.error(f"Error creating income category for user {telegram_id}: {e}")
+            logger.error("Error creating income category for %s: %s", log_safe_id(telegram_id, "user"), e)
             raise ValueError("Ошибка при создании категории")
 
     return await _create_income_category()
@@ -1298,13 +1322,18 @@ async def update_income_category(
                 
             category.save()
             
-            logger.info(f"Updated income category {category_id} for user {telegram_id}")
+            logger.info("Updated income category %s for %s", category_id, log_safe_id(telegram_id, "user"))
             return category
             
         except ValueError:
             raise
         except Exception as e:
-            logger.error(f"Error updating income category {category_id} for user {telegram_id}: {e}")
+            logger.error(
+                "Error updating income category %s for %s: %s",
+                category_id,
+                log_safe_id(telegram_id, "user"),
+                e,
+            )
             raise ValueError("Ошибка при обновлении категории")
 
     return await _update_income_category()
@@ -1351,11 +1380,16 @@ def delete_income_category(telegram_id: int, category_id: int) -> bool:
             # Если нет связанных доходов, удаляем полностью
             category.delete()
             
-        logger.info(f"Deleted income category {category_id} for user {telegram_id}")
+        logger.info("Deleted income category %s for %s", category_id, log_safe_id(telegram_id, "user"))
         return True
         
     except ValueError:
         raise
     except Exception as e:
-        logger.error(f"Error deleting income category {category_id} for user {telegram_id}: {e}")
+        logger.error(
+            "Error deleting income category %s for %s: %s",
+            category_id,
+            log_safe_id(telegram_id, "user"),
+            e,
+        )
         raise ValueError("Ошибка при удалении категории")

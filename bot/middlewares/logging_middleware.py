@@ -10,6 +10,8 @@ from typing import Dict, Any, Callable, Awaitable
 from aiogram import BaseMiddleware
 from aiogram.types import Update, Message, CallbackQuery, InlineQuery
 
+from bot.utils.logging_safe import log_safe_id, sanitize_callback_action
+
 logger = logging.getLogger(__name__)
 
 
@@ -58,9 +60,9 @@ class LoggingMiddleware(BaseMiddleware):
         log_data = {
             'request_id': self.request_count,
             'timestamp': datetime.now().isoformat(),
-            'user_id': user.id if user else None,
+            'user_ref': log_safe_id(user.id, 'user') if user else None,
             # 'username': УДАЛЕНО для privacy (GDPR compliance)
-            'chat_id': chat.id if chat else None,
+            'chat_ref': log_safe_id(chat.id, 'chat') if chat else None,
             'chat_type': chat.type if chat else None,
         }
         
@@ -84,33 +86,10 @@ class LoggingMiddleware(BaseMiddleware):
                 log_data['voice_duration'] = event.voice.duration
                 log_data['voice_size'] = event.voice.file_size
         elif isinstance(event, CallbackQuery):
-            # Полный callback_data без обрезания
             callback_data = event.data or ""
-            log_data['callback_data'] = callback_data
-
-            # Умный парсинг: отделяем числовые параметры с конца
-            # edit_expense_456 -> action: edit_expense, params: 456
-            # set_category_15_42 -> action: set_category, params: 15_42
-            # expenses_today -> action: expenses_today, params: ""
-            parts = callback_data.split('_')
-
-            # Найти индекс первого числового параметра с конца
-            param_start_idx = len(parts)
-            for i in range(len(parts) - 1, -1, -1):
-                if parts[i].isdigit():
-                    param_start_idx = i
-                else:
-                    break
-
-            if param_start_idx < len(parts):
-                log_data['callback_action'] = '_'.join(parts[:param_start_idx])
-                log_data['callback_params'] = '_'.join(parts[param_start_idx:])
-            else:
-                log_data['callback_action'] = callback_data
-                log_data['callback_params'] = ""
-
-            # Дополнительные поля для отладки
-            log_data['callback_id'] = event.id
+            callback_action, has_params = sanitize_callback_action(callback_data)
+            log_data['callback_action'] = callback_action
+            log_data['callback_has_params'] = has_params
             if event.message:
                 log_data['message_id'] = event.message.message_id
 
@@ -125,9 +104,10 @@ class LoggingMiddleware(BaseMiddleware):
             # Для callback используем callback_action для более детального логирования
             action_detail = log_data.get('callback_action', message_type)
             self.audit_logger.info(
-                f"AUDIT: user={user.id if user else 'unknown'} "
-                f"action={action_detail} "
-                f"details={log_data}"
+                "AUDIT: user=%s action=%s details=%s",
+                log_safe_id(user.id, 'user') if user else 'user:unknown',
+                action_detail,
+                json.dumps(log_data, ensure_ascii=False),
             )
         
         # Сохраняем время начала обработки
@@ -146,7 +126,7 @@ class LoggingMiddleware(BaseMiddleware):
                     f"Slow request detected: "
                     f"type={message_type}, "
                     f"duration={duration:.2f}s, "
-                    f"user={user.id if user else 'unknown'}"
+                    f"user={log_safe_id(user.id, 'user') if user else 'user:unknown'}"
                 )
             
             # Периодическая статистика
@@ -162,7 +142,7 @@ class LoggingMiddleware(BaseMiddleware):
                 f"Request error: "
                 f"type={message_type}, "
                 f"duration={duration:.2f}s, "
-                f"user={user.id if user else 'unknown'}, "
+                f"user={log_safe_id(user.id, 'user') if user else 'user:unknown'}, "
                 f"error={str(e)}"
             )
             raise

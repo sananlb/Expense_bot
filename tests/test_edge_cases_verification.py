@@ -21,11 +21,6 @@ from django.utils import timezone
 # Add project root to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Django setup
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'expense_bot.settings')
-import django
-django.setup()
-
 from django.core.exceptions import ValidationError
 from expenses.models import Cashback, Household, FamilyInvite, RecurringPayment
 

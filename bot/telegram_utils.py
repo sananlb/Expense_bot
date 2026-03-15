@@ -2,6 +2,7 @@ import os
 import asyncio
 from aiogram import Bot
 import logging
+from bot.utils.logging_safe import log_safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +41,9 @@ def send_telegram_message(chat_id, text, parse_mode='Markdown'):
         # Закрываем сессию бота
         loop.run_until_complete(bot.session.close())
         
-        logger.info(f"Message sent to {chat_id}")
+        logger.info("Message sent to %s", log_safe_id(chat_id, "chat"))
         return True
         
     except Exception as e:
-        logger.error(f"Error sending message to {chat_id}: {e}")
+        logger.error("Error sending message to %s: %s", log_safe_id(chat_id, "chat"), e)
         raise

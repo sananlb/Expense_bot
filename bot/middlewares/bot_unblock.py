@@ -13,6 +13,7 @@ from django.core.cache import cache
 from django.utils import timezone
 from asgiref.sync import sync_to_async
 import logging
+from bot.utils.logging_safe import log_safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ class BotUnblockMiddleware(BaseMiddleware):
                     await self._reset_bot_blocked(user_id)
                 except Exception as e:
                     # Не блокируем обработку из-за ошибки БД
-                    logger.error(f"Error resetting bot_blocked for user {user_id}: {e}")
+                    logger.error("Error resetting bot_blocked for %s: %s", log_safe_id(user_id, "user"), e)
 
         return await handler(event, data)
 
@@ -67,12 +68,13 @@ class BotUnblockMiddleware(BaseMiddleware):
                 if profile.bot_blocked_at:
                     blocked_duration = timezone.now() - profile.bot_blocked_at
                     logger.info(
-                        f"User {user_id} returned after blocking bot. "
-                        f"Was blocked since: {profile.bot_blocked_at}, "
-                        f"duration: {blocked_duration}"
+                        "%s returned after blocking bot. Was blocked since: %s, duration: %s",
+                        log_safe_id(user_id, "user"),
+                        profile.bot_blocked_at,
+                        blocked_duration,
                     )
                 else:
-                    logger.info(f"User {user_id} returned after blocking bot (no timestamp)")
+                    logger.info("%s returned after blocking bot (no timestamp)", log_safe_id(user_id, "user"))
 
                 # Сбрасываем флаг
                 profile.bot_blocked = False

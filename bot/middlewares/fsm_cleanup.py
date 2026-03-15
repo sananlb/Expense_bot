@@ -7,6 +7,7 @@ from aiogram.types import TelegramObject
 from aiogram.fsm.context import FSMContext
 from typing import Callable, Dict, Any, Awaitable
 import logging
+from bot.utils.logging_safe import log_safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +59,7 @@ class FSMCleanupMiddleware(BaseMiddleware):
                 has_pii = any(key in pending for key in ['username', 'first_name', 'last_name'])
 
                 if has_pii:
-                    logger.warning(f"Found PII in FSM state for user {user_id}, cleaning...")
+                    logger.warning("Found PII in FSM state for %s, cleaning...", log_safe_id(user_id, "user"))
 
                     # Удалить PII
                     pending.pop('username', None)
@@ -68,7 +69,7 @@ class FSMCleanupMiddleware(BaseMiddleware):
                     # Обновить state
                     await state.update_data(pending_profile_data=pending)
 
-                    logger.info(f"PII cleaned from FSM state for user {user_id}")
+                    logger.info("PII cleaned from FSM state for %s", log_safe_id(user_id, "user"))
 
         except Exception as e:
-            logger.error(f"Error cleaning FSM state for user {user_id}: {e}")
+            logger.error("Error cleaning FSM state for %s: %s", log_safe_id(user_id, "user"), e)

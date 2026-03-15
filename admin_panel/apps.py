@@ -1,10 +1,20 @@
+import os
+import sys
+
 from django.apps import AppConfig
+
+
+def _is_running_tests() -> bool:
+    return 'pytest' in sys.modules or bool(os.getenv('PYTEST_CURRENT_TEST'))
 
 
 def _safe_ensure_periodic_tasks():
     """Try to ensure periodic tasks; swallow import/DB errors at startup.
     Runs idempotently; real diagnostics will appear in logs of beat/web.
     """
+    if _is_running_tests():
+        return
+
     try:
         from .beat_setup import ensure_periodic_tasks
         ensure_periodic_tasks(startup=True)
@@ -18,6 +28,9 @@ class AdminPanelConfig(AppConfig):
     name = 'admin_panel'
     
     def ready(self):
+        if _is_running_tests():
+            return
+
         # Run once at startup (idempotent)
         _safe_ensure_periodic_tasks()
         

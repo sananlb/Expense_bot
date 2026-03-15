@@ -498,7 +498,7 @@ async def confirm_delete_profile(callback: CallbackQuery, state: FSMContext, lan
             )
 
     except Exception as e:
-        logger.error(f"Error deleting profile for user {user_id}: {e}")
+        logger.error("Error deleting profile for %s: %s", log_safe_id(user_id, "user"), e)
         await callback.message.edit_text(
             get_text('delete_profile_error', lang)
         )

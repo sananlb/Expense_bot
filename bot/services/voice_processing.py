@@ -9,6 +9,7 @@ import aiohttp
 from aiogram import types
 from aiogram.types import File
 from .key_rotation_mixin import GoogleKeyRotationMixin, OpenAIKeyRotationMixin
+from bot.utils.logging_safe import summarize_text
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class VoiceProcessor(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
             return temp_path
             
         except Exception as e:
-            logger.error(f"Error downloading voice file: {e}")
+            logger.error("Error downloading voice file: %s", e)
             return None
     
     async def transcribe_with_openai(self, audio_path: str) -> Optional[str]:
@@ -82,11 +83,11 @@ class VoiceProcessor(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
                         return result.get('text', '')
                     else:
                         error_text = await resp.text()
-                        logger.error(f"OpenAI API error: {resp.status} - {error_text}")
+                        logger.error("OpenAI API error: %s - %s", resp.status, summarize_text(error_text))
                         return None
                         
         except Exception as e:
-            logger.error(f"OpenAI transcription error: {e}")
+            logger.error("OpenAI transcription error: %s", e)
             return None
     
     async def transcribe_with_google(self, audio_path: str) -> Optional[str]:
@@ -107,7 +108,7 @@ class VoiceProcessor(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
             return None
             
         except Exception as e:
-            logger.error(f"Google transcription error: {e}")
+            logger.error("Google transcription error: %s", e)
             return None
     
     async def get_yandex_iam_token(self) -> Optional[str]:
@@ -137,10 +138,10 @@ class VoiceProcessor(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
                         self._yandex_iam_expires = datetime.datetime.now() + datetime.timedelta(hours=11)
                         return self._yandex_iam_token
                     else:
-                        logger.error(f"Failed to get Yandex IAM token: {resp.status}")
+                        logger.error("Failed to get Yandex IAM token: %s", resp.status)
                         return None
         except Exception as e:
-            logger.error(f"Error getting Yandex IAM token: {e}")
+            logger.error("Error getting Yandex IAM token: %s", e)
             return None
     
     async def transcribe_with_yandex(self, audio_path: str) -> Optional[str]:
@@ -182,11 +183,11 @@ class VoiceProcessor(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
                         return result.get('result', '')
                     else:
                         error_text = await resp.text()
-                        logger.error(f"Yandex API error: {resp.status} - {error_text}")
+                        logger.error("Yandex API error: %s - %s", resp.status, summarize_text(error_text))
                         return None
                         
         except Exception as e:
-            logger.error(f"Yandex transcription error: {e}")
+            logger.error("Yandex transcription error: %s", e)
             return None
     
     async def process_voice_message(self, message: types.Message, bot, user_language: str = 'ru') -> Optional[str]:
@@ -240,7 +241,7 @@ class VoiceProcessor(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
                 if os.path.exists(audio_path):
                     os.remove(audio_path)
             except Exception as e:
-                logger.error(f"Error removing temp file: {e}")
+                logger.error("Error removing temp file: %s", e)
     
     async def cleanup_old_files(self):
         """Clean up old temporary voice files"""
@@ -253,7 +254,7 @@ class VoiceProcessor(GoogleKeyRotationMixin, OpenAIKeyRotationMixin):
                     if os.path.getmtime(file_path) < (time.time() - 3600):
                         os.remove(file_path)
         except Exception as e:
-            logger.error(f"Error cleaning up temp files: {e}")
+            logger.error("Error cleaning up temp files: %s", e)
 
 
 # Singleton instance

@@ -12,6 +12,7 @@ from asgiref.sync import sync_to_async
 from bot.utils.language import get_text
 from bot.utils.emoji_utils import strip_leading_emoji
 from bot.utils.keyword_service import match_keyword_in_text
+from bot.utils.logging_safe import log_safe_id, summarize_text
 
 logger = logging.getLogger(__name__)
 
@@ -565,7 +566,7 @@ def extract_amount_from_patterns(text: str) -> Tuple[Optional[Decimal], Optional
             if mult_match:
                 multiplier = mult_value
                 multiplier_match = mult_match
-                logger.info(f"Найден множитель '{mult_word}' ({mult_value}x) для суммы {amount}")
+                logger.debug("Amount multiplier detected: word='%s', factor=%sx", mult_word, mult_value)
                 break
 
         # Если нашли множитель - применяем его и удаляем из текста
@@ -574,7 +575,7 @@ def extract_amount_from_patterns(text: str) -> Tuple[Optional[Decimal], Optional
             # Удаляем и сумму и множитель из текста
             mult_end = match_end + multiplier_match.end()
             text_without_amount = (text[:match_start] + ' ' + text[mult_end:]).strip()
-            logger.info(f"Сумма после применения множителя: {amount}")
+            logger.debug("Amount multiplier applied successfully")
         else:
             text_without_amount = (text[:match_start] + ' ' + text[match_end:]).strip()
 
@@ -605,7 +606,7 @@ def extract_amount_from_patterns(text: str) -> Tuple[Optional[Decimal], Optional
                     text_without_amount = text_without_this_number.strip()
                     # Убираем лишние пробелы
                     text_without_amount = ' '.join(text_without_amount.split())
-                    logger.info(f"Fallback: найдено единственное число {amount} в середине текста '{text}'")
+                    logger.debug("Fallback amount extracted from middle of text (%s)", summarize_text(text))
                     return amount, text_without_amount
             except (ValueError, InvalidOperation):
                 pass
@@ -853,7 +854,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                     text_without_amount = text_after_date
 
     if amount and amount > 0:
-        logger.info(f"Expense amount: source={amount_source}, amount={amount}, original='{original_text}'")
+        logger.debug("Expense amount extracted: source=%s, text=%s", amount_source, summarize_text(original_text))
 
     # Если не нашли сумму, возвращаем None
     # Пользователь должен указать сумму явно
@@ -913,7 +914,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                     category = get_category_display_name(user_cat, lang_code)
                     max_score = 100  # Максимальный приоритет для пользовательских категорий
                     category_matched = True
-                    logger.info(f"[KEYWORD MATCH] {match_type}: Category matched by name '{cat_name}' in text '{text_for_keywords}' → {category}")
+                    logger.debug("[KEYWORD MATCH] Matched category name via %s", match_type)
                     break
 
             if category_matched:
@@ -943,7 +944,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                     # Используем язык пользователя для отображения категории
                     lang_code = profile.language_code if hasattr(profile, 'language_code') else 'ru'
                     category = get_category_display_name(user_cat, lang_code)
-                    logger.info(f"[KEYWORD MATCH] {match_type}: Expense keyword '{kw.keyword}' matched '{text_for_keywords}'")
+                    logger.debug("[KEYWORD MATCH] Expense keyword matched via %s", match_type)
 
                     max_score = 100
                     break
@@ -970,9 +971,9 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             if profile and user_categories:
                 category = find_user_category_by_key(user_categories, category_key, lang_code)
                 if category:
-                    logger.info(f"Found user category '{category}' by key '{category_key}'")
+                    logger.debug("Found user category by key '%s'", category_key)
                 else:
-                    logger.info(f"User category not found for key '{category_key}', using default")
+                    logger.debug("User category not found for key '%s', using default", category_key)
 
             # Fallback: если нет профиля или не нашли у пользователя - берем из definitions
             if not category:
@@ -1018,7 +1019,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
     # Если текст содержит только число (без описания), пропускаем AI
     # и сразу назначаем "Прочие расходы"
     if not category and is_number_only(original_text):
-        logger.info(f"Number-only expense detected: '{original_text}', skipping AI")
+        logger.debug("Number-only expense detected, skipping AI (%s)", summarize_text(original_text))
         # Назначаем "Прочие расходы" / "Other expenses"
         result['category_key'] = DEFAULT_EXPENSE_CATEGORY_KEY
         # Используем язык пользователя для отображения категории
@@ -1039,7 +1040,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         # Проверяем, нужно ли использовать AI
         if not category:
             should_use_ai = True
-            logger.info(f"No category found by keywords for '{text}', will use AI")
+            logger.debug("No category found by keywords, will use AI (%s)", summarize_text(text))
         else:
             # Проверяем, есть ли такая категория у пользователя
             from expenses.models import ExpenseCategory
@@ -1060,7 +1061,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
             
             if not category_exists:
                 should_use_ai = True
-                logger.info(f"Category '{category}' not found in user categories, will use AI")
+                logger.debug("Matched category not found in user categories, using AI fallback")
         
         if should_use_ai:
             try:
@@ -1109,10 +1110,10 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
 
                     # Пробуем сначала основной AI сервис с таймаутом
                     try:
-                        logger.info(f"Getting AI service for categorization...")
+                        logger.debug("Getting AI service for categorization")
                         ai_service = get_service('categorization')
-                        logger.info(f"AI service obtained: {type(ai_service).__name__}")
-                        logger.info(f"Calling categorize_expense with timeout=10s...")
+                        logger.debug("AI service obtained: %s", type(ai_service).__name__)
+                        logger.debug("Calling categorize_expense with timeout=10s")
                         ai_result = await asyncio.wait_for(
                             ai_service.categorize_expense(
                                 text=ai_text,  # Отправляем очищенный текст без даты
@@ -1123,9 +1124,9 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                             ),
                             timeout=10.0  # 10 секунд общий таймаут для изолированного процесса
                         )
-                        logger.info(f"AI categorization completed")
+                        logger.debug("AI categorization completed")
                     except asyncio.TimeoutError:
-                        logger.warning(f"AI categorization timeout for '{original_text}'")
+                        logger.warning("AI categorization timeout (%s)", summarize_text(original_text))
                         ai_result = None
                     except Exception as e:
                         logger.error(f"AI categorization error: {e}")
@@ -1140,7 +1141,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                         if fallback_chain:
                             fallback_provider = fallback_chain[0]
                             try:
-                                logger.info(f"Trying fallback to {fallback_provider}...")
+                                logger.debug("Trying fallback provider %s", fallback_provider)
                                 fallback_service = AISelector(fallback_provider)
                                 ai_result = await asyncio.wait_for(
                                     fallback_service.categorize_expense(
@@ -1153,7 +1154,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                                     timeout=5.0  # 5 секунд таймаут для fallback
                                 )
                                 if ai_result:
-                                    logger.info(f"{fallback_provider} fallback successful")
+                                    logger.debug("%s fallback successful", fallback_provider)
                             except asyncio.TimeoutError:
                                 logger.error(f"{fallback_provider} fallback timeout")
                             except Exception as e:
@@ -1179,7 +1180,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                             result['ai_enhanced'] = True
                             result['ai_provider'] = ai_result.get('provider', 'unknown')
                         else:
-                            logger.warning(f"AI suggested category '{raw_category}' but no match found in user categories")
+                            logger.warning("AI suggested a category that did not match user categories")
                             # AI не смог подобрать категорию - оставляем result без изменений
                         
                         # Безопасное логирование без Unicode
@@ -1189,7 +1190,12 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                                 cat_clean = ''.join(c for c in result['category'] if ord(c) < 128).strip()
                                 if not cat_clean and result['category']:
                                     cat_clean = 'category with emoji'
-                                logger.info(f"AI enhanced result for user {user_id}: category='{cat_clean}', confidence={result['confidence']}, provider={result['ai_provider']}")
+                                logger.debug(
+                                    "AI enhanced result for %s: confidence=%s, provider=%s",
+                                    log_safe_id(user_id, "user"),
+                                    result['confidence'],
+                                    result['ai_provider'],
+                                )
                         except (AttributeError, KeyError, TypeError) as e:
                             logger.debug(f"Error logging AI result: {e}")
                             pass
@@ -1203,7 +1209,7 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
         lang_code = profile.language_code if profile and hasattr(profile, 'language_code') else 'ru'
         result['category'] = get_expense_category_display_for_key(DEFAULT_EXPENSE_CATEGORY_KEY, lang_code)
         result['category_key'] = DEFAULT_EXPENSE_CATEGORY_KEY
-        logger.info(f"Using default category '{result['category']}' for '{original_text}'")
+        logger.debug("Using default category fallback (%s)", summarize_text(original_text))
     
     return result
 
@@ -1312,7 +1318,7 @@ def _extract_leading_amount(text: str) -> Tuple[Optional[Decimal], Optional[str]
             amount *= mult_value
             remaining = mult_m.group(1).strip()
             has_signal = True
-            logger.info(f"Leading amount: multiplier '{mult_word}' ({mult_value}x) → {amount}")
+            logger.debug("Leading amount multiplier detected: word='%s', factor=%sx", mult_word, mult_value)
             break
 
     # Проверяем валюту после числа/множителя — убираем из описания
@@ -1399,7 +1405,7 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
                 amount_source = 'extract_patterns_with_date'
 
     if amount and amount > 0:
-        logger.info(f"Income amount: source={amount_source}, amount={amount}, original='{original_text}'")
+        logger.debug("Income amount extracted: source=%s, text=%s", amount_source, summarize_text(original_text))
 
     # ВАЖНО: Для поиска ключевых слов используем текст БЕЗ суммы,
     # чтобы числа вроде "95" не совпадали с суммой "9500"
@@ -1439,7 +1445,7 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
                 if category:
                     result['category'] = category
                 
-                logger.info(f"Found similar income for '{original_text}': amount={amount}, category={category}")
+                logger.debug("Found similar income by description (%s)", summarize_text(original_text))
                 return result
         
         # Если не нашли похожий доход, возвращаем None
@@ -1468,7 +1474,7 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
     # Если текст содержит только число (без описания), пропускаем AI
     # и сразу назначаем "Прочие доходы"
     if not category and is_number_only(original_text):
-        logger.info(f"Number-only income detected: '{original_text}', skipping AI")
+        logger.debug("Number-only income detected, skipping AI (%s)", summarize_text(original_text))
         category_key = DEFAULT_INCOME_CATEGORY_KEY
         category = get_income_category_display_for_key(category_key, lang_code)
 
@@ -1521,7 +1527,7 @@ async def parse_income_message(text: str, user_id: Optional[int] = None, profile
                 # с улучшенной обработкой emoji и ZWJ (Zero Width Joiner)
                 matched, match_type = match_keyword_in_text(keyword_obj.keyword, text_for_keywords)
                 if matched:
-                    logger.info(f"[INCOME KEYWORD] {match_type}: '{keyword_obj.keyword}' matched '{text_for_keywords}'")
+                    logger.debug("[INCOME KEYWORD] Matched income keyword via %s", match_type)
                     best_match = keyword_obj.category
                     break  # При строгой уникальности достаточно первого совпадения
 

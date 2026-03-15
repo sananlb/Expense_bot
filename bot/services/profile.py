@@ -7,6 +7,7 @@ from typing import Tuple
 import logging
 
 from expenses.models import Profile, UserSettings, Household
+from bot.utils.logging_safe import log_safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,7 @@ def get_or_create_profile(telegram_id: int, **user_data) -> Profile:
         if created:
             # Создаем настройки пользователя
             UserSettings.objects.create(profile=profile)
-            logger.info(f"Created new profile for user {telegram_id}")
+            logger.info("Created new profile for %s", log_safe_id(telegram_id, "user"))
                 
         # Убеждаемся что настройки существуют
         if not hasattr(profile, 'settings'):
@@ -117,7 +118,7 @@ def get_or_create_profile(telegram_id: int, **user_data) -> Profile:
         return profile
         
     except Exception as e:
-        logger.error(f"Error creating/getting profile for user {telegram_id}: {e}")
+        logger.error("Error creating/getting profile for %s: %s", log_safe_id(telegram_id, "user"), e)
         raise
 
 
@@ -134,7 +135,7 @@ def update_profile_activity(telegram_id: int) -> None:
             last_activity=datetime.now()
         )
     except Exception as e:
-        logger.error(f"Error updating activity for user {telegram_id}: {e}")
+        logger.error("Error updating activity for %s: %s", log_safe_id(telegram_id, "user"), e)
 
 
 @sync_to_async
@@ -152,10 +153,10 @@ def get_profile_settings(telegram_id: int) -> UserSettings:
         profile = Profile.objects.get(telegram_id=telegram_id)
         return profile.settings
     except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {telegram_id}")
+        logger.error("Profile not found for %s", log_safe_id(telegram_id, "user"))
         raise
     except Exception as e:
-        logger.error(f"Error getting settings for user {telegram_id}: {e}")
+        logger.error("Error getting settings for %s: %s", log_safe_id(telegram_id, "user"), e)
         raise
 
 
@@ -183,7 +184,7 @@ def delete_user_profile(telegram_id: int) -> Tuple[bool, str]:
             profile = Profile.objects.filter(telegram_id=telegram_id).first()
 
             if not profile:
-                logger.warning(f"Profile not found for telegram_id={telegram_id}")
+                logger.warning("Profile not found for %s", log_safe_id(telegram_id, "user"))
                 return (False, "NOT_FOUND")
 
             profile_id = profile.id
@@ -192,7 +193,7 @@ def delete_user_profile(telegram_id: int) -> Tuple[bool, str]:
             # 1. Удаляем AI метрики (user_id - BigIntegerField, не FK)
             metrics_deleted = AIServiceMetrics.objects.filter(user_id=telegram_id).delete()[0]
             if metrics_deleted > 0:
-                logger.info(f"Deleted {metrics_deleted} AIServiceMetrics for user {telegram_id}")
+                logger.info("Deleted %s AIServiceMetrics for %s", metrics_deleted, log_safe_id(telegram_id, "user"))
 
             # 2. Если пользователь - создатель household, удаляем household целиком
             created_households = Household.objects.filter(creator_id=profile_id)
@@ -204,29 +205,34 @@ def delete_user_profile(telegram_id: int) -> Tuple[bool, str]:
                 ).update(view_scope='personal')
                 if settings_reset > 0:
                     logger.info(
-                        f"Reset view_scope to 'personal' for {settings_reset} members "
-                        f"of household {household.id}"
+                        "Reset view_scope to 'personal' for %s members of household %s",
+                        settings_reset,
+                        household.id,
                     )
 
                 # Открепляем всех участников от household
                 members_count = Profile.objects.filter(household=household).update(household=None)
                 logger.info(
-                    f"Removed {members_count} members from household {household.id} "
-                    f"before deletion (creator: {telegram_id})"
+                    "Removed %s members from household %s before deletion (creator: %s)",
+                    members_count,
+                    household.id,
+                    log_safe_id(telegram_id, "user"),
                 )
                 # Удаляем household
                 household.delete()
-                logger.info(f"Deleted household {household.id} (creator was {telegram_id})")
+                logger.info("Deleted household %s (creator was %s)", household.id, log_safe_id(telegram_id, "user"))
 
             # 3. Удаляем профиль — CASCADE удалит все остальное
             profile.delete()
 
             logger.info(
-                f"Profile deleted: telegram_id={telegram_id}, "
-                f"profile_id={profile_id}, was_in_household={household_id}"
+                "Profile deleted for %s: profile_id=%s, was_in_household=%s",
+                log_safe_id(telegram_id, "user"),
+                profile_id,
+                household_id,
             )
             return (True, "")
 
     except Exception as e:
-        logger.error(f"Failed to delete profile telegram_id={telegram_id}: {e}")
+        logger.error("Failed to delete profile for %s: %s", log_safe_id(telegram_id, "user"), e)
         return (False, "ERROR")

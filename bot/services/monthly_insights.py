@@ -13,6 +13,7 @@ from expenses.models import (
     Profile, Expense, Income, MonthlyInsight,
     ExpenseCategory, IncomeCategory, UserSettings
 )
+from bot.utils.logging_safe import log_safe_id
 from .ai_selector import get_service, get_model, get_provider_settings, get_fallback_chain
 from bot.utils.formatters import format_currency
 
@@ -41,14 +42,14 @@ class MonthlyInsightsService:
             self.ai_service = AISelector(provider)
             self.ai_provider = provider
             self.ai_model = get_model('insights', provider)
-            logger.info(f"Initialized AI service: {provider} with model {self.ai_model}")
+            logger.info("Initialized AI service: %s with model %s", provider, self.ai_model)
 
     def _is_provider_available(self, provider: str) -> bool:
         """Check provider availability based on configured API keys"""
         try:
             settings = get_provider_settings(provider)
         except Exception as e:
-            logger.warning(f"Failed to load provider settings for {provider}: {e}")
+            logger.warning("Failed to load provider settings for %s: %s", provider, e)
             return False
         return settings.get('api_keys_available', False)
 
@@ -604,7 +605,12 @@ IMPORTANT:
             profile, month_data, prev_month_data, year, month, historical_data
         )
 
-        logger.info(f"Generating insights for user {profile.telegram_id} for {month}/{year}")
+        logger.info(
+            "Generating insights for %s period=%s/%s",
+            log_safe_id(profile.telegram_id, "user"),
+            month,
+            year,
+        )
 
         # Retry logic: try up to 2 times with same provider (different API keys)
         # before falling back to another provider
@@ -614,7 +620,13 @@ IMPORTANT:
             try:
                 # Re-initialize AI service on retry (refresh instance and key rotation state)
                 if attempt > 0:
-                    logger.warning(f"Retrying {provider} (attempt {attempt + 1}/{max_retries}) for user {profile.telegram_id}")
+                    logger.warning(
+                        "Retrying provider=%s attempt=%s/%s for %s",
+                        provider,
+                        attempt + 1,
+                        max_retries,
+                        log_safe_id(profile.telegram_id, "user"),
+                    )
                     self.ai_service = None
                     self._initialize_ai(provider)
 
@@ -643,7 +655,15 @@ IMPORTANT:
                 break
 
             except Exception as e:
-                logger.error(f"Attempt {attempt + 1}/{max_retries} failed for {provider}: {e}")
+                logger.error(
+                    "Attempt %s/%s failed for provider=%s user=%s error=%s",
+                    attempt + 1,
+                    max_retries,
+                    provider,
+                    log_safe_id(profile.telegram_id, "user"),
+                    e,
+                    exc_info=True,
+                )
                 if attempt < max_retries - 1:
                     continue  # Try again with next API key
                 else:
@@ -682,8 +702,7 @@ IMPORTANT:
             }
 
         except (json.JSONDecodeError, ValueError) as e:
-            logger.error(f"Failed to parse AI response as JSON: {e}")
-            logger.error(f"Response was: {response[:500]}")
+            logger.error("Failed to parse AI response as JSON: %s", e)
 
             # Check if response contains error message from AI service
             error_phrases = [
@@ -697,7 +716,7 @@ IMPORTANT:
             if any(phrase in response.lower() for phrase in error_phrases):
                 # AI service returned error - re-raise to trigger fallback provider
                 logger.error("AI service returned error response, triggering provider fallback")
-                raise Exception(f"AI provider returned error: {response[:200]}")
+                raise Exception("AI provider returned error")
 
             # Otherwise try to parse response as text (non-JSON format)
             try:
@@ -708,7 +727,7 @@ IMPORTANT:
                     raise ValueError("Fallback parsing returned empty result")
             except Exception as parse_error:
                 # If parsing completely fails, re-raise to trigger provider fallback
-                logger.error(f"Fallback parsing failed: {parse_error}")
+                logger.error("Fallback parsing failed: %s", parse_error)
                 raise Exception(f"Failed to parse AI response: {e}")
 
     def _fallback_parse_response(self, response: str) -> Dict[str, str]:
@@ -870,7 +889,12 @@ IMPORTANT:
         )
 
         if existing_insight and not force_regenerate:
-            logger.info(f"Returning existing insight for {profile.telegram_id} {month}/{year}")
+            logger.info(
+                "Returning existing insight for %s period=%s/%s",
+                log_safe_id(profile.telegram_id, "user"),
+                month,
+                year,
+            )
             return existing_insight
 
         try:
@@ -879,7 +903,7 @@ IMPORTANT:
 
             # Check if there's enough data
             if month_data['total_expenses'] == 0 or len(month_data['expenses']) < 3:
-                logger.info(f"Not enough data for insights: {len(month_data['expenses'])} expenses")
+                logger.info("Not enough data for insights: %s expenses", len(month_data['expenses']))
                 return None
 
             # Collect previous month data for comparison
@@ -891,9 +915,17 @@ IMPORTANT:
                 # Only use comparison if previous month has meaningful data
                 if prev_month_data['total_expenses'] == 0 or len(prev_month_data['expenses']) < 3:
                     prev_month_data = None
-                    logger.info(f"Previous month ({prev_month}/{prev_year}) has insufficient data for comparison")
+                    logger.info(
+                        "Previous month (%s/%s) has insufficient data for comparison",
+                        prev_month,
+                        prev_year,
+                    )
             except Exception as e:
-                logger.warning(f"Failed to collect previous month data: {e}")
+                logger.warning(
+                    "Failed to collect previous month data for %s: %s",
+                    log_safe_id(profile.telegram_id, "user"),
+                    e,
+                )
                 prev_month_data = None
 
             # Collect historical data (last 3-6 months)
@@ -905,9 +937,17 @@ IMPORTANT:
                     h for h in historical_data
                     if h['total_expenses'] > 0 and h['expenses_count'] >= 3
                 ]
-                logger.info(f"Collected {len(historical_data)} months of historical data for user {profile.telegram_id}")
+                logger.info(
+                    "Collected %s historical months for %s",
+                    len(historical_data),
+                    log_safe_id(profile.telegram_id, "user"),
+                )
             except Exception as e:
-                logger.warning(f"Failed to collect historical data: {e}")
+                logger.warning(
+                    "Failed to collect historical data for %s: %s",
+                    log_safe_id(profile.telegram_id, "user"),
+                    e,
+                )
                 historical_data = []
 
             # Generate AI insights with comparison, historical context and fallback
@@ -919,13 +959,21 @@ IMPORTANT:
                     profile, month_data, prev_month_data, year, month, provider, historical_data
                 )
             except Exception as e:
-                logger.error(f"Primary AI provider ({provider}) failed: {e}")
+                logger.error(
+                    "Primary AI provider failed provider=%s user=%s error=%s",
+                    provider,
+                    log_safe_id(profile.telegram_id, "user"),
+                    e,
+                    exc_info=True,
+                )
                 fallback_chain = self._get_fallback_providers(provider)
 
                 for fallback_provider in fallback_chain:
                     try:
                         logger.warning(
-                            f"Attempting fallback to {fallback_provider} for user {profile.telegram_id}"
+                            "Attempting fallback provider=%s for %s",
+                            fallback_provider,
+                            log_safe_id(profile.telegram_id, "user"),
                         )
                         ai_insights = await self._generate_ai_insights(
                             profile, month_data, prev_month_data, year, month, fallback_provider, historical_data
@@ -937,19 +985,29 @@ IMPORTANT:
                         break
                     except Exception as fallback_error:
                         logger.error(
-                            f"{fallback_provider} fallback also failed for user {profile.telegram_id}: {fallback_error}"
+                            "Fallback provider failed provider=%s user=%s error=%s",
+                            fallback_provider,
+                            log_safe_id(profile.telegram_id, "user"),
+                            fallback_error,
+                            exc_info=True,
                         )
 
                 if not ai_insights:
                     # All AI providers failed - use basic summary as final fallback
-                    logger.error(f"All AI providers failed for user {profile.telegram_id}, using basic summary")
+                    logger.error(
+                        "All AI providers failed for %s, using basic summary",
+                        log_safe_id(profile.telegram_id, "user"),
+                    )
                     await self._notify_admin_failure(profile.telegram_id, year, month)
                     ai_insights = self._generate_basic_summary(month_data, prev_month_data, year, month)
                     provider = 'basic'  # Mark that we used basic fallback
 
             # Validate AI result before saving
             if not ai_insights or not ai_insights.get('summary') or not ai_insights.get('analysis'):
-                logger.warning(f"AI response empty for user {profile.telegram_id}, using basic summary fallback")
+                logger.warning(
+                    "AI response empty for %s, using basic summary fallback",
+                    log_safe_id(profile.telegram_id, "user"),
+                )
                 ai_insights = self._generate_basic_summary(month_data, prev_month_data, year, month)
                 provider = 'basic'
 
@@ -969,7 +1027,12 @@ IMPORTANT:
                 existing_insight.last_regenerated_at = timezone.now()
 
                 await asyncio.to_thread(existing_insight.save)
-                logger.info(f"Updated insight for {profile.telegram_id} {month}/{year}")
+                logger.info(
+                    "Updated insight for %s period=%s/%s",
+                    log_safe_id(profile.telegram_id, "user"),
+                    month,
+                    year,
+                )
 
                 return existing_insight
             else:
@@ -990,11 +1053,23 @@ IMPORTANT:
                     ai_provider=provider
                 )
 
-                logger.info(f"Created new insight for {profile.telegram_id} {month}/{year}")
+                logger.info(
+                    "Created new insight for %s period=%s/%s",
+                    log_safe_id(profile.telegram_id, "user"),
+                    month,
+                    year,
+                )
                 return insight
 
         except Exception as e:
-            logger.error(f"Error generating monthly insight: {e}", exc_info=True)
+            logger.error(
+                "Error generating monthly insight for %s period=%s/%s: %s",
+                log_safe_id(profile.telegram_id, "user"),
+                month,
+                year,
+                e,
+                exc_info=True,
+            )
             return None
 
     async def get_insight(
@@ -1047,7 +1122,7 @@ IMPORTANT:
         if 1 <= rating <= 5:
             insight.user_rating = rating
             await asyncio.to_thread(insight.save)
-            logger.info(f"Insight {insight.id} rated {rating} stars")
+            logger.info("Insight %s rated %s stars", insight.id, rating)
 
     async def _notify_admin_fallback(self, user_id: int, year: int, month: int,
                                     primary_provider: str, fallback_provider: str):
@@ -1070,7 +1145,10 @@ IMPORTANT:
         if key in _last_fallback_notification:
             time_since_last = (now - _last_fallback_notification[key]).total_seconds() / 3600
             if time_since_last < NOTIFICATION_THROTTLE_HOURS:
-                logger.debug(f"Skipping admin fallback notification (throttled, last: {time_since_last:.1f}h ago)")
+                logger.debug(
+                    "Skipping admin fallback notification (throttled, last: %.1fh ago)",
+                    time_since_last,
+                )
                 return
 
         # Update last notification time
@@ -1089,9 +1167,13 @@ IMPORTANT:
             )
 
             await send_admin_alert(message)
-            logger.info(f"Admin notified about fallback from {primary_provider} to {fallback_provider}")
+            logger.info(
+                "Admin notified about fallback from %s to %s",
+                primary_provider,
+                fallback_provider,
+            )
         except Exception as e:
-            logger.error(f"Failed to notify admin about fallback: {e}")
+            logger.error("Failed to notify admin about fallback: %s", e)
 
     async def _notify_admin_failure(self, user_id: int, year: int, month: int):
         """
@@ -1111,7 +1193,10 @@ IMPORTANT:
         if key in _last_failure_notification:
             time_since_last = (now - _last_failure_notification[key]).total_seconds() / 3600
             if time_since_last < NOTIFICATION_THROTTLE_HOURS:
-                logger.debug(f"Skipping admin failure notification (throttled, last: {time_since_last:.1f}h ago)")
+                logger.debug(
+                    "Skipping admin failure notification (throttled, last: %.1fh ago)",
+                    time_since_last,
+                )
                 return
 
         # Update last notification time
@@ -1130,6 +1215,11 @@ IMPORTANT:
             )
 
             await send_admin_alert(message)
-            logger.info(f"Admin notified about complete AI failure for {user_id} {month}/{year}")
+            logger.info(
+                "Admin notified about complete AI failure for %s period=%s/%s",
+                log_safe_id(user_id, "user"),
+                month,
+                year,
+            )
         except Exception as e:
-            logger.error(f"Failed to notify admin about failure: {e}")
+            logger.error("Failed to notify admin about failure: %s", e)

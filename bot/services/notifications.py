@@ -12,6 +12,7 @@ from expenses.models import Profile, Expense
 from ..services.expense import get_expenses_summary
 from ..utils import format_amount, get_month_name
 from bot.utils.language import get_text
+from bot.utils.logging_safe import log_safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -80,13 +81,34 @@ class NotificationService:
             if not insight or not insight.ai_summary or has_error or is_too_short:
                 # Инсайт не сгенерирован или содержит ошибку - НЕ отправляем уведомление вообще
                 if has_error:
-                    logger.warning(f"Insight contains error message for user {user_id} for {report_year}-{report_month:02d}. Notification not sent.")
+                    logger.warning(
+                        "Insight contains error message for %s period=%s-%02d. Notification not sent.",
+                        log_safe_id(user_id, "user"),
+                        report_year,
+                        report_month,
+                    )
                 elif is_too_short:
-                    logger.warning(f"Insight summary too short ({len(insight.ai_summary.strip())} chars) for user {user_id} for {report_year}-{report_month:02d}. Notification not sent.")
+                    logger.warning(
+                        "Insight summary too short (%s chars) for %s period=%s-%02d. Notification not sent.",
+                        len(insight.ai_summary.strip()),
+                        log_safe_id(user_id, "user"),
+                        report_year,
+                        report_month,
+                    )
                 elif insight:
-                    logger.warning(f"Insight exists but ai_summary is empty for user {user_id} for {report_year}-{report_month:02d}. Notification not sent.")
+                    logger.warning(
+                        "Insight exists but ai_summary is empty for %s period=%s-%02d. Notification not sent.",
+                        log_safe_id(user_id, "user"),
+                        report_year,
+                        report_month,
+                    )
                 else:
-                    logger.info(f"No insights generated for user {user_id} for {report_year}-{report_month:02d} (not enough data). Notification not sent.")
+                    logger.info(
+                        "No insights generated for %s period=%s-%02d (not enough data). Notification not sent.",
+                        log_safe_id(user_id, "user"),
+                        report_year,
+                        report_month,
+                    )
                 return False
 
             # Формируем текст инсайта и добавляем к caption
@@ -107,11 +129,20 @@ class NotificationService:
                 else:
                     caption += f"\n\n💡 <i>{choose_format_text}</i>"
 
-            logger.info(f"Monthly insights generated for user {user_id} for {report_year}-{report_month:02d}")
+            logger.info(
+                "Monthly insights generated for %s period=%s-%02d",
+                log_safe_id(user_id, "user"),
+                report_year,
+                report_month,
+            )
 
         except Exception as e:
             # Ошибка при генерации инсайтов - НЕ отправляем уведомление вообще
-            logger.error(f"Error generating insights for user {user_id}: {e}. Notification not sent.")
+            logger.error(
+                "Error generating insights for %s: %s. Notification not sent.",
+                log_safe_id(user_id, "user"),
+                e,
+            )
             return False
 
         # Создаем клавиатуру с кнопками форматов (в один ряд)
@@ -126,15 +157,22 @@ class NotificationService:
         # Idempotency check - don't send duplicates
         sent_key = f"monthly_report_sent:{user_id}:{report_year}:{report_month}"
         if cache.get(sent_key):
-            logger.info(f"[MONTHLY_REPORT] user={user_id} status=already_sent period={report_year}-{report_month:02d}")
+            logger.info(
+                "[MONTHLY_REPORT] user=%s status=already_sent period=%s-%02d",
+                log_safe_id(user_id, "user"),
+                report_year,
+                report_month,
+            )
             return False
 
         # Prevent concurrent sends from parallel workers for the same user/period.
         inflight_key = f"monthly_report_sending:{user_id}:{report_year}:{report_month}"
         if not cache.add(inflight_key, True, timeout=600):
             logger.info(
-                f"[MONTHLY_REPORT] user={user_id} status=in_progress "
-                f"period={report_year}-{report_month:02d}"
+                "[MONTHLY_REPORT] user=%s status=in_progress period=%s-%02d",
+                log_safe_id(user_id, "user"),
+                report_year,
+                report_month,
             )
             return False
 
@@ -150,7 +188,13 @@ class NotificationService:
             # Mark as sent for idempotency (keep for 7 days)
             cache.set(sent_key, True, timeout=86400 * 7)
 
-            logger.info(f"[MONTHLY_REPORT] user={user_id} status=sent attempt={attempt} period={report_year}-{report_month:02d}")
+            logger.info(
+                "[MONTHLY_REPORT] user=%s status=sent attempt=%s period=%s-%02d",
+                log_safe_id(user_id, "user"),
+                attempt,
+                report_year,
+                report_month,
+            )
             return True
         finally:
             cache.delete(inflight_key)

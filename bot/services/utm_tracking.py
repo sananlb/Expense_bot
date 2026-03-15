@@ -5,6 +5,7 @@ import logging
 from typing import Optional, Dict, Any
 from django.utils import timezone
 from expenses.models import Profile
+from bot.utils.logging_safe import log_safe_id, summarize_text
 
 logger = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ async def parse_utm_source(start_args: str) -> Optional[Dict[str, Any]]:
             return None
 
     except Exception as e:
-        logger.error(f"Error parsing UTM source from '{start_args}': {e}")
+        logger.error("Error parsing UTM source from %s: %s", summarize_text(start_args), e)
 
     return None
 
@@ -152,7 +153,11 @@ async def save_utm_data(profile: Profile, utm_data: Dict[str, Any]) -> bool:
             # Валидация длины кампании (максимум 100 символов в БД)
             campaign = utm_data.get('campaign', '')
             if len(campaign) > 100:
-                logger.warning(f"Campaign name too long ({len(campaign)} chars), truncating: {campaign}")
+                logger.warning(
+                    "Campaign name too long (%s chars), truncating: %s",
+                    len(campaign),
+                    summarize_text(campaign),
+                )
                 campaign = campaign[:100]
 
             profile.acquisition_source = utm_data['source']
@@ -168,18 +173,22 @@ async def save_utm_data(profile: Profile, utm_data: Dict[str, Any]) -> bool:
             ])
 
             logger.info(
-                f"UTM data saved for user {profile.telegram_id}: "
-                f"source={utm_data['source']}, campaign={utm_data.get('campaign')}"
+                "UTM data saved for %s: source=%s, campaign=%s",
+                log_safe_id(profile.telegram_id, "user"),
+                utm_data['source'],
+                summarize_text(utm_data.get('campaign')),
             )
             return True
         else:
             logger.info(
-                f"User {profile.telegram_id} already has acquisition source: "
-                f"{profile.acquisition_source}/{profile.acquisition_campaign}"
+                "%s already has acquisition source: %s/%s",
+                log_safe_id(profile.telegram_id, "user"),
+                profile.acquisition_source,
+                summarize_text(profile.acquisition_campaign),
             )
 
     except Exception as e:
-        logger.error(f"Error saving UTM data for user {profile.telegram_id}: {e}")
+        logger.error("Error saving UTM data for %s: %s", log_safe_id(profile.telegram_id, "user"), e)
 
     return False
 
@@ -236,21 +245,16 @@ async def get_blogger_stats_by_name(blogger_name: str) -> Dict[str, Any]:
         ).distinct().acount()
 
         # Считаем общий доход (в звездах)
-        total_revenue_stars = 0
-        async for profile in queryset:
-            total_revenue_stars += profile.total_stars_paid or 0
+        revenue_stats = await queryset.aaggregate(total_revenue_stars=Sum('total_stars_paid'))
+        total_revenue_stars = revenue_stats['total_revenue_stars'] or 0
 
         # Считаем общее количество трат пользователей
-        total_expenses = 0
-        expenses_count = 0
-        async for profile in queryset:
-            user_expenses = await Expense.objects.filter(profile=profile).aggregate(
-                total=Sum('amount'),
-                count=Count('id')
-            )
-            if user_expenses['total']:
-                total_expenses += user_expenses['total']
-                expenses_count += user_expenses['count']
+        expenses_stats = await Expense.objects.filter(profile__in=queryset).aaggregate(
+            total=Sum('amount'),
+            count=Count('id')
+        )
+        total_expenses = expenses_stats['total'] or 0
+        expenses_count = expenses_stats['count'] or 0
 
         # Средний LTV
         avg_ltv = (total_revenue_stars / total_users) if total_users > 0 else 0
@@ -282,7 +286,7 @@ async def get_blogger_stats_by_name(blogger_name: str) -> Dict[str, Any]:
         }
 
     except Exception as e:
-        logger.error(f"Error getting blogger stats for {blogger_name}: {e}")
+        logger.error("Error getting blogger stats for %s: %s", summarize_text(blogger_name), e)
         return {
             'found': False,
             'blogger_name': blogger_name,
@@ -353,7 +357,7 @@ async def get_acquisition_stats(source: Optional[str] = None, campaign: Optional
         }
 
     except Exception as e:
-        logger.error(f"Error getting acquisition stats: {e}")
+        logger.error("Error getting acquisition stats: %s", e)
         return {
             'error': str(e)
         }

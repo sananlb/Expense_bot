@@ -9,6 +9,7 @@ from asgiref.sync import sync_to_async, async_to_sync
 from django.db import transaction
 import logging
 from bot.utils.category_helpers import get_category_display_name
+from bot.utils.logging_safe import log_safe_id, summarize_text
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +182,7 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
     for payment in payments:
         # Проверяем, не был ли уже обработан платеж сегодня
         if payment.last_processed == today:
-            logger.info(f"Payment {payment.id} already processed today")
+            logger.info("Recurring payment already processed payment_id=%s", payment.id)
             continue
 
         try:
@@ -257,10 +258,21 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
                 'operation_type': operation_type,
                 'payment': payment
             })
-            logger.info(f"Processed recurring {operation_type} {payment.id}: {payment.description}")
+            logger.info(
+                "Processed recurring payment_id=%s type=%s user=%s description=%s",
+                payment.id,
+                operation_type,
+                log_safe_id(payment.profile.telegram_id, "user"),
+                summarize_text(payment.description),
+            )
             
         except Exception as e:
-            logger.error(f"Error processing recurring payment {payment.id}: {e}")
+            logger.error(
+                "Error processing recurring payment payment_id=%s user=%s",
+                payment.id,
+                log_safe_id(payment.profile.telegram_id, "user"),
+                exc_info=True,
+            )
     
     return processed_count, processed_payments
 

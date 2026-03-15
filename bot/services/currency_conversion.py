@@ -455,7 +455,12 @@ class CurrencyConverter:
             to_currency=to_currency
         )
         if not rates:
-            logger.warning(f"No rates available for conversion {from_currency} -> {to_currency} on {conversion_date}")
+            logger.warning(
+                "No rates available for conversion %s -> %s on %s",
+                from_currency,
+                to_currency,
+                conversion_date,
+            )
             return None, None
 
         # Конвертация
@@ -465,28 +470,57 @@ class CurrencyConverter:
                 return None, None
             rate = Decimal('1') / rates[to_currency]['unit_rate']
             result = (amount * rate).quantize(Decimal('0.01'))
-            logger.info(f"Converted {amount} {from_currency} -> {result} {to_currency} (rate: {rate:.6f}, date: {conversion_date})")
+            logger.debug(
+                "Converted %s %s -> %s %s (rate=%s, date=%s)",
+                amount,
+                from_currency,
+                result,
+                to_currency,
+                f"{rate:.6f}",
+                conversion_date,
+            )
             return result, rate
 
         if to_currency == 'RUB':
             if from_currency not in rates:
-                logger.warning(f"Currency {from_currency} not found in rates for date {conversion_date}")
+                logger.warning("Currency %s not found in rates for date %s", from_currency, conversion_date)
                 return None, None
             rate = rates[from_currency]['unit_rate']
             result = (amount * rate).quantize(Decimal('0.01'))
-            logger.info(f"Converted {amount} {from_currency} -> {result} {to_currency} (rate: {rate:.6f}, date: {conversion_date})")
+            logger.debug(
+                "Converted %s %s -> %s %s (rate=%s, date=%s)",
+                amount,
+                from_currency,
+                result,
+                to_currency,
+                f"{rate:.6f}",
+                conversion_date,
+            )
             return result, rate
 
         # Кросс-курс через RUB
         if from_currency not in rates or to_currency not in rates:
-            logger.warning(f"Cross-rate conversion failed: {from_currency} or {to_currency} not in rates for {conversion_date}")
+            logger.warning(
+                "Cross-rate conversion failed: %s or %s not in rates for %s",
+                from_currency,
+                to_currency,
+                conversion_date,
+            )
             return None, None
 
         from_rate = rates[from_currency]['unit_rate']
         to_rate = rates[to_currency]['unit_rate']
         rate = from_rate / to_rate
         result = (amount * rate).quantize(Decimal('0.01'))
-        logger.info(f"Cross-converted {amount} {from_currency} -> {result} {to_currency} (rate: {rate:.6f}, date: {conversion_date})")
+        logger.debug(
+            "Cross-converted %s %s -> %s %s (rate=%s, date=%s)",
+            amount,
+            from_currency,
+            result,
+            to_currency,
+            f"{rate:.6f}",
+            conversion_date,
+        )
         return result, rate
     
     async def get_available_currencies(self) -> List[Tuple[str, str]]:

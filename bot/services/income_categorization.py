@@ -13,6 +13,7 @@ from bot.utils.income_category_definitions import (
     normalize_income_category_key,
     strip_leading_emoji,
 )
+from bot.utils.logging_safe import log_safe_id, summarize_text
 from bot.utils.keyword_service import match_keyword_in_text, ensure_unique_keyword
 
 # УДАЛЕНО: _keyword_matches_in_text() - мертвый код, заменен на match_keyword_in_text() из keyword_service.py
@@ -96,14 +97,18 @@ def ensure_unique_income_keyword(
 
     if removed_count > 0:
         logger.info(
-            f"[INCOME KEYWORD MOVE] User {profile.telegram_id}: '{word}' "
-            f"removed from {removed_from_categories} ({removed_count} duplicates) → "
-            f"moved to '{target_cat_name}'"
+            "[INCOME KEYWORD MOVE] %s: %s removed from %s categories -> category_id=%s",
+            log_safe_id(profile.telegram_id, "user"),
+            summarize_text(word),
+            removed_count,
+            category.id,
         )
     elif created:
         logger.info(
-            f"[INCOME KEYWORD NEW] User {profile.telegram_id}: '{word}' "
-            f"created in '{target_cat_name}'"
+            "[INCOME KEYWORD NEW] %s: %s created in category_id=%s",
+            log_safe_id(profile.telegram_id, "user"),
+            summarize_text(word),
+            category.id,
         )
 
     return keyword, created, removed_count
@@ -123,7 +128,7 @@ async def categorize_income(text: str, user_id: int, profile: Optional[Profile] 
         }
     """
     if not profile:
-        logger.warning(f"No profile provided for user {user_id}")
+        logger.warning("No profile provided for %s", log_safe_id(user_id, "user"))
         return None
 
     lang_code = getattr(profile, 'language_code', None) or 'ru'
@@ -179,9 +184,9 @@ async def _categorize_income_with_ai(
     # Получаем AI сервис через ai_selector (использует настройки из .env)
     try:
         ai_service = get_service('categorization')
-        logger.info(f"Using AI service for income categorization: {type(ai_service).__name__}")
+        logger.info("Using AI service for income categorization: %s", type(ai_service).__name__)
     except Exception as e:
-        logger.error(f"Failed to get AI service: {e}")
+        logger.error("Failed to get AI service: %s", e)
         return None
 
     # Вызываем categorize_expense (универсальный метод для категоризации)
@@ -198,19 +203,23 @@ async def _categorize_income_with_ai(
         )
 
         if result:
-            logger.info(f"AI categorization result for income: {result}")
+            logger.info(
+                "AI categorization result for income %s: confidence=%s",
+                summarize_text(text),
+                result.get('confidence'),
+            )
             return result
 
     except asyncio.TimeoutError:
-        logger.warning(f"AI categorization timeout for user {user_id}")
+        logger.warning("AI categorization timeout for %s", log_safe_id(user_id, "user"))
     except Exception as e:
-        logger.error(f"AI categorization error for income: {e}")
+        logger.error("AI categorization error for income for %s: %s", log_safe_id(user_id, "user"), e)
 
     # Пробуем fallback провайдеров
     fallback_providers = get_fallback_chain('categorization')
     for fallback_provider in fallback_providers:
         try:
-            logger.info(f"Trying fallback provider: {fallback_provider}")
+            logger.info("Trying fallback provider for income categorization: %s", fallback_provider)
             fallback_service = AISelector(fallback_provider)
 
             result = await asyncio.wait_for(
@@ -225,14 +234,14 @@ async def _categorize_income_with_ai(
             )
 
             if result:
-                logger.info(f"Fallback {fallback_provider} succeeded for income categorization")
+                logger.info("Fallback provider succeeded for income categorization: %s", fallback_provider)
                 return result
 
         except Exception as e:
-            logger.warning(f"Fallback {fallback_provider} failed: {e}")
+            logger.warning("Fallback provider %s failed for income categorization: %s", fallback_provider, e)
             continue
 
-    logger.warning(f"All AI providers failed for income categorization, user {user_id}")
+    logger.warning("All AI providers failed for income categorization for %s", log_safe_id(user_id, "user"))
     return None
 
 
@@ -262,7 +271,12 @@ def find_category_by_keywords(text: str, profile: Profile) -> Optional[IncomeCat
             keyword_obj.usage_count += 1
             keyword_obj.save(update_fields=['usage_count', 'last_used'])  # last_used обновится auto_now
 
-            logger.info(f"[INCOME KEYWORD MATCH] {match_type}: '{keyword_obj.keyword}' matched '{text}'")
+            logger.info(
+                "[INCOME KEYWORD MATCH] %s: keyword=%s text=%s",
+                match_type,
+                summarize_text(keyword_obj.keyword),
+                summarize_text(text),
+            )
             return keyword_obj.category
 
     # Ничего не найдено
@@ -337,8 +351,9 @@ async def find_best_matching_category(suggested: str, available: List[str]) -> s
         for cat in available:
             if cleaned_suggested == strip_leading_emoji(cat).lower():
                 logger.info(
-                    f"[INCOME CATEGORY MATCH] AI suggested '{suggested}' → "
-                    f"exact match (no emoji) → matched '{cat}'"
+                    "[INCOME CATEGORY MATCH] AI suggested %s -> exact match -> %s",
+                    summarize_text(suggested),
+                    summarize_text(cat),
                 )
                 return cat
 
@@ -349,8 +364,9 @@ async def find_best_matching_category(suggested: str, available: List[str]) -> s
             cleaned_cat = strip_leading_emoji(cat).lower()
             if cleaned_suggested in cleaned_cat or cleaned_cat in cleaned_suggested:
                 logger.info(
-                    f"[INCOME CATEGORY MATCH] AI suggested '{suggested}' → "
-                    f"partial match → matched '{cat}'"
+                    "[INCOME CATEGORY MATCH] AI suggested %s -> partial match -> %s",
+                    summarize_text(suggested),
+                    summarize_text(cat),
                 )
                 return cat
 
@@ -369,8 +385,10 @@ async def find_best_matching_category(suggested: str, available: List[str]) -> s
         if normalized_suggested_key in available_map:
             matched_category = available_map[normalized_suggested_key]
             logger.info(
-                f"[INCOME CATEGORY MATCH] AI suggested '{suggested}' → "
-                f"key '{normalized_suggested_key}' → matched '{matched_category}'"
+                "[INCOME CATEGORY MATCH] AI suggested %s -> key %s -> %s",
+                summarize_text(suggested),
+                normalized_suggested_key,
+                summarize_text(matched_category),
             )
             return matched_category
 
@@ -379,8 +397,11 @@ async def find_best_matching_category(suggested: str, available: List[str]) -> s
             candidate_name = get_income_category_display_for_key(normalized_suggested_key, lang)
             if candidate_name in available:
                 logger.info(
-                    f"[INCOME CATEGORY MATCH] AI suggested '{suggested}' → "
-                    f"key '{normalized_suggested_key}' → lang '{lang}' → matched '{candidate_name}'"
+                    "[INCOME CATEGORY MATCH] AI suggested %s -> key %s -> lang %s -> %s",
+                    summarize_text(suggested),
+                    normalized_suggested_key,
+                    lang,
+                    summarize_text(candidate_name),
                 )
                 return candidate_name
 
@@ -391,16 +412,18 @@ async def find_best_matching_category(suggested: str, available: List[str]) -> s
     ]
     if other_candidates:
         logger.warning(
-            f"[INCOME CATEGORY FALLBACK] AI suggested '{suggested}' → "
-            f"no match found → using 'other' category '{other_candidates[0]}'"
+            "[INCOME CATEGORY FALLBACK] AI suggested %s -> using 'other' category %s",
+            summarize_text(suggested),
+            summarize_text(other_candidates[0]),
         )
         return other_candidates[0]
 
     # Последний шанс - возвращаем первую доступную категорию (если есть)
     if available:
         logger.warning(
-            f"[INCOME CATEGORY FALLBACK] AI suggested '{suggested}' → "
-            f"no match found and no 'other' category → using first available '{available[0]}'"
+            "[INCOME CATEGORY FALLBACK] AI suggested %s -> using first available %s",
+            summarize_text(suggested),
+            summarize_text(available[0]),
         )
         return available[0]
 
@@ -449,11 +472,19 @@ def learn_from_income_category_change_sync(
 
     if total_removed > 0:
         logger.info(
-            f"Removed {total_removed} duplicate keywords while learning from income category change: "
-            f"{old_category} -> {new_category} for '{income.description}'"
+            "Removed %s duplicate keywords while learning from income category change: %s -> %s for %s",
+            total_removed,
+            getattr(old_category, "id", None),
+            new_category.id,
+            summarize_text(income.description),
         )
     else:
-        logger.info(f"Learned from income category change: {old_category} -> {new_category} for '{income.description}'")
+        logger.info(
+            "Learned from income category change: %s -> %s for %s",
+            getattr(old_category, "id", None),
+            new_category.id,
+            summarize_text(income.description),
+        )
 
 
 async def learn_from_income_category_change(
@@ -507,8 +538,9 @@ def generate_keywords_for_income_category_sync(
 
     if total_removed > 0:
         logger.info(
-            f"Removed {total_removed} duplicate keywords while generating default keywords "
-            f"for income category '{category_name}'"
+            "Removed %s duplicate keywords while generating default keywords for income category %s",
+            total_removed,
+            summarize_text(category_name),
         )
 
     # ВАЖНО: Возвращаем список ключевых слов для вызывающей функции

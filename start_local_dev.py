@@ -221,8 +221,8 @@ def main():
                 print_colored(f"   ⚠️ Ошибка остановки {name}: {e}", Colors.YELLOW)
                 try:
                     proc.kill()
-                except:
-                    pass
+                except Exception as kill_error:
+                    print_colored(f"   ⚠️ Не удалось принудительно остановить {name}: {kill_error}", Colors.YELLOW)
 
         print_colored("\n✅ Все сервисы остановлены", Colors.GREEN)
         print_colored("💡 Redis продолжает работать (daemon), остановить: redis-cli shutdown", Colors.YELLOW)

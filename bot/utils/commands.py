@@ -4,6 +4,7 @@
 import logging
 from aiogram import Bot
 from aiogram.types import BotCommand, BotCommandScopeDefault, BotCommandScopeChat
+from bot.utils.logging_safe import log_safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ async def set_bot_commands(bot: Bot):
             commands=commands,
             scope=BotCommandScopeDefault()
         )
-    except Exception as e:
+    except Exception:
         logger.error("Failed to set bot commands", exc_info=True)
 
 
@@ -68,5 +69,9 @@ async def update_user_commands(bot: Bot, user_id: int):
         # Устанавливаем команды для конкретного пользователя
         scope = BotCommandScopeChat(chat_id=user_id)
         await bot.set_my_commands(commands, scope=scope)
-    except Exception as e:
-        logger.error(f"Failed to set user commands for {user_id}", exc_info=True)
+    except Exception:
+        logger.error(
+            "Failed to set user commands for %s",
+            log_safe_id(user_id, "user"),
+            exc_info=True,
+        )

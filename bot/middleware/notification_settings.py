@@ -6,6 +6,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from bot.routers.settings import NotificationStates
+from bot.utils.logging_safe import sanitize_callback_action, summarize_text
 import logging
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,10 @@ class NotificationSettingsMiddleware(BaseMiddleware):
                 # Если это команда - очищаем состояние
                 if event.text and event.text.startswith('/'):
                     await state.clear()
-                    logger.info(f"Cleared notification settings state due to command: {event.text}")
+                    logger.info(
+                        "Cleared notification settings state due to command input=%s",
+                        summarize_text(event.text),
+                    )
                     
             elif isinstance(event, CallbackQuery):
                 # Проверяем callback_data
@@ -50,7 +54,12 @@ class NotificationSettingsMiddleware(BaseMiddleware):
                 ]):
                     # Если это не связано с настройками уведомлений - очищаем состояние
                     await state.clear()
-                    logger.info(f"Cleared notification settings state due to unrelated callback: {event.data}")
+                    action, had_params = sanitize_callback_action(event.data)
+                    logger.info(
+                        "Cleared notification settings state due to unrelated callback action=%s had_params=%s",
+                        action or "unknown",
+                        had_params,
+                    )
         
         # Продолжаем обработку
         return await handler(event, data)

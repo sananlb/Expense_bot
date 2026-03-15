@@ -19,6 +19,7 @@ from django.db.models import Sum, Count, Q
 from dateutil.relativedelta import relativedelta
 from bot.utils.formatters import truncate_text
 from bot.utils.language import get_text
+from bot.utils.logging_safe import log_safe_id
 
 from expenses.models import Expense, ExpenseCategory, Profile, Cashback, Income, IncomeCategory, UserSettings
 
@@ -85,7 +86,12 @@ class PDFReportService:
             # Получаем данные из БД
             report_data = await self._prepare_report_data(user_id, year, month, lang)
             if not report_data:
-                logger.warning(f"No data for report: user_id={user_id}, year={year}, month={month}")
+                logger.warning(
+                    "No data for report: %s period=%s/%s",
+                    log_safe_id(user_id, "user"),
+                    year,
+                    month,
+                )
                 return None
             
             # Генерируем HTML
@@ -591,7 +597,7 @@ class PDFReportService:
             return report_data
             
         except Profile.DoesNotExist:
-            logger.error(f"Profile not found for user_id: {user_id}")
+            logger.error("Profile not found for %s", log_safe_id(user_id, "user"))
             return None
         except Exception as e:
             logger.error(f"Error preparing report data: {e}")
@@ -603,7 +609,8 @@ class PDFReportService:
             with open(self.LOGO_PATH, 'rb') as f:
                 logo_bytes = f.read()
             return base64.b64encode(logo_bytes).decode('utf-8')
-        except:
+        except OSError as logo_error:
+            logger.debug("Failed to read PDF logo from %s: %s", self.LOGO_PATH, logo_error)
             return ""
     
     async def _render_html(self, report_data: Dict, lang: str = 'ru') -> str:

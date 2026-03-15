@@ -19,6 +19,7 @@ from asgiref.sync import sync_to_async
 
 from expenses.models import Expense, Income, Profile, ExpenseCategory, IncomeCategory
 from bot.utils.language import get_text
+from bot.utils.logging_safe import log_safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -487,10 +488,23 @@ class AnalyticsQueryExecutor:
         profile = self._get_profile()
         user_lang = profile.language_code or 'ru'
         results = []
+        should_preload_categories = spec.group_by == 'category' and isinstance(qs, QuerySet)
+        grouped_items = list(qs) if should_preload_categories else qs
+
+        expense_categories = {}
+        income_categories = {}
+        if should_preload_categories:
+            category_ids = {
+                item['category__id'] for item in grouped_items if item.get('category__id')
+            }
+            if spec.entity == 'expenses':
+                expense_categories = ExpenseCategory.objects.in_bulk(category_ids)
+            elif spec.entity == 'incomes':
+                income_categories = IncomeCategory.objects.in_bulk(category_ids)
 
         if spec.group_by != 'none':
             # Grouped results
-            for item in qs:
+            for item in grouped_items:
                 result = {}
 
                 if spec.group_by == 'date':
@@ -501,13 +515,32 @@ class AnalyticsQueryExecutor:
                     if category_id:
                         try:
                             if spec.entity == 'expenses':
-                                from expenses.models import ExpenseCategory
-                                category = ExpenseCategory.objects.get(id=category_id)
+                                category = expense_categories.get(category_id)
                             else:  # incomes
-                                from expenses.models import IncomeCategory
-                                category = IncomeCategory.objects.get(id=category_id)
-                            result['category'] = category.get_display_name(user_lang)
-                        except:
+                                category = income_categories.get(category_id)
+                            if category:
+                                result['category'] = category.get_display_name(user_lang)
+                            else:
+                                raise KeyError(category_id)
+                        except (ExpenseCategory.DoesNotExist, IncomeCategory.DoesNotExist):
+                            logger.warning(
+                                "[analytics_query] Category id=%s not found, using raw name fallback",
+                                category_id,
+                            )
+                            result['category'] = item.get('category__name', '')
+                        except KeyError:
+                            logger.warning(
+                                "[analytics_query] Category id=%s not found in preloaded map, using raw name fallback",
+                                category_id,
+                            )
+                            result['category'] = item.get('category__name', '')
+                        except Exception as category_error:
+                            logger.error(
+                                "[analytics_query] Failed to resolve category display name for id=%s: %s",
+                                category_id,
+                                category_error,
+                                exc_info=True,
+                            )
                             result['category'] = item.get('category__name', '')
                     else:
                         result['category'] = get_text('no_category', user_lang)
@@ -604,7 +637,13 @@ async def execute_analytics_query(user_id: int, spec_json: str) -> Dict[str, Any
             }
 
         # Log the query for monitoring (without sensitive data)
-        logger.info(f"Analytics query from user {user_id}: entity={spec.entity}, group_by={spec.group_by}, limit={spec.limit}")
+        logger.info(
+            "Analytics query from %s: entity=%s, group_by=%s, limit=%s",
+            log_safe_id(user_id, "user"),
+            spec.entity,
+            spec.group_by,
+            spec.limit,
+        )
 
         # Execute query
         executor = AnalyticsQueryExecutor(user_id)
@@ -615,14 +654,14 @@ async def execute_analytics_query(user_id: int, spec_json: str) -> Dict[str, Any
 
         # Log result stats
         if result.get('success'):
-            logger.info(f"Analytics query successful: {result.get('count')} results")
+            logger.info("Analytics query successful: %s results", result.get('count'))
         else:
-            logger.warning(f"Analytics query failed: {result.get('error')}")
+            logger.warning("Analytics query failed: %s", result.get('error'))
 
         return result
 
     except Exception as e:
-        logger.error(f"Unexpected error in analytics query: {e}", exc_info=True)
+        logger.error("Unexpected error in analytics query: %s", e, exc_info=True)
         return {
             'success': False,
             'error': 'Internal error',

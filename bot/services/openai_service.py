@@ -16,6 +16,7 @@ from django.conf import settings
 from .ai_base_service import AIBaseService
 from .ai_selector import get_provider_settings, get_model
 from .key_rotation_mixin import OpenAIKeyRotationMixin
+from bot.utils.logging_safe import log_safe_id, summarize_text
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ OPENAI_CLIENTS = []
 if hasattr(settings, 'OPENAI_API_KEYS') and settings.OPENAI_API_KEYS:
     for api_key in settings.OPENAI_API_KEYS:
         OPENAI_CLIENTS.append(AsyncOpenAI(api_key=api_key))
-    logger.info(f"Инициализировано {len(OPENAI_CLIENTS)} OpenAI клиентов")
+    logger.info("Инициализировано %s OpenAI клиентов", len(OPENAI_CLIENTS))
 else:
     logger.info("Не найдены OPENAI_API_KEYS в настройках, используем единичный ключ")
     OPENAI_CLIENTS = []
@@ -225,9 +226,13 @@ class OpenAIService(AIBaseService):
                     user_id=user_context.get('user_id') if user_context else None
                 )
             except Exception as e:
-                logger.warning(f"Failed to log AI metrics: {e}")
+                logger.warning("Failed to log AI metrics: %s", e)
             
-            logger.info(f"OpenAI categorization took {response_time:.2f}s for text length {len(text)}")
+            logger.info(
+                "OpenAI categorization took %.2fs for %s",
+                response_time,
+                summarize_text(text),
+            )
             
             content = response.choices[0].message.content
             
@@ -238,7 +243,11 @@ class OpenAIService(AIBaseService):
                 # Возвращаем сырой результат - валидация категории будет в parser
                 # (централизованный подход как у доходов через find_best_matching_expense_category)
                 if 'category' in result:
-                    logger.info(f"OpenAI categorized '{text}' as '{result.get('category')}' (raw) with confidence {result.get('confidence', 0)}")
+                    logger.info(
+                        "OpenAI categorized %s with confidence %s",
+                        summarize_text(text),
+                        result.get('confidence', 0),
+                    )
                     return {
                         'category': result.get('category'),  # Сырая категория от AI
                         'confidence': result.get('confidence', 0.8),
@@ -246,16 +255,16 @@ class OpenAIService(AIBaseService):
                         'provider': 'openai'
                     }
                 else:
-                    logger.warning(f"OpenAI response missing category field")
+                    logger.warning("OpenAI response missing category field")
                     return None
                     
             except json.JSONDecodeError:
-                logger.error(f"Failed to parse OpenAI response: {content}")
+                logger.error("Failed to parse OpenAI response: %s", summarize_text(content))
                 return None
                 
         except Exception as e:
             self._mark_key_failure(e)
-            logger.error(f"OpenAI categorization error: {e}")
+            logger.error("OpenAI categorization error: %s", e)
             
             # Логируем неудачную попытку в метрики
             try:
@@ -271,7 +280,7 @@ class OpenAIService(AIBaseService):
                     user_id=user_context.get('user_id') if user_context else None
                 )
             except Exception as log_error:
-                logger.warning(f"Failed to log AI error metrics: {log_error}")
+                logger.warning("Failed to log AI error metrics: %s", log_error)
             
             return None
     
@@ -295,7 +304,7 @@ class OpenAIService(AIBaseService):
                 model_name_fc = get_model('chat', 'openai')
                 client_fc = self._get_client()
                 sel_t0 = time.time()
-                logger.info(f"[OpenAI] START function selection at {datetime.now().isoformat()}")
+                logger.info("[OpenAI] START function selection at %s", datetime.now().isoformat())
                 sel_resp = await client_fc.chat.completions.create(
                     model=model_name_fc,
                     messages=[
@@ -307,7 +316,7 @@ class OpenAIService(AIBaseService):
                 )
                 self._mark_key_success()
                 sel_elapsed = time.time() - sel_t0
-                logger.info(f"[OpenAI] END function selection took {sel_elapsed:.2f}s")
+                logger.info("[OpenAI] END function selection took %.2fs", sel_elapsed)
                 sel_text = sel_resp.choices[0].message.content.strip() if sel_resp and sel_resp.choices else ""
 
                 if sel_text.startswith("FUNCTION_CALL:"):
@@ -342,7 +351,7 @@ class OpenAIService(AIBaseService):
                                         return method(**params)
                                     result = await asyncio.to_thread(run_sync_function)
                                 except Exception as e:
-                                    logger.error(f"[OpenAI] Function {func_name} error: {e}")
+                                    logger.error("[OpenAI] Function %s error: %s", func_name, e)
                                     result = {'success': False, 'message': str(e)}
 
                                 if result.get('success'):
@@ -399,7 +408,7 @@ class OpenAIService(AIBaseService):
                                     return await asyncio.to_thread(lambda: method(**params))
                             result = await call_function()
                         except Exception as e:
-                            logger.error(f"[OpenAI] Function {func_name} error: {e}")
+                            logger.error("[OpenAI] Function %s error: %s", func_name, e)
                             result = {'success': False, 'message': str(e)}
 
                         if result.get('success'):
@@ -463,13 +472,13 @@ class OpenAIService(AIBaseService):
                     user_id=user_context.get('user_id') if user_context else None
                 )
             except Exception as e:
-                logger.warning(f"Failed to log AI metrics: {e}")
-            logger.info(f"OpenAI chat took {response_time:.2f}s for message length {len(message)}")
+                logger.warning("Failed to log AI metrics: %s", e)
+            logger.info("OpenAI chat took %.2fs for %s", response_time, summarize_text(message))
             result = response.choices[0].message.content.strip()
             return result
         except Exception as e:
             self._mark_key_failure(e)
-            logger.error(f"OpenAI chat error: {e}")
+            logger.error("OpenAI chat error: %s", e)
             try:
                 from expenses.models import AIServiceMetrics
                 await asyncio.to_thread(
@@ -483,5 +492,5 @@ class OpenAIService(AIBaseService):
                     user_id=user_context.get('user_id') if user_context else None
                 )
             except Exception as log_error:
-                logger.warning(f"Failed to log AI error metrics: {log_error}")
+                logger.warning("Failed to log AI error metrics: %s", log_error)
             return "Извините, произошла ошибка при обработке вашего сообщения. Попробуйте еще раз."

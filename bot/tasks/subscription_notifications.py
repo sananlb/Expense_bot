@@ -10,6 +10,7 @@ import logging
 
 from expenses.models import Subscription, SubscriptionNotification
 from bot.utils.time_helpers import is_daytime_for_user
+from bot.utils.logging_safe import log_safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -35,8 +36,9 @@ async def check_expiring_subscriptions(bot: Bot):
             # Пропускаем пользователей, заблокировавших бота
             if subscription.profile.bot_blocked:
                 logger.info(
-                    f"Пропуск уведомления для пользователя {subscription.profile.telegram_id}: "
-                    f"бот заблокирован с {subscription.profile.bot_blocked_at}"
+                    "Пропуск уведомления для %s: бот заблокирован с %s",
+                    log_safe_id(subscription.profile.telegram_id, "user"),
+                    subscription.profile.bot_blocked_at,
                 )
                 continue
 
@@ -47,7 +49,7 @@ async def check_expiring_subscriptions(bot: Bot):
             ).aexists()
             
             if notification_exists:
-                logger.info(f"Уведомление для подписки {subscription.id} уже отправлено")
+                logger.info("Уведомление для подписки %s уже отправлено", subscription.id)
                 continue
             
             # НОВАЯ ПРОВЕРКА: Если у пользователя есть другие активные подписки, не отправляем уведомление
@@ -60,22 +62,25 @@ async def check_expiring_subscriptions(bot: Bot):
             
             if other_active_subscriptions:
                 logger.info(
-                    f"Пользователь {subscription.profile.telegram_id} имеет другие активные подписки. "
-                    f"Не отправляем уведомление об истечении подписки {subscription.id}"
+                    "%s has other active subscriptions; skip notification for subscription %s",
+                    log_safe_id(subscription.profile.telegram_id, "user"),
+                    subscription.id,
                 )
                 continue
 
             # Проверяем, что сейчас дневное время в часовом поясе пользователя
             if not is_daytime_for_user(subscription.profile.timezone):
                 logger.info(
-                    f"User {subscription.profile.telegram_id} skipped: nighttime in timezone "
-                    f"{subscription.profile.timezone} (will notify in next check)"
+                    "%s skipped: nighttime in timezone %s (will notify in next check)",
+                    log_safe_id(subscription.profile.telegram_id, "user"),
+                    subscription.profile.timezone,
                 )
                 continue
 
             logger.info(
-                f"Sending notification to user {subscription.profile.telegram_id} "
-                f"(daytime in timezone {subscription.profile.timezone})"
+                "Sending notification to %s (daytime in timezone %s)",
+                log_safe_id(subscription.profile.telegram_id, "user"),
+                subscription.profile.timezone,
             )
 
             # Формируем сообщение
@@ -127,8 +132,9 @@ async def check_expiring_subscriptions(bot: Bot):
             )
 
             logger.info(
-                f"Notification successfully sent to user {subscription.profile.telegram_id} "
-                f"for subscription {subscription.id}"
+                "Notification successfully sent to %s for subscription %s",
+                log_safe_id(subscription.profile.telegram_id, "user"),
+                subscription.id,
             )
             
         except Exception as e:
@@ -139,9 +145,17 @@ async def check_expiring_subscriptions(bot: Bot):
                 subscription.profile.bot_blocked = True
                 subscription.profile.bot_blocked_at = timezone.now()
                 await subscription.profile.asave(update_fields=['bot_blocked', 'bot_blocked_at'])
-                logger.warning(f"Пользователь {subscription.profile.telegram_id} заблокировал бота. Профиль помечен.")
+                logger.warning(
+                    "%s blocked the bot. Profile marked.",
+                    log_safe_id(subscription.profile.telegram_id, "user"),
+                )
             else:
-                logger.error(f"Ошибка при отправке уведомления пользователю {subscription.profile.telegram_id}: {e}")
+                logger.error(
+                    "Failed to send notification to %s: %s",
+                    log_safe_id(subscription.profile.telegram_id, "user"),
+                    e,
+                    exc_info=True,
+                )
 
 
 async def run_notification_task(bot: Bot):
@@ -150,7 +164,7 @@ async def run_notification_task(bot: Bot):
         try:
             await check_expiring_subscriptions(bot)
         except Exception as e:
-            logger.error(f"Ошибка в задаче уведомлений: {e}")
+            logger.error("Ошибка в задаче уведомлений: %s", e, exc_info=True)
         
         # Проверяем каждые 4 часа
         await asyncio.sleep(14400)

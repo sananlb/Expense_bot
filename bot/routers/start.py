@@ -16,6 +16,7 @@ from bot.keyboards import back_close_keyboard
 from bot.services.category import create_default_categories, create_default_income_categories
 from bot.utils.message_utils import send_message_with_cleanup, delete_message_with_effect, safe_delete_message
 from bot.utils.commands import update_user_commands
+from bot.utils.logging_safe import log_safe_id, summarize_text
 from bot.services.affiliate import process_referral_link  # Новая реферальная система Telegram Stars
 from bot.services.utm_tracking import parse_utm_source, save_utm_data  # UTM-метки
 from expenses.models import Subscription, Profile
@@ -161,7 +162,7 @@ async def cmd_start(
 
         logger.info(
             "[START] User %s status: has_subscription_history=%s, is_new_user=%s, is_beta_tester=%s",
-            user_id,
+            log_safe_id(user_id, "user"),
             has_subscription_history,
             is_new_user,
             profile.is_beta_tester,
@@ -180,12 +181,12 @@ async def cmd_start(
 
         # Сохраняем UTM-данные для существующего пользователя (если есть)
         if utm_data and is_new_user:
-            logger.info(f"[START] Processing UTM for new user {user_id}: {start_args}")
+            logger.info("[START] Processing UTM for %s", log_safe_id(user_id, "user"))
             saved = await save_utm_data(profile, utm_data)
             if saved:
-                logger.info(f"[START] UTM data saved for user {user_id}: source={utm_data.get('source')}, campaign={utm_data.get('campaign')}")
+                logger.info("[START] UTM data saved for %s", log_safe_id(user_id, "user"))
             else:
-                logger.info(f"[START] UTM data NOT saved for user {user_id} (already has source or error)")
+                logger.info("[START] UTM data not saved for %s", log_safe_id(user_id, "user"))
 
         # Проверка принятия политики конфиденциальности до выполнения
         # остальных действий
@@ -295,13 +296,17 @@ async def cmd_start(
                     "Invite link is invalid or expired" if display_lang=='en' else "Ссылка-приглашение недействительна или истек срок действия"
                 )
         except Exception as e:
-            logger.error(f"Error handling family invite: {e}")
+            logger.error("Error handling family invite for %s: %s", log_safe_id(user_id, "user"), e)
     
     # Обработка реферальной ссылки для новых пользователей
     referral_message = ""
     # Обрабатываем реферальные коды только если это не UTM-метка
     if is_new_user and referral_code and not utm_data:
-        logger.info(f"[START] Processing referral code '{referral_code}' for new user {user_id}")
+        logger.info(
+            "[START] Processing referral code for %s (code=%s)",
+            log_safe_id(user_id, "user"),
+            summarize_text(referral_code),
+        )
         try:
             # Сначала пробуем обработать как реферальную ссылку Telegram Stars
             affiliate_referral = await process_referral_link(user_id, referral_code)
@@ -320,15 +325,24 @@ async def cmd_start(
                         "Ваш друг получит однократное продление подписки на срок вашей первой покупки."
                     )
 
-                logger.info(f"New user {user_id} registered via Telegram Stars affiliate link from {affiliate_referral.referrer.telegram_id}")
+                logger.info(
+                    "New user %s registered via Telegram Stars affiliate link from %s",
+                    log_safe_id(user_id, "user"),
+                    log_safe_id(affiliate_referral.referrer.telegram_id, "referrer"),
+                )
                 # Старая система с бонусными днями ПОЛНОСТЬЮ УДАЛЕНА
                 # Используется только новая система Telegram Stars
         except Exception as e:
-            logger.error(f"Error processing referral code: {e}")
+            logger.error("Error processing referral code for %s: %s", log_safe_id(user_id, "user"), e)
     
     # НЕ создаем пробную подписку здесь - она будет создана после принятия политики конфиденциальности
     # Это предотвращает дублирование подписок
-    logger.info(f"[START] User {user_id}: is_new_user={is_new_user}, is_beta_tester={profile.is_beta_tester}")
+    logger.info(
+        "[START] User %s: is_new_user=%s, is_beta_tester=%s",
+        log_safe_id(user_id, "user"),
+        is_new_user,
+        profile.is_beta_tester,
+    )
     
     # Обновляем команды бота для пользователя
     await update_user_commands(message.bot, user_id)
@@ -392,13 +406,13 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
             utm_data = await parse_utm_source(start_args)
             if utm_data:
                 await save_utm_data(profile, utm_data)
-                logger.info(f"[PRIVACY_ACCEPT] UTM data saved for user {user_id}: source={utm_data.get('source')}")
+                logger.info("[PRIVACY_ACCEPT] UTM data saved for %s", log_safe_id(user_id, "user"))
 
         await callback.answer('Согласие принято')
         try:
             await safe_delete_message(message=callback.message)
-        except Exception:
-            pass
+        except Exception as delete_error:
+            logger.debug("Failed to delete privacy acceptance message: %s", delete_error)
 
         await create_default_categories(user_id)
         await create_default_income_categories(user_id)
@@ -411,7 +425,7 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
 
         logger.info(
             "[PRIVACY_ACCEPT] User %s status: has_subscription_history=%s, is_new_user=%s, is_beta_tester=%s",
-            user_id,
+            log_safe_id(user_id, "user"),
             has_subscription_history,
             is_new_user,
             profile.is_beta_tester,
@@ -426,7 +440,7 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
 
             logger.info(
                 "[PRIVACY_ACCEPT] Subscription check for user %s: is_new_user=%s, has_active_subscription=%s, existing_trial=%s",
-                user_id,
+                log_safe_id(user_id, "user"),
                 is_new_user,
                 has_active_subscription,
                 existing_trial,
@@ -446,24 +460,24 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
                     )
                     logger.info(
                         "[PRIVACY_ACCEPT] Successfully created trial subscription for new user %s, expires: %s",
-                        user_id,
+                        log_safe_id(user_id, "user"),
                         trial_end,
                     )
                 except Exception as e:
                     logger.error(
                         "[PRIVACY_ACCEPT] Failed to create trial subscription for user %s: %s",
-                        user_id,
+                        log_safe_id(user_id, "user"),
                         e,
                     )
             else:
                 logger.info(
                     "[PRIVACY_ACCEPT] Not creating trial subscription for user %s: has_active_subscription=%s, existing_trial=%s",
-                    user_id,
+                    log_safe_id(user_id, "user"),
                     has_active_subscription,
                     existing_trial,
                 )
         elif profile.is_beta_tester:
-            logger.info("[PRIVACY_ACCEPT] User %s is a beta tester, skipping trial subscription", user_id)
+            logger.info("[PRIVACY_ACCEPT] User %s is a beta tester, skipping trial subscription", log_safe_id(user_id, "user"))
 
         family_token = None
         if start_args and start_args.startswith('family_'):
@@ -498,15 +512,15 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
                         "Invite link is invalid or expired" if display_lang == 'en' else "Ссылка-приглашение недействительна или истек срок действия"
                     )
             except Exception as e:
-                logger.error(f"Error handling family invite after privacy acceptance: {e}")
+                logger.error("Error handling family invite after privacy acceptance for %s: %s", log_safe_id(user_id, "user"), e)
 
         referral_message = ""
         if is_new_user and start_args and start_args.startswith('ref_'):
             referral_code = start_args[4:]
             logger.info(
-                "[PRIVACY_ACCEPT] Processing referral code '%s' for new user %s",
-                referral_code,
-                user_id,
+                "[PRIVACY_ACCEPT] Processing referral code for %s (code=%s)",
+                log_safe_id(user_id, "user"),
+                summarize_text(referral_code),
             )
             try:
                 affiliate_referral = await process_referral_link(user_id, referral_code)
@@ -517,9 +531,12 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
                     else:
                         referral_message = "\n\n🤝 Вы перешли по партнёрской ссылке! Ваш друг получит однократное продление подписки на срок вашей первой покупки."
 
-                    logger.info("New user %s registered via Telegram Stars affiliate link after privacy acceptance", user_id)
+                    logger.info(
+                        "New user %s registered via Telegram Stars affiliate link after privacy acceptance",
+                        log_safe_id(user_id, "user"),
+                    )
             except Exception as e:
-                logger.error(f"Error processing referral code after privacy acceptance: {e}")
+                logger.error("Error processing referral code after privacy acceptance for %s: %s", log_safe_id(user_id, "user"), e)
 
         await update_user_commands(callback.bot, user_id)
 
@@ -529,8 +546,7 @@ async def privacy_accept(callback: types.CallbackQuery, state: FSMContext):
         await state.update_data(start_command_args=None, pending_profile_data=None)
 
     except Exception as e:
-        import traceback
-        logger.error(f"privacy_accept error: {e}\n{traceback.format_exc()}")
+        logger.error("privacy_accept error for %s: %s", log_safe_id(callback.from_user.id, "user"), e, exc_info=True)
         await callback.answer('Ошибка. Попробуйте /start', show_alert=True)
 
 
@@ -540,7 +556,10 @@ async def privacy_decline(callback: types.CallbackQuery):
     try:
         profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
         display_lang = profile.language_code or 'ru'
-    except Exception:
+    except Profile.DoesNotExist:
+        display_lang = 'ru'
+    except Exception as profile_error:
+        logger.debug("Failed to resolve language for privacy decline: %s", profile_error)
         display_lang = 'ru'
     msg = get_text('privacy_decline_message', display_lang)
     await callback.message.edit_text(msg)
@@ -568,7 +587,8 @@ async def callback_start(callback: types.CallbackQuery, state: FSMContext, lang:
 
     try:
         await callback.message.edit_text(text, parse_mode="HTML")
-    except Exception:
+    except Exception as edit_error:
+        logger.debug("Failed to edit start message, sending a new one instead: %s", edit_error)
         # Если не удалось отредактировать, отправляем новое
         await send_message_with_cleanup(callback, state, text, parse_mode="HTML")
     
@@ -629,8 +649,8 @@ async def help_main_handler(callback: types.CallbackQuery, state: FSMContext, la
     # Удаляем предыдущее сообщение (со списком команд /start)
     try:
         await safe_delete_message(message=callback.message)
-    except:
-        pass  # Игнорируем ошибки удаления
+    except Exception as delete_error:
+        logger.debug("Failed to delete help menu source message: %s", delete_error)
 
 
 @router.callback_query(F.data == "help_back")
@@ -675,8 +695,8 @@ async def help_close_handler(callback: types.CallbackQuery, state: FSMContext):
     # Удаляем сообщение справки
     try:
         await safe_delete_message(message=callback.message)
-    except:
-        pass
+    except Exception as delete_error:
+        logger.debug("Failed to delete help message: %s", delete_error)
 
     # Очищаем ID сообщения справки из состояния
     await state.update_data(help_message_id=None)

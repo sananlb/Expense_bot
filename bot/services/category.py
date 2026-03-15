@@ -11,6 +11,7 @@ from difflib import get_close_matches
 import logging
 # ВАЖНО: Импортируем из централизованного модуля (включает ZWJ для композитных эмодзи)
 from bot.utils.emoji_utils import EMOJI_PREFIX_RE, normalize_category_for_matching, strip_leading_emoji
+from bot.utils.logging_safe import log_safe_id, summarize_text
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ def _find_exact_match(categories, category_name: str, lang_code: str):
 
             name_without_emoji = strip_leading_emoji(field_value)
             if name_without_emoji.lower() == category_name_lower:
-                logger.info(f"Found exact match in {field_name}: {_safe_category_name(cat, lang_code)}")
+                logger.info("Found exact category match in %s: category_id=%s", field_name, cat.id)
                 return cat
     return None
 
@@ -86,13 +87,13 @@ def _find_partial_match(categories, category_name: str, lang_code: str):
 
             # Check if category contains the searched name
             if category_name_lower in name_lower:
-                logger.info(f"Found partial match in {field_name}: {_safe_category_name(cat, lang_code)}")
+                logger.info("Found partial category match in %s: category_id=%s", field_name, cat.id)
                 return cat
 
             # Check each word from searched category
             words = category_name_lower.split()
             if any(word in name_lower for word in words if len(word) > 3):
-                logger.info(f"Found word match in {field_name}: {_safe_category_name(cat, lang_code)}")
+                logger.info("Found word category match in %s: category_id=%s", field_name, cat.id)
                 return cat
     return None
 
@@ -113,7 +114,11 @@ def _find_by_mapping(profile, category_name: str, lang_code: str):
                 ).first()
 
                 if category:
-                    logger.info(f"Found category '{_safe_category_name(category, lang_code)}' through mapping keyword '{keyword}'")
+                    logger.info(
+                        "Found category through mapping: category_id=%s keyword=%s",
+                        category.id,
+                        summarize_text(keyword),
+                    )
                     return category
     return None
 
@@ -130,7 +135,7 @@ def _find_cafe_restaurant(categories, category_name: str, lang_code: str):
 
         if ('кафе' in name_ru or 'ресторан' in name_ru or
             'cafe' in name_en or 'restaurant' in name_en):
-            logger.info(f"Found category '{_safe_category_name(cat, lang_code)}' by cafe/restaurant keyword")
+            logger.info("Found cafe/restaurant category: category_id=%s", cat.id)
             return cat
     return None
 
@@ -158,7 +163,11 @@ def _find_fuzzy_match(categories, category_name: str, lang_code: str):
     if close_matches:
         matched_key = close_matches[0]
         category = candidate_map[matched_key]
-        logger.info(f"Found category '{_safe_category_name(category, lang_code)}' by fuzzy match (matched='{matched_key}')")
+        logger.info(
+            "Found fuzzy category match: category_id=%s matched=%s",
+            category.id,
+            summarize_text(matched_key),
+        )
         return category
     return None
 
@@ -201,7 +210,12 @@ def _get_or_create_default_category(profile, user_id: int):
     )
 
     if created:
-        logger.info(f"Created default category '{category_name_display}' for user {user_id} (lang: {user_lang})")
+        logger.info(
+            "Created default category %s for %s (lang=%s)",
+            summarize_text(category_name_display),
+            log_safe_id(user_id, "user"),
+            user_lang,
+        )
 
     return other_category
 
@@ -223,10 +237,18 @@ def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCate
     category_name = EMOJI_PREFIX_RE.sub('', original_category_name).strip()
 
     if original_category_name and original_category_name != category_name:
-        logger.debug(f"Normalized category name from '{original_category_name}' to '{category_name}'")
+        logger.debug(
+            "Normalized category name from %s to %s",
+            summarize_text(original_category_name),
+            summarize_text(category_name),
+        )
 
     effective_name = category_name or original_category_name
-    logger.info(f"Looking for category '{effective_name}' for user {user_id}")
+    logger.info(
+        "Looking for category %s for %s",
+        summarize_text(effective_name),
+        log_safe_id(user_id, "user"),
+    )
 
     profile = get_or_create_user_profile_sync(user_id)
     lang_code = profile.language_code if profile and profile.language_code else 'ru'
@@ -256,7 +278,11 @@ def get_or_create_category_sync(user_id: int, category_name: str) -> ExpenseCate
         return result
 
     # Category not found - return default
-    logger.warning(f"Category '{category_name}' not found for user {user_id}, using default")
+    logger.warning(
+        "Category %s not found for %s, using default",
+        summarize_text(category_name),
+        log_safe_id(user_id, "user"),
+    )
     return _get_or_create_default_category(profile, user_id)
 
 
@@ -282,7 +308,11 @@ def get_user_categories(user_id: int) -> List[ExpenseCategory]:
     
     # Force evaluation of queryset
     categories_count = categories.count()
-    logger.info(f"get_user_categories for user {user_id}: found {categories_count} categories in DB")
+    logger.info(
+        "get_user_categories for %s: found %s categories in DB",
+        log_safe_id(user_id, "user"),
+        categories_count,
+    )
     
     # Сортируем так, чтобы "Прочие расходы" были в конце
     categories_list = list(categories)
@@ -355,7 +385,12 @@ async def create_category(user_id: int, name: str, icon: str = '💰') -> Expens
                 is_translatable=False
             )
 
-            logger.info(f"Created category '{clean_name}' (id: {category.id}) for user {user_id}")
+            logger.info(
+                "Created category %s (id=%s) for %s",
+                summarize_text(clean_name),
+                category.id,
+                log_safe_id(user_id, "user"),
+            )
             return category
 
     return await _create_category()
@@ -464,10 +499,10 @@ def delete_category(user_id: int, category_id: int) -> bool:
                 profile__telegram_id=user_id
             )
             category.delete()
-            logger.info(f"Deleted category {category_id} for user {user_id}")
+            logger.info("Deleted category %s for %s", category_id, log_safe_id(user_id, "user"))
         return True
     except ExpenseCategory.DoesNotExist:
-        logger.warning(f"Category {category_id} not found for user {user_id}")
+        logger.warning("Category %s not found for %s", category_id, log_safe_id(user_id, "user"))
         return False
 
 
@@ -585,7 +620,11 @@ def update_default_categories_language(user_id: int, new_lang: str) -> bool:
                 category.save()
                 updated += 1
                 logger.info(
-                    f"Updated {category_type} category language for '{text}' to '{new_lang}' for user {user_id}"
+                    "Updated %s category language for %s to %s for %s",
+                    category_type,
+                    summarize_text(text),
+                    new_lang,
+                    log_safe_id(user_id, "user"),
                 )
             return updated
         
@@ -594,16 +633,20 @@ def update_default_categories_language(user_id: int, new_lang: str) -> bool:
         total_updated = expense_updated + income_updated
         
         logger.info(
-            f"Updated {total_updated} default categories for user {user_id} to language '{new_lang}' "
-            f"(expenses={expense_updated}, incomes={income_updated})"
+            "Updated %s default categories for %s to language %s (expenses=%s, incomes=%s)",
+            total_updated,
+            log_safe_id(user_id, "user"),
+            new_lang,
+            expense_updated,
+            income_updated,
         )
         return True
         
     except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {user_id}")
+        logger.error("Profile not found for %s", log_safe_id(user_id, "user"))
         return False
     except Exception as e:
-        logger.error(f"Error updating categories language for user {user_id}: {e}")
+        logger.error("Error updating categories language for %s: %s", log_safe_id(user_id, "user"), e)
         return False
 
 
@@ -611,7 +654,7 @@ def create_default_categories_sync(user_id: int) -> bool:
     """Создать базовые категории для нового пользователя."""
     profile, created = Profile.objects.get_or_create(telegram_id=user_id)
     if created:
-        logger.info(f"Created new profile for user {user_id}")
+        logger.info("Created new profile for %s", log_safe_id(user_id, "user"))
 
     # Проверяем количество категорий - защищаемся от race conditions, когда создалась только "Прочие расходы"
     existing_count = ExpenseCategory.objects.filter(profile=profile).count()
@@ -643,13 +686,21 @@ def create_default_categories_sync(user_id: int) -> bool:
 
         required_count = len(default_categories)
         if existing_count >= required_count:
-            logger.debug(f"User {user_id} already has {existing_count} categories, skipping default creation")
+            logger.debug(
+                "%s already has %s categories, skipping default creation",
+                log_safe_id(user_id, "user"),
+                existing_count,
+            )
             return False
 
         # Если есть несколько категорий (например только "Прочие расходы" от fallback),
         # все равно создаем все остальные
         if existing_count > 0:
-            logger.info(f"User {user_id} has only {existing_count} categories (likely from fallback), creating remaining defaults")
+            logger.info(
+                "%s has only %s categories (likely from fallback), creating remaining defaults",
+                log_safe_id(user_id, "user"),
+                existing_count,
+            )
             # Получаем названия уже существующих категорий по мультиязычным полям
             existing_categories = ExpenseCategory.objects.filter(profile=profile)
 
@@ -691,7 +742,11 @@ def create_default_categories_sync(user_id: int) -> bool:
                     )
             if categories_to_create:
                 ExpenseCategory.objects.bulk_create(categories_to_create)
-                logger.info(f"Created {len(categories_to_create)} missing default categories for user {user_id}")
+                logger.info(
+                    "Created %s missing default categories for %s",
+                    len(categories_to_create),
+                    log_safe_id(user_id, "user"),
+                )
         else:
             # Создаем все категории с нуля
             categories = []
@@ -715,11 +770,11 @@ def create_default_categories_sync(user_id: int) -> bool:
                     )
                 )
             ExpenseCategory.objects.bulk_create(categories)
-            logger.info(f"Created all {len(categories)} default categories for user {user_id}")
+            logger.info("Created all %s default categories for %s", len(categories), log_safe_id(user_id, "user"))
 
         return True
     except Exception as exc:
-        logger.error(f"Failed to create default categories for {user_id}: {exc}")
+        logger.error("Failed to create default categories for %s: %s", log_safe_id(user_id, "user"), exc)
         return False
 
 
@@ -744,7 +799,7 @@ def create_default_income_categories(user_id: int) -> bool:
     except Profile.DoesNotExist:
         # Создаем профиль если его нет
         profile = Profile.objects.create(telegram_id=user_id)
-        logger.info(f"Created new profile for user {user_id}")
+        logger.info("Created new profile for %s", log_safe_id(user_id, "user"))
 
     try:
         # Количество уже существующих категорий. Нужно чтобы добавить только недостающие.
@@ -770,13 +825,21 @@ def create_default_income_categories(user_id: int) -> bool:
 
         required_count = len(default_income_categories)
         if existing_count >= required_count:
-            logger.debug(f"User {user_id} already has {existing_count} income categories, skipping default creation")
+            logger.debug(
+                "%s already has %s income categories, skipping default creation",
+                log_safe_id(user_id, "user"),
+                existing_count,
+            )
             return False
 
         # Если есть несколько категорий (например только fallback категория),
         # все равно создаем все остальные
         if existing_count > 0:
-            logger.info(f"User {user_id} has only {existing_count} income categories (likely from fallback), creating remaining defaults")
+            logger.info(
+                "%s has only %s income categories (likely from fallback), creating remaining defaults",
+                log_safe_id(user_id, "user"),
+                existing_count,
+            )
             # Получаем названия уже существующих категорий
             existing_names = set(
                 IncomeCategory.objects.filter(profile=profile)
@@ -808,7 +871,11 @@ def create_default_income_categories(user_id: int) -> bool:
 
             if categories_to_create:
                 IncomeCategory.objects.bulk_create(categories_to_create)
-                logger.info(f"Created {len(categories_to_create)} missing default income categories for user {user_id}")
+                logger.info(
+                    "Created %s missing default income categories for %s",
+                    len(categories_to_create),
+                    log_safe_id(user_id, "user"),
+                )
         else:
             # Создаем все категории доходов с нуля
             categories = []
@@ -833,12 +900,16 @@ def create_default_income_categories(user_id: int) -> bool:
                 categories.append(category)
 
             IncomeCategory.objects.bulk_create(categories)
-            logger.info(f"Created all {len(categories)} default income categories for user {user_id}")
+            logger.info(
+                "Created all %s default income categories for %s",
+                len(categories),
+                log_safe_id(user_id, "user"),
+            )
 
         return True
 
     except Exception as e:
-        logger.error(f"Error creating default income categories: {e}")
+        logger.error("Error creating default income categories for %s: %s", log_safe_id(user_id, "user"), e)
         return False
 
 
@@ -946,18 +1017,22 @@ def add_category_keyword(user_id: int, category_id: int, keyword: str) -> bool:
         ).delete()
 
         if deleted[0] > 0:
-            logger.info(f"Removed keyword '{keyword}' from {deleted[0]} other categories to maintain uniqueness")
+            logger.info(
+                "Removed keyword %s from %s other categories to maintain uniqueness",
+                summarize_text(keyword),
+                deleted[0],
+            )
 
         # Добавляем слово в целевую категорию
         CategoryKeyword.objects.create(
             category=category,
             keyword=keyword_lower
         )
-        logger.info(f"Added keyword '{keyword}' to category {category_id}")
+        logger.info("Added keyword %s to category %s", summarize_text(keyword), category_id)
         return True
 
     except ExpenseCategory.DoesNotExist:
-        logger.error(f"Category {category_id} not found for user {user_id}")
+        logger.error("Category %s not found for %s", category_id, log_safe_id(user_id, "user"))
         return False
 
 
@@ -976,14 +1051,14 @@ def remove_category_keyword(user_id: int, category_id: int, keyword: str) -> boo
         ).delete()
         
         if deleted_count > 0:
-            logger.info(f"Removed keyword '{keyword}' from category {category_id}")
+            logger.info("Removed keyword %s from category %s", summarize_text(keyword), category_id)
             return True
         else:
-            logger.warning(f"Keyword '{keyword}' not found in category {category_id}")
+            logger.warning("Keyword %s not found in category %s", summarize_text(keyword), category_id)
             return False
             
     except ExpenseCategory.DoesNotExist:
-        logger.error(f"Category {category_id} not found for user {user_id}")
+        logger.error("Category %s not found for %s", category_id, log_safe_id(user_id, "user"))
         return False
 
 
@@ -1003,7 +1078,7 @@ def get_category_keywords(user_id: int, category_id: int) -> List[str]:
         return list(keywords)
         
     except ExpenseCategory.DoesNotExist:
-        logger.error(f"Category {category_id} not found for user {user_id}")
+        logger.error("Category %s not found for %s", category_id, log_safe_id(user_id, "user"))
         return []
 
 
@@ -1068,7 +1143,11 @@ def auto_learn_keywords(user_id: int) -> dict:
 
                     if deleted[0] > 0:
                         total_removed += deleted[0]
-                        logger.debug(f"Removed keyword '{word}' from {deleted[0]} other categories during auto-learn")
+                        logger.debug(
+                            "Removed keyword %s from %s other categories during auto-learn",
+                            summarize_text(word),
+                            deleted[0],
+                        )
 
                     # Добавляем слово в целевую категорию
                     CategoryKeyword.objects.create(
@@ -1081,12 +1160,12 @@ def auto_learn_keywords(user_id: int) -> dict:
                     added_keywords[category_name] = added
 
         if total_removed > 0:
-            logger.info(f"Auto-learn: removed {total_removed} duplicate keywords to maintain uniqueness")
+            logger.info("Auto-learn: removed %s duplicate keywords to maintain uniqueness", total_removed)
 
         return added_keywords
         
     except Profile.DoesNotExist:
-        logger.error(f"Profile not found for user {user_id}")
+        logger.error("Profile not found for %s", log_safe_id(user_id, "user"))
         return {}
 
 
@@ -1102,8 +1181,10 @@ async def optimize_keywords_for_new_category(user_id: int, new_category_id: int)
           - Универсальный AI провайдер (DeepSeek/Qwen/OpenAI)
     """
     logger.warning(
-        f"optimize_keywords_for_new_category called for user {user_id}, category {new_category_id}. "
-        "This function is deprecated and does nothing. Use manual keyword management instead."
+        "optimize_keywords_for_new_category called for %s, category %s. "
+        "This function is deprecated and does nothing. Use manual keyword management instead.",
+        log_safe_id(user_id, "user"),
+        new_category_id,
     )
 
 
@@ -1149,7 +1230,11 @@ async def learn_from_category_change(user_id: int, expense_id: int, new_category
                     ).delete()
                     if deleted[0] > 0:
                         removed_count += deleted[0]
-                        logger.debug(f"Removed keyword '{word}' from {deleted[0]} categories")
+                        logger.debug(
+                            "Removed keyword %s from %s categories",
+                            summarize_text(word),
+                            deleted[0],
+                        )
 
             # ШАБЛОН 2: Добавляем слова в новую категорию
             added_keywords = []
@@ -1180,9 +1265,14 @@ async def learn_from_category_change(user_id: int, expense_id: int, new_category
         added, removed = await update_keywords_for_category_change()
 
         if added:
-            logger.info(f"Learned keywords {added} for category {new_category_id} from manual change (expense {expense_id})")
+            logger.info(
+                "Learned %s keywords for category %s from manual change (expense %s)",
+                len(added),
+                new_category_id,
+                expense_id,
+            )
         if removed > 0:
-            logger.info(f"Removed {removed} duplicate keywords from other categories")
+            logger.info("Removed %s duplicate keywords from other categories", removed)
 
     except Exception as e:
-        logger.error(f"Error learning from category change: {e}")
+        logger.error("Error learning from category change for %s: %s", log_safe_id(user_id, "user"), e)

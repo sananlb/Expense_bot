@@ -7,6 +7,7 @@ from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from ..routers.cashback import CashbackForm
 from ..utils.message_utils import send_message_with_cleanup, delete_subscription_messages
+from ..utils.logging_safe import log_safe_id, summarize_text
 import logging
 
 logger = logging.getLogger(__name__)
@@ -41,7 +42,11 @@ class StateResetMiddleware(BaseMiddleware):
 
                 # Сбрасываем состояние при любой команде
                 await state.clear()
-                logger.info(f"State cleared for user {event.from_user.id} on command {event.text}")
+                logger.info(
+                    "State cleared for %s on command %s",
+                    log_safe_id(event.from_user.id, "user"),
+                    summarize_text(event.text),
+                )
 
                 # Восстанавливаем флаг персистентного меню кешбека и список ID
                 if persistent_cashback and cashback_menu_ids:
@@ -54,12 +59,16 @@ class StateResetMiddleware(BaseMiddleware):
                         cashback_menu_month=cashback_menu_month,
                         last_menu_message_id=last_id  # ВАЖНО: сохраняем ID как last_menu для защиты от удаления
                     )
-                    logger.info(f"Restored persistent cashback menus ({len(cashback_menu_ids)} menus) for user {event.from_user.id}")
+                    logger.info(
+                        "Restored persistent cashback menus (%s menus) for %s",
+                        len(cashback_menu_ids),
+                        log_safe_id(event.from_user.id, "user"),
+                    )
 
                 # Восстанавливаем clarification_message_id чтобы menu_cleanup мог его удалить
                 if clarification_message_id:
                     await state.update_data(clarification_message_id=clarification_message_id)
-                    logger.info(f"Restored clarification_message_id={clarification_message_id} for cleanup")
+                    logger.info("Restored clarification_message_id=%s for cleanup", clarification_message_id)
             
             # Проверяем состояние ожидания процента кешбэка (при добавлении или редактировании)
             elif current_state in [CashbackForm.waiting_for_percent.state, CashbackForm.editing_percent.state]:
@@ -74,7 +83,11 @@ class StateResetMiddleware(BaseMiddleware):
                 if not only_number and not text_and_number:
                     # Нет числа ни в начале, ни в конце - это ошибка
                     await state.clear()
-                    logger.info(f"State cleared for user {event.from_user.id} on invalid percent input: {event.text}")
+                    logger.info(
+                        "State cleared for %s on invalid percent input: %s",
+                        log_safe_id(event.from_user.id, "user"),
+                        summarize_text(event.text),
+                    )
                     await send_message_with_cleanup(event, state, "❌ Не найден процент. Введите процент или описание и процент.")
                     return None
                 # Если паттерн совпал, продолжаем обработку
@@ -86,7 +99,11 @@ class StateResetMiddleware(BaseMiddleware):
                     float(text)
                 except ValueError:
                     await state.clear()
-                    logger.info(f"State cleared for user {event.from_user.id} on invalid limit input: {event.text}")
+                    logger.info(
+                        "State cleared for %s on invalid limit input: %s",
+                        log_safe_id(event.from_user.id, "user"),
+                        summarize_text(event.text),
+                    )
                     await send_message_with_cleanup(event, state, "❌ Действие отменено. Используйте команды для навигации.")
                     return None
         

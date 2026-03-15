@@ -259,7 +259,8 @@ class HealthCheckView(View):
                     return str(uptime).split('.')[0]
                 else:
                     return "unknown"
-            except:
+            except Exception as uptime_error:
+                logger.debug("Fallback uptime calculation failed: %s", uptime_error)
                 return "unknown"
         except Exception:
             return "unknown"

@@ -4,6 +4,7 @@
 import logging
 from typing import Optional
 from asgiref.sync import sync_to_async
+from bot.utils.logging_safe import log_safe_id
 from expenses.models import Profile, ExpenseCategory
 
 logger = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ def get_or_create_user_profile_sync(telegram_id: int, **defaults) -> Profile:
         }
     )
     if created:
-        logger.info(f"Created new profile for user {telegram_id}")
+        logger.info("Created new profile for %s", log_safe_id(telegram_id, "user"))
     return profile
 
 
@@ -52,7 +53,7 @@ def get_or_create_user_profile(telegram_id: int, **defaults) -> Profile:
         }
     )
     if created:
-        logger.info(f"Created new profile for user {telegram_id}")
+        logger.info("Created new profile for %s", log_safe_id(telegram_id, "user"))
     return profile
 
 
@@ -92,7 +93,7 @@ def update_user_profile(telegram_id: int, **kwargs) -> Optional[Profile]:
         profile.save()
         return profile
     except Profile.DoesNotExist:
-        logger.warning(f"Profile not found for user {telegram_id}")
+        logger.warning("Profile not found for %s", log_safe_id(telegram_id, "user"))
         return None
 
 

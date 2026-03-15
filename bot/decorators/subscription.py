@@ -6,6 +6,7 @@ from typing import Union
 from aiogram import types
 from aiogram.fsm.context import FSMContext
 from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
+from bot.utils.logging_safe import log_safe_id
 import logging
 
 logger = logging.getLogger(__name__)
@@ -54,7 +55,11 @@ def require_subscription(feature: str = None):
                     parse_mode="HTML"
                 )
                 
-                logger.info(f"User {user_id} tried to access {func.__name__} without subscription")
+                logger.info(
+                    "Subscription required for %s on %s",
+                    log_safe_id(user_id, "user"),
+                    func.__name__,
+                )
                 return
             
             # Если подписка есть, выполняем функцию

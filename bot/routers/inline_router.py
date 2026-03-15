@@ -7,6 +7,7 @@ from bot.services.profile import get_or_create_profile
 from bot.services.household import HouseholdService
 from asgiref.sync import sync_to_async
 from bot.utils import get_text
+from bot.utils.logging_safe import log_safe_id
 from expenses.models import Household
 import logging
 
@@ -91,7 +92,7 @@ async def household_invite_inline(inline_query: InlineQuery):
         success, invite_link = await sync_to_async(HouseholdService.generate_invite_link)(profile, bot_info.username)
 
         if not success:
-            logger.error(f"Failed to generate invite link for user {user_id}: {invite_link}")
+            logger.error("Failed to generate invite link for %s: %s", log_safe_id(user_id, "user"), invite_link)
             await inline_query.answer(
                 results=[],
                 switch_pm_text=get_text('error_generating_invite', lang),
@@ -131,10 +132,10 @@ async def household_invite_inline(inline_query: InlineQuery):
             is_personal=True  # КРИТИЧНО: предотвращает кеширование приватных ссылок для других пользователей
         )
 
-        logger.info(f"Inline invite generated for user {user_id}, household {household.id}")
+        logger.info("Inline invite generated for %s, household %s", log_safe_id(user_id, "user"), household.id)
 
     except Exception as e:
-        logger.error(f"Error handling inline query: {e}", exc_info=True)
+        logger.error("Error handling inline query for %s: %s", log_safe_id(user_id, "user"), e, exc_info=True)
 
         # Попытка определить язык из языка Telegram
         lang = 'ru'

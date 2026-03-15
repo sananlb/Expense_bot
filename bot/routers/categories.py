@@ -21,9 +21,12 @@ from ..utils.category_helpers import get_category_display_name
 from ..utils.category_ui import build_icon_keyboard
 from ..utils.emoji_utils import EMOJI_PREFIX_RE, strip_leading_emoji
 from ..utils.input_sanitizer import InputSanitizer
+from ..utils.logging_safe import log_safe_id, sanitize_callback_action
 from datetime import date
+import logging
 
 router = Router(name="categories")
+logger = logging.getLogger(__name__)
 
 
 class CategoryForm(StatesGroup):
@@ -205,16 +208,13 @@ async def cmd_categories(message: types.Message, state: FSMContext):
 
 async def show_categories_menu(message: types.Message | types.CallbackQuery, state: FSMContext = None):
     """Показать главное меню категорий с выбором типа"""
-    import logging
-    logger = logging.getLogger(__name__)
-    
     # Определяем user_id в зависимости от типа сообщения
     if isinstance(message, types.CallbackQuery):
         user_id = message.from_user.id
     else:
         user_id = message.from_user.id
     
-    logger.info(f"show_categories_menu called for user_id: {user_id}")
+    logger.debug("show_categories_menu called for %s", log_safe_id(user_id, "user"))
     
     # Получаем язык пользователя
     lang = await get_user_language(user_id)
@@ -253,16 +253,13 @@ async def show_categories_menu(message: types.Message | types.CallbackQuery, sta
 
 async def show_expense_categories_menu(message: types.Message | types.CallbackQuery, state: FSMContext = None):
     """Показать меню категорий трат"""
-    import logging
-    logger = logging.getLogger(__name__)
-    
     # Определяем user_id в зависимости от типа сообщения
     if isinstance(message, types.CallbackQuery):
         user_id = message.from_user.id
     else:
         user_id = message.from_user.id
     
-    logger.info(f"show_expense_categories_menu called for user_id: {user_id}")
+    logger.debug("show_expense_categories_menu called for %s", log_safe_id(user_id, "user"))
     
     # Получаем язык пользователя
     lang = await get_user_language(user_id)
@@ -272,7 +269,7 @@ async def show_expense_categories_menu(message: types.Message | types.CallbackQu
     has_subscription = await check_subscription(user_id)
         
     categories = await get_user_categories(user_id)
-    logger.info(f"Found {len(categories)} expense categories for user {user_id}")
+    logger.debug("Found %s expense categories for %s", len(categories), log_safe_id(user_id, "user"))
     
     text = f"<b>{get_text('expense_categories_title', lang)}</b>\n\n"
     
@@ -329,16 +326,13 @@ async def show_expense_categories_menu(message: types.Message | types.CallbackQu
 
 async def show_income_categories_menu(message: types.Message | types.CallbackQuery, state: FSMContext = None):
     """Показать меню категорий доходов"""
-    import logging
-    logger = logging.getLogger(__name__)
-    
     # Определяем user_id в зависимости от типа сообщения
     if isinstance(message, types.CallbackQuery):
         user_id = message.from_user.id
     else:
         user_id = message.from_user.id
     
-    logger.info(f"show_income_categories_menu called for user_id: {user_id}")
+    logger.debug("show_income_categories_menu called for %s", log_safe_id(user_id, "user"))
     
     # Получаем язык пользователя
     lang = await get_user_language(user_id)
@@ -350,7 +344,7 @@ async def show_income_categories_menu(message: types.Message | types.CallbackQue
     # Получаем категории доходов
     from bot.services.income import get_user_income_categories
     income_categories = await get_user_income_categories(user_id)
-    logger.info(f"Found {len(income_categories)} income categories for user {user_id}")
+    logger.debug("Found %s income categories for %s", len(income_categories), log_safe_id(user_id, "user"))
     
     text = f"<b>{get_text('income_categories_title', lang)}</b>\n\n"
     
@@ -762,10 +756,9 @@ async def delete_category_direct(callback: types.CallbackQuery, state: FSMContex
 @router.callback_query(lambda c: c.data.startswith("edit_cat_") and not c.data.startswith("edit_cat_name_") and not c.data.startswith("edit_cat_icon_"))
 async def edit_category(callback: types.CallbackQuery, state: FSMContext):
     """Редактирование категории"""
-    import logging
     from aiogram.exceptions import TelegramBadRequest
-    logger = logging.getLogger(__name__)
-    logger.info(f"edit_category called with data: {callback.data}")
+    callback_action, _ = sanitize_callback_action(callback.data)
+    logger.debug("edit_category called with action='%s'", callback_action)
 
     cat_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
@@ -881,7 +874,7 @@ async def process_edit_category_name(
     """Обработка нового названия категории (текст или голос)"""
     import logging
     logger = logging.getLogger(__name__)
-    logger.info(f"process_edit_category_name called for user {message.from_user.id}")
+    logger.debug("process_edit_category_name called for %s", log_safe_id(message.from_user.id, "user"))
 
     lang = await get_user_language(message.from_user.id)
 
@@ -956,7 +949,7 @@ async def process_edit_category_name(
     from bot.services.category import update_category_name as _update_category_name
     try:
         await _update_category_name(user_id, cat_id, final_name)
-        logger.info(f"Category {cat_id} updated successfully with name: {final_name}")
+        logger.info("Category %s updated successfully for %s", cat_id, log_safe_id(user_id, "user"))
 
         # Удаляем сообщение пользователя
         await safe_delete_message(message=message)

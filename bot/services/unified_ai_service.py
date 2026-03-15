@@ -19,6 +19,7 @@ from django.conf import settings
 from .ai_base_service import AIBaseService
 from .ai_selector import get_model
 from .key_rotation_mixin import KeyRotationMixin, DeepSeekKeyRotationMixin, QwenKeyRotationMixin, OpenRouterKeyRotationMixin
+from bot.utils.logging_safe import log_safe_id, summarize_text
 
 logger = logging.getLogger(__name__)
 
@@ -344,12 +345,12 @@ class UnifiedAIService(AIBaseService):
                         'provider': self.provider_name
                     }
             except json.JSONDecodeError:
-                logger.error(f"[{self.provider_name}] Failed to parse JSON: {content}")
+                logger.error("[%s] Failed to parse JSON: %s", self.provider_name, summarize_text(content))
                 
             return None
             
         except Exception as e:
-            logger.error(f"[{self.provider_name}] Categorization error: {e}")
+            logger.error("[%s] Categorization error: %s", self.provider_name, e)
             self._log_metrics(
                 operation='categorize_expense',
                 response_time=0,
@@ -492,7 +493,12 @@ class UnifiedAIService(AIBaseService):
             return response_text
 
         except Exception as e:
-            logger.error(f"[{self.provider_name}] Chat error: {e}")
+            logger.error(
+                "[%s] Chat error for %s: %s",
+                self.provider_name,
+                log_safe_id(user_id, "user"),
+                e,
+            )
             self._log_metrics(
                 operation='chat',
                 response_time=0,
@@ -579,7 +585,12 @@ class UnifiedAIService(AIBaseService):
 
         except Exception as api_error:
             response_time = time.time() - start_time
-            logger.error(f"[{self.provider_name}] Simple chat error: {api_error}")
+            logger.error(
+                "[%s] Simple chat error for %s: %s",
+                self.provider_name,
+                log_safe_id(user_id, "user"),
+                api_error,
+            )
             self._log_metrics(
                 operation='simple_chat',
                 response_time=response_time,
@@ -648,17 +659,32 @@ class UnifiedAIService(AIBaseService):
             # Форматирование результата
             if isinstance(result, dict) and user_id:
                 result['user_id'] = user_id
-                logger.info(f"[_execute_function_call] Added user_id={user_id} to result for function='{func_name}'")
+                logger.info(
+                    "[_execute_function_call] Added %s to result for function=%s",
+                    log_safe_id(user_id, "user"),
+                    func_name,
+                )
             else:
-                logger.warning(f"[_execute_function_call] Could NOT add user_id! isinstance(result, dict)={isinstance(result, dict)}, user_id={user_id}")
+                logger.warning(
+                    "[_execute_function_call] Could NOT add user id. is_dict=%s user=%s",
+                    isinstance(result, dict),
+                    log_safe_id(user_id, "user"),
+                )
 
-            logger.info(f"[_execute_function_call] Calling format_function_result with func_name='{func_name}', result keys={list(result.keys()) if isinstance(result, dict) else 'N/A'}")
+            logger.info(
+                "[_execute_function_call] Calling format_function_result with func_name=%s result_keys=%s",
+                func_name,
+                list(result.keys()) if isinstance(result, dict) else 'N/A',
+            )
             formatted = format_function_result(func_name, result)
-            logger.info(f"[_execute_function_call] format_function_result returned: {formatted[:100]}...")
+            logger.info(
+                "[_execute_function_call] format_function_result returned: %s",
+                summarize_text(formatted),
+            )
             return formatted
             
         except Exception as e:
-            logger.error(f"Function execution error: {e}")
+            logger.error("Function execution error: %s", e)
             return f"Ошибка при выполнении операции: {str(e)}"
 
     async def transcribe_voice(
@@ -679,7 +705,7 @@ class UnifiedAIService(AIBaseService):
             Распознанный текст или None при ошибке
         """
         if self.provider_name != 'openrouter':
-            logger.error(f"[{self.provider_name}] transcribe_voice поддерживается только для OpenRouter")
+            logger.error("[%s] transcribe_voice поддерживается только для OpenRouter", self.provider_name)
             return None
 
         user_id = user_context.get('user_id') if user_context else None
@@ -766,7 +792,10 @@ class UnifiedAIService(AIBaseService):
                 transcribed_lower = transcribed_text.lower()
                 for pattern in AI_REFUSAL_PATTERNS:
                     if pattern in transcribed_lower:
-                        logger.warning(f"[OpenRouter] AI returned refusal instead of transcription: {transcribed_text[:100]}...")
+                        logger.warning(
+                            "[OpenRouter] AI returned refusal instead of transcription: %s",
+                            summarize_text(transcribed_text),
+                        )
                         # Логируем метрики для отказа AI (важно для мониторинга)
                         self._log_metrics(
                             operation='transcribe_voice',
@@ -791,12 +820,16 @@ class UnifiedAIService(AIBaseService):
                 user_id=user_id
             )
 
-            logger.info(f"[OpenRouter] Транскрибировано за {response_time:.2f}s: {transcribed_text[:50]}...")
+            logger.info(
+                "[OpenRouter] Transcribed in %.2fs: %s",
+                response_time,
+                summarize_text(transcribed_text),
+            )
             return transcribed_text if transcribed_text else None
 
         except Exception as e:
             response_time = time.time() - start_time
-            logger.error(f"[OpenRouter] Ошибка транскрипции за {response_time:.2f}s: {e}")
+            logger.error("[OpenRouter] Ошибка транскрипции за %.2fs: %s", response_time, e)
             self._log_metrics(
                 operation='transcribe_voice',
                 response_time=response_time,
@@ -851,7 +884,7 @@ class UnifiedAIService(AIBaseService):
             logger.error("[OpenRouter] pydub не установлен для конвертации аудио")
             return None
         except Exception as e:
-            logger.error(f"[OpenRouter] Ошибка конвертации OGG→MP3: {e}")
+            logger.error("[OpenRouter] Ошибка конвертации OGG→MP3: %s", e)
             return None
 
     def _log_metrics(self, operation, response_time, success, model=None, input_len=0, tokens=None, error=None, user_id=None):
@@ -887,4 +920,4 @@ class UnifiedAIService(AIBaseService):
                 _save_metrics()
                 
         except Exception as e:
-            logger.warning(f"Failed to log metrics: {e}")
+            logger.warning("Failed to log metrics: %s", e)

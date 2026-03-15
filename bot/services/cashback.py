@@ -148,14 +148,21 @@ def calculate_potential_cashback(user_id: int, start_date: date, end_date: date)
             if key not in expenses_by_category_month:
                 expenses_by_category_month[key] = Decimal('0')
             expenses_by_category_month[key] += expense.amount
+
+    category_ids = {category_id for category_id, _ in expenses_by_category_month.keys()}
+    months = {month for _, month in expenses_by_category_month.keys()}
+    cashback_map: dict[tuple[int, int], list[Cashback]] = {}
+    relevant_cashbacks = Cashback.objects.filter(
+        profile=profile,
+        category_id__in=category_ids,
+        month__in=months
+    )
+    for cashback in relevant_cashbacks:
+        cashback_map.setdefault((cashback.category_id, cashback.month), []).append(cashback)
     
     # Получаем все кешбэки для категорий и месяцев
     for (category_id, month), amount in expenses_by_category_month.items():
-        cashbacks = Cashback.objects.filter(
-            profile=profile,
-            category_id=category_id,
-            month=month
-        )
+        cashbacks = cashback_map.get((category_id, month), [])
         
         for cashback in cashbacks:
             cashback_amount = amount * (cashback.cashback_percent / 100)

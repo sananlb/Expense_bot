@@ -11,6 +11,7 @@ from django.db.models import Sum, Avg, Max, Min, Count, Q
 from collections import defaultdict
 from bot.utils.category_helpers import get_category_display_name
 from bot.utils.language import get_user_language, get_text
+from bot.utils.logging_safe import log_safe_id, summarize_text
 import logging
 
 logger = logging.getLogger(__name__)
@@ -259,7 +260,12 @@ class ExpenseFunctions:
         Returns:
             Информация о дне с максимальными тратами
         """
-        logger.info(f"[get_max_expense_day] Starting for user_id={user_id}, period={period}, period_days={period_days}")
+        logger.debug(
+            "[get_max_expense_day] Starting for %s, period=%s, period_days=%s",
+            log_safe_id(user_id, "user"),
+            period,
+            period_days,
+        )
         try:
             from bot.utils.date_utils import get_period_dates
 
@@ -269,9 +275,9 @@ class ExpenseFunctions:
                 defaults={'language_code': 'ru'}
             )
             if created:
-                logger.info(f"[get_max_expense_day] Created new profile for user {user_id}")
+                logger.debug("[get_max_expense_day] Created new profile for %s", log_safe_id(user_id, "user"))
             else:
-                logger.info(f"[get_max_expense_day] Profile found: id={profile.id}, telegram_id={profile.telegram_id}")
+                logger.debug("[get_max_expense_day] Profile found for %s", log_safe_id(user_id, "user"))
 
             # Определяем период
             if period:
@@ -293,7 +299,7 @@ class ExpenseFunctions:
                 total=Sum('amount')
             ).order_by('-total')
             
-            logger.info(f"[get_max_expense_day] Found {len(expenses)} days with expenses")
+            logger.debug("[get_max_expense_day] Found %s days with expenses", len(expenses))
             
             # Получаем язык пользователя
             lang = profile.language_code or 'ru'
@@ -341,21 +347,26 @@ class ExpenseFunctions:
             }
             
         except Profile.DoesNotExist:
-            logger.error(f"[get_max_expense_day] Profile not found for telegram_id={user_id}")
+            logger.error("[get_max_expense_day] Profile not found for %s", log_safe_id(user_id, "user"))
             from bot.utils import get_text
             return {
                 'success': False,
                 'message': get_text('profile_not_found', 'ru')
             }
         except Exception as e:
-            logger.error(f"[get_max_expense_day] Unexpected error for user {user_id}: {e}", exc_info=True)
+            logger.error("[get_max_expense_day] Unexpected error for %s: %s", log_safe_id(user_id, "user"), e, exc_info=True)
             from bot.utils import get_text
             lang = 'ru'  # Default language for errors
             try:
                 profile = Profile.objects.get(telegram_id=user_id)
                 lang = profile.language_code or 'ru'
-            except:
-                pass
+            except Profile.DoesNotExist:
+                logger.warning("[get_max_expense_day] Could not resolve profile language while handling error")
+            except Exception as profile_error:
+                logger.warning(
+                    "[get_max_expense_day] Failed to resolve profile language while handling error: %s",
+                    profile_error,
+                )
             return {
                 'success': False,
                 'message': f"{get_text('error', lang)}: {str(e)}"
@@ -373,14 +384,14 @@ class ExpenseFunctions:
         """
         import logging
         logger = logging.getLogger(__name__)
-        logger.info(f"[get_period_total] Called with user_id={user_id}, period='{period}'")
+        logger.debug("[get_period_total] Called for %s, period='%s'", log_safe_id(user_id, "user"), period)
 
         try:
             profile, _ = Profile.objects.get_or_create(
                 telegram_id=user_id,
                 defaults={'language_code': 'ru'}
             )
-            logger.info(f"[get_period_total] Profile found/created: telegram_id={profile.telegram_id}, language_code='{profile.language_code}'")
+            logger.debug("[get_period_total] Profile resolved for %s, language_code='%s'", log_safe_id(user_id, "user"), profile.language_code)
             # Используем единую функцию для определения дат периода
             from bot.utils.date_utils import get_period_dates
             try:
@@ -440,7 +451,7 @@ class ExpenseFunctions:
                 'count': count,
                 'categories': categories[:5]  # Топ-5 категорий
             }
-            logger.info(f"[get_period_total] Returning result with user_id={result['user_id']}, period='{result['period']}', total={result['total']}")
+            logger.debug("[get_period_total] Returning result for %s, period='%s'", log_safe_id(user_id, "user"), result['period'])
             return result
 
         except Profile.DoesNotExist:
@@ -456,8 +467,13 @@ class ExpenseFunctions:
             try:
                 profile = Profile.objects.get(telegram_id=user_id)
                 lang = profile.language_code or 'ru'
-            except:
-                pass
+            except Profile.DoesNotExist:
+                logger.warning("[get_period_total] Could not resolve profile language while handling error")
+            except Exception as profile_error:
+                logger.warning(
+                    "[get_period_total] Failed to resolve profile language while handling error: %s",
+                    profile_error,
+                )
             return {
                 'success': False,
                 'message': f"{get_text('error', lang)}: {str(e)}"
@@ -663,11 +679,18 @@ class ExpenseFunctions:
                 start_date = period_start.isoformat()
                 end_date = period_end.isoformat()
 
-            logger.info(f"search_expenses: profile_id={profile.id}, query='{query}', limit={limit}, period={start_date} to {end_date}")
+            logger.debug(
+                "search_expenses: user=%s, query=%s, limit=%s, period=%s to %s",
+                log_safe_id(user_id, "user"),
+                summarize_text(query),
+                limit,
+                start_date,
+                end_date,
+            )
 
             # Parse query into parts
             query_parts = _parse_search_query(query)
-            logger.info(f"search_expenses: parsed query parts: {query_parts}")
+            logger.debug("search_expenses: parsed query into %s parts", len(query_parts))
 
             # Build base queryset with date filters
             queryset = Expense.objects.filter(profile=profile)
@@ -692,14 +715,14 @@ class ExpenseFunctions:
             # If nothing found - use fuzzy search
             if not expenses:
                 expenses = _fuzzy_search_expenses(queryset, query_parts, limit)
-                logger.info(f"search_expenses: extended search found {len(expenses)} expenses")
+                logger.debug("search_expenses: extended search found %s expenses", len(expenses))
                 if expenses:
                     used_fuzzy = True
                     if total_count == 0:
                         total_count = len(expenses)
                         total_amount = sum((exp.amount for exp in expenses), Decimal('0'))
 
-            logger.info(f"search_expenses: found {len(expenses)} expenses for query '{query}'")
+            logger.debug("search_expenses: found %s expenses", len(expenses))
 
             # Format results
             lang = profile.language_code or 'ru'
@@ -716,7 +739,7 @@ class ExpenseFunctions:
                     # Используем period если есть, иначе определяем по датам
                     prev_start_date, prev_end_date = _get_previous_period(current_start, current_end, period or '')
 
-                    logger.info(f"search_expenses: comparing with previous period {prev_start_date} to {prev_end_date}")
+                    logger.debug("search_expenses: comparing with previous period %s to %s", prev_start_date, prev_end_date)
 
                     # Получаем траты за предыдущий период с теми же фильтрами
                     prev_queryset = Expense.objects.filter(
@@ -737,7 +760,7 @@ class ExpenseFunctions:
                         prev_count = 0
                         prev_total = Decimal('0')
 
-                    logger.info(f"search_expenses: previous period - total={prev_total}, count={prev_count}")
+                    logger.debug("search_expenses: previous period count=%s", prev_count)
 
                     # Если в предыдущем периоде были траты, вычисляем изменение
                     if prev_total > 0:
@@ -755,9 +778,9 @@ class ExpenseFunctions:
                                 'end': prev_end_date.isoformat()
                             }
                         }
-                        logger.info(f"search_expenses: comparison - difference={difference}, percent_change={percent_change}%")
+                        logger.debug("search_expenses: comparison calculated successfully")
                     else:
-                        logger.info(f"search_expenses: no expenses in previous period, skipping comparison")
+                        logger.debug("search_expenses: no expenses in previous period, skipping comparison")
 
                 except Exception as e:
                     logger.warning(f"search_expenses: failed to calculate comparison: {e}")
@@ -1074,8 +1097,14 @@ class ExpenseFunctions:
                 end_date = date.today()
                 start_date = end_date - timedelta(days=30)
 
-            logger.info(f"get_category_total: searching for category='{category}', user={user_id}, period={period}")
-            logger.info(f"get_category_total: date range {start_date} to {end_date}")
+            logger.debug(
+                "get_category_total: user=%s, category=%s, period=%s, range=%s..%s",
+                log_safe_id(user_id, "user"),
+                summarize_text(category),
+                period,
+                start_date,
+                end_date,
+            )
 
             # Пытаемся найти категорию пользователя по имени
             # Ищем в нескольких полях для лучшего совпадения
@@ -1091,16 +1120,16 @@ class ExpenseFunctions:
             ).filter(cat_q).first()
 
             if cat_obj:
-                logger.info(f"get_category_total: found category obj: id={cat_obj.id}, name='{cat_obj.name}', name_ru='{cat_obj.name_ru}', name_en='{cat_obj.name_en}'")
+                logger.debug("get_category_total: matched category object id=%s", cat_obj.id)
             else:
-                logger.info(f"get_category_total: category not found for query '{category}'")
+                logger.debug("get_category_total: category not found for query")
 
             # Если точное совпадение не найдено, пробуем более гибкий поиск
             if not cat_obj:
                 # Удаляем эмодзи из запроса если они есть и ищем снова
                 import re
                 clean_category = re.sub(r'[^\w\s]', '', category, flags=re.UNICODE).strip()
-                logger.info(f"get_category_total: trying cleaned category='{clean_category}'")
+                logger.debug("get_category_total: trying cleaned category query")
                 if clean_category and clean_category != category:
                     cat_q = Q(name__icontains=clean_category)
                     cat_q |= Q(name_ru__icontains=clean_category)
@@ -1109,13 +1138,11 @@ class ExpenseFunctions:
                         profile=profile
                     ).filter(cat_q).first()
                     if cat_obj:
-                        logger.info(f"get_category_total: found with cleaned search: id={cat_obj.id}, name='{cat_obj.name}'")
+                        logger.debug("get_category_total: found category with cleaned search id=%s", cat_obj.id)
 
                 # Дополнительно выведем все категории пользователя для отладки
                 all_cats = ExpenseCategory.objects.filter(profile=profile)
-                logger.info(f"get_category_total: user has {all_cats.count()} categories total")
-                for cat in all_cats[:10]:  # Первые 10 для отладки
-                    logger.info(f"  - Category: name='{cat.name}', name_ru='{cat.name_ru}', name_en='{cat.name_en}'")
+                logger.debug("get_category_total: user has %s categories total", all_cats.count())
 
             # Универсальное правило: ищем как по категории, так и по описанию
             q_filter = Q()
@@ -1139,26 +1166,22 @@ class ExpenseFunctions:
                 expense_date__lte=end_date
             ).filter(q_filter)
 
-            logger.info(f"get_category_total: filtered queryset, found {qs.count()} expenses")
+            logger.debug("get_category_total: filtered queryset count=%s", qs.count())
 
             from django.db.models import Sum
             total = qs.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
             count = qs.count()
 
-            logger.info(f"get_category_total: result - total={total}, count={count}")
+            logger.debug("get_category_total: result count=%s", count)
 
             # Если нашли траты, покажем первые несколько для отладки
-            if count > 0:
-                for exp in qs[:3]:
-                    logger.info(f"  - Expense: amount={exp.amount}, date={exp.expense_date}, category='{exp.category.name if exp.category else 'None'}', desc='{exp.description}'")
-
             # Вычисляем сравнение с предыдущим периодом
             previous_comparison = None
 
             # Определяем предыдущий период (для месяцев - календарный предыдущий месяц)
             prev_start_date, prev_end_date = _get_previous_period(start_date, end_date, period)
 
-            logger.info(f"get_category_total: comparing with previous period {prev_start_date} to {prev_end_date}")
+            logger.debug("get_category_total: comparing with previous period %s to %s", prev_start_date, prev_end_date)
 
             # Получаем траты за предыдущий период с теми же фильтрами категории
             prev_qs = Expense.objects.filter(
@@ -1170,7 +1193,7 @@ class ExpenseFunctions:
             prev_total = prev_qs.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
             prev_count = prev_qs.count()
 
-            logger.info(f"get_category_total: previous period - total={prev_total}, count={prev_count}")
+            logger.debug("get_category_total: previous period count=%s", prev_count)
 
             # Если в предыдущем периоде были траты, вычисляем изменение
             if prev_total > 0:
@@ -1188,9 +1211,9 @@ class ExpenseFunctions:
                         'end': prev_end_date.isoformat()
                     }
                 }
-                logger.info(f"get_category_total: comparison - difference={difference}, percent_change={percent_change}%")
+                logger.debug("get_category_total: comparison calculated successfully")
             else:
-                logger.info(f"get_category_total: no expenses in previous period, skipping comparison")
+                logger.debug("get_category_total: no expenses in previous period, skipping comparison")
 
             result = {
                 'success': True,
@@ -1745,8 +1768,13 @@ class ExpenseFunctions:
             try:
                 profile = Profile.objects.get(telegram_id=user_id)
                 lang = profile.language_code or 'ru'
-            except:
-                pass
+            except Profile.DoesNotExist:
+                logger.warning("[get_income_total] Could not resolve profile language while handling error")
+            except Exception as profile_error:
+                logger.warning(
+                    "[get_income_total] Failed to resolve profile language while handling error: %s",
+                    profile_error,
+                )
             return {
                 'success': False,
                 'message': f"{get_text('error', lang)}: {str(e)}"
@@ -2269,7 +2297,7 @@ class ExpenseFunctions:
                     # Используем period если есть, иначе определяем по датам
                     prev_start_date, prev_end_date = _get_previous_period(current_start, current_end, period or '')
 
-                    logger.info(f"search_incomes: comparing with previous period {prev_start_date} to {prev_end_date}")
+                    logger.debug("search_incomes: comparing with previous period %s to %s", prev_start_date, prev_end_date)
 
                     # Получаем доходы за предыдущий период с тем же фильтром
                     prev_incomes = Income.objects.filter(
@@ -2282,7 +2310,7 @@ class ExpenseFunctions:
                     prev_total = prev_incomes.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
                     prev_count = prev_incomes.count()
 
-                    logger.info(f"search_incomes: previous period - total={prev_total}, count={prev_count}")
+                    logger.debug(f"search_incomes: previous period - total={prev_total}, count={prev_count}")
 
                     # Добавляем сравнение только если в предыдущем периоде были доходы
                     if prev_total > 0:
@@ -2309,12 +2337,12 @@ class ExpenseFunctions:
                             'trend': trend
                         }
 
-                        logger.info(f"search_incomes: comparison - difference={difference}, percent_change={percent_change}%")
+                        logger.debug(f"search_incomes: comparison - difference={difference}, percent_change={percent_change}%")
                     else:
-                        logger.info(f"search_incomes: no incomes in previous period, skipping comparison")
+                        logger.debug("search_incomes: no incomes in previous period, skipping comparison")
 
                 except Exception as e:
-                    logger.warning(f"search_incomes: failed to calculate comparison: {e}")
+                    logger.warning("search_incomes: failed to calculate comparison: %s", e)
 
             result = {
                 'success': True,
@@ -2339,7 +2367,7 @@ class ExpenseFunctions:
 
             return result
         except Exception as e:
-            logger.error(f"Error in search_incomes: {e}")
+            logger.error("Error in search_incomes: %s", e)
             return {'success': False, 'message': str(e)}
     
     @staticmethod
@@ -2682,7 +2710,7 @@ class ExpenseFunctions:
                 # Определяем предыдущий период
                 prev_start_date, prev_end_date = _get_previous_period(start_date, end_date, period)
 
-                logger.info(f"get_income_category_total: comparing with previous period {prev_start_date} to {prev_end_date}")
+                logger.debug("get_income_category_total: comparing with previous period %s to %s", prev_start_date, prev_end_date)
 
                 # Получаем доходы за предыдущий период
                 prev_incomes = Income.objects.filter(
@@ -2695,7 +2723,7 @@ class ExpenseFunctions:
                 prev_total = prev_incomes.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
                 prev_count = prev_incomes.count()
 
-                logger.info(f"get_income_category_total: previous period - total={prev_total}, count={prev_count}")
+                logger.debug(f"get_income_category_total: previous period - total={prev_total}, count={prev_count}")
 
                 # Добавляем сравнение только если в предыдущем периоде были доходы
                 if prev_total > 0:
@@ -2722,12 +2750,12 @@ class ExpenseFunctions:
                         'trend': trend
                     }
 
-                    logger.info(f"get_income_category_total: comparison - difference={difference}, percent_change={percent_change}%")
+                    logger.debug(f"get_income_category_total: comparison - difference={difference}, percent_change={percent_change}%")
                 else:
-                    logger.info(f"get_income_category_total: no incomes in previous period, skipping comparison")
+                    logger.debug("get_income_category_total: no incomes in previous period, skipping comparison")
 
             except Exception as e:
-                logger.warning(f"get_income_category_total: failed to calculate comparison: {e}")
+                logger.warning("get_income_category_total: failed to calculate comparison: %s", e)
 
             result = {
                 'success': True,
@@ -2747,7 +2775,7 @@ class ExpenseFunctions:
 
             return result
         except Exception as e:
-            logger.error(f"Error in get_income_category_total: {e}")
+            logger.error("Error in get_income_category_total: %s", e)
             return {'success': False, 'message': str(e)}
     
     @staticmethod

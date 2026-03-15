@@ -20,6 +20,7 @@ from dateutil import parser
 from calendar import monthrange
 import re
 from bot.utils.category_helpers import get_category_display_name
+from bot.utils.logging_safe import log_safe_id, summarize_text
 from ..utils.language import get_user_language, get_text
 
 logger = logging.getLogger(__name__)
@@ -230,11 +231,19 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
     # FAQ (быстрый ответ без вызова AI)
     faq_answer, faq_confidence, faq_id = await find_faq_answer(text, lang)
     if faq_confidence >= get_faq_matcher().HIGH_CONFIDENCE_THRESHOLD:
-        logger.info(f"[Chat] FAQ high confidence ({faq_id}) for user {user_id}")
+        logger.info(
+            "[Chat] FAQ high confidence (%s) for %s",
+            faq_id,
+            log_safe_id(user_id, "user"),
+        )
         await send_message_with_cleanup(message, state, faq_answer, parse_mode="HTML")
         return
     if faq_confidence >= get_faq_matcher().MEDIUM_CONFIDENCE_THRESHOLD:
-        logger.info(f"[Chat] FAQ medium confidence ({faq_id}) for user {user_id}")
+        logger.info(
+            "[Chat] FAQ medium confidence (%s) for %s",
+            faq_id,
+            log_safe_id(user_id, "user"),
+        )
         clarification = (
             "\n\n💡 Если это не то, что нужно — уточните вопрос."
             if lang == "ru"
@@ -291,10 +300,17 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
                         # Используем язык пользователя для отображения категории
                         # Получаем профиль пользователя
                         try:
-                            from expenses.models import Profile
                             profile = await sync_to_async(Profile.objects.get)(telegram_id=user_id)
                             cat_lang = getattr(profile, 'language_code', 'ru') if profile else 'ru'
-                        except:
+                        except Profile.DoesNotExist:
+                            logger.warning("[Chat] Profile missing while building recent expenses context")
+                            cat_lang = 'ru'
+                        except Exception as profile_error:
+                            logger.error(
+                                "[Chat] Failed to resolve profile language for recent expenses context: %s",
+                                profile_error,
+                                exc_info=True,
+                            )
                             cat_lang = 'ru'
 
                         category_name = get_category_display_name(exp.category, cat_lang) if exp.category else get_text('no_category', cat_lang)
@@ -305,9 +321,18 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
                             'description': exp.description or ''
                         })
                 except Exception as e:
-                    logger.error(f"Error getting recent expenses: {e}")
+                    logger.error(
+                        "[Chat] Failed to collect recent expenses for %s: %s",
+                        log_safe_id(user_id, "user"),
+                        e,
+                        exc_info=True,
+                    )
                 
-                logger.info(f"[Chat] User language detected: {lang}")
+                logger.info(
+                    "[Chat] User language detected for %s: %s",
+                    log_safe_id(user_id, "user"),
+                    lang,
+                )
 
                 user_context = {
                     'total_today': today_summary.get('total', 0) if today_summary else 0,
@@ -319,33 +344,46 @@ async def process_chat_message(message: types.Message, state: FSMContext, text: 
 
                 # Получаем AI сервис и генерируем ответ
                 ai_service = get_service('chat')
-                logger.info(f"[Chat] Got AI service: {type(ai_service).__name__}")
-                logger.info(f"[Chat] Calling AI with user_id={user_id}, language={lang}, message={text[:50]}...")
+                logger.info("[Chat] Got AI service: %s", type(ai_service).__name__)
+                logger.info(
+                    "[Chat] Calling AI for %s lang=%s query=%s",
+                    log_safe_id(user_id, "user"),
+                    lang,
+                    summarize_text(text),
+                )
                 
                 response = await ai_service.chat(text, context, user_context)
-                # Безопасное логирование в Windows-консолях (ASCII-only превью)
-                try:
-                    preview = (response or '')[:100]
-                    safe_preview = preview.encode('ascii', 'ignore').decode('ascii')
-                except Exception:
-                    safe_preview = 'None'
-                logger.info(f"[Chat] AI response received: {safe_preview}...")
+                logger.info(
+                    "[Chat] AI response received for %s: %s",
+                    log_safe_id(user_id, "user"),
+                    summarize_text(response),
+                )
                 
             except Exception as e:
-                logger.error(f"AI chat error with primary service: {e}")
+                logger.error(
+                    "[Chat] AI chat error with primary service for %s: %s",
+                    log_safe_id(user_id, "user"),
+                    e,
+                    exc_info=True,
+                )
                 # Fallback chain из .env настроек
                 fallback_chain = get_fallback_chain('chat')
                 response = None
 
                 for fallback_provider in fallback_chain:
                     try:
-                        logger.info(f"Trying fallback to {fallback_provider} service...")
+                        logger.info("[Chat] Trying fallback provider: %s", fallback_provider)
                         fallback_service = AISelector(fallback_provider)  # Returns actual service instance
                         response = await fallback_service.chat(text, context, user_context)
-                        logger.info(f"{fallback_provider} fallback successful")
+                        logger.info("[Chat] Fallback provider succeeded: %s", fallback_provider)
                         break
                     except Exception as fallback_error:
-                        logger.error(f"{fallback_provider} fallback failed: {fallback_error}")
+                        logger.error(
+                            "[Chat] Fallback provider failed: %s error=%s",
+                            fallback_provider,
+                            fallback_error,
+                            exc_info=True,
+                        )
                         continue
 
                 if not response:
@@ -462,8 +500,8 @@ async def parse_dates_from_text(text: str) -> Optional[tuple[datetime.date, date
             
             if start_date <= today and end_date <= today:
                 return (start_date, end_date)
-        except:
-            pass
+        except (ValueError, OverflowError) as date_error:
+            logger.debug("[Chat] Failed to parse date range from message, falling back: %s", date_error)
     
     # Проверяем названия месяцев для периода за весь месяц
     for month_name, month_num in months.items():

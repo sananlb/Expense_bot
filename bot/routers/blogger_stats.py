@@ -10,6 +10,7 @@ from typing import Optional
 from bot.services.utm_tracking import get_blogger_stats_by_name
 from bot.services.profile import get_or_create_profile
 from bot.utils.message_utils import send_message_with_cleanup
+from bot.utils.logging_safe import summarize_text
 
 logger = logging.getLogger(__name__)
 
@@ -202,8 +203,8 @@ async def cmd_blogger_stats(
         # Удаляем сообщение о загрузке
         try:
             await loading_msg.delete()
-        except:
-            pass
+        except Exception as delete_error:
+            logger.debug("Failed to delete blogger stats loading message: %s", delete_error)
 
         # Отправляем отчет
         await send_message_with_cleanup(message, state, report_text, parse_mode="HTML")
@@ -211,20 +212,29 @@ async def cmd_blogger_stats(
         # Логируем запрос
         if stats.get('found'):
             logger.info(
-                f"Blogger {blogger_name} requested stats: "
-                f"users={stats['total_users']}, paying={stats['paying_users']}"
+                "Blogger stats requested blogger=%s users=%s paying=%s",
+                summarize_text(blogger_name),
+                stats['total_users'],
+                stats['paying_users'],
             )
         else:
-            logger.info(f"Blogger {blogger_name} requested stats but no data found")
+            logger.info(
+                "Blogger stats requested but no data found blogger=%s",
+                summarize_text(blogger_name),
+            )
 
     except Exception as e:
-        logger.error(f"Error getting blogger stats for {blogger_name}: {e}")
+        logger.error(
+            "Error getting blogger stats blogger=%s",
+            summarize_text(blogger_name),
+            exc_info=True,
+        )
 
         # Удаляем сообщение о загрузке
         try:
             await loading_msg.delete()
-        except:
-            pass
+        except Exception as delete_error:
+            logger.debug("Failed to delete blogger stats loading message after error: %s", delete_error)
 
         error_text = (
             "❌ Произошла ошибка при получении статистики. Попробуйте позже."

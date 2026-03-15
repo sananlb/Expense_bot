@@ -9,6 +9,7 @@ import os
 from aiogram import BaseMiddleware
 from aiogram.types import Message
 import asyncio
+from bot.utils.logging_safe import log_safe_id
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class AntiSpamMiddleware(BaseMiddleware):
                     f"⚠️ Вы временно заблокированы из-за подозрительной активности.\n"
                     f"Попробуйте через {remaining} минут."
                 )
-                logger.warning(f"Blocked spam attempt from user {user_id}")
+                logger.warning("Blocked spam attempt from %s", log_safe_id(user_id, "user"))
                 return
             else:
                 # Снимаем бан
@@ -103,7 +104,11 @@ class AntiSpamMiddleware(BaseMiddleware):
             if len(self.start_timestamps[user_id]) >= self.MAX_STARTS_PER_HOUR:
                 # Баним пользователя
                 self.banned_users[user_id] = now + self.BAN_DURATION
-                logger.warning(f"User {user_id} banned for spam: {len(self.start_timestamps[user_id])} /start commands")
+                logger.warning(
+                    "%s banned for spam: %s /start commands",
+                    log_safe_id(user_id, "user"),
+                    len(self.start_timestamps[user_id]),
+                )
                 await event.answer(
                     "⚠️ Обнаружена подозрительная активность.\n"
                     "Доступ временно ограничен."

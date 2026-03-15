@@ -1906,6 +1906,6 @@ def get_text(key: str, lang: str = 'ru') -> str:
 
     # Логируем только для критичных ключей AI-чата
     if key in ['expense_summary', 'total', 'top_categories', 'income_summary', 'top_sources']:
-        logger.info(f"[get_text] key='{key}', lang='{lang}' -> result='{result}'")
+        logger.debug("[get_text] key='%s', lang='%s'", key, lang)
 
     return result

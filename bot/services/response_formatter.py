@@ -4,11 +4,31 @@ Unified formatter for function-call results used by AI services.
 from __future__ import annotations
 
 from typing import Dict, List, Optional
+from datetime import datetime
 from bot.utils.language import get_text
 from bot.utils.formatters import format_currency
+from bot.utils.logging_safe import log_safe_id
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+MONTH_NAMES_RU_PREPOSITIONAL = {
+    1: 'январе', 2: 'феврале', 3: 'марте', 4: 'апреле', 5: 'мае', 6: 'июне',
+    7: 'июле', 8: 'августе', 9: 'сентябре', 10: 'октябре', 11: 'ноябре', 12: 'декабре'
+}
+
+
+def _try_get_ru_month_name_from_iso(date_str: Optional[str]) -> Optional[str]:
+    if not date_str:
+        return None
+
+    try:
+        month_num = datetime.fromisoformat(date_str).month
+        return MONTH_NAMES_RU_PREPOSITIONAL[month_num]
+    except (TypeError, ValueError, KeyError) as date_error:
+        logger.debug("Failed to resolve Russian month name from ISO date '%s': %s", date_str, date_error)
+        return None
 
 
 def _get_result_currency(result: Dict, fallback: str = 'RUB') -> str:
@@ -23,10 +43,10 @@ def _get_user_language(result: Dict) -> str:
     It's safe to call from sync context (like format_function_result called via asyncio.to_thread).
     """
     user_id = result.get('user_id')
-    logger.info(f"[_get_user_language] Received result with user_id: {user_id}")
+    logger.debug("[_get_user_language] Received result for %s", log_safe_id(user_id, "user"))
 
     if not user_id:
-        logger.warning(f"[_get_user_language] No user_id in result, defaulting to 'ru'. Result keys: {list(result.keys())}")
+        logger.warning("[_get_user_language] No user_id in result, defaulting to 'ru'. Result keys: %s", list(result.keys()))
         return 'ru'
 
     try:
@@ -36,13 +56,18 @@ def _get_user_language(result: Dict) -> str:
         from expenses.models import Profile
         profile = Profile.objects.get(telegram_id=user_id)
         language = getattr(profile, 'language_code', 'ru')
-        logger.info(f"[_get_user_language] Found profile for user_id={user_id}, language_code='{language}'")
+        logger.debug("[_get_user_language] Found profile for %s, language_code='%s'", log_safe_id(user_id, "user"), language)
         return language
     except Profile.DoesNotExist:
-        logger.error(f"[_get_user_language] Profile not found for user_id={user_id}, defaulting to 'ru'")
+        logger.error("[_get_user_language] Profile not found for %s, defaulting to 'ru'", log_safe_id(user_id, "user"))
         return 'ru'
     except Exception as e:
-        logger.error(f"[_get_user_language] Error getting language for user_id={user_id}: {type(e).__name__}: {e}")
+        logger.error(
+            "[_get_user_language] Error getting language for %s: %s: %s",
+            log_safe_id(user_id, "user"),
+            type(e).__name__,
+            e,
+        )
         return 'ru'
 
 
@@ -158,7 +183,8 @@ def _format_operations_list(result: Dict, title: str, subtitle: str, lang: str =
                     formatted_date = f"{month_name} {day}"
                 else:
                     formatted_date = f"{day} {month_name}"
-        except:
+        except (TypeError, ValueError, IndexError) as date_error:
+            logger.debug("Failed to format operation date '%s': %s", date_str, date_error)
             formatted_date = date_str
 
         result_parts.append(f"\n<b>📅 {formatted_date}</b>")
@@ -242,7 +268,8 @@ def _format_daily_totals(result: Dict) -> str:
         amount_val = entry.get('amount', 0) if isinstance(entry, dict) else (entry or 0)
         try:
             amount = float(amount_val)
-        except Exception:
+        except (TypeError, ValueError) as amount_error:
+            logger.debug("Invalid amount value '%s' in daily totals: %s", amount_val, amount_error)
             amount = 0.0
         if amount > 0:
             lines.append(f"• {dk}: {format_currency(amount, currency)}")
@@ -255,7 +282,12 @@ def format_function_result(func_name: str, result: Dict) -> str:
     """
     Convert ExpenseFunctions/OpenAI/Gemini function-call results to user-facing text.
     """
-    logger.info(f"[format_function_result] Called with func_name='{func_name}', user_id={result.get('user_id')}, result_keys={list(result.keys())}")
+    logger.debug(
+        "[format_function_result] func_name='%s', user=%s, result_keys=%s",
+        func_name,
+        log_safe_id(result.get('user_id'), "user"),
+        list(result.keys()),
+    )
 
     if not result.get('success'):
         return f"Ошибка: {result.get('message','Не удалось получить данные')}"
@@ -324,8 +356,6 @@ def format_function_result(func_name: str, result: Dict) -> str:
 
         # Добавляем сравнение с предыдущим периодом если оно есть
         if previous_comparison:
-            from datetime import datetime
-
             prev_total = previous_comparison.get('previous_total', 0)
             percent_change = previous_comparison.get('percent_change', 0)
             trend = previous_comparison.get('trend', '')
@@ -344,30 +374,16 @@ def format_function_result(func_name: str, result: Dict) -> str:
             abs_percent = abs(percent_change)
 
             # Определяем название текущего и предыдущего периода
-            month_names_ru = {
-                1: 'январе', 2: 'феврале', 3: 'марте', 4: 'апреле', 5: 'мае', 6: 'июне',
-                7: 'июле', 8: 'августе', 9: 'сентябре', 10: 'октябре', 11: 'ноябре', 12: 'декабре'
-            }
-
             current_period_name = 'в этом периоде'
             prev_period_name = 'предыдущем периоде'
 
-            if start_date:
-                try:
-                    date_obj = datetime.fromisoformat(start_date)
-                    month_num = date_obj.month
-                    # Всегда используем название месяца если есть дата
-                    current_period_name = f'в {month_names_ru[month_num]}'
-                except:
-                    pass
+            current_month_name = _try_get_ru_month_name_from_iso(start_date)
+            if current_month_name:
+                current_period_name = f'в {current_month_name}'
 
-            if prev_start:
-                try:
-                    prev_date_obj = datetime.fromisoformat(prev_start)
-                    prev_month_num = prev_date_obj.month
-                    prev_period_name = month_names_ru[prev_month_num]
-                except:
-                    pass
+            previous_month_name = _try_get_ru_month_name_from_iso(prev_start)
+            if previous_month_name:
+                prev_period_name = previous_month_name
 
             # Формируем человечное сообщение о сравнении
             if trend == 'без изменений':
@@ -422,22 +438,13 @@ def format_function_result(func_name: str, result: Dict) -> str:
         }.get(period, f'за период {period}')
 
         # Пытаемся определить название месяца из периода
-        from datetime import datetime
-
-        month_names_ru = {
-            1: 'январе', 2: 'феврале', 3: 'марте', 4: 'апреле', 5: 'мае', 6: 'июне',
-            7: 'июле', 8: 'августе', 9: 'сентябре', 10: 'октябре', 11: 'ноябре', 12: 'декабре'
-        }
-
         # Если есть start_date, пытаемся определить месяц
-        if start_date:
-            try:
-                date_obj = datetime.fromisoformat(start_date)
-                month_num = date_obj.month
-                if period.lower() in ('month', 'this_month', 'last_month') or any(m in period.lower() for m in ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']):
-                    period_text = f'в {month_names_ru[month_num]}'
-            except:
-                pass
+        month_name = _try_get_ru_month_name_from_iso(start_date)
+        if month_name and (
+            period.lower() in ('month', 'this_month', 'last_month')
+            or any(m in period.lower() for m in ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'])
+        ):
+            period_text = f'в {month_name}'
 
         # Формируем основное сообщение
         if count == 1:
@@ -466,13 +473,9 @@ def format_function_result(func_name: str, result: Dict) -> str:
 
             # Определяем название предыдущего периода
             prev_period_name = 'предыдущем периоде'
-            if prev_start:
-                try:
-                    prev_date_obj = datetime.fromisoformat(prev_start)
-                    prev_month_num = prev_date_obj.month
-                    prev_period_name = month_names_ru[prev_month_num]
-                except:
-                    pass
+            previous_month_name = _try_get_ru_month_name_from_iso(prev_start)
+            if previous_month_name:
+                prev_period_name = previous_month_name
 
             if trend == 'без изменений':
                 message += f" {trend_emoji} Это столько же, сколько было в {prev_period_name}."
@@ -509,7 +512,13 @@ def format_function_result(func_name: str, result: Dict) -> str:
                 period_desc = f"за {month_name} {s.year}"
             else:
                 period_desc = f"с {start_date} по {end_date}"
-        except Exception:
+        except (TypeError, ValueError, IndexError) as period_error:
+            logger.debug(
+                "Failed to build period description from start=%s end=%s: %s",
+                start_date,
+                end_date,
+                period_error,
+            )
             period_desc = f"с {start_date} по {end_date}"
 
         return (
@@ -561,7 +570,7 @@ def format_function_result(func_name: str, result: Dict) -> str:
 
     if func_name == 'get_period_total':
         lang = _get_user_language(result)
-        logger.info(f"[get_period_total] Formatting with lang='{lang}', user_id={result.get('user_id')}")
+        logger.debug("[get_period_total] Formatting with lang='%s', user=%s", lang, log_safe_id(result.get('user_id'), "user"))
 
         total = result.get('total', 0)
         period = result.get('period', '')
@@ -570,13 +579,9 @@ def format_function_result(func_name: str, result: Dict) -> str:
         cats = result.get('categories', []) or []
 
         # Логируем перед получением текстов
-        logger.info(f"[get_period_total] Getting text 'expense_summary' for lang='{lang}'")
         expense_summary_text = get_text('expense_summary', lang)
-        logger.info(f"[get_period_total] Got expense_summary='{expense_summary_text}'")
 
-        logger.info(f"[get_period_total] Getting text 'total' for lang='{lang}'")
         total_text = get_text('total', lang)
-        logger.info(f"[get_period_total] Got total='{total_text}'")
 
         localized_period = _localize_period(period, lang)
         lines = [f"{expense_summary_text} {start}{(' — ' + end) if end and end != start else ''} ({localized_period})"]
@@ -584,13 +589,12 @@ def format_function_result(func_name: str, result: Dict) -> str:
         if cats:
             lines.append("")
             top_categories_text = get_text('top_categories', lang)
-            logger.info(f"[get_period_total] Got top_categories='{top_categories_text}'")
             lines.append(f"{top_categories_text}:")
             for c in cats:
                 lines.append(f"• {c.get('name','')}: {format_currency(c.get('amount', 0), currency)}")
 
         result_text = "\n".join(lines)
-        logger.info(f"[get_period_total] Final formatted text (first 200 chars): {result_text[:200]}")
+        logger.debug("[get_period_total] Prepared formatted text len=%s", len(result_text))
         return result_text
 
     if func_name == 'get_income_period_total':
@@ -848,8 +852,6 @@ def format_function_result(func_name: str, result: Dict) -> str:
 
         # Добавляем сравнение с предыдущим периодом если оно есть
         if previous_comparison:
-            from datetime import datetime
-
             prev_total = previous_comparison.get('previous_total', 0)
             percent_change = previous_comparison.get('percent_change', 0)
             trend = previous_comparison.get('trend', '')
@@ -868,30 +870,16 @@ def format_function_result(func_name: str, result: Dict) -> str:
             abs_percent = abs(percent_change)
 
             # Определяем название текущего и предыдущего периода
-            month_names_ru = {
-                1: 'январе', 2: 'феврале', 3: 'марте', 4: 'апреле', 5: 'мае', 6: 'июне',
-                7: 'июле', 8: 'августе', 9: 'сентябре', 10: 'октябре', 11: 'ноябре', 12: 'декабре'
-            }
-
             current_period_name = 'в этом периоде'
             prev_period_name = 'предыдущем периоде'
 
-            if start_date:
-                try:
-                    date_obj = datetime.fromisoformat(start_date)
-                    month_num = date_obj.month
-                    # Всегда используем название месяца если есть дата
-                    current_period_name = f'в {month_names_ru[month_num]}'
-                except:
-                    pass
+            current_month_name = _try_get_ru_month_name_from_iso(start_date)
+            if current_month_name:
+                current_period_name = f'в {current_month_name}'
 
-            if prev_start:
-                try:
-                    prev_date_obj = datetime.fromisoformat(prev_start)
-                    prev_month_num = prev_date_obj.month
-                    prev_period_name = month_names_ru[prev_month_num]
-                except:
-                    pass
+            previous_month_name = _try_get_ru_month_name_from_iso(prev_start)
+            if previous_month_name:
+                prev_period_name = previous_month_name
 
             # Формируем человечное сообщение о сравнении
             if trend == 'без изменений':
@@ -939,22 +927,13 @@ def format_function_result(func_name: str, result: Dict) -> str:
         }.get(period, f'за период {period}')
 
         # Пытаемся определить название месяца из периода
-        from datetime import datetime
-
-        month_names_ru = {
-            1: 'январе', 2: 'феврале', 3: 'марте', 4: 'апреле', 5: 'мае', 6: 'июне',
-            7: 'июле', 8: 'августе', 9: 'сентябре', 10: 'октябре', 11: 'ноябре', 12: 'декабре'
-        }
-
         # Если есть start_date, пытаемся определить месяц
-        if start_date:
-            try:
-                date_obj = datetime.fromisoformat(start_date)
-                month_num = date_obj.month
-                if period.lower() in ('month', 'this_month', 'last_month') or any(m in period.lower() for m in ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december']):
-                    period_text = f'в {month_names_ru[month_num]}'
-            except:
-                pass
+        month_name = _try_get_ru_month_name_from_iso(start_date)
+        if month_name and (
+            period.lower() in ('month', 'this_month', 'last_month')
+            or any(m in period.lower() for m in ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь', 'january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'])
+        ):
+            period_text = f'в {month_name}'
 
         # Формируем основное сообщение
         if count == 1:
@@ -983,13 +962,9 @@ def format_function_result(func_name: str, result: Dict) -> str:
 
             # Определяем название предыдущего периода
             prev_period_name = 'предыдущем периоде'
-            if prev_start:
-                try:
-                    prev_date_obj = datetime.fromisoformat(prev_start)
-                    prev_month_num = prev_date_obj.month
-                    prev_period_name = month_names_ru[prev_month_num]
-                except:
-                    pass
+            previous_month_name = _try_get_ru_month_name_from_iso(prev_start)
+            if previous_month_name:
+                prev_period_name = previous_month_name
 
             if trend == 'без изменений':
                 message += f" {trend_emoji} Это столько же, сколько было в {prev_period_name}."
@@ -1101,7 +1076,8 @@ def format_function_result(func_name: str, result: Dict) -> str:
     import json as _json
     try:
         return _json.dumps(result, ensure_ascii=False)[:1000]
-    except Exception:
+    except (TypeError, ValueError) as serialization_error:
+        logger.debug("Failed to serialize fallback result as JSON: %s", serialization_error)
         return str(result)[:1000]
 
 

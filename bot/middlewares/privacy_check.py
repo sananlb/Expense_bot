@@ -10,6 +10,7 @@ from aiogram.fsm.context import FSMContext
 
 from bot.utils import get_text
 from bot.constants import get_privacy_url_for
+from bot.utils.logging_safe import log_safe_id
 from expenses.models import Profile
 
 logger = logging.getLogger(__name__)
@@ -83,9 +84,10 @@ class PrivacyCheckMiddleware(BaseMiddleware):
                 display_lang = 'ru'
 
             logger.info(
-                f"[PRIVACY_CHECK] User {user.id} attempted action without accepting privacy policy. "
-                f"Profile exists: {profile is not None}, "
-                f"accepted_privacy: {profile.accepted_privacy if profile else 'N/A'}"
+                "[PRIVACY_CHECK] %s attempted action without accepted privacy policy. profile_exists=%s, accepted_privacy=%s",
+                log_safe_id(user.id, "user"),
+                profile is not None,
+                profile.accepted_privacy if profile else "N/A",
             )
 
             # Сохраняем информацию о pending профиле для нового пользователя
@@ -146,7 +148,7 @@ class PrivacyCheckMiddleware(BaseMiddleware):
                     )
                 except Exception as e:
                     # Если не удалось отредактировать - отправляем новое
-                    logger.warning(f"Failed to edit privacy message: {e}")
+                    logger.warning("Failed to edit privacy message for %s: %s", log_safe_id(user.id, "user"), e)
                     await message.answer(
                         privacy_text,
                         reply_markup=keyboard,

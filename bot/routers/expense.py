@@ -33,6 +33,7 @@ from ..utils.formatters import format_currency, format_expenses_summary, format_
 from ..utils.validators import validate_amount, parse_description_amount
 from ..utils.expense_messages import format_expense_added_message
 from ..utils.category_helpers import get_category_display_name
+from ..utils.logging_safe import log_safe_id, sanitize_callback_action, summarize_text
 from ..decorators import require_subscription, rate_limit
 from ..keyboards import expenses_summary_keyboard
 from expenses.models import Profile
@@ -473,7 +474,7 @@ async def _generate_and_send_pdf_for_current_month(
 
     try:
         # Логируем начало генерации
-        logger.info(f"[PDF_START] user={user_id}, period={year}/{month}, source=expense.py")
+        logger.info("[PDF_START] user=%s, period=%s/%s, source=expense.py", log_safe_id(user_id, "user"), year, month)
 
         # Создаем экземпляр бота для фоновой отправки
         bot = Bot(token=os.getenv('BOT_TOKEN'))
@@ -492,7 +493,13 @@ async def _generate_and_send_pdf_for_current_month(
 
         if not pdf_bytes:
             # Нет данных для отчета
-            logger.warning(f"[PDF_NO_DATA] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
+            logger.warning(
+                "[PDF_NO_DATA] user=%s, period=%s/%s, duration=%.2fs",
+                log_safe_id(user_id, "user"),
+                year,
+                month,
+                duration,
+            )
             error_msg = (
                 "❌ <b>No data for report</b>\n\n"
                 "No expenses found for selected month."
@@ -518,8 +525,12 @@ async def _generate_and_send_pdf_for_current_month(
 
         # Логируем успешную генерацию
         logger.info(
-            f"[PDF_SUCCESS] user={user_id}, period={year}/{month}, "
-            f"duration={duration:.2f}s, size={len(pdf_bytes)}"
+            "[PDF_SUCCESS] user=%s, period=%s/%s, duration=%.2fs, size=%s",
+            log_safe_id(user_id, "user"),
+            year,
+            month,
+            duration,
+            len(pdf_bytes),
         )
 
         # Алерт если генерация заняла > 30 секунд
@@ -527,7 +538,7 @@ async def _generate_and_send_pdf_for_current_month(
             from bot.services.admin_notifier import send_admin_alert
             await send_admin_alert(
                 f"⚠️ Slow PDF generation\n"
-                f"User: {user_id}\n"
+                f"User: {log_safe_id(user_id, 'user')}\n"
                 f"Period: {year}/{month}\n"
                 f"Duration: {duration:.2f}s\n"
                 f"Size: {len(pdf_bytes)} bytes\n"
@@ -602,11 +613,17 @@ async def _generate_and_send_pdf_for_current_month(
             try:
                 await bot.delete_message(chat_id=chat_id, message_id=progress_msg_id)
             except Exception as e:
-                logger.debug(f"Could not delete progress message: {e}")
+                logger.debug("Could not delete progress message for %s: %s", log_safe_id(user_id, "user"), e)
 
     except asyncio.TimeoutError:
         duration = time.time() - start_time
-        logger.error(f"[PDF_TIMEOUT] user={user_id}, period={year}/{month}, duration={duration:.2f}s")
+        logger.error(
+            "[PDF_TIMEOUT] user=%s, period=%s/%s, duration=%.2fs",
+            log_safe_id(user_id, "user"),
+            year,
+            month,
+            duration,
+        )
 
         # Уведомляем пользователя
         if bot:
@@ -639,7 +656,7 @@ async def _generate_and_send_pdf_for_current_month(
         from bot.services.admin_notifier import send_admin_alert
         await send_admin_alert(
             f"🔴 PDF Timeout\n"
-            f"User: {user_id}\n"
+            f"User: {log_safe_id(user_id, 'user')}\n"
             f"Period: {year}/{month}\n"
             f"Duration: {duration:.2f}s\n"
             f"Source: expense.py"
@@ -648,8 +665,12 @@ async def _generate_and_send_pdf_for_current_month(
     except Exception as e:
         duration = time.time() - start_time
         logger.error(
-            f"[PDF_ERROR] user={user_id}, period={year}/{month}, "
-            f"duration={duration:.2f}s, error={str(e)}"
+            "[PDF_ERROR] user=%s, period=%s/%s, duration=%.2fs, error=%s",
+            log_safe_id(user_id, "user"),
+            year,
+            month,
+            duration,
+            e,
         )
 
         # Уведомляем пользователя
@@ -682,7 +703,7 @@ async def _generate_and_send_pdf_for_current_month(
     finally:
         # Всегда снимаем lock
         cache.delete(lock_key)
-        logger.info(f"Released PDF lock for user {user_id}, {year}/{month}")
+        logger.info("Released PDF lock for %s, %s/%s", log_safe_id(user_id, "user"), year, month)
 
         # Закрываем сессию бота
         if bot:
@@ -754,7 +775,7 @@ async def generate_pdf_report(callback: types.CallbackQuery, state: FSMContext, 
     except Exception as e:
         # Снимаем lock при ошибке
         cache.delete(lock_key)
-        logger.error(f"Error creating PDF background task: {e}")
+        logger.error("Error creating PDF background task for %s: %s", log_safe_id(user_id, "user"), e)
         raise
 
 
@@ -1352,17 +1373,21 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 message_id=last_menu_id
             )
 
-        logger.info(f"Cleared state {current_state} for user {message.from_user.id} on expense input")
+        logger.info(
+            "Cleared state %s for %s on expense input",
+            current_state,
+            log_safe_id(message.from_user.id, "user"),
+        )
         current_state = None  # Сбрасываем для продолжения обработки
 
     # Пропускаем обработку трат, если активно состояние другого роутера
     if current_state and current_state in skip_states:
-        logger.info(f"Skipping expense handler due to active state: {current_state}")
+        logger.info("Skipping expense handler due to active state: %s", current_state)
         return
 
     # Если есть состояние из другого модуля (не ExpenseForm), очищаем его
     if current_state and current_state != "ExpenseForm:waiting_for_amount_clarification" and not current_state.startswith("ExpenseForm:"):
-        logger.info(f"Auto-clearing foreign state '{current_state}' to process expense")
+        logger.info("Auto-clearing foreign state '%s' to process expense", current_state)
         from bot.utils.state_utils import clear_state_keep_cashback
         await clear_state_keep_cashback(state)
         # Продолжаем обработку траты
@@ -1381,7 +1406,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     try:
         profile = await Profile.objects.aget(telegram_id=user_id)
         if not profile.accepted_privacy:
-            logger.warning(f"User {user_id} tried to add expense without accepting privacy policy")
+            logger.warning("Expense add rejected by privacy policy for %s", log_safe_id(user_id, "user"))
             # Отправляем сообщение с предложением принять политику
             from bot.constants import get_privacy_url_for
             privacy_url = get_privacy_url_for(lang)
@@ -1395,7 +1420,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             await message.answer(privacy_text, reply_markup=kb, parse_mode='HTML')
             return
     except Profile.DoesNotExist:
-        logger.warning(f"Profile not found for user {user_id} when trying to add expense")
+        logger.warning("Profile not found for %s when trying to add expense", log_safe_id(user_id, "user"))
         # Профиль должен быть создан через /start, но если нет - отправляем к началу
         await message.answer(get_text('start_bot_first', lang) if get_text('start_bot_first', lang) else "Please start the bot with /start command first.")
         return
@@ -1462,14 +1487,23 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         ).aexists()
 
         if has_keyword:
-            logger.info(f"Found keyword in saved keywords for user {user_id}, treating as expense: '{text}'")
+            logger.info(
+                "Found saved keyword for %s, treating as expense: %s",
+                log_safe_id(user_id, "user"),
+                summarize_text(text),
+            )
 
     # НОВОЕ: Проверка на запрос показа трат ДО вызова AI парсера (экономия токенов)
     # НО только если НЕ найдено ключевое слово
     if not has_keyword:
         is_show_request, confidence = is_show_expenses_request(text)
         if is_show_request and confidence >= 0.7:
-            logger.info(f"Detected show expenses request: '{text}' (confidence: {confidence:.2f})")
+            logger.info(
+                "Detected show expenses request for %s: %s (confidence=%.2f)",
+                log_safe_id(user_id, "user"),
+                summarize_text(text),
+                confidence,
+            )
             from ..routers.chat import process_chat_message
             # Сохраняем уже запущенный индикатор до отправки ответа
             await process_chat_message(message, state, text, skip_typing=True)
@@ -1480,7 +1514,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     # Проверка на доход перед парсингом как расход
     from ..utils.expense_parser import detect_income_intent, parse_income_message
     if detect_income_intent(text):
-        logger.info(f"Detected income intent: '{text}'")
+        logger.info("Detected income intent for %s: %s", log_safe_id(user_id, "user"), summarize_text(text))
 
         # Проверка подписки для функции учета доходов
         has_subscription = await check_subscription(user_id)
@@ -1625,12 +1659,12 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     keep_message=True  # Не удалять это сообщение при следующих действиях
                 )
                 
-                logger.info(f"Income created: {income.id} for user {user_id}")
+                logger.info("Income %s created for %s", income.id, log_safe_id(user_id, "user"))
                 return
             else:
                 # Если не удалось создать доход (ошибка в БД или другие проблемы)
                 await cancel_typing()
-                logger.error(f"Failed to create income for user {user_id}: create_income returned None")
+                logger.error("Failed to create income for %s: create_income returned None", log_safe_id(user_id, "user"))
                 await message.answer(
                     "❌ Не удалось добавить доход. Попробуйте позже.",
                     parse_mode="HTML"
@@ -1639,7 +1673,11 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         else:
             # Если не удалось распарсить как доход - просто выходим
             # НЕ создаем расход когда intent явно доход (знак + или "плюс")
-            logger.warning(f"Failed to parse as income despite intent: '{text}'")
+            logger.warning(
+                "Failed to parse as income despite intent for %s: %s",
+                log_safe_id(user_id, "user"),
+                summarize_text(text),
+            )
             await cancel_typing()
             return
     
@@ -1650,15 +1688,15 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     except Profile.DoesNotExist:
         profile = None
     
-    logger.info(f"Starting parse_expense_message for text: '{text}', user_id: {user_id}")
+    logger.info("Starting parse_expense_message for %s: %s", log_safe_id(user_id, "user"), summarize_text(text))
     parsed = await parse_expense_message(text, user_id=user_id, profile=profile, use_ai=True)
     # Убираем эмодзи из логов для Windows
     if parsed:
         safe_parsed = {k: v.encode('ascii', 'ignore').decode('ascii') if isinstance(v, str) else v 
                        for k, v in parsed.items()}
-        logger.info(f"Parsing completed, result: {safe_parsed}")
+        logger.info("Parsing completed for %s, result keys: %s", log_safe_id(user_id, "user"), sorted(safe_parsed.keys()))
     else:
-        logger.info("Parsing completed, result: None")
+        logger.info("Parsing completed for %s, result: None", log_safe_id(user_id, "user"))
     
     if not parsed:
         # Проверяем, не указана ли явно нулевая сумма (например "кофе 0")
@@ -1676,10 +1714,14 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             is_show_request, show_confidence = is_show_expenses_request(text)
         else:
             is_show_request, show_confidence = False, 0.0
-            logger.info(f"Skipping intent check because keyword was found for: '{text}'")
+            logger.info("Skipping intent check because keyword was found for %s: %s", log_safe_id(user_id, "user"), summarize_text(text))
 
         if is_show_request and show_confidence >= 0.6:
-            logger.info(f"Show expenses request detected after parsing failed: '{text}'")
+            logger.info(
+                "Show expenses request detected after parsing failed for %s: %s",
+                log_safe_id(user_id, "user"),
+                summarize_text(text),
+            )
             from ..routers.chat import process_chat_message
             # Сохраняем typing до отправки ответа
             await process_chat_message(message, state, text, skip_typing=True)
@@ -1694,11 +1736,17 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         # Логируем для отладки
         if confidence > 0.5:
             indicators = get_expense_indicators(text)
-            logger.info(f"Classified '{text}' as {message_type} (confidence: {confidence:.2f}), indicators: {indicators}")
+            logger.info(
+                "Classified message for %s as %s (confidence=%.2f, indicators=%s)",
+                log_safe_id(user_id, "user"),
+                message_type,
+                confidence,
+                indicators,
+            )
         
         # Если классификатор определил это как чат - направляем в чат
         if message_type == 'chat':
-            logger.info(f"Message classified as chat, redirecting: '{text}'")
+            logger.info("Message classified as chat for %s: %s", log_safe_id(user_id, "user"), summarize_text(text))
             from ..routers.chat import process_chat_message
             # Сохраняем typing до отправки ответа
             await process_chat_message(message, state, text, skip_typing=True)
@@ -1707,16 +1755,20 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         
         # Иначе это трата (message_type == 'record')
         might_be_expense = True
-        logger.info(f"Message classified as expense record, searching for similar expenses: '{text}'")
+        logger.info(
+            "Message classified as expense record for %s: %s",
+            log_safe_id(user_id, "user"),
+            summarize_text(text),
+        )
 
         if might_be_expense and len(text) > 2:  # Минимальная длина для осмысленного описания
             # Сначала ищем похожие траты за последний год
             from ..services.expense import find_similar_expenses
             from datetime import datetime
 
-            logger.info(f"Calling find_similar_expenses for: '{text}'")
+            logger.info("Calling find_similar_expenses for %s: %s", log_safe_id(user_id, "user"), summarize_text(text))
             similar = await find_similar_expenses(user_id, text)
-            logger.info(f"Found {len(similar) if similar else 0} similar expenses")
+            logger.info("Found %s similar expenses for %s", len(similar) if similar else 0, log_safe_id(user_id, "user"))
             
             # Также проверяем похожие доходы
             from ..services.income import get_last_income_by_description, create_income_with_conversion
@@ -1789,7 +1841,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     else:
                         # Если не удалось создать доход (ошибка в БД или другие проблемы)
                         await cancel_typing()
-                        logger.error(f"Failed to create income for user {user_id}: create_income returned None")
+                        logger.error("Failed to create income for %s: create_income returned None", log_safe_id(user_id, "user"))
                         await message.answer(
                             "❌ Не удалось добавить доход. Попробуйте позже.",
                             parse_mode="HTML"
@@ -1867,7 +1919,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                         else:
                             # Если не удалось создать доход (ошибка в БД или другие проблемы)
                             await cancel_typing()
-                            logger.error(f"Failed to create income for user {user_id}: create_income returned None")
+                            logger.error("Failed to create income for %s: create_income returned None", log_safe_id(user_id, "user"))
                             await message.answer(
                                 "❌ Не удалось добавить доход. Попробуйте позже.",
                                 parse_mode="HTML"
@@ -1951,7 +2003,11 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 )
             else:
                 # Если похожих трат нет, используем обычный двухшаговый ввод
-                logger.info(f"No similar expenses found, asking for amount: '{text}'")
+                logger.info(
+                    "No similar expenses found for %s, asking for amount: %s",
+                    log_safe_id(user_id, "user"),
+                    summarize_text(text),
+                )
                 await state.update_data(expense_description=text)
                 await state.set_state(ExpenseForm.waiting_for_amount_clarification)
                 
@@ -1980,7 +2036,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
             return
         
         # Не похоже на трату - обрабатываем как чат
-        logger.info(f"Expense parser returned None for text: '{text}', processing as chat")
+        logger.info("Expense parser returned None for %s: %s; processing as chat", log_safe_id(user_id, "user"), summarize_text(text))
         # Сохраняем typing до отправки ответа в чат
         await process_chat_message(message, state, text, skip_typing=True)
         await cancel_typing()
@@ -2019,7 +2075,7 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
 
     # Проверяем что трата успешно создана
     if expense is None:
-        logger.error(f"Failed to create expense for user {user_id}: add_expense returned None")
+        logger.error("Failed to create expense for %s: add_expense returned None", log_safe_id(user_id, "user"))
         await message.answer("❌ Не удалось сохранить трату. Попробуйте позже.", parse_mode="HTML")
         return
 
@@ -2107,7 +2163,11 @@ async def handle_voice_expense(message: types.Message, state: FSMContext, lang: 
         # Ничего не делаем - middleware уже залогировал ошибку
         return
 
-    logger.info(f"[VOICE_EXPENSE] User {message.from_user.id} | Voice recognized | Processing text: {voice_text[:100]}")
+    logger.info(
+        "[VOICE_EXPENSE] %s | Voice recognized | text=%s",
+        log_safe_id(message.from_user.id, "user"),
+        summarize_text(voice_text),
+    )
 
     # Вызываем обработчик текстовых сообщений с распознанным текстом
     await handle_text_expense(message, state, text=voice_text, lang=lang)
@@ -2390,7 +2450,7 @@ async def remove_cashback(callback: types.CallbackQuery, state: FSMContext, lang
     except Expense.DoesNotExist:
         await callback.answer("❌ Трата не найдена", show_alert=True)
     except Exception as e:
-        logger.error(f"Error removing cashback: {e}")
+        logger.error("Error removing cashback: %s", e)
         await callback.answer("❌ Ошибка при удалении кешбека", show_alert=True)
 
 
@@ -2422,7 +2482,7 @@ async def delete_expense(callback: types.CallbackQuery, state: FSMContext):
             await callback.message.edit_text(deleted_msg, reply_markup=None)
         except Exception as e:
             # Если не можем отредактировать, логируем для диагностики
-            logger.warning(f"Could not edit message after delete: {e}")
+            logger.warning("Could not edit message after delete: %s", e)
 
         # Очищаем состояние после удаления
         from bot.utils.state_utils import clear_state_keep_cashback
@@ -2455,7 +2515,12 @@ async def edit_field_amount(callback: types.CallbackQuery, state: FSMContext, la
         item_type = data.get('editing_type')
 
     if expense_id is None:
-        logger.warning(f"[edit_field_amount] Missing expense id for user {callback.from_user.id} (callback: {callback.data})")
+        callback_action, _ = sanitize_callback_action(callback.data)
+        logger.warning(
+            "[edit_field_amount] Missing expense id for %s (callback=%s)",
+            log_safe_id(callback.from_user.id, "user"),
+            callback_action,
+        )
         await callback.answer(
             "❌ Сессия редактирования истекла. Попробуйте начать заново.",
             show_alert=True
@@ -2497,7 +2562,12 @@ async def edit_field_description(callback: types.CallbackQuery, state: FSMContex
         item_type = data.get('editing_type')
 
     if expense_id is None:
-        logger.warning(f"[edit_field_description] Missing expense id for user {callback.from_user.id} (callback: {callback.data})")
+        callback_action, _ = sanitize_callback_action(callback.data)
+        logger.warning(
+            "[edit_field_description] Missing expense id for %s (callback=%s)",
+            log_safe_id(callback.from_user.id, "user"),
+            callback_action,
+        )
         await callback.answer(
             "❌ Сессия редактирования истекла. Попробуйте начать заново.",
             show_alert=True
@@ -2539,7 +2609,12 @@ async def edit_field_category(callback: types.CallbackQuery, state: FSMContext, 
         expense_id = data.get('editing_expense_id')
 
     if expense_id is None:
-        logger.warning(f"[edit_field_category] Missing expense id for user {callback.from_user.id} (callback: {callback.data})")
+        callback_action, _ = sanitize_callback_action(callback.data)
+        logger.warning(
+            "[edit_field_category] Missing expense id for %s (callback=%s)",
+            log_safe_id(callback.from_user.id, "user"),
+            callback_action,
+        )
         await callback.answer(
             "❌ Сессия редактирования истекла. Попробуйте начать заново.",
             show_alert=True
@@ -2645,7 +2720,12 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext, lang: str 
         item_type = data.get('editing_type')
 
     if item_id is None:
-        logger.warning(f"[edit_done] Missing expense id for user {callback.from_user.id} (callback: {callback.data})")
+        callback_action, _ = sanitize_callback_action(callback.data)
+        logger.warning(
+            "[edit_done] Missing expense id for %s (callback=%s)",
+            log_safe_id(callback.from_user.id, "user"),
+            callback_action,
+        )
         await callback.answer(
             "❌ Сессия редактирования истекла. Попробуйте начать заново.",
             show_alert=True

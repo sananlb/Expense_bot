@@ -20,6 +20,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from bot.utils.message_utils import send_message_with_cleanup, safe_delete_message
 from bot.utils import get_text
 from bot.services.affiliate import reward_referrer_subscription_extension
+from bot.utils.logging_safe import log_safe_id, summarize_text
 
 logger = logging.getLogger(__name__)
 
@@ -322,7 +323,7 @@ async def offer_accept(callback: CallbackQuery, state: FSMContext):
             profile.accepted_offer = True
             await profile.asave()
     except Exception as e:
-        logger.error(f"offer_accept save error: {e}")
+        logger.error("offer_accept save error for %s: %s", log_safe_id(callback.from_user.id, "user"), e)
     await send_stars_invoice(callback, state, sub_type)
 
 
@@ -694,7 +695,7 @@ async def process_promocode(message: Message, state: FSMContext):
         await state.clear()
         
     except Exception as e:
-        logger.error(f"Error processing promocode: {e}")
+        logger.error("Error processing promocode for %s: %s", log_safe_id(user_id, "user"), e)
         await message.answer(
             "❌ Произошла ошибка при обработке промокода. Попробуйте позже.",
             parse_mode="HTML"
@@ -861,13 +862,13 @@ async def process_pre_checkout_updated(pre_checkout_query: PreCheckoutQuery):
     payload_parts = payload.split("_")
     
     # Логируем для отладки
-    logger.info(f"Pre-checkout query received. Payload: {payload}")
-    logger.info(f"Payload parts: {payload_parts}, count: {len(payload_parts)}")
+    logger.info("Pre-checkout query received. Payload=%s", summarize_text(payload))
+    logger.info("Payload parts count: %s", len(payload_parts))
     
     # Проверяем, что payload начинается с "subscription" и имеет минимум 3 части
     # Формат: subscription_TYPE_USER_ID или subscription_TYPE_USER_ID_promo_PROMO_ID
     if len(payload_parts) < 3 or payload_parts[0] != "subscription":
-        logger.error(f"Invalid payload format: {payload}")
+        logger.error("Invalid payload format: %s", summarize_text(payload))
         await pre_checkout_query.answer(
             ok=False,
             error_message="Ошибка в данных платежа"
@@ -875,7 +876,7 @@ async def process_pre_checkout_updated(pre_checkout_query: PreCheckoutQuery):
         return
     
     # Все проверки пройдены, подтверждаем оплату
-    logger.info(f"Payment pre-checkout approved for payload: {payload}")
+    logger.info("Payment pre-checkout approved for payload=%s", summarize_text(payload))
     await pre_checkout_query.answer(ok=True)
 
 
@@ -884,7 +885,7 @@ async def process_pre_checkout_updated(pre_checkout_query: PreCheckoutQuery):
 async def process_successful_payment_updated(message: Message, state: FSMContext):
     """Обработка успешной оплаты"""
     # Логируем успешную оплату
-    logger.info(f"Successful payment from user {message.from_user.id}")
+    logger.info("Successful payment from %s", log_safe_id(message.from_user.id, "user"))
 
     # Очищаем состояние после оплаты
     await state.clear()
@@ -894,11 +895,10 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     payload_parts = payload.split("_")
 
     # Логируем payload и сумму для отладки
-    logger.info(f"Payment payload: {payload}")
-    logger.info(f"Payload parts: {payload_parts}")
-    logger.info(f"Payment total_amount: {payment.total_amount}")
-    logger.info(f"Payment currency: {payment.currency}")
-    logger.info(f"Payment telegram_payment_charge_id: {payment.telegram_payment_charge_id}")
+    logger.info("Payment payload: %s", summarize_text(payload))
+    logger.info("Payment payload parts count: %s", len(payload_parts))
+    logger.debug("Payment total_amount=%s currency=%s", payment.total_amount, payment.currency)
+    logger.debug("Payment telegram_payment_charge_id present=%s", bool(payment.telegram_payment_charge_id))
     
     # Проверяем тип подписки
     if payload_parts[2] == "months":
@@ -925,7 +925,7 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     ).aupdate(is_active=False)
 
     if expired:
-        logger.info(f"Marked {expired} expired subscriptions inactive for user {user_id}")
+        logger.info("Marked %s expired subscriptions inactive for %s", expired, log_safe_id(user_id, "user"))
 
     # Рассчитываем период новой подписки
     latest_subscription = await profile.subscriptions.filter(
@@ -935,11 +935,14 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     if latest_subscription:
         base_start = max(latest_subscription.end_date, now_ts)
         logger.info(
-            f"Extending subscription for user {user_id}: latest_end={latest_subscription.end_date}, new_start={base_start}"
+            "Extending subscription for %s: latest_end=%s, new_start=%s",
+            log_safe_id(user_id, "user"),
+            latest_subscription.end_date,
+            base_start,
         )
     else:
         base_start = now_ts
-        logger.info(f"Creating fresh subscription for user {user_id}: start={base_start}")
+        logger.info("Creating fresh subscription for %s: start=%s", log_safe_id(user_id, "user"), base_start)
 
     start_date = base_start
     end_date = start_date + relativedelta(months=sub_info['months'])
@@ -953,7 +956,7 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
         # Fallback на цену из конфигурации
         stars_amount = sub_info['stars']
 
-    logger.info(f"Creating subscription with amount: {stars_amount} Stars")
+    logger.debug("Creating subscription with amount=%s Stars for %s", stars_amount, log_safe_id(user_id, "user"))
 
     # Создаем запись подписки с корректным методом оплаты
     subscription = await Subscription.objects.acreate(
@@ -972,7 +975,13 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     profile.total_stars_paid = (profile.total_stars_paid or 0) + stars_amount
     await profile.asave(update_fields=['total_payments_count', 'total_stars_paid'])
 
-    logger.info(f"Created subscription #{subscription.id} for user {user_id}: {start_date} → {end_date}")
+    logger.info(
+        "Created subscription #%s for %s: %s -> %s",
+        subscription.id,
+        log_safe_id(user_id, "user"),
+        start_date,
+        end_date,
+    )
     
     # Бонус за приглашение
     try:
@@ -1017,19 +1026,19 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
                 )
                 logger.info(
                     "Notified referrer %s about subscription extension reward",
-                    referrer_tid
+                    log_safe_id(referrer_tid, "referrer"),
                 )
             except Exception as send_error:
                 if "bot was blocked" in str(send_error).lower() or "chat not found" in str(send_error).lower():
-                    logger.info("Referrer %s unavailable for reward notification", referrer_tid)
+                    logger.info("Referrer %s unavailable for reward notification", log_safe_id(referrer_tid, "referrer"))
                 else:
                     logger.warning(
                         "Could not notify referrer %s: %s",
-                        referrer_tid,
+                        log_safe_id(referrer_tid, "referrer"),
                         send_error
                     )
     except Exception as e:
-        logger.error(f"Error processing referral reward: {e}")
+        logger.error("Error processing referral reward for %s: %s", log_safe_id(user_id, "user"), e)
         # Не прерываем основной процесс из-за ошибки в реферальной системе
     
     # Если был использован промокод, записываем это
@@ -1050,7 +1059,7 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
             
             discount_text = f"\nИспользован промокод: {promocode.code} {promocode.get_discount_display()}"
         except (ObjectDoesNotExist, AttributeError) as e:
-            logger.warning(f"Error applying promocode {promocode_id}: {e}")
+            logger.warning("Error applying promocode %s for %s: %s", promocode_id, log_safe_id(user_id, "user"), e)
             discount_text = ""
     else:
         discount_text = ""

@@ -16,6 +16,8 @@ from typing import Any, Awaitable, Callable, Dict
 from aiogram import BaseMiddleware
 from aiogram.types import Message
 
+from bot.utils.logging_safe import log_safe_id, summarize_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -73,19 +75,23 @@ class VoiceToTextMiddleware(BaseMiddleware):
                 text = text.strip()
 
             if text:
-                logger.info(f"[VoiceToText] User {user_id}: voice transcribed to '{text[:50]}...'")
+                logger.info(
+                    "[VoiceToText] Voice transcribed for %s (%s)",
+                    log_safe_id(user_id, "user"),
+                    summarize_text(text),
+                )
                 data['voice_text'] = text
 
                 # Инкрементируем счётчик голосовых в UserAnalytics
                 from bot.utils.analytics import increment_analytics_counter
                 await increment_analytics_counter(user_id, 'voice_messages')
             else:
-                logger.warning(f"[VoiceToText] User {user_id}: failed to transcribe voice")
+                logger.warning("[VoiceToText] Failed to transcribe voice for %s", log_safe_id(user_id, "user"))
                 data['voice_text'] = None
                 data['voice_transcribe_failed'] = True
 
         except Exception as e:
-            logger.error(f"[VoiceToText] User {user_id}: error transcribing voice: {e}")
+            logger.error("[VoiceToText] Error transcribing voice for %s: %s", log_safe_id(user_id, "user"), e)
             data['voice_text'] = None
             data['voice_transcribe_failed'] = True
 

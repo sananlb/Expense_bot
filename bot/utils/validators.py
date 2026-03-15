@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any
 import logging
 
 from .expense_parser import detect_currency
+from .logging_safe import summarize_text
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,7 @@ async def validate_amount(text: str) -> Optional[float]:
     except ValueError as e:
         raise ValueError(f"Неверный формат суммы: {str(e)}")
     except Exception as e:
-        logger.error(f"Error validating amount '{text}': {e}")
+        logger.error("Error validating amount input=%s", summarize_text(text), exc_info=True)
         raise ValueError("Неверный формат суммы")
 
 

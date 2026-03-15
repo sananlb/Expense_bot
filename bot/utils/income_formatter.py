@@ -1,11 +1,15 @@
 """
 Форматирование доходов в стиле дневника
 """
+import logging
 from typing import List, Dict, Any
 from datetime import date, datetime
 from decimal import Decimal
 from . import get_text
 from .category_helpers import get_category_display_name
+
+
+logger = logging.getLogger(__name__)
 
 
 def format_incomes_diary_style(
@@ -260,7 +264,8 @@ def format_incomes_from_dict_list(
                     formatted_date = f"{month_name} {day}"
                 else:
                     formatted_date = f"{day} {month_name}"
-        except:
+        except (TypeError, ValueError) as parse_error:
+            logger.debug("Failed to parse income date '%s', using raw string fallback: %s", date_str, parse_error)
             formatted_date = date_str
 
         result_parts.append(f"\n<b>📅 {formatted_date}</b>")

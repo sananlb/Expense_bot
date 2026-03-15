@@ -47,8 +47,8 @@ async def check_user_state(user_id: int):
             try:
                 value = redis_client.get(key)
                 print(f"  - {key}: {value[:100] if value else 'None'}...")
-            except:
-                print(f"  - {key}: [не удалось прочитать]")
+            except Exception as read_error:
+                print(f"  - {key}: [не удалось прочитать: {read_error}]")
     else:
         print("[INFO] Ключи для пользователя не найдены в Redis")
     

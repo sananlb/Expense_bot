@@ -2,11 +2,11 @@
 Django settings for expense_bot project.
 """
 
-from pathlib import Path
 import os
-import sys
 import logging
 import platform
+import sys
+from pathlib import Path
 # import dj_database_url  # TODO: Install dj-database-url
 from dotenv import load_dotenv
 
@@ -96,6 +96,8 @@ if os.name == 'nt':  # Windows
     import multiprocessing
     multiprocessing.set_start_method('spawn', force=True)
 
+RUNNING_TESTS = 'pytest' in sys.modules or bool(os.getenv('PYTEST_CURRENT_TEST'))
+
 # Database
 if os.getenv('DB_HOST'):
     # Production database settings for Docker
@@ -107,6 +109,9 @@ if os.getenv('DB_HOST'):
             'PASSWORD': os.getenv('DB_PASSWORD', 'expense_password'),
             'HOST': os.getenv('DB_HOST', 'db'),
             'PORT': os.getenv('DB_PORT', '5432'),
+            'TEST': {
+                'NAME': os.getenv('TEST_DB_NAME', f"test_{os.getenv('DB_NAME', 'expense_bot')}_pytest"),
+            },
         }
     }
 else:
@@ -179,6 +184,9 @@ CELERY_TIMEZONE = TIME_ZONE
 
 # Allow switching between DB scheduler and in-code schedule via env
 USE_DB_BEAT = os.getenv('USE_DB_BEAT', 'true').lower() == 'true'
+if RUNNING_TESTS:
+    USE_DB_BEAT = False
+
 if USE_DB_BEAT:
     CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 

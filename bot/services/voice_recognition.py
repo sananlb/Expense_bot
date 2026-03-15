@@ -10,6 +10,8 @@ import time
 from typing import Optional
 from io import BytesIO
 
+from bot.utils.logging_safe import log_safe_id, summarize_text
+
 from .yandex_speech import YandexSpeechKit
 from .ai_selector import get_service, get_model
 
@@ -51,7 +53,11 @@ class VoiceRecognitionService:
 
         # Проверяем что аудио не "пустое" (случайное нажатие кнопки записи)
         if len(audio_bytes) < MIN_AUDIO_BYTES:
-            logger.warning(f"[VoiceRecognition] User {user_id} | Audio too small: {len(audio_bytes)} bytes, skipping recognition")
+            logger.warning(
+                "[VoiceRecognition] %s | Audio too small: %s bytes, skipping recognition",
+                log_safe_id(user_id, "user"),
+                len(audio_bytes),
+            )
             return None
 
         if user_language == 'ru':
@@ -73,9 +79,20 @@ class VoiceRecognitionService:
 
         elapsed = time.time() - start_time
         if text:
-            logger.info(f"[VoiceRecognition] User {user_id} | Lang: {user_language} | Time: {elapsed:.2f}s | Text: {text[:50]}...")
+            logger.info(
+                "[VoiceRecognition] %s | Lang: %s | Time: %.2fs | Text: %s",
+                log_safe_id(user_id, "user"),
+                user_language,
+                elapsed,
+                summarize_text(text),
+            )
         else:
-            logger.warning(f"[VoiceRecognition] User {user_id} | Lang: {user_language} | Time: {elapsed:.2f}s | FAILED")
+            logger.warning(
+                "[VoiceRecognition] %s | Lang: %s | Time: %.2fs | FAILED",
+                log_safe_id(user_id, "user"),
+                user_language,
+                elapsed,
+            )
 
         return text
 
@@ -104,7 +121,12 @@ class VoiceRecognitionService:
         if text:
             return text
 
-        logger.info(f"[VoiceRecognition] Primary ({primary}) failed, trying fallback ({fallback})")
+        logger.info(
+            "[VoiceRecognition] Primary (%s) failed for %s, trying fallback (%s)",
+            primary,
+            log_safe_id(user_id, "user"),
+            fallback,
+        )
 
         # 2. Пробуем fallback
         text = await cls._transcribe_single(audio_bytes, fallback, user_id)
@@ -148,11 +170,16 @@ class VoiceRecognitionService:
                 )
 
             else:
-                logger.error(f"[VoiceRecognition] Unknown provider: {provider}")
+                logger.error("[VoiceRecognition] Unknown provider: %s", provider)
                 return None
 
         except Exception as e:
-            logger.error(f"[VoiceRecognition] Error with {provider}: {e}")
+            logger.error(
+                "[VoiceRecognition] Error with provider=%s for %s: %s",
+                provider,
+                log_safe_id(user_id, "user"),
+                e,
+            )
             return None
 
 
@@ -187,7 +214,12 @@ async def recognize_voice(message, bot, user_language: str = 'ru') -> Optional[s
         user_id = message.from_user.id
         duration = message.voice.duration
 
-        logger.info(f"[VOICE_INPUT] User {user_id} | Duration: {duration}s | Lang: {user_language}")
+        logger.info(
+            "[VOICE_INPUT] %s | Duration: %ss | Lang: %s",
+            log_safe_id(user_id, "user"),
+            duration,
+            user_language,
+        )
 
         # Используем новый централизованный сервис
         text = await VoiceRecognitionService.transcribe(
@@ -199,7 +231,7 @@ async def recognize_voice(message, bot, user_language: str = 'ru') -> Optional[s
         return text
 
     except Exception as e:
-        logger.error(f"Ошибка при распознавании голоса: {e}")
+        logger.error("Ошибка при распознавании голоса: %s", e)
         return None
 
 
