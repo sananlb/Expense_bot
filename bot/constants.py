@@ -3,6 +3,8 @@ from decimal import Decimal
 
 DEFAULT_CURRENCY_CODE = "RUB"
 DEFAULT_LANGUAGE_CODE = "ru"
+DEFAULT_TIMEZONE = "Europe/Moscow"
+DEFAULT_FOREIGN_CURRENCY_CODE = "USD"
 
 ONE_YEAR_DAYS = 365
 MAX_DAILY_OPERATIONS = 100
@@ -34,3 +36,8 @@ def get_offer_url_for(lang: str | None = None) -> str:
     normalized_lang = _normalize_lang(lang)
     env_key = f"PUBLIC_OFFER_URL_{normalized_lang.upper()}"
     return os.getenv(env_key, _DEFAULT_OFFER_URLS[normalized_lang])
+
+
+def get_default_currency_for_language(lang: str | None = None) -> str:
+    normalized_lang = _normalize_lang(lang)
+    return DEFAULT_CURRENCY_CODE if normalized_lang == DEFAULT_LANGUAGE_CODE else DEFAULT_FOREIGN_CURRENCY_CODE

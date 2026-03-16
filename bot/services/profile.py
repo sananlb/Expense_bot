@@ -7,6 +7,12 @@ from typing import Tuple
 import logging
 
 from expenses.models import Profile, UserSettings, Household
+from bot.constants import (
+    DEFAULT_CURRENCY_CODE,
+    DEFAULT_LANGUAGE_CODE,
+    DEFAULT_TIMEZONE,
+    get_default_currency_for_language,
+)
 from bot.utils.logging_safe import log_safe_id
 
 logger = logging.getLogger(__name__)
@@ -34,9 +40,9 @@ def get_user_settings(telegram_id: int) -> UserSettings:
         # Создаем профиль если не существует
         profile = Profile.objects.create(
             telegram_id=telegram_id,
-            language_code='ru',
-            timezone='Europe/Moscow',
-            currency='RUB',
+            language_code=DEFAULT_LANGUAGE_CODE,
+            timezone=DEFAULT_TIMEZONE,
+            currency=DEFAULT_CURRENCY_CODE,
             is_active=True
         )
         settings = UserSettings.objects.create(profile=profile)
@@ -68,9 +74,9 @@ def toggle_cashback(telegram_id: int) -> bool:
         # Создаем профиль если не существует
         profile = Profile.objects.create(
             telegram_id=telegram_id,
-            language_code='ru',
-            timezone='Europe/Moscow',
-            currency='RUB',
+            language_code=DEFAULT_LANGUAGE_CODE,
+            timezone=DEFAULT_TIMEZONE,
+            currency=DEFAULT_CURRENCY_CODE,
             is_active=True
         )
         settings = UserSettings.objects.create(profile=profile)
@@ -93,14 +99,14 @@ def get_or_create_profile(telegram_id: int, **user_data) -> Profile:
     """
     try:
         # Определяем валюту по умолчанию на основе языка
-        language_code = user_data.get('language_code', 'ru')[:2]
-        default_currency = 'RUB' if language_code == 'ru' else 'USD'
+        language_code = user_data.get('language_code', DEFAULT_LANGUAGE_CODE)[:2]
+        default_currency = get_default_currency_for_language(language_code)
         
         profile, created = Profile.objects.get_or_create(
             telegram_id=telegram_id,
             defaults={
                 'language_code': language_code,
-                'timezone': 'Europe/Moscow',  # По умолчанию московское время
+                'timezone': DEFAULT_TIMEZONE,
                 'currency': default_currency,  # Валюта на основе языка
                 'is_active': True,
             }

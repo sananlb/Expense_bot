@@ -561,21 +561,18 @@ def get_incomes_by_period(
             
         # Вызываем синхронно, так как мы в синхронной функции
         profile = Profile.objects.get(telegram_id=user_id)
-        incomes = Income.objects.filter(
+        incomes = list(Income.objects.filter(
             profile=profile,
             income_date__gte=start_date,
             income_date__lte=end_date
-        )
+        ).select_related('category'))
         
         # Общая сумма и количество
         total_amount = 0
-        for income in incomes:
-            total_amount += float(income.amount)
-            
-        # По категориям
         user_lang = profile.language_code or 'ru'
         by_category = {}
         for income in incomes:
+            total_amount += float(income.amount)
             cat_name = get_category_display_name(income.category, user_lang) if income.category else get_text('no_category', user_lang)
             if cat_name not in by_category:
                 by_category[cat_name] = 0
@@ -583,7 +580,7 @@ def get_incomes_by_period(
             
         return {
             'total': total_amount,
-            'count': incomes.count(),
+            'count': len(incomes),
             'by_category': [{'name': k, 'total': v} for k, v in by_category.items()],
             'currency': profile.currency
         }

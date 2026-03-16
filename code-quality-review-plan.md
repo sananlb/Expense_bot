@@ -1,6 +1,6 @@
 # Code Quality Review Plan - Expense Bot
 
-**Дата:** 2026-03-15 (v5.6 - conservative / safety-first, execution status updated)
+**Дата:** 2026-03-16 (v8.2 - conservative / safety-first, report export success paths covered)
 **Проект:** expense_bot (~58,500 строк, ~240 Python файлов)
 **Исходная оценка по аудиту:** 5.2/10
 
@@ -25,7 +25,7 @@
 
 ---
 
-## Статус выполнения на 2026-03-15
+## Статус выполнения на 2026-03-16
 
 ### Уже сделано
 
@@ -40,6 +40,7 @@
   - `tests/test_smoke_critical_flows.py`
   - `tests/test_logging_safety.py`
   - `tests/test_service_create_characterization.py`
+  - `tests/test_expense_service.py`
 - Стабилизирован test contour:
   - убран ручной `django.setup()` из тестов
   - отключён DB side-effect hook `admin_panel` во время тестов
@@ -55,32 +56,135 @@
   - отдельно закрыты последние telemetry-хвосты в `bot/services/admin_notifier.py` и `bot/services/currency_conversion.py`
   - выполнена финальная repo-wide сверка `INFO+` по типовым утечкам (`telegram_id/chat_id`, raw text, callback payload, referral/utm, суммы)
 - Начат inventory по производительности:
-  - найдены и исправлены low-risk `N+1` точки в `bot/services/top5.py`, `bot/services/analytics_query.py`, `bot/services/cashback.py`, `bot/services/utm_tracking.py`
+  - найдены и исправлены low-risk `N+1` точки в `bot/services/top5.py`, `bot/services/analytics_query.py`, `bot/services/cashback.py`, `bot/services/utm_tracking.py`, `bot/services/expense.py`, `bot/services/export_service.py`, `bot/services/income.py`
   - transaction-hotspots `create_expense` / `create_income` покрыты characterization-тестами и частично стабилизированы
   - `create_expense` / `create_income` переведены на локальный `transaction.atomic()` вокруг основной записи
   - non-critical side effect `clear_expense_reminder()` больше не ломает успешное создание операции
+- Запущен мягкий CI baseline:
+  - добавлен hard-gate workflow `tests`
+  - добавлен informational workflow `quality-baseline` для `ruff` / `black` / `isort` / `mypy`
+  - строгие quality gates пока сознательно не включаются: текущий baseline линтеров и typecheck остаётся шумным
+  - включён coverage measurement в `pytest.ini`
+- Добавлен первый service-test batch для `bot/services/expense.py`:
+  - покрыты `get_expenses_by_period`, `update_expense`, `get_expense_by_id`, `delete_expense`
+  - выявлен и исправлен latent bug: `get_expenses_by_period()` возвращал coroutine вместо `Dict`
+  - добавлены regression/boundary tests для empty period, missing/foreign access и validation paths в `create_expense`
+- Добавлен зеркальный service-test batch для `bot/services/income.py`:
+  - покрыты `get_incomes_by_period`, `update_income`, `get_income_by_id`, `delete_income`
+  - добавлены regression/boundary tests для empty period, missing/foreign access и validation paths в `create_income`
+  - отдельно зафиксирован текущий контракт: слишком длинное описание дохода обрезается, а не отклоняется
+- Добавлен service-test batch для `bot/services/category.py`:
+  - покрыты `create_category`, `get_or_create_category_sync`, `get_user_categories`, `update_category_name`, `get_category_by_id`, `delete_category`
+  - зафиксированы idempotency и fallback-контракты для `create_default_categories_sync`
+  - добиты category-tail tests: limit contract, user isolation, foreign rename guard, repeat-call idempotency
+- Добавлен service-test batch для `bot/services/subscription.py`:
+  - покрыты `check_subscription`, `is_trial_active`, `get_active_subscription`, `deactivate_expired_subscriptions`
+  - зафиксированы контракты для beta access, trial handling и деактивации премиум-настроек после истечения подписки
+  - добавлены boundary-контракты для expired/paid subscription paths, пустой таблицы и профиля без подписок
+- Добавлен service-test batch для `bot/services/household.py`:
+  - покрыты `create_household`, `generate_invite_link`, `join_household`, `leave_household`
+  - зафиксированы контракты для invite rotation, beta/subscription access, disband vs regular leave и household query helpers
+  - добит ownership-контракт: пользователь из household A не может вступить в household B по чужому invite
+- Добавлен unit-test batch для `bot/utils/validators.py`:
+  - покрыты `validate_amount`, `validate_date_format`, `validate_phone_number`, `validate_email`
+  - отдельно зафиксированы generic-fallback контракт для нестрокового ввода и нижняя граница `0.01` для `validate_amount`
+- Добавлен integration-ish smoke batch для `bot/routers/household.py`:
+  - покрыты `household_menu`, `generate_invite`, `process_family_invite`
+  - зафиксированы контракты для subscription gate, household settings view, copyable invite link и self-invite guard
+- Добавлен integration-ish smoke batch для `bot/routers/reports.py` и `bot/routers/expense.py`:
+  - покрыты делегирование `/expenses`, `expenses_month` и `toggle_view_scope_expenses`
+  - зафиксированы контракты для report delegation, переключения personal/household scope и guard'а без household
+  - дополнительно покрыты `callback_expenses_today`, `callback_show_month_start`, `callback_back_to_summary`, `show_prev_month_expenses`
+  - зафиксированы контракты для period navigation, state-based return to summary и year-boundary month rollback
+  - дополнительно покрыт `callback_show_diary`
+  - зафиксированы контракты для empty personal diary, empty household diary с toggle-кнопкой и guard при `toggle_view_scope_diary` без household
+  - дополнительно покрыт happy path `toggle_view_scope_diary`
+  - зафиксирован контракт для переключения personal -> household и повторного рендера дневника уже в household-mode
+  - дополнительно покрыты `callback_export_month_csv`, `callback_export_month_excel`, `callback_monthly_report_pdf`
+  - зафиксированы premium-guard контракты для CSV/XLSX экспорта и duplicate-lock guard для monthly PDF generation
+  - дополнительно покрыты state-missing error paths у `callback_export_month_csv` и `callback_export_month_excel`
+  - зафиксирован контракт для `export_error` fallback после успешного premium-check при пустом report period в state
+  - дополнительно покрыты `callback_monthly_report_csv` и `callback_monthly_report_xlsx`
+  - зафиксированы контракты для empty-month fallback и timeout fallback при генерации monthly exports
+  - дополнительно покрыты success paths у `callback_monthly_report_csv` и `callback_monthly_report_xlsx`
+  - зафиксированы контракты для callback-period parsing, вызова `ExportService` и отправки итогового файла пользователю
+  - дополнительно покрыты success paths у `callback_export_month_csv` и `callback_export_month_excel`
+  - зафиксированы контракты для чтения report period из state, premium-pass export orchestration и отправки итогового файла пользователю
+- Добавлен integration-ish smoke batch для `bot/routers/subscription.py` и `bot/routers/start.py`:
+  - покрыты `cmd_subscription`, `show_subscription_menu`, `privacy_decline`, `callback_start`
+  - зафиксированы контракты для subscription menu rendering, invoice cleanup, privacy-decline language selection и fallback при неудачном `edit_text`
+  - дополнительно покрыты `ask_promocode`, `offer_decline`, `help_main_handler`, `help_back_handler`
+  - зафиксированы FSM/menu-контракты для promo flow, help navigation и language-aware offer decline
+  - дополнительно покрыты `privacy_accept`, `send_stars_invoice` и `process_subscription_purchase`
+  - зафиксированы контракты для privacy-accept onboarding, trial creation, invoice state persistence и offer-before-payment orchestration
+  - дополнительно покрыты error paths в `process_promocode`
+  - зафиксированы контракты для missing/reused promo code и language-aware возврата в меню подписки
+  - дополнительно покрыты success paths в `process_promocode`
+  - зафиксированы контракты для days-promo activation, usage recording и сохранения `active_promocode` для discount-promo followup purchase
+  - дополнительно покрыт `process_subscription_purchase_with_promo`
+  - зафиксированы guard path без `active_promocode`, free-promo purchase без invoice и discounted invoice path с сохранением state
 - Начат безопасный вынос реально общих констант:
   - `bot/constants.py` дополнен бизнес-лимитами без нарушения старого import-contract
   - повторяющиеся лимиты и fallback-значения переведены на константы в `bot/services/income.py` и `bot/services/expense.py`
   - сохранена обратная совместимость `get_privacy_url_for()` / `get_offer_url_for()` через тот же модуль
+  - добавлены `DEFAULT_TIMEZONE`, `DEFAULT_FOREIGN_CURRENCY_CODE` и helper `get_default_currency_for_language()`
+  - дефолты `bot/services/profile.py` переведены на общий constants module без изменения поведения
+- Добавлен service-test batch для `bot/services/profile.py`:
+  - зафиксированы shared defaults для создаваемого профиля
+  - зафиксирован fallback-контракт `toggle_cashback()` для отсутствующего профиля
+  - зафиксирован выбор дефолтной валюты по языку в `get_or_create_profile()`
+- Исправлен latent bug в `bot/routers/subscription.py`:
+  - в `process_promocode()` error paths восстановлен корректный `lang` resolution
+  - возврат в меню подписки после promo failure теперь использует язык профиля, а не default fallback
+  - в `process_promocode()` исправлен discount-promo flow: `active_promocode` больше не очищается раньше времени до followup purchase
 
 ### Текущий подтверждённый результат
 
-- Полный прогон тестов на чистой test DB: `171 passed, 1 skipped`
+- Полный прогон тестов на чистой test DB: `308 passed, 1 skipped`
 - Единственный skip ожидаемый: отсутствуют native-библиотеки WeasyPrint в локальном окружении
 - Известных регрессий после выполненных изменений не обнаружено
 - Проект находится в состоянии `baseline stabilized`
 - PII-cleanup подтверждён повторными полными прогонами после нескольких отдельных batched changes
 - Финальная repo-wide сверка `INFO+` пройдена; явные raw-ID/raw-text утечки в обычных application logs больше не обнаружены
-- Low-risk `N+1` cleanup уже внесён в четыре сервиса без изменения пользовательского поведения
+- Low-risk `N+1` cleanup уже внесён в семь сервисов без изменения пользовательского поведения
+- Запуск Phase 3 подготовлен: тестовый CI вынесен в отдельный hard gate, lint/typecheck добавлены как non-blocking baseline jobs
+- `quality-baseline` переведён на `changed files` scope:
+  - `ruff`, `black`, `isort` запускаются только по изменённым Python-файлам
+  - `mypy` запускается только по изменённым файлам в `bot/services`, `bot/routers`, `bot/utils`
+  - legacy-wide blocking пока сознательно не включается
+- CI baseline зафиксирован локально на текущем scope:
+  - `ruff`: 3929 замечаний
+  - `black --check`: 216 файлов требуют форматирования
+  - `isort --check-only`: 157 файлов с import-order drift
+  - `mypy bot/services bot/routers bot/utils`: 886 ошибок
+- Текущий coverage baseline по `bot + expenses`: `25%`
+- Покрытие `bot/services/expense.py` поднято до `42%`
+- Покрытие `bot/services/income.py` поднято до `40%`
+- Покрытие `bot/services/category.py` поднято до `42%`
+- Покрытие `bot/services/subscription.py` поднято до `61%`
+- Покрытие `bot/services/profile.py` поднято до `44%`
+- Покрытие `bot/services/household.py` поднято до `75%`
+- Покрытие `bot/utils/validators.py` поднято до `84%`
+- Покрытие `bot/routers/household.py` поднято до `41%`
+- Покрытие `bot/routers/reports.py` поднято до `60%`
+- Покрытие `bot/routers/expense.py` поднято до `12%`
+- Покрытие `bot/routers/start.py` поднято до `50%`
+- Покрытие `bot/routers/subscription.py` поднято до `54%`
 
 ### Следующие действия
 
-1. Формально закрыть Фазу 1.5 в плане как выполненную по logging-части и оставить открытым только performance inventory
-2. Завершить inventory по `N+1` и transaction hotspots: добрать оставшиеся сервисные кандидаты и проверить, есть ли ещё критичные денежные операции вне `create_expense` / `create_income`
-3. Продолжить Фазу 1.3: точечно вынести ещё только действительно общие константы (`DEFAULT_TIMEZONE` и аналогичные), без расширения scope на локальные числа
-4. Фаза 3: ввести quality gates в CI без агрессивного включения всех ошибок сразу
-5. Расширить smoke/characterization coverage перед любыми изменениями в крупных функциях
+1. Добавить следующий integration batch для более глубоких пользовательских сценариев `reports/expense` или `subscription/start`, по-прежнему не заходя в реальные платёжные side effects
+2. Продолжить Фазу 1.3: точечно вынести ещё только действительно общие константы (`DEFAULT_TIMEZONE` и аналогичные), без расширения scope на локальные числа
+3. После достижения формальных порогов постепенно переводить CI jobs из informational в blocking
+4. Не делать массовый lint/typecheck cleanup по legacy-wide scope без отдельной бизнес-причины
+
+### Что осталось по плану
+
+- **Фаза 1.3:** точечно добрать оставшиеся действительно общие константы; без массового выноса локальных чисел
+- **Фаза 1.4:** расширить characterization coverage на следующие рискованные сервисные сценарии до любого заметного рефакторинга
+- **Фаза 3:** довести CI от baseline до управляемых gate'ов; changed-file scope уже включён, дальше постепенно ужесточать правила
+- **Фаза 4:** инкрементальная типизация основных структур и hot-path сервисов
+- **Фаза 5:** документация, стандарты и архитектурные правила
 
 ---
 
@@ -110,9 +214,9 @@
 **Задачи:**
 - [x] Создать `pyproject.toml` с конфигурацией ruff, black, isort, mypy
 - [x] Добавить ruff, black, isort, mypy в requirements-dev.txt
-- [ ] Первый прогон ruff/mypy — зафиксировать текущие ошибки как baseline, не пытаться исправить всё сразу
+- [x] Первый прогон ruff/mypy — зафиксировать текущие ошибки как baseline, не пытаться исправить всё сразу
 - [x] Настроить pre-commit hooks для автоматической проверки
-- [ ] Ограничить обязательные проверки новыми/изменёнными файлами до стабилизации baseline
+- [x] Ограничить обязательные проверки новыми/изменёнными файлами до стабилизации baseline
 
 **Конфигурация (ориентир):**
 ```toml
@@ -243,25 +347,32 @@ except Exception as e:
   - `show_expenses_summary`
 - [x] Добавить safety fallback tests для критичных обработчиков форматирования/аналитики/PDF
 - [x] Добавить characterization tests для `create_expense()` / `create_income()` перед review transaction-hotspots
-- [ ] Настроить CI с этими тестами как quality gate перед изменениями в критичном коде
+- [x] Настроить CI с этими тестами как quality gate перед изменениями в критичном коде
 - [ ] **Правило:** НЕ рефакторить функцию, пока нет хотя бы characterization теста или воспроизводимого smoke-сценария
 
 ### 1.5 Аудит безопасности и производительности без массовых переписываний
 
 **Проблема:** CLAUDE.md требует PII-safe логирование, оптимизацию запросов, кеширование. Ниже — формализованные задачи и критерии приёмки.
 
-**Статус:** `практически завершено` — основные high/noisy points в middleware, reports, income, expense, tasks, onboarding/privacy flow, chat, affiliate, subscription notifications, monthly insights, voice/AI chain и оставшихся service/router хвостах уже очищены; финальная repo-wide сверка выполнена, low-risk `N+1` частично устранены, `create_expense` / `create_income` покрыты characterization-тестами и стабилизированы по side effects; остаётся дочистить performance inventory.
+**Статус:** `закрыто` — logging/PII часть завершена: основные high/noisy points в middleware, reports, income, expense, tasks, onboarding/privacy flow, chat, affiliate, subscription notifications, monthly insights, voice/AI chain и оставшихся service/router хвостах очищены, финальная repo-wide сверка выполнена. Low-risk `N+1` устранены в ключевых сервисах, `create_expense` / `create_income` покрыты characterization-тестами и стабилизированы по side effects. Remaining performance tail зафиксирован как inventory без расширения scope.
 
 **Безопасность:**
-- [ ] Аудит логов на PII: убедиться что telegram_id, имена, суммы, referral/utm payload'ы не логируются на уровне INFO и выше
-- [ ] Проверить все `logger.error()` и `logger.warning()` на наличие пользовательских данных
+- [x] Аудит логов на PII: убедиться что telegram_id, имена, суммы, referral/utm payload'ы не логируются на уровне INFO и выше
+- [x] Проверить все `logger.error()` и `logger.warning()` на наличие пользовательских данных
 - [x] Добавить sanitize-хелпер для логирования: `log_safe_user(user_id)` → маскирует данные
 
 **Производительность:**
-- [ ] Аудит N+1 запросов: проверить все циклы с ORM-запросами в `bot/services/`
+- [~] Аудит N+1 запросов: проверить все циклы с ORM-запросами в `bot/services/`
 - [~] Добавить `select_related`/`prefetch_related` где отсутствует
-- [ ] Проверить Redis-кеширование: что кешируется, что нет, TTL-политика
+- [~] Проверить Redis-кеширование: что кешируется, что нет, TTL-политика
 - [~] Обернуть критичные операции в `transaction.atomic()` (create_expense, create_income)
+
+**Inventory remaining low-priority hotspots:**
+- `bot/services/export_service.py`: export/report generation остаётся тяжёлым по CPU/памяти; есть отдельные profile/cashback lookup'и, но это offline/export path, не hot write path
+- `bot/routers/expense.py` и `bot/routers/reports.py`: используются lock-key cache записи с фиксированным TTL (`600s`); критичных дефектов инвалидации не найдено, но TTL policy пока не централизована
+- `bot/services/notifications.py`, `bot/services/admin_notifier.py`, `bot/services/currency_conversion.py`: кеш используется как dedup/rate-limit и rate cache; политика TTL есть, но не вынесена в единый cache policy document
+- `bot/services/expense_functions.py`: остаётся legacy-heavy analytics/read path с большим числом запросов и циклов; не находится на критичном hot write path, поэтому оставлен вне текущего safety-first scope
+- Мульти-записные transaction paths уже покрыты в `expense.py`, `income.py`, `household.py`, `settings.py`, `affiliate.py`, `recurring.py`, `reports.py`; remaining single-row updates не дают достаточного выигрыша для дополнительного `atomic()` без бизнес-причины
 
 **Критерии приёмки:**
 - Ноль PII в логах уровня INFO+
@@ -401,90 +512,51 @@ except Exception as e:
 
 ## Фаза 3: CI/CD и quality gates (1 неделя)
 
-**Статус:** tooling baseline готов, но обязательные CI gates ещё не включены.
+**Статус:** тестовый hard gate уже включён, informational quality baseline jobs добавлены, coverage baseline измерен; `quality-baseline` уже ограничен changed-file scope, обязательные lint/typecheck gates ещё не ужесточались.
 
 ### 3.1 Настройка CI/CD (GitHub Actions)
 
-**Единая стратегия:** 3 отдельных workflow с общим подходом к зависимостям.
+**Единая стратегия:** hard-gate для тестов + informational baseline jobs для качества, без агрессивного блокирования legacy-шумом.
+
+**Критерий перевода `quality-baseline` в blocking:**
+- Сначала checks ограничены `changed files` или заранее выбранным безопасным scope, а не всем legacy-репозиторием
+- На этом scope `ruff`, `black --check` и `isort --check-only` дают `0` замечаний в течение как минимум 10 последовательных локальных/CI прогонов
+- `mypy` на gated scope снижен до `<= 50` ошибок и не растёт в течение 2 недель
+- `tests` hard gate и критичные smoke/service tests остаются зелёными без новых флаки-падений
 
 **Задачи:**
 - [x] Создать `requirements-dev.txt` с dev-зависимостями (ruff, black, mypy, pytest, coverage)
-- [ ] Создать `.github/workflows/lint.yml`:
-  ```yaml
-  name: Lint
-  on: [push, pull_request]
-  jobs:
-    lint:
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v4
-        - uses: actions/setup-python@v5
-          with: { python-version: '3.11' }
-        - run: pip install -r requirements-dev.txt
-        - run: ruff check .
-        - run: black --check .
-  ```
-- [ ] Создать `.github/workflows/test.yml`:
-  ```yaml
-  name: Test
-  on: [push, pull_request]
-  jobs:
-    test:
-      runs-on: ubuntu-latest
-      services:
-        postgres:
-          image: postgres:15
-          env: { POSTGRES_DB: test_db, POSTGRES_USER: test_user, POSTGRES_PASSWORD: test_pass }
-          ports: ['5432:5432']
-        redis:
-          image: redis:7
-          ports: ['6379:6379']
-      steps:
-        - uses: actions/checkout@v4
-        - uses: actions/setup-python@v5
-          with: { python-version: '3.11' }
-        - run: pip install -r requirements.txt -r requirements-dev.txt
-        - run: pytest --cov=bot --cov=expenses --cov-report=xml
-  ```
-- [ ] Создать `.github/workflows/typecheck.yml`:
-  ```yaml
-  name: Type Check
-  on: [push, pull_request]
-  jobs:
-    mypy:
-      runs-on: ubuntu-latest
-      steps:
-        - uses: actions/checkout@v4
-        - uses: actions/setup-python@v5
-          with: { python-version: '3.11' }
-        - run: pip install -r requirements.txt -r requirements-dev.txt
-        - run: mypy bot/ --ignore-missing-imports --warn-return-any
-  ```
+- [x] Добавить workflow для тестов (`.github/workflows/tests.yml`)
+- [x] Добавить workflow для baseline quality checks (`.github/workflows/quality-baseline.yml`)
+- [x] Ограничить `quality-baseline` changed-file scope до стабилизации legacy baseline
 - [ ] Настроить badge покрытия в README
 - [ ] Добавить запуск smoke/characterization тестов как обязательный gate для PR с изменениями в критичном коде
 
 ### 3.2 Расширение покрытия тестами без погони за процентом ради процента
 
-**Текущее состояние:** 8 файлов тестов (6 `test_*.py` + `conftest.py` + `__init__.py`), coverage не измеряется.
+**Текущее состояние:** coverage измеряется, текущий baseline `22%` по `bot + expenses`, сервисный слой и первые router smoke batches уже добавлены.
 
 **Приоритет тестирования:**
 
 | Модуль | Текущие тесты | Нужны тесты для |
 |--------|--------------|-----------------|
 | `bot/utils/expense_parser.py` | Есть | Добавить edge cases |
-| `bot/services/expense.py` | Нет | create, update, delete, summary |
-| `bot/services/category.py` | Нет | create, validate, defaults |
-| `bot/services/income.py` | Нет | create, categorize |
-| `bot/services/subscription.py` | Нет | check, activate, expire |
-| `bot/services/household.py` | Нет | invite, join, leave |
-| `bot/utils/validators.py` | Нет | Все валидаторы |
+| `bot/services/expense.py` | Есть расширенный service batch | расширить summary / search / household paths |
+| `bot/services/category.py` | Есть service batch | keyword/default-language paths |
+| `bot/services/income.py` | Есть расширенный service batch | categorize / category-management / report paths |
+| `bot/services/subscription.py` | Есть service batch | require_subscription / button / message paths |
+| `bot/services/household.py` | Есть service batch + router smoke | deeper household/report integration paths |
+| `bot/utils/validators.py` | Есть unit batch | parse/edge paths уже частично покрыты, дальше только при касании |
 | `expenses/models.py` | Нет | Model constraints |
 
 **Задачи:**
-- [ ] Включить coverage в pytest.ini (`--cov=bot --cov=expenses`)
-- [ ] Измерить текущий % покрытия
-- [ ] Написать тесты для `bot/services/expense.py` (самый критичный)
-- [ ] Написать тесты для `bot/services/category.py`
+- [x] Включить coverage в pytest.ini (`--cov=bot --cov=expenses`)
+- [x] Измерить текущий % покрытия
+- [x] Написать тесты для `bot/services/expense.py` (самый критичный)
+- [x] Написать тесты для `bot/services/category.py`
+- [x] Написать тесты для `bot/services/subscription.py`
+- [x] Написать тесты для `bot/services/household.py`
+- [x] Написать тесты для `bot/utils/validators.py`
 - [ ] Добавить интеграционные тесты для основных сценариев
 - [ ] Не поднимать coverage искусственно тестами на тривиальный код
 - [ ] Цель: сначала покрыть критичные сценарии, потом наращивать общий %
@@ -549,8 +621,8 @@ except Exception as e:
 ```
 Неделя 1:   [Фаза 1.1-1.2] Baseline линтеров + исправление bare except + стабилизация test contour  [выполнено]
 Неделя 2:   [Фаза 1.4] Safety fallback tests + первые smoke tests + очистка test suite            [выполнено]
-Неделя 3:   [Фаза 1.5 + 1.3] PII audit логов + первые общие константы + inventory N+1 hotspots    [почти закрыто]
-Неделя 4:   [Фаза 3] CI/CD и quality gates
+Неделя 3:   [Фаза 1.5 + 1.3] PII audit логов + первые общие константы + inventory N+1 hotspots    [выполнено]
+Неделя 4:   [Фаза 3] CI/CD и quality gates                                                     [в процессе, baseline собран]
 Неделя 4-5: [Фаза 2.1] Не более 1-2 рефакторингов Tier 1 или Tier 2, только при наличии бизнес-причины
 Неделя 6:   [Фаза 2.4-2.5] Безопасные устранения дублей + импорты без circular regressions
 Неделя 7:   [Фаза 3.2] Тесты для сервисного слоя
@@ -568,15 +640,15 @@ except Exception as e:
 | Метрика | Сейчас | Цель (фазы 1-5) | Цель (с 2C) |
 |---------|--------|:---:|:---:|
 | bare except | 0 | 0 | 0 |
-| Покрытие тестами | smoke + safety + characterization batch, `171 passed / 1 skipped` | Критичные сценарии покрыты | 40-60% |
-| Линтер ошибки | tooling baseline настроен, полный baseline ещё не зафиксирован | baseline зафиксирован, новые не добавляются | 0 warnings |
+| Покрытие тестами | smoke + safety + characterization + expense/income/category/subscription/profile/household service batches + household/reports/expense/subscription/start router smoke + validators unit batch, `295 passed / 1 skipped`, coverage `24%` | Критичные сценарии покрыты | 40-60% |
+| Линтер ошибки | baseline зафиксирован: `ruff 3929`, `black 216 files`, `isort 157 files`, `mypy 886`; jobs уже добавлены и ограничены changed-file scope, legacy scope ещё шумный | baseline зафиксирован, новые не добавляются | 0 warnings |
 | Функции >500 строк | 4 | 2-4 (только если безопасно) | 0-2 |
 | Функции 200-500 строк | 16 | без обязательной цели | по мере касания |
 | Функции 100-199 строк | 73 | 73 (boy scout) | по мере касания |
-| Magic numbers | критичные дубли в core services уже частично вынесены | критичные вынесены | 0 |
-| CI/CD pipelines | 0 обязательных gate'ов | 3 (lint, test, typecheck) | 3 |
+| Magic numbers | критичные дубли в core services уже частично вынесены; profile defaults тоже синхронизированы через constants | критичные вынесены | 0 |
+| CI/CD pipelines | `tests` hard gate + `quality-baseline` informational jobs | 3 (lint, test, typecheck) | 3 |
 | PII в логах INFO+ | основной audit batched cleanup выполнен, финальная repo-wide сверка пройдена | 0 | 0 |
-| N+1 запросы | low-risk точки в `top5` / `analytics_query` / `cashback` / `utm_tracking` уже сняты; полный inventory не завершён | 0 подтверждённых в основных сценариях | 0 |
+| N+1 запросы | low-risk точки в `top5` / `analytics_query` / `cashback` / `utm_tracking` / `expense` / `export_service` / `income` уже сняты; остаётся формальный inventory tail | 0 подтверждённых в основных сценариях | 0 |
 | Денежные операции в транзакциях | частично: `create_expense` / `create_income` уже под локальным `atomic()`, остальные hotspots ещё не проверены | 100% | 100% |
 | Регрессии в основных сценариях | 0 известных после текущего батча | 0 известных регрессий | 0 |
 

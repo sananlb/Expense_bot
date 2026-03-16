@@ -400,6 +400,7 @@ async def process_promocode(message: Message, state: FSMContext):
     try:
         # Получаем профиль пользователя
         profile = await Profile.objects.aget(telegram_id=user_id)
+        lang = profile.language_code or 'ru'
         
         # Ищем промокод
         try:
@@ -419,7 +420,7 @@ async def process_promocode(message: Message, state: FSMContext):
                 message, 
                 state,
                 text,
-                reply_markup=get_subscription_keyboard(),
+                reply_markup=get_subscription_keyboard(lang=lang),
                 parse_mode="HTML"
             )
             return
@@ -438,7 +439,7 @@ async def process_promocode(message: Message, state: FSMContext):
                 message, 
                 state,
                 text,
-                reply_markup=get_subscription_keyboard(),
+                reply_markup=get_subscription_keyboard(lang=lang),
                 parse_mode="HTML"
             )
             return
@@ -462,7 +463,7 @@ async def process_promocode(message: Message, state: FSMContext):
                 message, 
                 state,
                 text,
-                reply_markup=get_subscription_keyboard(),
+                reply_markup=get_subscription_keyboard(lang=lang),
                 parse_mode="HTML"
             )
             return
@@ -527,6 +528,7 @@ async def process_promocode(message: Message, state: FSMContext):
                 f"<i>Спасибо за поддержку проекта!</i> 💙",
                 parse_mode="HTML"
             )
+            await state.clear()
             
         else:
             # Промокод на скидку - проверяем не дает ли он 100% скидку
@@ -691,8 +693,7 @@ async def process_promocode(message: Message, state: FSMContext):
                     reply_markup=builder.as_markup(),
                     parse_mode="HTML"
                 )
-        
-        await state.clear()
+                return
         
     except Exception as e:
         logger.error("Error processing promocode for %s: %s", log_safe_id(user_id, "user"), e)

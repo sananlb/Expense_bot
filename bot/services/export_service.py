@@ -352,13 +352,13 @@ class ExportService:
                 profile__household_id=household_id,
                 expense_date__gte=start_date,
                 expense_date__lte=end_date
-            ).select_related('category')
+            ).select_related('category', 'profile')
         else:
             expenses = Expense.objects.filter(
                 profile_id=profile_id,
                 expense_date__gte=start_date,
                 expense_date__lte=end_date
-            ).select_related('category')
+            ).select_related('category', 'profile')
 
         # Группируем расходы по месяцам и категориям + по операциям (описание+валюта)
         expenses_by_month: Dict[Tuple[int, int], Dict[str, float]] = {m: {} for m in months_list}
@@ -402,13 +402,13 @@ class ExportService:
                 profile__household_id=household_id,
                 income_date__gte=start_date,
                 income_date__lte=end_date
-            ).select_related('category')
+            ).select_related('category', 'profile')
         else:
             incomes = Income.objects.filter(
                 profile_id=profile_id,
                 income_date__gte=start_date,
                 income_date__lte=end_date
-            ).select_related('category')
+            ).select_related('category', 'profile')
 
         # Группируем доходы по месяцам и категориям + по операциям (описание+валюта)
         incomes_by_month: Dict[Tuple[int, int], Dict[str, float]] = {m: {} for m in months_list}

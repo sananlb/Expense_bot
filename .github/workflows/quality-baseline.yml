@@ -1,0 +1,191 @@
+name: Quality Baseline
+
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+jobs:
+  detect_changes:
+    runs-on: ubuntu-latest
+    outputs:
+      has_python_changes: ${{ steps.changed.outputs.has_python_changes }}
+      has_mypy_changes: ${{ steps.changed.outputs.has_mypy_changes }}
+      python_files: ${{ steps.changed.outputs.python_files }}
+      mypy_files: ${{ steps.changed.outputs.mypy_files }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed Python files
+        id: changed
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+          fi
+
+          if [[ -z "${BASE_SHA}" || "${BASE_SHA}" == "0000000000000000000000000000000000000000" ]]; then
+            BASE_SHA="$(git rev-list --max-parents=0 HEAD)"
+          fi
+
+          mapfile -t CHANGED_FILES < <(git diff --name-only "${BASE_SHA}" "${{ github.sha }}")
+
+          PYTHON_FILES=()
+          MYPY_FILES=()
+
+          for file in "${CHANGED_FILES[@]}"; do
+            [[ -f "${file}" ]] || continue
+
+            if [[ "${file}" =~ ^(bot|tests|expenses|admin_panel|scripts)/.*\.py$ || "${file}" == "start_local_dev.py" ]]; then
+              PYTHON_FILES+=("${file}")
+            fi
+
+            if [[ "${file}" =~ ^bot/(services|routers|utils)/.*\.py$ ]]; then
+              MYPY_FILES+=("${file}")
+            fi
+          done
+
+          if (( ${#PYTHON_FILES[@]} > 0 )); then
+            mapfile -t UNIQUE_PYTHON_FILES < <(printf '%s\n' "${PYTHON_FILES[@]}" | sort -u)
+            echo "has_python_changes=true" >> "${GITHUB_OUTPUT}"
+            {
+              echo "python_files<<EOF"
+              printf '%s\n' "${UNIQUE_PYTHON_FILES[@]}"
+              echo "EOF"
+            } >> "${GITHUB_OUTPUT}"
+          else
+            echo "has_python_changes=false" >> "${GITHUB_OUTPUT}"
+            echo "python_files=" >> "${GITHUB_OUTPUT}"
+          fi
+
+          if (( ${#MYPY_FILES[@]} > 0 )); then
+            mapfile -t UNIQUE_MYPY_FILES < <(printf '%s\n' "${MYPY_FILES[@]}" | sort -u)
+            echo "has_mypy_changes=true" >> "${GITHUB_OUTPUT}"
+            {
+              echo "mypy_files<<EOF"
+              printf '%s\n' "${UNIQUE_MYPY_FILES[@]}"
+              echo "EOF"
+            } >> "${GITHUB_OUTPUT}"
+          else
+            echo "has_mypy_changes=false" >> "${GITHUB_OUTPUT}"
+            echo "mypy_files=" >> "${GITHUB_OUTPUT}"
+          fi
+
+  ruff:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: detect_changes
+    if: needs.detect_changes.outputs.has_python_changes == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run Ruff on changed files
+        shell: bash
+        env:
+          CHANGED_FILES: ${{ needs.detect_changes.outputs.python_files }}
+        run: printf '%s\n' "${CHANGED_FILES}" | xargs ruff check --output-format=github
+
+  black:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: detect_changes
+    if: needs.detect_changes.outputs.has_python_changes == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run Black on changed files
+        shell: bash
+        env:
+          CHANGED_FILES: ${{ needs.detect_changes.outputs.python_files }}
+        run: printf '%s\n' "${CHANGED_FILES}" | xargs black --check
+
+  isort:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: detect_changes
+    if: needs.detect_changes.outputs.has_python_changes == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run isort on changed files
+        shell: bash
+        env:
+          CHANGED_FILES: ${{ needs.detect_changes.outputs.python_files }}
+        run: printf '%s\n' "${CHANGED_FILES}" | xargs isort --check-only
+
+  typecheck:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    needs: detect_changes
+    if: needs.detect_changes.outputs.has_mypy_changes == 'true'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Create minimal .env
+        run: |
+          cat > .env << 'EOF'
+          SECRET_KEY=test-key
+          DEBUG=True
+          BOT_TOKEN=fake
+          EOF
+
+      - name: Run mypy on changed files
+        shell: bash
+        env:
+          CHANGED_FILES: ${{ needs.detect_changes.outputs.mypy_files }}
+        run: printf '%s\n' "${CHANGED_FILES}" | xargs mypy --ignore-missing-imports --no-error-summary

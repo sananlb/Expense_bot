@@ -441,14 +441,17 @@ def _get_income_summary(
         count=Count('id')
     ).order_by('-total')
 
+    category_ids = [cat['category__id'] for cat in by_income_category if cat['category__id']]
+    income_categories = IncomeCategory.objects.in_bulk(category_ids)
+
     income_categories_list = []
     for cat in by_income_category:
         category_id = cat['category__id']
         if category_id:
             try:
-                category = IncomeCategory.objects.get(id=category_id)
+                category = income_categories[category_id]
                 cat_name = category.get_display_name(user_lang)
-            except IncomeCategory.DoesNotExist:
+            except KeyError:
                 cat_name = f"💰 {get_text('other_income', user_lang)}"
         else:
             cat_name = f"💰 {get_text('other_income', user_lang)}"
@@ -539,18 +542,19 @@ def _calculate_household_cashback(
         member_totals[pid][cid] += exp.amount
 
     # Apply each member's cashback rules
-    for pid, cat_map in member_totals.items():
-        cashbacks = Cashback.objects.filter(
-            profile_id=pid,
+    cashback_rules: Dict[int, Dict[int | None, list]] = {}
+    member_ids = list(member_totals.keys())
+    if member_ids:
+        member_cashbacks = Cashback.objects.filter(
+            profile_id__in=member_ids,
             month=current_month
         ).select_related('category')
+        for cb in member_cashbacks:
+            profile_rules = cashback_rules.setdefault(cb.profile_id, {})
+            profile_rules.setdefault(cb.category_id, []).append(cb)
 
-        per_cat: Dict[int, list] = {}
-        for cb in cashbacks:
-            key = cb.category_id
-            if key not in per_cat:
-                per_cat[key] = []
-            per_cat[key].append(cb)
+    for pid, cat_map in member_totals.items():
+        per_cat = cashback_rules.get(pid, {})
 
         for cid, total_sum in cat_map.items():
             if cid not in per_cat:
@@ -709,8 +713,7 @@ def get_expenses_summary(
         return _build_empty_summary()
 
 
-@sync_to_async
-def get_expenses_by_period(
+async def get_expenses_by_period(
     user_id: int,
     period: str = 'month'
 ) -> Dict:
@@ -742,7 +745,7 @@ def get_expenses_by_period(
         start_date = today.replace(day=1)
         end_date = today
         
-    return get_expenses_summary(user_id, start_date, end_date)
+    return await get_expenses_summary(user_id, start_date, end_date)
 
 
 @sync_to_async
