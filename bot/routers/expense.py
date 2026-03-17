@@ -2956,18 +2956,18 @@ async def show_edit_menu_callback(
 
 async def show_updated_expense(message: types.Message, state: FSMContext, item_id: int, lang: str = 'ru'):
     """Показать обновленную операцию (доход или расход)"""
+    from expenses.models import Expense, Income
+
     data = await state.get_data()
     is_income = data.get('editing_type') == 'income'
     
     try:
         if is_income:
-            from expenses.models import Income
             expense = await Income.objects.select_related('category', 'profile').aget(
                 id=item_id,
                 profile__telegram_id=message.from_user.id
             )
         else:
-            from expenses.models import Expense
             expense = await Expense.objects.select_related('category', 'profile').aget(
                 id=item_id,
                 profile__telegram_id=message.from_user.id
@@ -3037,18 +3037,18 @@ async def show_updated_expense(message: types.Message, state: FSMContext, item_i
 
 async def show_updated_expense_callback(callback: types.CallbackQuery, state: FSMContext, item_id: int, lang: str = 'ru'):
     """Показать обновленную операцию для callback"""
+    from expenses.models import Expense, Income
+
     data = await state.get_data()
     is_income = data.get('editing_type') == 'income'
     
     try:
         if is_income:
-            from expenses.models import Income
             expense = await Income.objects.select_related('category', 'profile').aget(
                 id=item_id,
                 profile__telegram_id=callback.from_user.id
             )
         else:
-            from expenses.models import Expense
             expense = await Expense.objects.select_related('category', 'profile').aget(
                 id=item_id,
                 profile__telegram_id=callback.from_user.id

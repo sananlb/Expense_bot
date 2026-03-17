@@ -1,6 +1,6 @@
 # Code Quality Review Plan - Expense Bot
 
-**Дата:** 2026-03-16 (v8.2 - conservative / safety-first, report export success paths covered)
+**Дата:** 2026-03-17 (v9.0 - conservative / safety-first, expense router income/category symmetry expanded)
 **Проект:** expense_bot (~58,500 строк, ~240 Python файлов)
 **Исходная оценка по аудиту:** 5.2/10
 
@@ -110,6 +110,23 @@
   - зафиксированы контракты для callback-period parsing, вызова `ExportService` и отправки итогового файла пользователю
   - дополнительно покрыты success paths у `callback_export_month_csv` и `callback_export_month_excel`
   - зафиксированы контракты для чтения report period из state, premium-pass export orchestration и отправки итогового файла пользователю
+- Добавлен integration-ish smoke batch для `bot/routers/expense.py`:
+  - покрыты `cancel_expense_input`, `edit_expense`, `delete_expense`, `show_edit_menu`, `show_edit_menu_callback`
+  - зафиксированы контракты для cancel-flow cleanup, not-found guard paths при редактировании и success/failure веток удаления
+  - дополнительно покрыты `edit_cancel`, `edit_back_to_menu`, `show_updated_expense`, `show_updated_expense_callback`
+  - зафиксированы контракты для возврата в edit menu, expired/missing-id guard paths и симметричных not-found веток после обновления операции
+  - дополнительно покрыты success paths у `show_updated_expense` и `show_updated_expense_callback`
+  - зафиксированы контракты для финального рендера обновлённой расходной/доходной карточки и очистки edit-state после успешного обновления
+  - дополнительно покрыты success paths у `show_edit_menu_callback`, `edit_field_amount`, `edit_field_description`, `edit_field_category`
+  - зафиксированы контракты для рендера edit menu, сохранения `editing_*` в FSM state и построения клавиатур для prompt/category selection
+  - дополнительно покрыты `edit_done` и `process_edit_category`
+  - зафиксированы контракты для финализации edit-flow, error fallback при чтении обновлённой операции и category-update orchestration
+  - дополнительно покрыты success/failure paths у `edit_expense`, `delete_income` и `show_edit_menu`
+  - зафиксированы контракты для полного рендера expense/income edit menu, симметричного failure path удаления дохода и message-based edit menu через `send_message_with_cleanup`
+  - дополнительно покрыты success/not-found/error paths у `remove_cashback`
+  - зафиксированы контракты для сброса cashback, рендера обновлённой карточки без cashback и error fallback при сбое сохранения
+  - дополнительно покрыты income/menu symmetry paths у `show_edit_menu_callback`, `edit_field_category`, `process_edit_category`
+  - зафиксированы контракты для income edit-menu rendering, no-categories alerts и income category-update orchestration
 - Добавлен integration-ish smoke batch для `bot/routers/subscription.py` и `bot/routers/start.py`:
   - покрыты `cmd_subscription`, `show_subscription_menu`, `privacy_decline`, `callback_start`
   - зафиксированы контракты для subscription menu rendering, invoice cleanup, privacy-decline language selection и fallback при неудачном `edit_text`
@@ -140,7 +157,7 @@
 
 ### Текущий подтверждённый результат
 
-- Полный прогон тестов на чистой test DB: `308 passed, 1 skipped`
+- Полный прогон тестов на чистой test DB: `352 passed, 1 skipped`
 - Единственный skip ожидаемый: отсутствуют native-библиотеки WeasyPrint в локальном окружении
 - Известных регрессий после выполненных изменений не обнаружено
 - Проект находится в состоянии `baseline stabilized`
@@ -157,7 +174,7 @@
   - `black --check`: 216 файлов требуют форматирования
   - `isort --check-only`: 157 файлов с import-order drift
   - `mypy bot/services bot/routers bot/utils`: 886 ошибок
-- Текущий coverage baseline по `bot + expenses`: `25%`
+- Текущий coverage baseline по `bot + expenses`: `26%`
 - Покрытие `bot/services/expense.py` поднято до `42%`
 - Покрытие `bot/services/income.py` поднято до `40%`
 - Покрытие `bot/services/category.py` поднято до `42%`
@@ -167,13 +184,13 @@
 - Покрытие `bot/utils/validators.py` поднято до `84%`
 - Покрытие `bot/routers/household.py` поднято до `41%`
 - Покрытие `bot/routers/reports.py` поднято до `60%`
-- Покрытие `bot/routers/expense.py` поднято до `12%`
+- Покрытие `bot/routers/expense.py` поднято до `38%`
 - Покрытие `bot/routers/start.py` поднято до `50%`
 - Покрытие `bot/routers/subscription.py` поднято до `54%`
 
 ### Следующие действия
 
-1. Добавить следующий integration batch для более глубоких пользовательских сценариев `reports/expense` или `subscription/start`, по-прежнему не заходя в реальные платёжные side effects
+1. Продолжить недорогие integration batches в `expense` router: оставшиеся callback parsing и соседние not-found/error paths вокруг edit/callback flows, либо переключиться на другой критичный router flow ради более равномерного покрытия
 2. Продолжить Фазу 1.3: точечно вынести ещё только действительно общие константы (`DEFAULT_TIMEZONE` и аналогичные), без расширения scope на локальные числа
 3. После достижения формальных порогов постепенно переводить CI jobs из informational в blocking
 4. Не делать массовый lint/typecheck cleanup по legacy-wide scope без отдельной бизнес-причины
