@@ -12,6 +12,17 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/telegram-ack.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "hooks": [
@@ -31,6 +42,11 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/codex-review-hook.sh\"",
             "timeout": 300
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/codex-task-runner.sh\"",
+            "timeout": 300
           }
         ]
       }
@@ -46,5 +62,8 @@
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "telegram@claude-plugins-official": true
   }
 }
