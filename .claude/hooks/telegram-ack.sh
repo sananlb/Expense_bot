@@ -8,7 +8,7 @@ INPUT=$(cat)
 echo "$INPUT" >> /tmp/telegram-ack-debug.log
 
 # Only trigger for messages from Telegram channel
-if ! echo "$INPUT" | grep -q '"source".*"telegram"\|channel.*telegram\|telegram.*channel'; then
+if ! echo "$INPUT" | grep -q 'plugin:telegram:telegram\|source="plugin:telegram'; then
     exit 0
 fi
 

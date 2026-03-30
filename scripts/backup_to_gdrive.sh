@@ -99,7 +99,7 @@ log "Дамп создан: ${BACKUP_FILE} (${BACKUP_SIZE})"
 
 # --- Шаг 2: Валидация дампа ---
 log "Валидация дампа..."
-if ! cat "$BACKUP_FILE" | docker exec -i expense_bot_db pg_restore --list > /dev/null 2>&1; then
+if ! docker exec -i expense_bot_db pg_restore --list < "$BACKUP_FILE" > /dev/null 2>&1; then
     error_exit "Дамп не прошёл валидацию (pg_restore --list)"
 fi
 log "Дамп валиден"

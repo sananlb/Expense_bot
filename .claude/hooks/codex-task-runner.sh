@@ -46,10 +46,12 @@ if [ -z "$PROJECT_ROOT" ]; then
 fi
 
 # Parse .codex-task file
-PROMPT=$(echo "$TASK_CONTENT" | grep "^PROMPT:" | head -1 | sed 's/^PROMPT:[[:space:]]*//')
 TASK_FILE=$(echo "$TASK_CONTENT" | grep "^FILE:" | head -1 | sed 's/^FILE:[[:space:]]*//')
 
-if [ -z "$PROMPT" ]; then
+if echo "$TASK_CONTENT" | grep -q "^PROMPT:"; then
+    # Extract everything after PROMPT: (including multiple lines)
+    PROMPT=$(echo "$TASK_CONTENT" | sed -n '/^PROMPT:/,$ p' | sed 's/^PROMPT:[[:space:]]*//' | grep -v "^FILE:")
+else
     # No PROMPT: prefix — treat entire file as the prompt
     PROMPT="$TASK_CONTENT"
 fi
@@ -84,13 +86,21 @@ codex exec \
     -s read-only \
     -C "$PROJECT_ROOT" \
     -o "$RESULT_FILE" \
-    "$FULL_PROMPT" > /dev/null 2>&1
+    "$FULL_PROMPT" > /tmp/codex-task-raw.log 2>&1
 CODEX_EXIT=$?
 
 log "Codex finished with exit code: $CODEX_EXIT"
+log "Result file size: $(wc -c < "$RESULT_FILE" 2>/dev/null || echo 'N/A')"
+log "Raw output size: $(wc -c < /tmp/codex-task-raw.log 2>/dev/null || echo 'N/A')"
 
 TASK_OUTPUT=$(cat "$RESULT_FILE" 2>/dev/null)
 rm -f "$RESULT_FILE"
+
+# Fallback: try raw output if result file is empty
+if [ -z "$TASK_OUTPUT" ]; then
+    TASK_OUTPUT=$(cat /tmp/codex-task-raw.log 2>/dev/null | grep -v "^$" | tail -50)
+    log "Fallback to raw output: $(echo "$TASK_OUTPUT" | wc -c) chars"
+fi
 
 if [ -z "$TASK_OUTPUT" ]; then
     echo "CODEX_TASK: No output received from Codex (exit code: $CODEX_EXIT)"
