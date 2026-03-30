@@ -1,6 +1,7 @@
 """
 Роутер для управления подписками через Telegram Stars
 """
+from asgiref.sync import sync_to_async
 from aiogram import Router, F, types
 from aiogram.types import Message, CallbackQuery, LabeledPrice, PreCheckoutQuery
 from aiogram.filters import Command
@@ -9,6 +10,8 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.exceptions import TelegramAPIError, TelegramBadRequest, TelegramNotFound
 from datetime import datetime, timedelta
+from django.db import IntegrityError, transaction
+from django.db.models import F as DjangoF
 from django.utils import timezone
 from decimal import Decimal
 from dateutil.relativedelta import relativedelta
@@ -30,6 +33,147 @@ router = Router(name='subscription')
 class PromoCodeStates(StatesGroup):
     """Состояния для промокода"""
     waiting_for_promo = State()
+
+
+class PromoCodeValidationError(Exception):
+    """Бизнес-ошибка применения промокода."""
+
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(reason)
+
+
+def _promocode_error_text(reason: str, html: bool = False) -> str:
+    texts = {
+        'not_found': (
+            "❌ <b>Промокод не найден</b>\n\nПроверьте правильность ввода и попробуйте снова.",
+            "Промокод не найден.",
+        ),
+        'invalid': (
+            "❌ <b>Промокод недействителен</b>\n\nВозможно, истек срок действия или достигнут лимит использований.",
+            "Промокод недействителен.",
+        ),
+        'already_used': (
+            "❌ <b>Вы уже использовали этот промокод</b>\n\nКаждый промокод можно использовать только один раз.",
+            "Вы уже использовали этот промокод.",
+        ),
+        'not_applicable': (
+            "❌ <b>Промокод не подходит</b>\n\nЭтот промокод нельзя применить к выбранной подписке.",
+            "Промокод не подходит для выбранной подписки.",
+        ),
+    }
+    html_text, plain_text = texts.get(reason, texts['invalid'])
+    return html_text if html else plain_text
+
+
+def _validate_promocode_state(promocode: PromoCode, profile_id: int, sub_type: str | None = None) -> PromoCode:
+    if not promocode.is_valid():
+        raise PromoCodeValidationError('invalid')
+
+    applicable_to = getattr(promocode, 'applicable_subscription_types', 'all')
+    if sub_type and applicable_to not in ('all', sub_type):
+        raise PromoCodeValidationError('not_applicable')
+
+    if PromoCodeUsage.objects.filter(promocode=promocode, profile_id=profile_id).exists():
+        raise PromoCodeValidationError('already_used')
+
+    return promocode
+
+
+def _parse_subscription_payload(payload: str) -> tuple[str, int, int | None]:
+    payload_parts = payload.split("_")
+    if len(payload_parts) < 3 or payload_parts[0] != "subscription":
+        raise ValueError(f"Invalid subscription payload: {payload}")
+
+    if payload_parts[2] == "months":
+        sub_type = f"{payload_parts[1]}_{payload_parts[2]}"
+        user_id = int(payload_parts[3])
+        promocode_id = int(payload_parts[5]) if len(payload_parts) > 5 and payload_parts[4] == "promo" else None
+    else:
+        sub_type = payload_parts[1]
+        user_id = int(payload_parts[2])
+        promocode_id = int(payload_parts[4]) if len(payload_parts) > 4 and payload_parts[3] == "promo" else None
+
+    return sub_type, user_id, promocode_id
+
+
+@sync_to_async
+def validate_promocode_for_checkout(promocode_id: int, profile_id: int, sub_type: str | None = None) -> PromoCode:
+    try:
+        promocode = PromoCode.objects.get(id=promocode_id)
+    except PromoCode.DoesNotExist as exc:
+        raise PromoCodeValidationError('not_found') from exc
+
+    return _validate_promocode_state(promocode, profile_id, sub_type=sub_type)
+
+
+@sync_to_async
+def apply_promocode_grant(profile_id: int, promocode_id: int, sub_type: str, days_to_add: int) -> Subscription:
+    with transaction.atomic():
+        now_ts = timezone.now()
+        profile = Profile.objects.select_for_update().get(id=profile_id)
+        promocode = PromoCode.objects.select_for_update().get(id=promocode_id)
+        _validate_promocode_state(promocode, profile_id, sub_type=sub_type)
+
+        active_sub = (
+            Subscription.objects.select_for_update()
+            .filter(profile=profile, is_active=True, end_date__gt=now_ts)
+            .order_by('-end_date')
+            .first()
+        )
+
+        if active_sub:
+            active_sub.end_date = active_sub.end_date + timedelta(days=days_to_add)
+            active_sub.save()
+            subscription = active_sub
+        else:
+            start_date = now_ts
+            end_date = start_date + timedelta(days=days_to_add)
+            subscription = Subscription.objects.create(
+                profile=profile,
+                type=sub_type,
+                payment_method='promo',
+                amount=0,
+                start_date=start_date,
+                end_date=end_date,
+                is_active=True,
+            )
+
+        try:
+            PromoCodeUsage.objects.create(
+                promocode=promocode,
+                profile=profile,
+                subscription=subscription,
+            )
+        except IntegrityError as exc:
+            raise PromoCodeValidationError('already_used') from exc
+
+        PromoCode.objects.filter(id=promocode.id).update(used_count=DjangoF('used_count') + 1)
+        subscription.refresh_from_db(fields=['end_date'])
+        return subscription
+
+
+@sync_to_async
+def finalize_paid_promocode_usage(promocode_id: int, profile_id: int, subscription_id: int) -> tuple[str, str]:
+    with transaction.atomic():
+        profile = Profile.objects.select_for_update().get(id=profile_id)
+        promocode = PromoCode.objects.select_for_update().get(id=promocode_id)
+        subscription = Subscription.objects.select_for_update().get(id=subscription_id)
+
+        if subscription.profile_id != profile_id:
+            raise PromoCodeValidationError('invalid')
+
+        try:
+            PromoCodeUsage.objects.create(
+                promocode=promocode,
+                profile=profile,
+                subscription=subscription,
+            )
+        except IntegrityError as exc:
+            raise PromoCodeValidationError('already_used') from exc
+
+        PromoCode.objects.filter(id=promocode.id).update(used_count=DjangoF('used_count') + 1)
+        return promocode.code, promocode.get_discount_display()
 
 
 # Цены подписок в Telegram Stars
@@ -409,8 +553,7 @@ async def process_promocode(message: Message, state: FSMContext):
                 raise PromoCode.DoesNotExist
         except PromoCode.DoesNotExist:
             await message.answer(
-                "❌ <b>Промокод не найден</b>\n\n"
-                "Проверьте правильность ввода и попробуйте снова.",
+                _promocode_error_text('not_found', html=True),
                 parse_mode="HTML"
             )
             await state.clear()
@@ -424,43 +567,18 @@ async def process_promocode(message: Message, state: FSMContext):
                 parse_mode="HTML"
             )
             return
-        
-        # Проверяем валидность промокода
-        if not promocode.is_valid():
+
+        try:
+            promocode = await validate_promocode_for_checkout(promocode.id, profile.id)
+        except PromoCodeValidationError as exc:
             await message.answer(
-                "❌ <b>Промокод недействителен</b>\n\n"
-                "Возможно, истек срок действия или достигнут лимит использований.",
+                _promocode_error_text(exc.reason, html=True),
                 parse_mode="HTML"
             )
             await state.clear()
-            # Показываем меню подписки
             text = await get_subscription_info_text(profile, lang)
             await send_message_with_cleanup(
-                message, 
-                state,
-                text,
-                reply_markup=get_subscription_keyboard(lang=lang),
-                parse_mode="HTML"
-            )
-            return
-        
-        # Проверяем, использовал ли пользователь этот промокод
-        usage_exists = await PromoCodeUsage.objects.filter(
-            promocode=promocode,
-            profile=profile
-        ).aexists()
-        
-        if usage_exists:
-            await message.answer(
-                "❌ <b>Вы уже использовали этот промокод</b>\n\n"
-                "Каждый промокод можно использовать только один раз.",
-                parse_mode="HTML"
-            )
-            await state.clear()
-            # Показываем меню подписки
-            text = await get_subscription_info_text(profile, lang)
-            await send_message_with_cleanup(
-                message, 
+                message,
                 state,
                 text,
                 reply_markup=get_subscription_keyboard(lang=lang),
@@ -472,43 +590,28 @@ async def process_promocode(message: Message, state: FSMContext):
         if promocode.discount_type == 'days':
             # Промокод на дополнительные дни
             days_to_add = int(promocode.discount_value)
-            
-            # Проверяем текущую подписку
-            active_sub = await profile.subscriptions.filter(
-                is_active=True,
-                end_date__gt=timezone.now()
-            ).order_by('-end_date').afirst()
-            
-            if active_sub:
-                # Продлеваем существующую подписку
-                active_sub.end_date = active_sub.end_date + timedelta(days=days_to_add)
-                await active_sub.asave()
-                subscription = active_sub
-            else:
-                # Создаем новую подписку
-                start_date = timezone.now()
-                end_date = start_date + timedelta(days=days_to_add)
-                
-                subscription = await Subscription.objects.acreate(
-                    profile=profile,
-                    type='month',  # По умолчанию месячная
-                    payment_method='stars',
-                    amount=0,  # Бесплатно по промокоду
-                    start_date=start_date,
-                    end_date=end_date,
-                    is_active=True
+            try:
+                subscription = await apply_promocode_grant(
+                    profile.id,
+                    promocode.id,
+                    sub_type='month',
+                    days_to_add=days_to_add,
                 )
-            
-            # Записываем использование промокода
-            await PromoCodeUsage.objects.acreate(
-                promocode=promocode,
-                profile=profile,
-                subscription=subscription
-            )
-            
-            # Увеличиваем счетчик использований
-            promocode.used_count += 1
-            await promocode.asave()
+            except PromoCodeValidationError as exc:
+                await message.answer(
+                    _promocode_error_text(exc.reason, html=True),
+                    parse_mode="HTML"
+                )
+                await state.clear()
+                text = await get_subscription_info_text(profile, lang)
+                await send_message_with_cleanup(
+                    message,
+                    state,
+                    text,
+                    reply_markup=get_subscription_keyboard(lang=lang),
+                    parse_mode="HTML"
+                )
+                return
             
             await message.answer(
                 f"🎉 <b>ПОЗДРАВЛЯЕМ!</b> 🎉\n"
@@ -574,43 +677,28 @@ async def process_promocode(message: Message, state: FSMContext):
                 period_text = 'месяц'
 
             if has_free_subscription:
-
-                # Проверяем текущую подписку
-                active_sub = await profile.subscriptions.filter(
-                    is_active=True,
-                    end_date__gt=timezone.now()
-                ).order_by('-end_date').afirst()
-
-                if active_sub:
-                    # Продлеваем существующую подписку на месяц
-                    active_sub.end_date = active_sub.end_date + timedelta(days=days_to_add)
-                    await active_sub.asave()
-                    subscription = active_sub
-                else:
-                    # Создаем новую подписку соответствующего типа
-                    start_date = timezone.now()
-                    end_date = start_date + timedelta(days=days_to_add)
-
-                    subscription = await Subscription.objects.acreate(
-                        profile=profile,
-                        type=sub_type,  # Тип подписки из промокода
-                        payment_method='promo',  # Промокод
-                        amount=0,  # Бесплатно по промокоду
-                        start_date=start_date,
-                        end_date=end_date,
-                        is_active=True
+                try:
+                    subscription = await apply_promocode_grant(
+                        profile.id,
+                        promocode.id,
+                        sub_type=sub_type,
+                        days_to_add=days_to_add,
                     )
-
-                # Записываем использование промокода
-                await PromoCodeUsage.objects.acreate(
-                    promocode=promocode,
-                    profile=profile,
-                    subscription=subscription
-                )
-
-                # Увеличиваем счетчик использований
-                promocode.used_count += 1
-                await promocode.asave()
+                except PromoCodeValidationError as exc:
+                    await message.answer(
+                        _promocode_error_text(exc.reason, html=True),
+                        parse_mode="HTML"
+                    )
+                    await state.clear()
+                    text = await get_subscription_info_text(profile, lang)
+                    await send_message_with_cleanup(
+                        message,
+                        state,
+                        text,
+                        reply_markup=get_subscription_keyboard(lang=lang),
+                        parse_mode="HTML"
+                    )
+                    return
 
                 # Очищаем состояние
                 await state.clear()
@@ -714,15 +802,21 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
         await callback.answer("Промокод не найден", show_alert=True)
         return
     
-    # Получаем промокод
-    promocode = await PromoCode.objects.aget(id=promocode_id)
-    
     # Определяем тип подписки
     if "_month_" in callback.data:
         sub_type = "month"
     else:
         sub_type = "six_months"
-    
+
+    profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
+
+    try:
+        promocode = await validate_promocode_for_checkout(promocode_id, profile.id, sub_type=sub_type)
+    except PromoCodeValidationError as exc:
+        await state.clear()
+        await callback.answer(_promocode_error_text(exc.reason), show_alert=True)
+        return
+
     sub_info = SUBSCRIPTION_PRICES[sub_type]
 
     # Сохраняем ID старого сообщения для удаления ПОСЛЕ отправки нового
@@ -733,56 +827,25 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
     original_price = sub_info['stars']
     discounted_price = int(promocode.apply_discount(original_price))
 
-    # Отвечаем на callback чтобы убрать индикатор загрузки
-    await callback.answer()
-
     # Проверяем случай с нулевой ценой (бесплатный промокод)
     if discounted_price == 0:
-        # Не можем создать инвойс на 0 звезд - обработаем как бесплатную подписку
-        profile = await Profile.objects.aget(telegram_id=callback.from_user.id)
-
         # Определяем количество дней на основе типа подписки
         days_to_add = 30 if sub_type == "month" else 180
-
-        # Проверяем текущую подписку
-        active_sub = await profile.subscriptions.filter(
-            is_active=True,
-            end_date__gt=timezone.now()
-        ).order_by('-end_date').afirst()
-
-        if active_sub:
-            # Продлеваем существующую подписку
-            active_sub.end_date = active_sub.end_date + timedelta(days=days_to_add)
-            await active_sub.asave()
-            subscription = active_sub
-        else:
-            # Создаем новую подписку
-            start_date = timezone.now()
-            end_date = start_date + timedelta(days=days_to_add)
-
-            subscription = await Subscription.objects.acreate(
-                profile=profile,
-                type=sub_type,
-                payment_method='promo',  # Промокод
-                amount=0,  # Бесплатно по промокоду
-                start_date=start_date,
-                end_date=end_date,
-                is_active=True
+        try:
+            subscription = await apply_promocode_grant(
+                profile.id,
+                promocode.id,
+                sub_type=sub_type,
+                days_to_add=days_to_add,
             )
-
-        # Записываем использование промокода
-        await PromoCodeUsage.objects.acreate(
-            promocode=promocode,
-            profile=profile,
-            subscription=subscription
-        )
-
-        # Увеличиваем счетчик использований
-        promocode.used_count += 1
-        await promocode.asave()
+        except PromoCodeValidationError as exc:
+            await state.clear()
+            await callback.answer(_promocode_error_text(exc.reason), show_alert=True)
+            return
 
         # Очищаем состояние
         await state.clear()
+        await callback.answer()
 
         period_text = "месяц" if sub_type == "month" else "6 месяцев"
         # Сначала отправляем новое сообщение
@@ -816,6 +879,8 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
         return
 
     # Обычный случай - создаем инвойс для оплаты со скидкой
+    await callback.answer()
+
     # Убеждаемся что цена не меньше 1 звезды
     discounted_price = max(1, discounted_price)
 
@@ -858,25 +923,48 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
 @router.pre_checkout_query()
 async def process_pre_checkout_updated(pre_checkout_query: PreCheckoutQuery):
     """Подтверждение оплаты перед списанием Stars"""
-    # Проверяем payload
     payload = pre_checkout_query.invoice_payload
-    payload_parts = payload.split("_")
-    
-    # Логируем для отладки
     logger.info("Pre-checkout query received. Payload=%s", summarize_text(payload))
-    logger.info("Payload parts count: %s", len(payload_parts))
-    
-    # Проверяем, что payload начинается с "subscription" и имеет минимум 3 части
-    # Формат: subscription_TYPE_USER_ID или subscription_TYPE_USER_ID_promo_PROMO_ID
-    if len(payload_parts) < 3 or payload_parts[0] != "subscription":
+
+    try:
+        sub_type, user_id, promocode_id = _parse_subscription_payload(payload)
+    except (ValueError, IndexError):
         logger.error("Invalid payload format: %s", summarize_text(payload))
         await pre_checkout_query.answer(
             ok=False,
             error_message="Ошибка в данных платежа"
         )
         return
-    
-    # Все проверки пройдены, подтверждаем оплату
+
+    if user_id != pre_checkout_query.from_user.id:
+        logger.warning(
+            "Payload user mismatch in pre-checkout: payload_user=%s actual_user=%s",
+            log_safe_id(user_id, "payload_user"),
+            log_safe_id(pre_checkout_query.from_user.id, "user"),
+        )
+        await pre_checkout_query.answer(
+            ok=False,
+            error_message="Ошибка в данных платежа"
+        )
+        return
+
+    if promocode_id:
+        try:
+            profile = await Profile.objects.aget(telegram_id=user_id)
+            await validate_promocode_for_checkout(promocode_id, profile.id, sub_type=sub_type)
+        except (Profile.DoesNotExist, PromoCodeValidationError) as exc:
+            reason = exc.reason if isinstance(exc, PromoCodeValidationError) else 'invalid'
+            logger.info(
+                "Rejected promo pre-checkout for %s: reason=%s",
+                log_safe_id(user_id, "user"),
+                reason,
+            )
+            await pre_checkout_query.answer(
+                ok=False,
+                error_message=_promocode_error_text(reason)
+            )
+            return
+
     logger.info("Payment pre-checkout approved for payload=%s", summarize_text(payload))
     await pre_checkout_query.answer(ok=True)
 
@@ -893,23 +981,13 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     
     payment = message.successful_payment
     payload = payment.invoice_payload
-    payload_parts = payload.split("_")
 
     # Логируем payload и сумму для отладки
     logger.info("Payment payload: %s", summarize_text(payload))
-    logger.info("Payment payload parts count: %s", len(payload_parts))
     logger.debug("Payment total_amount=%s currency=%s", payment.total_amount, payment.currency)
     logger.debug("Payment telegram_payment_charge_id present=%s", bool(payment.telegram_payment_charge_id))
-    
-    # Проверяем тип подписки
-    if payload_parts[2] == "months":
-        sub_type = f"{payload_parts[1]}_{payload_parts[2]}"
-        user_id = int(payload_parts[3])
-        promocode_id = int(payload_parts[5]) if len(payload_parts) > 5 and payload_parts[4] == "promo" else None
-    else:
-        sub_type = payload_parts[1]
-        user_id = int(payload_parts[2])
-        promocode_id = int(payload_parts[4]) if len(payload_parts) > 4 and payload_parts[3] == "promo" else None
+
+    sub_type, user_id, promocode_id = _parse_subscription_payload(payload)
     
     # Получаем профиль
     profile = await Profile.objects.aget(telegram_id=user_id)
@@ -1045,21 +1123,13 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
     # Если был использован промокод, записываем это
     if promocode_id:
         try:
-            promocode = await PromoCode.objects.aget(id=promocode_id)
-            
-            # Записываем использование
-            await PromoCodeUsage.objects.acreate(
-                promocode=promocode,
-                profile=profile,
-                subscription=subscription
+            promo_code, promo_discount = await finalize_paid_promocode_usage(
+                promocode_id=promocode_id,
+                profile_id=profile.id,
+                subscription_id=subscription.id,
             )
-            
-            # Увеличиваем счетчик
-            promocode.used_count += 1
-            await promocode.asave()
-            
-            discount_text = f"\nИспользован промокод: {promocode.code} {promocode.get_discount_display()}"
-        except (ObjectDoesNotExist, AttributeError) as e:
+            discount_text = f"\nИспользован промокод: {promo_code} {promo_discount}"
+        except (ObjectDoesNotExist, AttributeError, PromoCodeValidationError) as e:
             logger.warning("Error applying promocode %s for %s: %s", promocode_id, log_safe_id(user_id, "user"), e)
             discount_text = ""
     else:

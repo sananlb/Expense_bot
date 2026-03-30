@@ -413,15 +413,15 @@ async def test_process_promocode_rejects_reused_code_and_restores_menu():
     message.text = "USED-CODE"
     state = make_state()
     await state.set_state(subscription_router.PromoCodeStates.waiting_for_promo)
-    profile = SimpleNamespace(language_code="ru")
-    promocode = SimpleNamespace(is_valid=Mock(return_value=True))
+    profile = SimpleNamespace(id=1, language_code="ru")
+    promocode = SimpleNamespace(id=77)
 
     with patch("bot.routers.subscription.Profile.objects.aget", AsyncMock(return_value=profile)), patch(
         "bot.routers.subscription.PromoCode.objects.filter",
         return_value=SimpleNamespace(afirst=AsyncMock(return_value=promocode)),
     ), patch(
-        "bot.routers.subscription.PromoCodeUsage.objects.filter",
-        return_value=SimpleNamespace(aexists=AsyncMock(return_value=True)),
+        "bot.routers.subscription.validate_promocode_for_checkout",
+        AsyncMock(side_effect=subscription_router.PromoCodeValidationError("already_used")),
     ), patch(
         "bot.routers.subscription.get_subscription_info_text", AsyncMock(return_value="INFO")
     ) as get_subscription_info_text, patch(
@@ -453,18 +453,12 @@ async def test_process_promocode_days_promo_creates_subscription_records_usage_a
     message.text = "BONUS30"
     state = make_state()
     await state.set_state(subscription_router.PromoCodeStates.waiting_for_promo)
-    profile = SimpleNamespace(
-        language_code="ru",
-        subscriptions=SimpleNamespace(
-            filter=Mock(return_value=SimpleNamespace(order_by=Mock(return_value=SimpleNamespace(afirst=AsyncMock(return_value=None)))))
-        ),
-    )
+    profile = SimpleNamespace(id=1, language_code="ru")
     promocode = SimpleNamespace(
+        id=55,
         discount_type="days",
         discount_value=30,
-        used_count=0,
         is_valid=Mock(return_value=True),
-        asave=AsyncMock(),
     )
     subscription = SimpleNamespace(end_date=SimpleNamespace(strftime=Mock(return_value="15.04.2026")))
 
@@ -472,23 +466,19 @@ async def test_process_promocode_days_promo_creates_subscription_records_usage_a
         "bot.routers.subscription.PromoCode.objects.filter",
         return_value=SimpleNamespace(afirst=AsyncMock(return_value=promocode)),
     ), patch(
-        "bot.routers.subscription.PromoCodeUsage.objects.filter",
-        return_value=SimpleNamespace(aexists=AsyncMock(return_value=False)),
+        "bot.routers.subscription.validate_promocode_for_checkout",
+        AsyncMock(return_value=promocode),
     ), patch(
-        "bot.routers.subscription.Subscription.objects.acreate", AsyncMock(return_value=subscription)
-    ) as create_subscription, patch(
-        "bot.routers.subscription.PromoCodeUsage.objects.acreate", AsyncMock()
-    ) as create_usage:
+        "bot.routers.subscription.apply_promocode_grant", AsyncMock(return_value=subscription)
+    ) as apply_promocode_grant:
         await subscription_router.process_promocode(message, state)
 
-    create_subscription.assert_awaited_once()
-    create_usage.assert_awaited_once_with(
-        promocode=promocode,
-        profile=profile,
-        subscription=subscription,
+    apply_promocode_grant.assert_awaited_once_with(
+        profile.id,
+        promocode.id,
+        sub_type="month",
+        days_to_add=30,
     )
-    promocode.asave.assert_awaited_once()
-    assert promocode.used_count == 1
     message.answer.assert_awaited_once()
     answer_text = message.answer.await_args.args[0]
     assert "30 дней подписки" in answer_text
@@ -502,7 +492,7 @@ async def test_process_promocode_discount_promo_keeps_active_promocode_in_state_
     message.text = "SAVE20"
     state = make_state()
     await state.set_state(subscription_router.PromoCodeStates.waiting_for_promo)
-    profile = SimpleNamespace(language_code="ru")
+    profile = SimpleNamespace(id=1, language_code="ru")
     promocode = SimpleNamespace(
         id=77,
         code="SAVE20",
@@ -517,8 +507,8 @@ async def test_process_promocode_discount_promo_keeps_active_promocode_in_state_
         "bot.routers.subscription.PromoCode.objects.filter",
         return_value=SimpleNamespace(afirst=AsyncMock(return_value=promocode)),
     ), patch(
-        "bot.routers.subscription.PromoCodeUsage.objects.filter",
-        return_value=SimpleNamespace(aexists=AsyncMock(return_value=False)),
+        "bot.routers.subscription.validate_promocode_for_checkout",
+        AsyncMock(return_value=promocode),
     ):
         await subscription_router.process_promocode(message, state)
 
@@ -551,24 +541,16 @@ async def test_process_subscription_purchase_with_promo_handles_free_month_subsc
     promocode = SimpleNamespace(
         id=77,
         code="FREE100",
-        used_count=0,
         apply_discount=Mock(return_value=0),
-        asave=AsyncMock(),
     )
     subscription = SimpleNamespace(end_date=SimpleNamespace(strftime=Mock(return_value="20.04.2026")))
-    profile = SimpleNamespace(
-        subscriptions=SimpleNamespace(
-            filter=Mock(return_value=SimpleNamespace(order_by=Mock(return_value=SimpleNamespace(afirst=AsyncMock(return_value=None)))))
-        )
-    )
+    profile = SimpleNamespace(id=1)
 
-    with patch("bot.routers.subscription.PromoCode.objects.aget", AsyncMock(return_value=promocode)), patch(
-        "bot.routers.subscription.Profile.objects.aget", AsyncMock(return_value=profile)
+    with patch("bot.routers.subscription.Profile.objects.aget", AsyncMock(return_value=profile)), patch(
+        "bot.routers.subscription.validate_promocode_for_checkout", AsyncMock(return_value=promocode)
     ), patch(
-        "bot.routers.subscription.Subscription.objects.acreate", AsyncMock(return_value=subscription)
-    ) as create_subscription, patch(
-        "bot.routers.subscription.PromoCodeUsage.objects.acreate", AsyncMock()
-    ) as create_usage, patch(
+        "bot.routers.subscription.apply_promocode_grant", AsyncMock(return_value=subscription)
+    ) as apply_promocode_grant, patch(
         "bot.routers.subscription.safe_delete_message", AsyncMock()
     ) as safe_delete_message:
         await subscription_router.process_subscription_purchase_with_promo(callback, state)
@@ -580,19 +562,17 @@ async def test_process_subscription_purchase_with_promo_handles_free_month_subsc
     assert send_message_kwargs["chat_id"] == callback.from_user.id
     assert "На месяц (бесплатно)" in send_message_kwargs["text"]
     assert "20.04.2026" in send_message_kwargs["text"]
-    create_subscription.assert_awaited_once()
-    create_usage.assert_awaited_once_with(
-        promocode=promocode,
-        profile=profile,
-        subscription=subscription,
+    apply_promocode_grant.assert_awaited_once_with(
+        profile.id,
+        promocode.id,
+        sub_type="month",
+        days_to_add=30,
     )
     safe_delete_message.assert_awaited_once_with(
         bot=callback.bot,
         chat_id=callback.message.chat.id,
         message_id=callback.message.message_id,
     )
-    assert promocode.used_count == 1
-    promocode.asave.assert_awaited_once()
     assert await state.get_state() is None
 
 
@@ -602,6 +582,7 @@ async def test_process_subscription_purchase_with_promo_sends_discounted_invoice
     state = make_state()
     callback.data = "subscription_buy_six_months_promo"
     await state.update_data(active_promocode=88)
+    profile = SimpleNamespace(id=1)
     promocode = SimpleNamespace(
         id=88,
         code="SAVE20",
@@ -611,7 +592,9 @@ async def test_process_subscription_purchase_with_promo_sends_discounted_invoice
     invoice_message = SimpleNamespace(message_id=444)
     callback.bot.send_invoice = AsyncMock(return_value=invoice_message)
 
-    with patch("bot.routers.subscription.PromoCode.objects.aget", AsyncMock(return_value=promocode)), patch(
+    with patch("bot.routers.subscription.Profile.objects.aget", AsyncMock(return_value=profile)), patch(
+        "bot.routers.subscription.validate_promocode_for_checkout", AsyncMock(return_value=promocode)
+    ), patch(
         "bot.routers.subscription.safe_delete_message", AsyncMock()
     ) as safe_delete_message:
         await subscription_router.process_subscription_purchase_with_promo(callback, state)
@@ -634,3 +617,63 @@ async def test_process_subscription_purchase_with_promo_sends_discounted_invoice
     data = await state.get_data()
     assert data["active_promocode"] == 88
     assert data["invoice_msg_id"] == 444
+
+
+@pytest.mark.asyncio
+async def test_process_subscription_purchase_with_promo_rejects_invalid_promocode_before_invoice():
+    callback = make_callback()
+    state = make_state()
+    callback.data = "subscription_buy_month_promo"
+    await state.update_data(active_promocode=77)
+    profile = SimpleNamespace(id=1)
+
+    with patch("bot.routers.subscription.Profile.objects.aget", AsyncMock(return_value=profile)), patch(
+        "bot.routers.subscription.validate_promocode_for_checkout",
+        AsyncMock(side_effect=subscription_router.PromoCodeValidationError("invalid")),
+    ):
+        await subscription_router.process_subscription_purchase_with_promo(callback, state)
+
+    callback.answer.assert_awaited_once_with("Промокод недействителен.", show_alert=True)
+    callback.bot.send_invoice.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_process_subscription_purchase_with_free_promo_handles_race_without_double_callback_answer():
+    callback = make_callback()
+    state = make_state()
+    callback.data = "subscription_buy_month_promo"
+    await state.update_data(active_promocode=77)
+    profile = SimpleNamespace(id=1)
+    promocode = SimpleNamespace(
+        id=77,
+        code="FREE100",
+        apply_discount=Mock(return_value=0),
+    )
+
+    with patch("bot.routers.subscription.Profile.objects.aget", AsyncMock(return_value=profile)), patch(
+        "bot.routers.subscription.validate_promocode_for_checkout", AsyncMock(return_value=promocode)
+    ), patch(
+        "bot.routers.subscription.apply_promocode_grant",
+        AsyncMock(side_effect=subscription_router.PromoCodeValidationError("invalid")),
+    ):
+        await subscription_router.process_subscription_purchase_with_promo(callback, state)
+
+    callback.answer.assert_awaited_once_with("Промокод недействителен.", show_alert=True)
+    callback.bot.send_message.assert_not_called()
+    callback.bot.send_invoice.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_pre_checkout_with_invalid_promo_is_rejected():
+    pre_checkout_query = AsyncMock()
+    pre_checkout_query.invoice_payload = "subscription_month_123456789_promo_77"
+    pre_checkout_query.from_user = SimpleNamespace(id=123456789)
+    profile = SimpleNamespace(id=1)
+
+    with patch("bot.routers.subscription.Profile.objects.aget", AsyncMock(return_value=profile)), patch(
+        "bot.routers.subscription.validate_promocode_for_checkout",
+        AsyncMock(side_effect=subscription_router.PromoCodeValidationError("invalid")),
+    ):
+        await subscription_router.process_pre_checkout_updated(pre_checkout_query)
+
+    pre_checkout_query.answer.assert_awaited_once_with(ok=False, error_message="Промокод недействителен.")

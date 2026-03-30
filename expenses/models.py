@@ -2,6 +2,7 @@
 Модели ExpenseBot согласно техническому заданию
 """
 from django.db import models
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.utils import timezone
 from datetime import date, datetime, time
@@ -701,6 +702,7 @@ class Subscription(models.Model):
     PAYMENT_METHODS = [
         ('trial', 'Пробный период'),
         ('stars', 'Telegram Stars'),
+        ('promo', 'Промокод'),
         ('referral', 'Реферальное продление'),
     ]
     
@@ -864,6 +866,27 @@ class PromoCode(models.Model):
         if self.code:
             self.code = self.code.upper()
         super().save(*args, **kwargs)
+
+    def clean(self):
+        errors = {}
+
+        if self.max_uses is not None and self.max_uses < 0:
+            errors['max_uses'] = 'Макс. использований не может быть отрицательным.'
+
+        if self.valid_until and self.valid_from and self.valid_until < self.valid_from:
+            errors['valid_until'] = 'Дата окончания должна быть не раньше даты начала.'
+
+        if self.discount_value is None:
+            errors['discount_value'] = 'Укажите значение скидки.'
+        elif self.discount_type == 'percent' and not (0 <= self.discount_value <= 100):
+            errors['discount_value'] = 'Процент скидки должен быть в диапазоне от 0 до 100.'
+        elif self.discount_type == 'fixed' and self.discount_value < 0:
+            errors['discount_value'] = 'Фиксированная скидка не может быть отрицательной.'
+        elif self.discount_type == 'days' and self.discount_value <= 0:
+            errors['discount_value'] = 'Количество дней должно быть больше нуля.'
+
+        if errors:
+            raise ValidationError(errors)
     
     def get_discount_display(self):
         """Отображение скидки"""
