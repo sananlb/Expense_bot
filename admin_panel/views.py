@@ -3,6 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.db.models import Count, Sum, Q, F, Max
+from django.db import transaction
 from django.utils import timezone
 from django.core.paginator import Paginator
 from datetime import datetime, timedelta
@@ -18,6 +19,21 @@ from expenses.models import (
 from bot.telegram_utils import send_telegram_message
 
 logger = logging.getLogger(__name__)
+
+
+def _claim_broadcast_for_sending(broadcast_id, *, total_recipients=None):
+    update_kwargs = {
+        'status': 'sending',
+        'started_at': timezone.now(),
+    }
+    if total_recipients is not None:
+        update_kwargs['total_recipients'] = total_recipients
+
+    with transaction.atomic():
+        return BroadcastMessage.objects.filter(
+            pk=broadcast_id,
+            status__in=('draft', 'scheduled'),
+        ).update(**update_kwargs)
 
 
 @login_required
@@ -404,14 +420,19 @@ def broadcast_create(request):
             
             # Если нужно отправить сразу
             if not broadcast.scheduled_at:
-                send_broadcast_message.delay(broadcast.id)
-                messages.success(request, f'Рассылка "{broadcast.title}" запущена. Будет отправлено {broadcast.total_recipients} сообщений.')
-            else:
-                # Планируем задачу на конкретное время
-                send_broadcast_message.apply_async(
-                    args=[broadcast.id],
-                    eta=broadcast.scheduled_at
+                claimed = _claim_broadcast_for_sending(
+                    broadcast.id,
+                    total_recipients=broadcast.total_recipients,
                 )
+                if claimed:
+                    send_broadcast_message.delay(broadcast.id)
+                    messages.success(
+                        request,
+                        f'Рассылка "{broadcast.title}" запущена. Будет отправлено {broadcast.total_recipients} сообщений.'
+                    )
+                else:
+                    messages.warning(request, f'Рассылка "{broadcast.title}" уже была запущена.')
+            else:
                 messages.success(request, f'Рассылка "{broadcast.title}" запланирована на {broadcast.scheduled_at.strftime("%d.%m.%Y %H:%M")}')
             
             return redirect('panel:broadcast_detail', broadcast_id=broadcast.id)
@@ -487,12 +508,21 @@ def broadcast_detail(request, broadcast_id):
             )
             
             # Запускаем заново
-            send_broadcast_message.delay(broadcast.id)
-            messages.success(request, 'Рассылка перезапущена')
+            if _claim_broadcast_for_sending(broadcast.id, total_recipients=broadcast.total_recipients):
+                send_broadcast_message.delay(broadcast.id)
+                messages.success(request, 'Рассылка перезапущена')
+            else:
+                messages.warning(request, 'Рассылка уже была запущена другим процессом')
             
         elif action == 'start_now' and broadcast.status == 'draft':
-            send_broadcast_message.delay(broadcast.id)
-            messages.success(request, 'Рассылка запущена')
+            total_recipients = broadcast.get_recipients_count()
+            if total_recipients == 0:
+                messages.warning(request, 'Нет получателей для отправки')
+            elif _claim_broadcast_for_sending(broadcast.id, total_recipients=total_recipients):
+                send_broadcast_message.delay(broadcast.id)
+                messages.success(request, 'Рассылка запущена')
+            else:
+                messages.warning(request, 'Рассылка уже была запущена другим процессом')
         
         return redirect('panel:broadcast_detail', broadcast_id=broadcast.id)
     

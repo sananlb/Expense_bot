@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_celery_beat',
     'expenses',
+    'bot',
     'admin_panel',
 ]
 
@@ -282,6 +283,8 @@ ADMIN_ID = int(os.getenv('ADMIN_ID', '0'))
 # Admin monitoring configuration
 MONITORING_BOT_TOKEN = os.getenv('MONITORING_BOT_TOKEN')
 ADMIN_TELEGRAM_ID = os.getenv('ADMIN_TELEGRAM_ID')
+BROADCAST_TEST_ONLY = os.getenv('BROADCAST_TEST_ONLY', 'false').lower() == 'true'
+BROADCAST_TEST_TELEGRAM_ID = os.getenv('BROADCAST_TEST_TELEGRAM_ID') or ADMIN_TELEGRAM_ID
 
 # AI Configuration
 # Единичные ключи для обратной совместимости
@@ -469,6 +472,11 @@ try:
         'task': 'expense_bot.celery_tasks.check_remote_server_health',
         'schedule': timedelta(minutes=11),  # Every 11 minutes (exact interval)
         'options': {'queue': 'monitoring', 'priority': 10, 'expires': 600}
+    },
+    'process-scheduled-broadcasts': {
+        'task': 'expenses.tasks.process_scheduled_broadcasts',
+        'schedule': timedelta(minutes=5),  # Каждые 5 минут
+        'options': {'queue': 'notifications'}
     },
 }
 except ImportError:

@@ -16,7 +16,7 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
         return
 
     try:
-        from django_celery_beat.models import CrontabSchedule, PeriodicTask
+        from django_celery_beat.models import CrontabSchedule, IntervalSchedule, PeriodicTask
     except Exception:
         # Library not installed or migrations not applied yet
         return
@@ -55,15 +55,35 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
                 timezone=tz,
             ).first()
 
+    def interval(every: int, period: str):
+        return IntervalSchedule.objects.get_or_create(
+            every=every,
+            period=period,
+        )[0]
+
     created_or_updated = []
 
-    def upsert(name: str, task: str, schedule, queue: str, enabled: bool = True):
+    def upsert(
+        name: str,
+        task: str,
+        *,
+        crontab_schedule=None,
+        interval_schedule=None,
+        queue: str,
+        enabled: bool = True,
+    ):
+        deleted, _ = PeriodicTask.objects.filter(task=task).exclude(name=name).delete()
+        if deleted:
+            logger.info("[Beat setup] Removed %d duplicate PeriodicTask(s) for %s", deleted, task)
+
         obj, _ = PeriodicTask.objects.update_or_create(
             name=name,
             defaults={
                 'task': task,
-                'crontab': schedule,
-                'interval': None,
+                'crontab': crontab_schedule,
+                'interval': interval_schedule,
+                'clocked': None,
+                'solar': None,
                 'enabled': enabled,
                 'one_off': False,
                 'queue': queue,
@@ -76,7 +96,7 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
         upsert(
             name='send-daily-admin-report',
             task='expense_bot.celery_tasks.send_daily_admin_report',
-            schedule=crontab(minute='0', hour='10'),
+            crontab_schedule=crontab(minute='0', hour='10'),
             queue='reports',
         )
 
@@ -84,7 +104,7 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
         upsert(
             name='process-recurring-payments',
             task='expense_bot.celery_tasks.process_recurring_payments',
-            schedule=crontab(minute='0', hour='12'),
+            crontab_schedule=crontab(minute='0', hour='12'),
             queue='recurring',
         )
 
@@ -92,7 +112,7 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
         upsert(
             name='generate-monthly-insights',
             task='expense_bot.celery_tasks.generate_monthly_insights',
-            schedule=crontab(minute='0', hour='6', day_of_month='1'),
+            crontab_schedule=crontab(minute='0', hour='6', day_of_month='1'),
             queue='reports',
         )
 
@@ -100,7 +120,7 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
         upsert(
             name='send-monthly-reports',
             task='expense_bot.celery_tasks.send_monthly_reports',
-            schedule=crontab(minute='0', hour='11', day_of_month='1'),
+            crontab_schedule=crontab(minute='0', hour='11', day_of_month='1'),
             queue='reports',
         )
 
@@ -108,7 +128,7 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
         upsert(
             name='cleanup-old-expenses',
             task='expense_bot.celery_tasks.cleanup_old_expenses',
-            schedule=crontab(minute='0', hour='3', day_of_week='0'),
+            crontab_schedule=crontab(minute='0', hour='3', day_of_week='0'),
             queue='maintenance',
         )
 
@@ -116,7 +136,7 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
         upsert(
             name='update-top5-keyboards',
             task='expense_bot.celery_tasks.update_top5_keyboards',
-            schedule=crontab(minute='0', hour='5'),
+            crontab_schedule=crontab(minute='0', hour='5'),
             queue='reports',
         )
 
@@ -124,7 +144,7 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
         upsert(
             name='system-health-check',
             task='expense_bot.celery_tasks.system_health_check',
-            schedule=crontab(minute='*/15', hour='*'),
+            crontab_schedule=crontab(minute='*/15', hour='*'),
             queue='monitoring',
             enabled=False,  # Выключено
         )
@@ -133,7 +153,7 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
         upsert(
             name='collect-daily-analytics',
             task='expense_bot.celery_tasks.collect_daily_analytics',
-            schedule=crontab(minute='0', hour='2'),
+            crontab_schedule=crontab(minute='0', hour='2'),
             queue='analytics',
         )
 
@@ -141,8 +161,16 @@ def ensure_periodic_tasks(startup: bool = False) -> None:
         upsert(
             name='prefetch-cbrf-rates',
             task='prefetch_cbrf_rates',
-            schedule=crontab(minute='30', hour='20'),
+            crontab_schedule=crontab(minute='30', hour='20'),
             queue='maintenance',
+        )
+
+        # Every 5 minutes — scheduled broadcasts pickup
+        upsert(
+            name='process-scheduled-broadcasts',
+            task='expenses.tasks.process_scheduled_broadcasts',
+            interval_schedule=interval(5, IntervalSchedule.MINUTES),
+            queue='notifications',
         )
 
         # Cleanup stale/deprecated tasks from DB

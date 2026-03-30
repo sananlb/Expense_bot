@@ -29,6 +29,9 @@ class Command(BaseCommand):
                 task='expense_bot.celery_tasks.send_daily_admin_report',
                 defaults={
                     'crontab': schedule_10am,
+                    'interval': None,
+                    'clocked': None,
+                    'solar': None,
                     'name': 'Daily Admin Report at 10:00',
                     'queue': 'reports',
                     'enabled': True
@@ -52,6 +55,9 @@ class Command(BaseCommand):
                 task='expense_bot.celery_tasks.send_monthly_reports',
                 defaults={
                     'crontab': schedule_20pm,
+                    'interval': None,
+                    'clocked': None,
+                    'solar': None,
                     'name': 'Monthly Reports at 20:00',
                     'queue': 'reports',
                     'enabled': True
@@ -76,6 +82,9 @@ class Command(BaseCommand):
                 task='expense_bot.celery_tasks.process_recurring_payments',
                 defaults={
                     'crontab': schedule_12pm,
+                    'interval': None,
+                    'clocked': None,
+                    'solar': None,
                     'name': 'Process Recurring Payments at 12:00',
                     'queue': 'recurring',
                     'enabled': True
@@ -99,6 +108,9 @@ class Command(BaseCommand):
                 task='expense_bot.celery_tasks.cleanup_old_expenses',
                 defaults={
                     'crontab': schedule_cleanup,
+                    'interval': None,
+                    'clocked': None,
+                    'solar': None,
                     'name': 'Cleanup Old Expenses on Sunday',
                     'queue': 'maintenance',
                     'enabled': True
@@ -118,6 +130,9 @@ class Command(BaseCommand):
                 task='expense_bot.celery_tasks.system_health_check',
                 defaults={
                     'interval': interval_1hour,
+                    'crontab': None,
+                    'clocked': None,
+                    'solar': None,
                     'name': 'System Health Check',
                     'queue': 'monitoring',
                     'enabled': True
@@ -141,6 +156,9 @@ class Command(BaseCommand):
                 task='expense_bot.celery_tasks.collect_daily_analytics',
                 defaults={
                     'crontab': schedule_23pm,
+                    'interval': None,
+                    'clocked': None,
+                    'solar': None,
                     'name': 'Collect Daily Analytics at 23:00',
                     'queue': 'analytics',
                     'enabled': True
@@ -164,6 +182,9 @@ class Command(BaseCommand):
                 task='expense_bot.celery_tasks.update_top5_keyboards',
                 defaults={
                     'crontab': schedule_1am,
+                    'interval': None,
+                    'clocked': None,
+                    'solar': None,
                     'name': 'Update Top5 Keyboards at 01:00',
                     'queue': 'maintenance',
                     'enabled': True
@@ -187,11 +208,38 @@ class Command(BaseCommand):
                 defaults={
                     'task': 'prefetch_cbrf_rates',
                     'crontab': schedule_prefetch_rates,
+                    'interval': None,
+                    'clocked': None,
+                    'solar': None,
                     'enabled': True,
                 }
             )
             self.stdout.write(
                 self.style.SUCCESS(f"{'✅ Создана' if created else '✔️ Обновлена'} задача: Prefetch CBRF rates daily")
+            )
+
+            # 10. Проверка запланированных рассылок каждые 5 минут
+            interval_5min, created = IntervalSchedule.objects.get_or_create(
+                every=5,
+                period=IntervalSchedule.MINUTES
+            )
+
+            task, created = PeriodicTask.objects.update_or_create(
+                task='expenses.tasks.process_scheduled_broadcasts',
+                defaults={
+                    'interval': interval_5min,
+                    'crontab': None,
+                    'clocked': None,
+                    'solar': None,
+                    'name': 'Process Scheduled Broadcasts',
+                    'queue': 'notifications',
+                    'enabled': True
+                }
+            )
+            self.stdout.write(
+                self.style.SUCCESS(
+                    f"{'✅ Создана' if created else '✔️ Обновлена'} задача: Process Scheduled Broadcasts"
+                )
             )
 
             # Выводим итоговую информацию

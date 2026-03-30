@@ -1,12 +1,14 @@
 from celery import shared_task
+from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 import logging
 import time
+from uuid import uuid4
 
 from admin_panel.models import BroadcastMessage, BroadcastRecipient
 from bot.telegram_utils import send_telegram_message
-from django.db import transaction
+from django.core.cache import cache
 
 from expenses.models import AffiliateCommission
 from bot.utils.logging_safe import log_safe_id
@@ -17,124 +19,204 @@ logger = logging.getLogger(__name__)
 @shared_task
 def send_broadcast_message(broadcast_id):
     """Задача для отправки массовой рассылки"""
+    lock_key = f"broadcast:send:{broadcast_id}"
+    lock_token = uuid4().hex
+    if not cache.add(lock_key, lock_token, timeout=6 * 60 * 60):
+        logger.info("Broadcast %s skipped: already locked by another worker", broadcast_id)
+        return False
+
     try:
-        broadcast = BroadcastMessage.objects.get(id=broadcast_id)
-    except BroadcastMessage.DoesNotExist:
-        logger.error(f"Broadcast {broadcast_id} not found")
-        return False
-    
-    # Проверяем статус
-    if broadcast.status == 'cancelled':
-        logger.info(f"Broadcast {broadcast_id} was cancelled")
-        return False
-    
-    # Обновляем статус на "отправляется"
-    broadcast.status = 'sending'
-    broadcast.started_at = timezone.now()
-    broadcast.save()
-    
-    # Получаем ID получателей и синхронизируем записи
-    recipient_ids = set(
-        broadcast.get_recipients_queryset().values_list('id', flat=True)
-    )
-    if recipient_ids:
-        BroadcastRecipient.objects.filter(broadcast=broadcast).exclude(
-            profile_id__in=recipient_ids
-        ).delete()
-    else:
-        BroadcastRecipient.objects.filter(broadcast=broadcast).delete()
-    
-    existing_recipient_ids = set(
-        BroadcastRecipient.objects.filter(broadcast=broadcast).values_list('profile_id', flat=True)
-    )
-    new_recipient_ids = recipient_ids - existing_recipient_ids
-    BroadcastRecipient.objects.bulk_create([
-        BroadcastRecipient(
-            broadcast=broadcast,
-            profile_id=profile_id,
-            status='pending'
-        )
-        for profile_id in new_recipient_ids
-    ])
-    
-    # Отправляем сообщения
-    sent_count = 0
-    failed_count = 0
-    
-    for recipient in BroadcastRecipient.objects.filter(broadcast=broadcast, status='pending'):
-        # Проверяем, не отменена ли рассылка
-        broadcast.refresh_from_db()
-        if broadcast.status == 'cancelled':
-            logger.info(f"Broadcast {broadcast_id} was cancelled during sending")
-            return False
-        
         try:
-            # Отправляем сообщение
-            send_telegram_message(
-                chat_id=recipient.profile.telegram_id,
-                text=broadcast.message_text,
-                parse_mode='Markdown'
+            broadcast = BroadcastMessage.objects.get(id=broadcast_id)
+        except BroadcastMessage.DoesNotExist:
+            logger.error(f"Broadcast {broadcast_id} not found")
+            return False
+
+        if broadcast.status in ('completed', 'failed', 'cancelled'):
+            logger.info(
+                "Broadcast %s skipped: current status is '%s'",
+                broadcast_id,
+                broadcast.status,
             )
-            
-            # Обновляем статус получателя
-            recipient.status = 'sent'
-            recipient.sent_at = timezone.now()
-            recipient.save()
-            
-            sent_count += 1
-            
-            # Небольшая задержка между сообщениями (защита от лимитов Telegram)
-            time.sleep(0.05)  # 50ms между сообщениями
-            
-        except Exception as e:
-            logger.error(
-                "Error sending broadcast message to %s: %s",
-                log_safe_id(recipient.profile.telegram_id, "user"),
-                e,
+            return False
+
+        if broadcast.status == 'scheduled':
+            claimed = BroadcastMessage.objects.filter(
+                pk=broadcast_id,
+                status='scheduled',
+            ).update(
+                status='sending',
+                started_at=timezone.now(),
             )
-            recipient.status = 'failed'
-            recipient.error_message = str(e)
-            recipient.save()
-            failed_count += 1
-        
-        # Обновляем счетчики в рассылке
-        if sent_count % 10 == 0 or failed_count % 10 == 0:
+            if not claimed:
+                broadcast.refresh_from_db()
+                logger.info(
+                    "Broadcast %s skipped: current status is '%s'",
+                    broadcast_id,
+                    broadcast.status,
+                )
+                return False
+            broadcast.refresh_from_db()
+        elif broadcast.status != 'sending':
+            logger.info(
+                "Broadcast %s skipped: current status is '%s'",
+                broadcast_id,
+                broadcast.status,
+            )
+            return False
+
+        recipient_qs = broadcast.get_recipients_queryset()
+        if settings.BROADCAST_TEST_ONLY:
+            allowed_telegram_id = settings.BROADCAST_TEST_TELEGRAM_ID
+            if not allowed_telegram_id:
+                broadcast.status = 'failed'
+                broadcast.error_message = 'Broadcast test mode is enabled, but BROADCAST_TEST_TELEGRAM_ID is not configured.'
+                broadcast.completed_at = timezone.now()
+                broadcast.save(update_fields=['status', 'error_message', 'completed_at'])
+                logger.error("Broadcast %s failed: test recipient is not configured", broadcast_id)
+                return False
+
+            recipient_qs = recipient_qs.filter(telegram_id=allowed_telegram_id)
+            logger.info(
+                "Broadcast %s test mode enabled: restricting recipients to telegram_id=%s",
+                broadcast_id,
+                log_safe_id(allowed_telegram_id, "user"),
+            )
+
+        # Получаем ID получателей и синхронизируем записи
+        recipient_ids = set(
+            recipient_qs.values_list('id', flat=True)
+        )
+        if recipient_ids:
+            BroadcastRecipient.objects.filter(broadcast=broadcast).exclude(
+                profile_id__in=recipient_ids
+            ).delete()
+        else:
+            BroadcastRecipient.objects.filter(broadcast=broadcast).delete()
+
+        existing_recipient_ids = set(
+            BroadcastRecipient.objects.filter(broadcast=broadcast).values_list('profile_id', flat=True)
+        )
+        new_recipient_ids = recipient_ids - existing_recipient_ids
+        BroadcastRecipient.objects.bulk_create([
+            BroadcastRecipient(
+                broadcast=broadcast,
+                profile_id=profile_id,
+                status='pending'
+            )
+            for profile_id in new_recipient_ids
+        ])
+
+        if broadcast.total_recipients != len(recipient_ids):
+            broadcast.total_recipients = len(recipient_ids)
+            broadcast.save(update_fields=['total_recipients'])
+
+        def persist_counters(*, final=False):
             broadcast.sent_count = sent_count
             broadcast.failed_count = failed_count
-            broadcast.save()
-    
-    # Финальное обновление
-    broadcast.sent_count = sent_count
-    broadcast.failed_count = failed_count
-    broadcast.completed_at = timezone.now()
-    
-    if failed_count > 0 and sent_count == 0:
-        broadcast.status = 'failed'
-    else:
-        broadcast.status = 'completed'
-    
-    broadcast.save()
-    
-    logger.info(f"Broadcast {broadcast_id} completed: {sent_count} sent, {failed_count} failed")
-    return True
+            update_fields = ['sent_count', 'failed_count']
+            if final:
+                if failed_count > 0 and sent_count == 0:
+                    broadcast.status = 'failed'
+                else:
+                    broadcast.status = 'completed'
+                broadcast.completed_at = timezone.now()
+                update_fields.extend(['status', 'completed_at'])
+            broadcast.save(update_fields=update_fields)
+
+        # Отправляем сообщения. Считаем от фактического состояния записей получателей,
+        # чтобы корректно переживать повторы/частичный рестарт.
+        sent_count = BroadcastRecipient.objects.filter(
+            broadcast=broadcast,
+            status='sent',
+        ).count()
+        failed_count = BroadcastRecipient.objects.filter(
+            broadcast=broadcast,
+            status='failed',
+        ).count()
+
+        for recipient in BroadcastRecipient.objects.filter(
+            broadcast=broadcast,
+            status='pending',
+        ).select_related('profile'):
+            # Проверяем, не отменена ли рассылка
+            broadcast.refresh_from_db(fields=['status'])
+            if broadcast.status == 'cancelled':
+                persist_counters()
+                logger.info(f"Broadcast {broadcast_id} was cancelled during sending")
+                return False
+
+            try:
+                # Отправляем сообщение
+                send_telegram_message(
+                    chat_id=recipient.profile.telegram_id,
+                    text=broadcast.message_text,
+                    parse_mode='Markdown'
+                )
+
+                # Обновляем статус получателя
+                recipient.status = 'sent'
+                recipient.sent_at = timezone.now()
+                recipient.save(update_fields=['status', 'sent_at'])
+
+                sent_count += 1
+
+                # Небольшая задержка между сообщениями (защита от лимитов Telegram)
+                time.sleep(0.05)  # 50ms между сообщениями
+
+            except Exception as e:
+                logger.error(
+                    "Error sending broadcast message to %s: %s",
+                    log_safe_id(recipient.profile.telegram_id, "user"),
+                    e,
+                )
+                recipient.status = 'failed'
+                recipient.error_message = str(e)
+                recipient.save(update_fields=['status', 'error_message'])
+                failed_count += 1
+
+            # Обновляем счетчики в рассылке пакетно
+            processed_count = sent_count + failed_count
+            if processed_count and processed_count % 10 == 0:
+                persist_counters()
+
+        persist_counters(final=True)
+
+        logger.info(f"Broadcast {broadcast_id} completed: {sent_count} sent, {failed_count} failed")
+        return True
+    finally:
+        if cache.get(lock_key) == lock_token:
+            cache.delete(lock_key)
 
 
 @shared_task
 def process_scheduled_broadcasts():
     """Задача для обработки запланированных рассылок"""
     now = timezone.now()
-    
+
     # Находим рассылки, которые нужно отправить
     scheduled = BroadcastMessage.objects.filter(
         status='scheduled',
         scheduled_at__lte=now
     )
-    
+
+    started = 0
     for broadcast in scheduled:
+        claimed = BroadcastMessage.objects.filter(
+            pk=broadcast.pk,
+            status='scheduled',
+        ).update(
+            status='sending',
+            started_at=now,
+        )
+        if not claimed:
+            continue
+
         logger.info(f"Starting scheduled broadcast {broadcast.id}")
         send_broadcast_message.delay(broadcast.id)
-    
-    return scheduled.count()
+        started += 1
+
+    return started
 
 
 @shared_task
