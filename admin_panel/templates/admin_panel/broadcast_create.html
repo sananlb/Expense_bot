@@ -13,25 +13,112 @@
     <div class="col-md-8">
         <div class="card">
             <div class="card-body">
-                <form method="post">
+                <form method="post" id="broadcast-form">
                     {% csrf_token %}
-                    {{ form.as_p }}
+
+                    {# Название #}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">{{ form.title.label }}</label>
+                        {{ form.title }}
+                        {% if form.title.errors %}<div class="text-danger small">{{ form.title.errors }}</div>{% endif %}
+                    </div>
+
+                    {# Текст сообщения #}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">{{ form.message_text.label }}</label>
+                        {{ form.message_text }}
+                        {% if form.message_text.errors %}<div class="text-danger small">{{ form.message_text.errors }}</div>{% endif %}
+                    </div>
+
+                    {# Получатели #}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">{{ form.recipient_type.label }}</label>
+                        {{ form.recipient_type }}
+                        {% if form.recipient_type.errors %}<div class="text-danger small">{{ form.recipient_type.errors }}</div>{% endif %}
+                    </div>
+
+                    {# Язык #}
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">{{ form.language_filter.label }}</label>
+                        {{ form.language_filter }}
+                    </div>
+
+                    {# Дни неактивности (только для inactive) #}
+                    <div class="mb-3" id="inactive-days-block" style="display:none">
+                        <label class="form-label fw-bold">{{ form.include_inactive_days.label }}</label>
+                        {{ form.include_inactive_days }}
+                        {% if form.include_inactive_days.errors %}<div class="text-danger small">{{ form.include_inactive_days.errors }}</div>{% endif %}
+                    </div>
+
+                    {# Выбор конкретных пользователей (только для custom) #}
+                    <div class="mb-3" id="custom-recipients-block" style="display:none">
+                        <label class="form-label fw-bold">Выбор получателей</label>
+
+                        {# Поле поиска #}
+                        <div class="input-group mb-2">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="text" id="recipient-search" class="form-control"
+                                   placeholder="Введите Telegram ID...">
+                        </div>
+
+                        {# Результаты поиска #}
+                        <div id="search-results" class="list-group mb-3" style="max-height:200px; overflow-y:auto; display:none;"></div>
+
+                        {# Выбранные пользователи #}
+                        <div id="selected-recipients-container">
+                            <div class="text-muted small mb-1">Выбранные получатели:</div>
+                            <div id="selected-tags" class="d-flex flex-wrap gap-2 p-2 border rounded" style="min-height:42px; background:#f8f9fa;">
+                                <span id="no-recipients-hint" class="text-muted small align-self-center">Никого не выбрано</span>
+                            </div>
+                        </div>
+
+                        {# Скрытый select для отправки формы #}
+                        <div style="display:none">{{ form.custom_recipients }}</div>
+                        {% if form.custom_recipients.errors %}<div class="text-danger small">{{ form.custom_recipients.errors }}</div>{% endif %}
+                    </div>
+
+                    {# Планирование #}
+                    <div class="mb-3">
+                        <div class="form-check mb-2">
+                            {{ form.send_immediately }}
+                            <label class="form-check-label fw-bold" for="{{ form.send_immediately.id_for_label }}">
+                                {{ form.send_immediately.label }}
+                            </label>
+                        </div>
+                        <div class="text-muted small mb-2">{{ form.send_immediately.help_text }}</div>
+                    </div>
+
+                    <div id="schedule-block" style="display:none">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">{{ form.scheduled_date.label }}</label>
+                                {{ form.scheduled_date }}
+                                {% if form.scheduled_date.errors %}<div class="text-danger small">{{ form.scheduled_date.errors }}</div>{% endif %}
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label fw-bold">{{ form.scheduled_time.label }}</label>
+                                {{ form.scheduled_time }}
+                                {% if form.scheduled_time.errors %}<div class="text-danger small">{{ form.scheduled_time.errors }}</div>{% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                    {% endif %}
+
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-send"></i> Создать рассылку
                     </button>
-                    <a href="{% url 'panel:broadcast_list' %}" class="btn btn-secondary">
-                        Отмена
-                    </a>
+                    <a href="{% url 'panel:broadcast_list' %}" class="btn btn-secondary">Отмена</a>
                 </form>
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-4">
         <div class="card">
-            <div class="card-header">
-                <h5>Статистика</h5>
-            </div>
+            <div class="card-header"><h5>Статистика</h5></div>
             <div class="card-body">
                 <p><strong>Всего пользователей:</strong> {{ stats.total_users }}</p>
                 <p><strong>Русскоязычных:</strong> {{ stats.ru_users }}</p>
@@ -44,4 +131,143 @@
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+    // --- Показ/скрытие блока планирования ---
+    const sendImmediately = document.getElementById('{{ form.send_immediately.id_for_label }}');
+    const scheduleBlock   = document.getElementById('schedule-block');
+
+    function toggleSchedule() {
+        scheduleBlock.style.display = sendImmediately.checked ? 'none' : 'block';
+    }
+    sendImmediately.addEventListener('change', toggleSchedule);
+    toggleSchedule();
+
+    // --- Показ/скрытие блоков в зависимости от типа получателей ---
+    const recipientType      = document.getElementById('recipient-type-select');
+    const customBlock        = document.getElementById('custom-recipients-block');
+    const inactiveDaysBlock  = document.getElementById('inactive-days-block');
+
+    function toggleRecipientBlocks() {
+        const val = recipientType.value;
+        customBlock.style.display       = val === 'custom'   ? 'block' : 'none';
+        inactiveDaysBlock.style.display = val === 'inactive' ? 'block' : 'none';
+    }
+    recipientType.addEventListener('change', toggleRecipientBlocks);
+    toggleRecipientBlocks();
+
+    // --- Поиск пользователей ---
+    const searchInput    = document.getElementById('recipient-search');
+    const searchResults  = document.getElementById('search-results');
+    const selectedTags   = document.getElementById('selected-tags');
+    const noHint         = document.getElementById('no-recipients-hint');
+    const hiddenSelect   = document.getElementById('{{ form.custom_recipients.id_for_label }}');
+
+    // Хранилище выбранных: { id -> {id, telegram_id, label} }
+    const selected = {};
+
+    let searchTimeout = null;
+
+    searchInput.addEventListener('input', function () {
+        clearTimeout(searchTimeout);
+        const q = this.value.trim();
+        if (q.length < 1) { searchResults.style.display = 'none'; return; }
+
+        searchTimeout = setTimeout(function () {
+            fetch(`{% url 'panel:api_users_search' %}?q=${encodeURIComponent(q)}`)
+                .then(r => r.json())
+                .then(data => {
+                    searchResults.innerHTML = '';
+                    if (!data.results.length) {
+                        searchResults.innerHTML = '<div class="list-group-item text-muted small">Ничего не найдено</div>';
+                        searchResults.style.display = 'block';
+                        return;
+                    }
+                    data.results.forEach(function (user) {
+                        if (selected[user.id]) return; // уже выбран
+
+                        let label = user.telegram_id;
+                        if (user.has_subscription) label += ' ⭐';
+                        if (user.is_beta)          label += ' 🧪';
+
+                        const item = document.createElement('button');
+                        item.type = 'button';
+                        item.className = 'list-group-item list-group-item-action py-1 px-2 small';
+                        item.textContent = label;
+                        item.dataset.userId     = user.id;
+                        item.dataset.telegramId = user.telegram_id;
+                        item.dataset.label      = label;
+                        item.addEventListener('click', function () {
+                            addUser(user.id, user.telegram_id, label);
+                            searchResults.style.display = 'none';
+                            searchInput.value = '';
+                        });
+                        searchResults.appendChild(item);
+                    });
+                    searchResults.style.display = 'block';
+                });
+        }, 250);
+    });
+
+    // Скрыть результаты при клике вне
+    document.addEventListener('click', function (e) {
+        if (!searchResults.contains(e.target) && e.target !== searchInput) {
+            searchResults.style.display = 'none';
+        }
+    });
+
+    function addUser(id, telegramId, label) {
+        if (selected[id]) return;
+        selected[id] = { id, telegramId, label };
+        renderTags();
+        syncSelect();
+    }
+
+    function removeUser(id) {
+        delete selected[id];
+        renderTags();
+        syncSelect();
+    }
+
+    function renderTags() {
+        // Удаляем все теги (но не hint)
+        Array.from(selectedTags.querySelectorAll('.recipient-tag')).forEach(el => el.remove());
+
+        const ids = Object.keys(selected);
+        noHint.style.display = ids.length ? 'none' : 'inline';
+
+        ids.forEach(function (id) {
+            const user = selected[id];
+            const tag  = document.createElement('span');
+            tag.className = 'recipient-tag badge d-inline-flex align-items-center gap-1';
+            tag.style.cssText = 'background:#0d6efd; color:#fff; font-size:.85em; padding:5px 8px;';
+            tag.innerHTML = `${user.label} <button type="button" style="background:none;border:none;color:#fff;padding:0;line-height:1;cursor:pointer;font-size:1em;" data-id="${id}">&times;</button>`;
+            tag.querySelector('button').addEventListener('click', function () {
+                removeUser(this.dataset.id);
+            });
+            selectedTags.insertBefore(tag, noHint);
+        });
+    }
+
+    function syncSelect() {
+        // Синхронизируем скрытый <select multiple> для отправки формы
+        Array.from(hiddenSelect.options).forEach(function (opt) {
+            opt.selected = !!selected[opt.value];
+        });
+    }
+
+    // Восстанавливаем выбранных после ошибки валидации
+    Array.from(hiddenSelect.options).forEach(function (opt) {
+        if (opt.selected) {
+            selected[opt.value] = {
+                id: opt.value,
+                telegramId: opt.text.replace(/ [⭐🧪].*/g, '').trim(),
+                label: opt.text.trim(),
+            };
+        }
+    });
+    renderTags();
+})();
+</script>
 {% endblock %}

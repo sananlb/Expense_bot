@@ -578,7 +578,8 @@ def api_users_search(request):
     query = request.GET.get('q', '')
     
     users = Profile.objects.filter(
-        Q(telegram_id__icontains=query)
+        Q(telegram_id__icontains=query),
+        is_active=True,
     )[:20]
     
     results = [{
