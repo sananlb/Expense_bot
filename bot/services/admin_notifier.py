@@ -12,6 +12,7 @@ from django.core.cache import cache
 import os
 from bot.utils.language import get_text
 from bot.utils.logging_safe import log_safe_id
+from bot.utils.telegram_client import create_telegram_http_session
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +41,8 @@ class TelegramNotifier:
         url = self.BASE_URL.format(token=self.token, method=method)
         
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, json=data, timeout=10) as response:
+            async with create_telegram_http_session(timeout_seconds=10) as session:
+                async with session.post(url, json=data) as response:
                     result = await response.json()
                     
                     if not result.get('ok'):

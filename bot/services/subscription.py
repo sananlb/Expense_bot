@@ -1,10 +1,13 @@
 """
 Сервис для работы с подписками
 """
+from aiogram import Bot
 from django.utils import timezone
 from expenses.models import Profile, Subscription, UserSettings
 from datetime import datetime, timedelta
 from typing import Optional
+
+from bot.utils.telegram_client import create_telegram_bot
 
 
 async def check_subscription(telegram_id: int, include_trial: bool = True) -> bool:
@@ -152,7 +155,7 @@ async def _update_commands_for_users(user_ids: list):
         if not bot_token:
             return
 
-        bot = Bot(token=bot_token)
+        bot = create_telegram_bot(token=bot_token)
 
         # Обновляем команды для каждого пользователя
         for user_id in user_ids:

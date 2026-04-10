@@ -36,6 +36,7 @@ from ..utils.category_helpers import get_category_display_name
 from ..utils.logging_safe import log_safe_id, sanitize_callback_action, summarize_text
 from ..decorators import require_subscription, rate_limit
 from ..keyboards import expenses_summary_keyboard
+from ..utils.telegram_client import create_telegram_bot
 from expenses.models import Profile
 from django.db import DatabaseError
 
@@ -477,7 +478,7 @@ async def _generate_and_send_pdf_for_current_month(
         logger.info("[PDF_START] user=%s, period=%s/%s, source=expense.py", log_safe_id(user_id, "user"), year, month)
 
         # Создаем экземпляр бота для фоновой отправки
-        bot = Bot(token=os.getenv('BOT_TOKEN'))
+        bot = create_telegram_bot(token=os.getenv('BOT_TOKEN'))
 
         # Генерируем PDF
         from ..services.pdf_report import PDFReportService

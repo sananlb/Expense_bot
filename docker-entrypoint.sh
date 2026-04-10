@@ -3,6 +3,15 @@ set -e
 
 echo "Starting Expense Bot container..."
 
+# Optional Telegram API host override for environments where one Telegram IP
+# is reachable and the resolver returns another one that times out.
+if [ "$TELEGRAM_API_HOST_OVERRIDE" ]; then
+    echo "Applying Telegram API host override: $TELEGRAM_API_HOST_OVERRIDE"
+    if ! grep -q "api.telegram.org" /etc/hosts; then
+        echo "$TELEGRAM_API_HOST_OVERRIDE api.telegram.org" >> /etc/hosts
+    fi
+fi
+
 # Wait for PostgreSQL to be ready
 if [ "$DB_HOST" ]; then
     echo "Waiting for PostgreSQL..."

@@ -1,8 +1,8 @@
 import os
 import asyncio
-from aiogram import Bot
 import logging
 from bot.utils.logging_safe import log_safe_id
+from bot.utils.telegram_client import create_telegram_bot
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ def send_telegram_message(chat_id, text, parse_mode='Markdown'):
             raise ValueError("Bot token not found in environment variables")
         
         # Создаем бота
-        bot = Bot(token=bot_token)
+        bot = create_telegram_bot(token=bot_token)
         
         # Создаем event loop если его нет
         try:

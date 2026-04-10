@@ -9,8 +9,6 @@ import os
 import inspect
 import django
 from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.fsm.storage.memory import MemoryStorage
 from datetime import timedelta
@@ -57,6 +55,7 @@ from .middlewares.voice_to_text import VoiceToTextMiddleware
 from .middleware import ActivityTrackerMiddleware, RateLimitMiddleware as AdminRateLimitMiddleware
 from .handlers import error_router
 from .utils.commands import set_bot_commands
+from .utils.telegram_client import create_telegram_bot
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -127,13 +126,8 @@ def create_bot() -> Bot:
     if not token:
         logger.error("BOT_TOKEN не найден в переменных окружения!")
         sys.exit(1)
-    
-    return Bot(
-        token=token,
-        default=DefaultBotProperties(
-            parse_mode=ParseMode.HTML
-        )
-    )
+
+    return create_telegram_bot(token=token, parse_mode="HTML")
 
 
 def create_dispatcher() -> Dispatcher:
@@ -279,23 +273,6 @@ async def main_webhook():
     
     setup_application(app, dp, bot=bot)
 
-    # Установка webhook
-    webhook_url = os.getenv("WEBHOOK_URL")
-    if webhook_url:
-        full_webhook_url = f"{webhook_url}{webhook_path}"
-        try:
-            webhook_info = await bot.set_webhook(
-                url=full_webhook_url,
-                allowed_updates=["message", "callback_query", "pre_checkout_query", "inline_query", "chosen_inline_result"],
-                drop_pending_updates=False
-            )
-            logger.info(f"✅ Webhook установлен успешно: {full_webhook_url}")
-        except Exception as e:
-            logger.error(f"❌ Ошибка установки webhook: {e}")
-            logger.warning("⚠️ Бот продолжит работу, но webhook может не работать")
-    else:
-        logger.warning("⚠️ WEBHOOK_URL не задан в .env, webhook не будет установлен")
-
     # Запуск веб-сервера
     runner = web.AppRunner(app)
     await runner.setup()
@@ -303,6 +280,25 @@ async def main_webhook():
     await site.start()
 
     logger.info("Webhook сервер запущен на порту 8000")
+
+    # Устанавливаем webhook только после старта HTTP-сервера.
+    # Иначе Telegram может проверять URL, пока порт еще не слушается.
+    webhook_url = os.getenv("WEBHOOK_URL")
+    if webhook_url:
+        full_webhook_url = f"{webhook_url}{webhook_path}"
+        try:
+            await bot.set_webhook(
+                url=full_webhook_url,
+                allowed_updates=["message", "callback_query", "pre_checkout_query", "inline_query", "chosen_inline_result"],
+                drop_pending_updates=False,
+                request_timeout=15,
+            )
+            logger.info(f"✅ Webhook установлен успешно: {full_webhook_url}")
+        except Exception as e:
+            logger.error(f"❌ Ошибка установки webhook: {e}")
+            logger.warning("⚠️ Бот продолжит работу, но webhook может не работать")
+    else:
+        logger.warning("⚠️ WEBHOOK_URL не задан в .env, webhook не будет установлен")
     
     # Бесконечный цикл
     await asyncio.Event().wait()

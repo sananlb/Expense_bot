@@ -20,6 +20,7 @@ from bot.utils.logging_safe import log_safe_id
 from bot.services.expense import get_expenses_summary, get_expenses_by_period, get_last_expenses
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
+from bot.utils.telegram_client import create_telegram_bot
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
@@ -1415,7 +1416,7 @@ async def _generate_and_send_pdf_from_monthly_notification(
         logger.info("[PDF_START] user=%s, period=%s/%s, source=reports.py", log_safe_id(user_id, "user"), year, month)
 
         # Создаем экземпляр бота для фоновой отправки
-        bot = Bot(token=os.getenv('BOT_TOKEN'))
+        bot = create_telegram_bot(token=os.getenv('BOT_TOKEN'))
 
         # Генерируем PDF
         from bot.services.pdf_report import PDFReportService

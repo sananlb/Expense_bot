@@ -24,7 +24,8 @@ async def set_bot_commands(bot: Bot):
     try:
         await bot.set_my_commands(
             commands=commands,
-            scope=BotCommandScopeDefault()
+            scope=BotCommandScopeDefault(),
+            request_timeout=15,
         )
     except Exception:
         logger.error("Failed to set bot commands", exc_info=True)
@@ -68,7 +69,7 @@ async def update_user_commands(bot: Bot, user_id: int):
     try:
         # Устанавливаем команды для конкретного пользователя
         scope = BotCommandScopeChat(chat_id=user_id)
-        await bot.set_my_commands(commands, scope=scope)
+        await bot.set_my_commands(commands, scope=scope, request_timeout=15)
     except Exception:
         logger.error(
             "Failed to set user commands for %s",
