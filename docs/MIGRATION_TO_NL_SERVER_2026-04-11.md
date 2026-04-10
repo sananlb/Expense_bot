@@ -68,6 +68,85 @@
 
 ---
 
+## ⚠️ Проблемы, с которыми пришлось столкнуться
+
+### 1. `ssh-copy-id` недоступен в PowerShell
+
+**Симптом:** команда `ssh-copy-id` не распознаётся в PowerShell на Windows.  
+**Причина:** `ssh-copy-id` — это утилита Unix, в Windows PowerShell её нет.  
+**Решение:** использовать эквивалент для PowerShell:
+```powershell
+type $env:USERPROFILE\.ssh\id_rsa.pub | ssh root@144.31.97.139 "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+```
+
+---
+
+### 2. apt заблокирован фоновым процессом при первом старте сервера
+
+**Симптом:** `E: Could not get lock /var/lib/dpkg/lock-frontend. It is held by process 1544`  
+**Причина:** при первом запуске Ubuntu автоматически запускает `apt upgrade` в фоне (unattended-upgrades). Процесс завис на 20+ минут.  
+**Решение:** принудительно завершить зависший процесс и снять блокировку:
+```bash
+sudo kill -9 1544
+sudo rm -f /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/cache/apt/archives/lock
+sudo dpkg --configure -a
+```
+
+---
+
+### 3. `docker-compose` не найден (новый синтаксис)
+
+**Симптом:** `scripts/full_update.sh: line 36: docker-compose: command not found`  
+**Причина:** на новом сервере установлен Docker Compose v2 (plugin), команда называется `docker compose` (без дефиса), а скрипты обновления используют старый синтаксис `docker-compose`.  
+**Решение:** создать симлинк для совместимости:
+```bash
+sudo ln -s /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
+```
+После этого старые скрипты работают без изменений.
+
+---
+
+### 4. Certbot `--nginx` перезаписывает конфиг при получении SSL
+
+**Симптом:** после `certbot --nginx -d expensebot.duckdns.org` бот не отвечал на сообщения. Webhook возвращал `404 Not Found`.  
+**Причина:** при получении сертификата certbot **автоматически модифицирует** активный nginx конфиг, заменяя его своим шаблоном. В результате:
+- `/webhook/` стал проксироваться на `localhost:8000` (Django web) вместо `127.0.0.1:8001` (бот)
+- Вернулся `localhost` вместо `127.0.0.1` (риск IPv6 fallback)
+- Пропали rate limiting зоны и security headers
+
+**Диагностика:**
+```bash
+# Напрямую на бот — 200 OK
+curl -X POST http://127.0.0.1:8001/webhook/ -H 'Content-Type: application/json' -d '{}'
+
+# Через nginx — 404 (значит nginx проксирует не туда)
+curl -X POST https://expensebot.duckdns.org/webhook/ -H 'Content-Type: application/json' -d '{}'
+
+# Статус webhook у Telegram
+curl "https://api.telegram.org/botTOKEN/getWebhookInfo"
+# → last_error_message: "Wrong response from the webhook: 404 Not Found"
+```
+
+**Решение:** после получения SSL всегда восстанавливать наш конфиг из репозитория:
+```bash
+sudo cp /home/batman/expense_bot/nginx/expensebot-ssl.conf /etc/nginx/sites-available/expensebot
+sudo nginx -t && sudo nginx -s reload
+```
+
+**⚠️ Правило на будущее:** при любом обновлении certbot (`certbot renew`, `certbot --nginx`) — проверять что nginx конфиг не был перезаписан, и восстанавливать из репозитория если нужно.
+
+---
+
+### 5. Передача файлов между серверами (scp не работает напрямую)
+
+**Симптом:** при попытке `scp` со старого сервера на новый — `Permission denied` (у старого сервера нет ключа для нового).  
+**Решение:** передавать через pipe через локальную машину:
+```bash
+ssh batman@176.124.218.53 "cat /home/batman/db_dump.sql" | ssh batman@144.31.97.139 "cat > /home/batman/db_dump.sql"
+```
+
+---
+
 ## Что меняется после переноса
 
 | Параметр | Сейчас | После переноса |
