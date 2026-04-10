@@ -1020,7 +1020,6 @@ IMPORTANT:
                 existing_insight.top_categories = month_data['top_categories']
                 existing_insight.ai_summary = ai_insights['summary']
                 existing_insight.ai_analysis = ai_insights['analysis']
-                existing_insight.ai_recommendations = ''
                 existing_insight.ai_model_used = self.ai_model
                 existing_insight.ai_provider = provider
                 existing_insight.regeneration_count += 1
@@ -1048,7 +1047,6 @@ IMPORTANT:
                     top_categories=month_data['top_categories'],
                     ai_summary=ai_insights['summary'],
                     ai_analysis=ai_insights['analysis'],
-                    ai_recommendations='',
                     ai_model_used=self.ai_model,
                     ai_provider=provider
                 )

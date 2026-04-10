@@ -103,8 +103,8 @@ connect() failed (111: Connection refused) ... upstream: "http://[::1]:8001/webh
 
 Изменения:
 
-- добавлена поддержка переменной окружения `TELEGRAM_API_HOST_OVERRIDE`;
-- если переменная задана, entrypoint добавляет строку вида:
+- был добавлен временный DNS override для Telegram API;
+- entrypoint добавлял строку вида:
 
 ```text
 149.154.167.220 api.telegram.org
@@ -115,6 +115,7 @@ connect() failed (111: Connection refused) ... upstream: "http://[::1]:8001/webh
 Смысл:
 
 - сделать DNS override постоянным и переживающим перезапуски контейнера.
+- позже этот временный обходной путь был удалён после переноса на зарубежный сервер.
 
 ### 4.4. [nginx/expensebot-ssl.conf](c:\Users\_batman_\Desktop\expense_bot\nginx\expensebot-ssl.conf)
 
@@ -153,10 +154,10 @@ connect() failed (111: Connection refused) ... upstream: "http://[::1]:8001/webh
 
 ### 5.3. Зафиксирован DNS override для Telegram API
 
-В `/home/batman/expense_bot/.env` была добавлена строка:
+В `/home/batman/expense_bot/.env` временно добавлялся DNS override для Telegram API:
 
 ```env
-TELEGRAM_API_HOST_OVERRIDE=149.154.167.220
+api.telegram.org -> 149.154.167.220
 ```
 
 После пересоздания контейнера entrypoint начал автоматически прописывать нужный override в `/etc/hosts`.
@@ -240,7 +241,7 @@ Run polling for bot @showmecoinbot id=8239680156 - 'Coins'
 
 - Nginx исправлен и использует `127.0.0.1`;
 - контейнер `expense_bot_app` пересоздан;
-- в контейнере применяется `TELEGRAM_API_HOST_OVERRIDE=149.154.167.220`;
+- в контейнере применяется временный DNS override для `api.telegram.org`;
 - Telegram webhook удалён;
 - бот запущен в `polling`;
 - `getWebhookInfo` показывал пустой webhook и `pending_update_count=0`;

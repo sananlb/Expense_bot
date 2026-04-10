@@ -12,10 +12,7 @@ import tempfile
 import os
 from typing import Dict, List, Optional, Any, Type, Callable, Awaitable
 
-import httpx
-from httpx_socks import AsyncProxyTransport
 from openai import AsyncOpenAI
-from django.conf import settings
 from .ai_base_service import AIBaseService
 from .ai_selector import get_model
 from .key_rotation_mixin import KeyRotationMixin, DeepSeekKeyRotationMixin, QwenKeyRotationMixin, OpenRouterKeyRotationMixin
@@ -40,10 +37,9 @@ class UnifiedAIService(AIBaseService):
         self.provider_name = provider_name
         self.base_url = None
         self.api_key_mixin: Optional[Type[KeyRotationMixin]] = None
-        self._http_client_with_proxy: Optional[httpx.AsyncClient] = None
         # Cache for AsyncOpenAI clients to prevent "Event loop is closed" errors
-        # Key: (api_key, use_proxy) -> AsyncOpenAI client
-        self._openai_clients: Dict[tuple, AsyncOpenAI] = {}
+        # Key: api_key -> AsyncOpenAI client
+        self._openai_clients: Dict[str, AsyncOpenAI] = {}
 
         # Настройка параметров провайдера
         if provider_name == 'deepseek':
@@ -55,44 +51,18 @@ class UnifiedAIService(AIBaseService):
         elif provider_name == 'openrouter':
             self.base_url = "https://openrouter.ai/api/v1"
             self.api_key_mixin = OpenRouterKeyRotationMixin
-            # Инициализируем прокси клиент для OpenRouter (только если режим proxy)
-            self._initialize_proxy_client()
+            self._initialize_openrouter_client()
         else:
             raise ValueError(f"Unsupported provider for UnifiedAIService: {provider_name}")
 
-    def _initialize_proxy_client(self):
-        """Инициализация httpx клиента с SOCKS5 прокси (только для OpenRouter)"""
-        connection_mode = os.getenv('OPENROUTER_CONNECTION_MODE', 'proxy').lower()
-
-        # В режиме direct не инициализируем прокси вообще
-        if connection_mode == 'direct':
-            logger.info(f"[{self.provider_name}] 🌐 Режим подключения: direct (прокси отключен)")
-            return
-
-        proxy_url = os.getenv('AI_PROXY_URL')
-        if not proxy_url:
-            logger.info(f"[{self.provider_name}] AI_PROXY_URL не задан, работаем напрямую")
-            return
-
-        try:
-            transport = AsyncProxyTransport.from_url(proxy_url)
-            self._http_client_with_proxy = httpx.AsyncClient(
-                transport=transport,
-                timeout=15.0  # Единый timeout 15 секунд
-            )
-            proxy_display = proxy_url.split('@')[1] if '@' in proxy_url else proxy_url.replace('socks5://', '')
-
-            logger.info(
-                f"[{self.provider_name}] 🔒 SOCKS5 прокси инициализирован: {proxy_display} (timeout: 15s)"
-            )
-        except Exception as e:
-            logger.warning(f"[{self.provider_name}] Не удалось инициализировать прокси ({e}), работаем напрямую")
-            self._http_client_with_proxy = None
+    def _initialize_openrouter_client(self):
+        """Инициализация OpenRouter в режиме прямого подключения."""
+        logger.info(f"[{self.provider_name}] OpenRouter direct connection enabled")
 
     async def aclose(self):
         """
         Закрываем все клиенты при завершении приложения.
-        Включает httpx прокси-клиент и все кэшированные AsyncOpenAI клиенты.
+        Включает все кэшированные AsyncOpenAI клиенты.
         """
         # Close cached AsyncOpenAI clients
         for _, client in list(self._openai_clients.items()):
@@ -107,23 +77,10 @@ class UnifiedAIService(AIBaseService):
                 logger.debug(f"[{self.provider_name}] Error closing OpenAI client: {e}")
         self._openai_clients.clear()
 
-        # Close httpx proxy client
-        if self._http_client_with_proxy:
-            try:
-                await self._http_client_with_proxy.aclose()
-            except Exception:
-                pass
-            finally:
-                # Do not keep reference to a closed proxy client.
-                self._http_client_with_proxy = None
-
-    def _get_client(self, use_proxy: bool = True) -> tuple[AsyncOpenAI, int]:
+    def _get_client(self) -> tuple[AsyncOpenAI, int]:
         """
         Получает или создаёт клиент OpenAI с актуальным ключом из ротации.
         Клиенты кэшируются для предотвращения утечек при закрытии event loop.
-
-        Args:
-            use_proxy: Использовать прокси (если доступен). False = прямое соединение.
 
         Returns:
             tuple: (клиент OpenAI, индекс ключа)
@@ -137,41 +94,17 @@ class UnifiedAIService(AIBaseService):
 
         api_key, key_index = key_result
 
-        # Используем прокси только для OpenRouter
-        connection_mode = os.getenv('OPENROUTER_CONNECTION_MODE', 'proxy').lower()
-        should_use_proxy = (
-            use_proxy
-            and self._http_client_with_proxy
-            and connection_mode == 'proxy'
-        )
-
-        # Cache key: (api_key, should_use_proxy)
-        cache_key = (api_key, should_use_proxy)
+        cache_key = api_key
 
         # Return cached client if exists
         if cache_key in self._openai_clients:
             return self._openai_clients[cache_key], key_index
 
-        # Create new client
-        http_client = self._http_client_with_proxy if should_use_proxy else None
-
-        # Для прокси-запросов: отключаем retry (мы сами делаем fallback)
-        # и используем granular timeout (быстрый connect, дольше на read)
-        if should_use_proxy:
-            # Прокси: connect=5s (быстро понять что прокси недоступен), read=15s
-            timeout = httpx.Timeout(15.0, connect=5.0)
-            max_retries = 0  # Не retry - у нас свой fallback механизм
-        else:
-            # Прямое соединение: стандартный timeout, 1 retry
-            timeout = 15.0
-            max_retries = 1
-
         client = AsyncOpenAI(
             api_key=api_key,
             base_url=self.base_url,
-            timeout=timeout,
-            max_retries=max_retries,
-            http_client=http_client
+            timeout=15.0,
+            max_retries=1,
         )
 
         # Cache the client
@@ -179,39 +112,13 @@ class UnifiedAIService(AIBaseService):
 
         return client, key_index
 
-    def _is_proxy_error(self, error: Exception) -> bool:
-        """Проверяет, является ли ошибка связанной с прокси"""
-        error_str = str(error).lower()
-        proxy_keywords = [
-            'socks', 'proxy', 'connection refused', 'connection reset',
-            'tunnel', 'handshake', 'connect timeout', 'proxyerror',
-            'connection error'  # Generic connection errors when proxy is enabled
-        ]
-        return any(keyword in error_str for keyword in proxy_keywords)
-
-    async def _notify_proxy_fallback(self, operation: str, error: Exception, proxy_time: float):
-        """Уведомляет админа о fallback с прокси на прямое соединение"""
-        try:
-            from bot.services.admin_notifier import notify_critical_error
-            await notify_critical_error(
-                error_type="OpenRouter Proxy Fallback",
-                details=f"Операция: {operation}, Ошибка: {str(error)[:150]}, Время прокси: {proxy_time:.2f}s"
-            )
-        except Exception as notify_error:
-            logger.warning(f"[{self.provider_name}] Не удалось уведомить админа о fallback: {notify_error}")
-
-    async def _make_api_call_with_proxy_fallback(
+    async def _make_api_call(
         self,
         create_call: Callable[[AsyncOpenAI], Awaitable[Any]],
         operation: str,
     ):
         """
-        Выполняет API вызов с fallback на прямое соединение при ошибке прокси.
-
-        Логика:
-        1. Всегда сначала пробуем через прокси (если настроен)
-        2. При ошибке прокси - fallback на прямое соединение
-        3. Уведомляем админа о каждом fallback
+        Выполняет API вызов через прямое соединение.
 
         Args:
             create_call: Функция, принимающая client и возвращающая response
@@ -220,12 +127,8 @@ class UnifiedAIService(AIBaseService):
         Returns:
             tuple: (response, response_time, key_index)
         """
-        client, key_index = self._get_client(use_proxy=True)
+        client, key_index = self._get_client()
         start_time = time.time()
-        using_proxy = (
-            self._http_client_with_proxy
-            and os.getenv('OPENROUTER_CONNECTION_MODE', 'proxy').lower() == 'proxy'
-        )
 
         try:
             response = await create_call(client)
@@ -235,51 +138,9 @@ class UnifiedAIService(AIBaseService):
                 self.api_key_mixin.mark_key_success(key_index)
 
             elapsed = time.time() - start_time
-
-            # Логируем режим подключения (только для прокси, чтобы не спамить)
-            if using_proxy:
-                logger.debug(
-                    f"[{self.provider_name}] ✓ {operation} через SOCKS5 прокси: {elapsed:.2f}s"
-                )
-
             return response, elapsed, key_index
 
         except Exception as api_error:
-            # Проверяем ошибки прокси - делаем fallback
-            if self._is_proxy_error(api_error) and self._http_client_with_proxy:
-                proxy_elapsed = time.time() - start_time
-                logger.warning(
-                    f"[{self.provider_name}] ⚠️ Ошибка прокси после {proxy_elapsed:.2f}s ({api_error}), "
-                    f"повторяю запрос напрямую"
-                )
-
-                # Уведомляем админа о fallback (async, не блокируем)
-                asyncio.create_task(self._notify_proxy_fallback(operation, api_error, proxy_elapsed))
-
-                # Повторяем запрос БЕЗ прокси
-                try:
-                    direct_start = time.time()
-                    client_direct, key_index_direct = self._get_client(use_proxy=False)
-                    response = await create_call(client_direct)
-
-                    if self.api_key_mixin:
-                        self.api_key_mixin.mark_key_success(key_index_direct)
-
-                    direct_elapsed = time.time() - direct_start
-                    total_elapsed = time.time() - start_time
-                    logger.info(
-                        f"[{self.provider_name}] ✓ {operation} через прямое соединение: {direct_elapsed:.2f}s "
-                        f"(попытка прокси: {proxy_elapsed:.2f}s, всего: {total_elapsed:.2f}s)"
-                    )
-                    return response, total_elapsed, key_index_direct
-
-                except Exception as direct_error:
-                    # Если и прямое соединение не помогло - помечаем НОВЫЙ ключ как проблемный
-                    if self.api_key_mixin:
-                        self.api_key_mixin.mark_key_failure(key_index_direct, direct_error)
-                    raise direct_error
-
-            # Обычная ошибка API (не прокси)
             if self.api_key_mixin:
                 self.api_key_mixin.mark_key_failure(key_index, api_error)
             raise api_error
@@ -316,8 +177,7 @@ class UnifiedAIService(AIBaseService):
                     max_tokens=1024
                 )
 
-            # Выполняем запрос с поддержкой прокси fallback
-            response, response_time, key_index = await self._make_api_call_with_proxy_fallback(
+            response, response_time, key_index = await self._make_api_call(
                 create_call, 'categorize_expense'
             )
 
@@ -421,8 +281,7 @@ class UnifiedAIService(AIBaseService):
                     max_tokens=200
                 )
 
-            # Выполняем запрос с поддержкой прокси fallback
-            intent_response, intent_time, _ = await self._make_api_call_with_proxy_fallback(
+            intent_response, intent_time, _ = await self._make_api_call(
                 create_intent_call, 'chat_intent'
             )
 
@@ -472,8 +331,7 @@ class UnifiedAIService(AIBaseService):
                     max_tokens=1000
                 )
 
-            # Выполняем запрос с поддержкой прокси fallback
-            response, chat_time, _ = await self._make_api_call_with_proxy_fallback(
+            response, chat_time, _ = await self._make_api_call(
                 create_chat_call, 'chat'
             )
 
@@ -564,8 +422,7 @@ class UnifiedAIService(AIBaseService):
             return await client.chat.completions.create(**call_kwargs)
 
         try:
-            # Выполняем запрос с поддержкой прокси fallback
-            response, response_time, _ = await self._make_api_call_with_proxy_fallback(
+            response, response_time, _ = await self._make_api_call(
                 create_call, 'simple_chat'
             )
 
@@ -765,8 +622,7 @@ class UnifiedAIService(AIBaseService):
                     temperature=0.0  # Минимальная температура для точной транскрипции
                 )
 
-            # Выполняем запрос с поддержкой прокси fallback
-            response, response_time, _ = await self._make_api_call_with_proxy_fallback(
+            response, response_time, _ = await self._make_api_call(
                 create_call, 'transcribe_voice'
             )
 

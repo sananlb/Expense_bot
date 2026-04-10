@@ -1,9 +1,10 @@
 from celery import shared_task
-from datetime import datetime, date, timedelta, time
+from datetime import datetime, date, timedelta, time, timezone as dt_timezone
 import asyncio
 import logging
 import re
 import os
+import time as time_module
 from typing import List
 
 from django.conf import settings
@@ -12,6 +13,7 @@ from django.utils import timezone
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.exceptions import TelegramBadRequest, TelegramNotFound
+from bot.utils.telegram_client import create_telegram_bot
 
 logger = logging.getLogger(__name__)
 
@@ -132,7 +134,7 @@ def send_monthly_reports():
         from calendar import monthrange
         # Use main bot token for user-facing notifications
         bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('MONITORING_BOT_TOKEN')
-        bot = Bot(token=bot_token)
+        bot = create_telegram_bot(token=bot_token)
         service = NotificationService(bot)
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -271,7 +273,7 @@ def retry_send_monthly_report(user_id: int, year: int, month: int, attempt: int 
 
     try:
         bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('MONITORING_BOT_TOKEN')
-        bot = Bot(token=bot_token)
+        bot = create_telegram_bot(token=bot_token)
         service = NotificationService(bot)
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -1405,7 +1407,7 @@ def process_recurring_payments():
         from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
         # Use main bot token for user-facing notifications
         bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('MONITORING_BOT_TOKEN')
-        bot = Bot(token=bot_token)
+        bot = create_telegram_bot(token=bot_token)
         
         # Run async function in sync context
         loop = asyncio.new_event_loop()
@@ -1808,7 +1810,7 @@ def update_top5_keyboards():
 
         # Бот для вызова editMessageReplyMarkup
         bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('MONITORING_BOT_TOKEN')
-        bot = Bot(token=bot_token)
+        bot = create_telegram_bot(token=bot_token)
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -2051,14 +2053,434 @@ def learn_income_keywords_on_create(income_id: int):
 
 
 # ---------------------------------------------------------------------------
-# Cross-server monitoring: expense_bot checks nutrition_bot availability
+# Public monitoring: expense_bot checks its own public HTTPS/webhook surface
 # ---------------------------------------------------------------------------
 
+PUBLIC_MONITOR_NAME = "Expense Bot"
+PUBLIC_CHECK_TIMEOUT = 15  # seconds
+PUBLIC_REQUEST_ATTEMPTS = 2
+PUBLIC_REQUEST_RETRY_DELAY = 5  # seconds
+PUBLIC_FAILURES_BEFORE_ALERT = 2
+
+CACHE_KEY_PUBLIC_FAILURES = "public_monitor:failures"
+CACHE_KEY_PUBLIC_ALERT_SENT = "public_monitor:alert_sent"
+CACHE_KEY_PUBLIC_DOWN_SINCE = "public_monitor:down_since"
+CACHE_KEY_PUBLIC_ISSUES_STATE = "public_monitor:issues_state"
+
+
+def _get_public_health_url() -> str:
+    public_url = (os.getenv("PUBLIC_HEALTHCHECK_URL") or "").strip()
+    if public_url:
+        return public_url
+
+    webhook_url = (os.getenv("WEBHOOK_URL") or "").strip().rstrip("/")
+    if webhook_url:
+        return f"{webhook_url}/health/"
+
+    return "https://expensebot.duckdns.org/health/"
+
+
+def _get_expected_webhook_url() -> str:
+    webhook_url = (os.getenv("WEBHOOK_URL") or "").strip().rstrip("/")
+    webhook_path = (os.getenv("WEBHOOK_PATH") or "/webhook/").strip() or "/webhook/"
+
+    if not webhook_url:
+        return ""
+
+    if not webhook_path.startswith("/"):
+        webhook_path = f"/{webhook_path}"
+
+    return f"{webhook_url}{webhook_path}"
+
+
+def _get_public_tls_target() -> tuple[str, int]:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(_get_public_health_url())
+    hostname = parsed.hostname or "expensebot.duckdns.org"
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    return hostname, port
+
+
+@shared_task
+def check_public_endpoint_health():
+    """
+    Проверяет публичный HTTPS endpoint, срок действия TLS сертификата и состояние Telegram webhook.
+    Шлёт админу alert/recovery и отдельные предупреждения по рискам до того, как бот реально ляжет.
+    """
+    from django.core.cache import cache
+
+    health_url = _get_public_health_url()
+    is_up, error_detail = _probe_public_health_endpoint(health_url)
+
+    if is_up:
+        _handle_public_endpoint_up(cache, health_url)
+        issues = _collect_public_monitoring_issues()
+        _handle_public_monitoring_issues(cache, health_url, issues)
+    else:
+        _handle_public_endpoint_down(cache, health_url, error_detail)
+
+
+def _probe_public_health_endpoint(health_url: str) -> tuple[bool, str]:
+    from urllib.error import HTTPError, URLError
+    from urllib.request import Request, urlopen
+
+    last_error = ""
+    request = Request(health_url, headers={"User-Agent": "ExpenseBotMonitor/1.0"})
+
+    for attempt in range(1, PUBLIC_REQUEST_ATTEMPTS + 1):
+        try:
+            with urlopen(request, timeout=PUBLIC_CHECK_TIMEOUT) as response:
+                status_code = getattr(response, "status", response.getcode())
+                if status_code == 200:
+                    if attempt > 1:
+                        logger.info(
+                            "[PUBLIC_MONITOR] %s recovered within the same check on attempt %s/%s",
+                            PUBLIC_MONITOR_NAME,
+                            attempt,
+                            PUBLIC_REQUEST_ATTEMPTS,
+                        )
+                    return True, ""
+
+                last_error = f"HTTP {status_code}"
+        except HTTPError as exc:
+            last_error = f"HTTP {exc.code}"
+        except URLError as exc:
+            last_error = str(exc.reason)[:160]
+        except Exception as exc:
+            last_error = str(exc)[:160]
+
+        if attempt < PUBLIC_REQUEST_ATTEMPTS:
+            logger.warning(
+                "[PUBLIC_MONITOR] %s health check failed on attempt %s/%s (%s), retrying in %ss",
+                PUBLIC_MONITOR_NAME,
+                attempt,
+                PUBLIC_REQUEST_ATTEMPTS,
+                last_error,
+                PUBLIC_REQUEST_RETRY_DELAY,
+            )
+            time_module.sleep(PUBLIC_REQUEST_RETRY_DELAY)
+
+    return False, last_error
+
+
+def _collect_public_monitoring_issues() -> List[dict]:
+    issues: List[dict] = []
+
+    cert_days_left, expires_at, cert_error = _probe_public_certificate_expiry()
+    cert_issue = _build_public_certificate_issue(
+        cert_days_left=cert_days_left,
+        expires_at=expires_at,
+        cert_error=cert_error,
+    )
+    if cert_issue:
+        issues.append(cert_issue)
+
+    webhook_info, webhook_error = _fetch_telegram_webhook_info()
+    if webhook_error:
+        issues.append(
+            {
+                "code": "webhook_info_unavailable",
+                "severity": "critical",
+                "message": f"Не удалось получить getWebhookInfo: {webhook_error}",
+            }
+        )
+    elif webhook_info:
+        issues.extend(
+            _build_webhook_monitoring_issues(
+                webhook_info,
+                expected_url=_get_expected_webhook_url(),
+            )
+        )
+
+    return issues
+
+
+def _probe_public_certificate_expiry() -> tuple[int | None, datetime | None, str]:
+    import math
+    import socket
+    import ssl
+    from email.utils import parsedate_to_datetime
+
+    hostname, port = _get_public_tls_target()
+
+    try:
+        context = ssl.create_default_context()
+        with socket.create_connection((hostname, port), timeout=PUBLIC_CHECK_TIMEOUT) as connection:
+            with context.wrap_socket(connection, server_hostname=hostname) as tls_socket:
+                certificate = tls_socket.getpeercert()
+
+        not_after_raw = certificate.get("notAfter")
+        if not not_after_raw:
+            return None, None, "поле notAfter отсутствует"
+
+        expires_at = parsedate_to_datetime(not_after_raw)
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=dt_timezone.utc)
+
+        seconds_left = (expires_at - datetime.now(dt_timezone.utc)).total_seconds()
+        days_left = max(0, math.ceil(seconds_left / 86400))
+        return days_left, expires_at, ""
+    except Exception as exc:
+        return None, None, str(exc)[:160]
+
+
+def _fetch_telegram_webhook_info() -> tuple[dict | None, str]:
+    import json
+    from urllib.error import HTTPError, URLError
+    from urllib.request import urlopen
+
+    bot_token = (
+        os.getenv("BOT_TOKEN")
+        or os.getenv("TELEGRAM_BOT_TOKEN")
+        or os.getenv("MONITORING_BOT_TOKEN")
+    )
+    if not bot_token:
+        return None, "BOT_TOKEN не настроен"
+
+    try:
+        with urlopen(
+            f"https://api.telegram.org/bot{bot_token}/getWebhookInfo",
+            timeout=PUBLIC_CHECK_TIMEOUT,
+        ) as response:
+            payload = json.load(response)
+
+        if not payload.get("ok"):
+            return None, payload.get("description", "unknown Telegram API error")
+
+        return payload.get("result") or {}, ""
+    except HTTPError as exc:
+        return None, f"HTTP {exc.code}"
+    except URLError as exc:
+        return None, str(exc.reason)[:160]
+    except Exception as exc:
+        return None, str(exc)[:160]
+
+
+def _build_public_certificate_issue(
+    *,
+    cert_days_left: int | None,
+    expires_at: datetime | None,
+    cert_error: str,
+) -> dict | None:
+    warning_days = int(os.getenv("PUBLIC_CERT_WARNING_DAYS", "21"))
+    critical_days = int(os.getenv("PUBLIC_CERT_CRITICAL_DAYS", "7"))
+
+    if cert_error:
+        return {
+            "code": "certificate_probe_failed",
+            "severity": "critical",
+            "message": f"Не удалось проверить срок действия TLS сертификата: {cert_error}",
+        }
+
+    if cert_days_left is None or expires_at is None or cert_days_left > warning_days:
+        return None
+
+    severity = "critical" if cert_days_left <= critical_days else "warning"
+    expires_local = timezone.localtime(expires_at)
+
+    return {
+        "code": "certificate_expiring",
+        "severity": severity,
+        "message": (
+            f"TLS сертификат истекает через {cert_days_left} дн. "
+            f"({expires_local.strftime('%Y-%m-%d %H:%M %Z')})"
+        ),
+    }
+
+
+def _build_webhook_monitoring_issues(
+    webhook_info: dict,
+    *,
+    expected_url: str,
+    now: datetime | None = None,
+) -> List[dict]:
+    issues: List[dict] = []
+    now = now or timezone.now()
+
+    current_url = (webhook_info.get("url") or "").strip()
+    pending_updates = int(webhook_info.get("pending_update_count") or 0)
+    last_error_message = (webhook_info.get("last_error_message") or "").strip()
+    last_error_date = webhook_info.get("last_error_date")
+
+    if expected_url and current_url != expected_url:
+        issues.append(
+            {
+                "code": "webhook_url_mismatch",
+                "severity": "critical",
+                "message": (
+                    "Webhook URL в Telegram не совпадает с ожидаемым: "
+                    f"registered={current_url or '<empty>'}, expected={expected_url}"
+                ),
+            }
+        )
+
+    pending_threshold = int(os.getenv("PUBLIC_WEBHOOK_PENDING_THRESHOLD", "10"))
+    if pending_updates >= pending_threshold:
+        issues.append(
+            {
+                "code": "webhook_pending_updates",
+                "severity": "warning",
+                "message": f"Telegram накопил pending updates: {pending_updates}",
+            }
+        )
+
+    if last_error_message and last_error_date:
+        try:
+            error_dt = datetime.fromtimestamp(int(last_error_date), tz=dt_timezone.utc)
+            recent_window = timedelta(
+                minutes=int(os.getenv("PUBLIC_WEBHOOK_RECENT_ERROR_MINUTES", "30"))
+            )
+            if now - error_dt.astimezone(now.tzinfo) <= recent_window:
+                issues.append(
+                    {
+                        "code": "recent_webhook_error",
+                        "severity": "critical",
+                        "message": (
+                            "Telegram недавно вернул webhook error "
+                            f"({timezone.localtime(error_dt).strftime('%Y-%m-%d %H:%M %Z')}): "
+                            f"{last_error_message}"
+                        ),
+                    }
+                )
+        except (TypeError, ValueError, OSError):
+            issues.append(
+                {
+                    "code": "webhook_error_timestamp_invalid",
+                    "severity": "warning",
+                    "message": "Telegram вернул webhook error без корректного last_error_date",
+                }
+            )
+
+    return issues
+
+
+def _handle_public_endpoint_up(cache, health_url: str) -> None:
+    was_alert_sent = cache.get(CACHE_KEY_PUBLIC_ALERT_SENT)
+
+    if was_alert_sent:
+        down_since_iso = cache.get(CACHE_KEY_PUBLIC_DOWN_SINCE)
+        downtime_str = _format_downtime(down_since_iso)
+
+        recovery_sent = _send_monitoring_alert(
+            f"✅ ПУБЛИЧНЫЙ ENDPOINT ВОССТАНОВЛЕН\n\n"
+            f"Сервис: {PUBLIC_MONITOR_NAME}\n"
+            f"URL: {health_url}\n"
+            f"Время простоя: {downtime_str}",
+            label="check_public_endpoint_health",
+        )
+        if recovery_sent:
+            cache.delete(CACHE_KEY_PUBLIC_ALERT_SENT)
+            cache.delete(CACHE_KEY_PUBLIC_DOWN_SINCE)
+            logger.info("[PUBLIC_MONITOR] %s recovered, downtime=%s", PUBLIC_MONITOR_NAME, downtime_str)
+        else:
+            logger.warning("[PUBLIC_MONITOR] Recovery message failed to send, keeping alert flag")
+
+    cache.set(CACHE_KEY_PUBLIC_FAILURES, 0, 3600)
+
+
+def _handle_public_endpoint_down(cache, health_url: str, error_detail: str) -> None:
+    failures = (cache.get(CACHE_KEY_PUBLIC_FAILURES) or 0) + 1
+    cache.set(CACHE_KEY_PUBLIC_FAILURES, failures, 3600)
+
+    if failures == 1:
+        cache.set(CACHE_KEY_PUBLIC_DOWN_SINCE, datetime.now().isoformat(), 86400)
+
+    logger.warning(
+        "[PUBLIC_MONITOR] %s unreachable (attempt %s, error: %s)",
+        PUBLIC_MONITOR_NAME,
+        failures,
+        error_detail,
+    )
+
+    if failures >= PUBLIC_FAILURES_BEFORE_ALERT and not cache.get(CACHE_KEY_PUBLIC_ALERT_SENT):
+        sent = _send_monitoring_alert(
+            f"🚨 ПУБЛИЧНЫЙ ENDPOINT НЕДОСТУПЕН\n\n"
+            f"Сервис: {PUBLIC_MONITOR_NAME}\n"
+            f"URL: {health_url}\n"
+            f"Проверок подряд: {failures}\n"
+            f"Ошибка: {error_detail}\n\n"
+            f"Проверь сертификат, nginx и доступность webhook.",
+            label="check_public_endpoint_health",
+        )
+        if sent:
+            cache.set(CACHE_KEY_PUBLIC_ALERT_SENT, True, 86400)
+            logger.error("[PUBLIC_MONITOR] Alert sent: %s is DOWN", PUBLIC_MONITOR_NAME)
+        else:
+            logger.error("[PUBLIC_MONITOR] Failed to send alert, will retry next check")
+
+
+def _handle_public_monitoring_issues(cache, health_url: str, issues: List[dict]) -> None:
+    previous_state = cache.get(CACHE_KEY_PUBLIC_ISSUES_STATE)
+    current_state = _serialize_monitoring_issues(issues)
+
+    if not issues:
+        if previous_state:
+            sent = _send_monitoring_alert(
+                f"✅ ПУБЛИЧНЫЙ HTTPS/WEBHOOK МОНИТОРИНГ НОРМАЛИЗОВАЛСЯ\n\n"
+                f"Сервис: {PUBLIC_MONITOR_NAME}\n"
+                f"URL: {health_url}",
+                label="check_public_endpoint_health",
+            )
+            if sent:
+                cache.delete(CACHE_KEY_PUBLIC_ISSUES_STATE)
+        return
+
+    if current_state == previous_state:
+        return
+
+    highest_severity = "critical" if any(issue["severity"] == "critical" for issue in issues) else "warning"
+    emoji = "🚨" if highest_severity == "critical" else "⚠️"
+    details = "\n".join(f"• {issue['message']}" for issue in issues)
+
+    sent = _send_monitoring_alert(
+        f"{emoji} ПУБЛИЧНЫЙ HTTPS/WEBHOOK РИСК\n\n"
+        f"Сервис: {PUBLIC_MONITOR_NAME}\n"
+        f"URL: {health_url}\n"
+        f"Проблемы:\n{details}",
+        label="check_public_endpoint_health",
+    )
+    if sent:
+        cache.set(CACHE_KEY_PUBLIC_ISSUES_STATE, current_state, 86400)
+
+
+def _serialize_monitoring_issues(issues: List[dict]) -> str:
+    import json
+
+    payload = [
+        {
+            "code": issue.get("code"),
+            "severity": issue.get("severity"),
+            "message": issue.get("message"),
+        }
+        for issue in issues
+    ]
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+def _format_downtime(down_since_iso: str | None) -> str:
+    if not down_since_iso:
+        return "неизвестно"
+
+    try:
+        down_since = datetime.fromisoformat(down_since_iso)
+        delta = datetime.now() - down_since
+        minutes = int(delta.total_seconds() // 60)
+        return f"~{minutes} мин" if minutes > 0 else "<1 мин"
+    except (ValueError, TypeError):
+        return "неизвестно"
+
+
+# ---------------------------------------------------------------------------
+# Cross-server monitoring: expense_bot checks nutrition_bot availability
+# ---------------------------------------------------------------------------
 REMOTE_SERVER_NAME = "Nutrition Bot"
 REMOTE_SERVER_IP = "45.93.201.222"
 REMOTE_HEALTH_URL = "https://showmefood.duckdns.org/health/"
 REMOTE_CHECK_TIMEOUT = 15  # seconds
-REMOTE_FAILURES_BEFORE_ALERT = 1  # alert on first failure
+REMOTE_REQUEST_ATTEMPTS = 3
+REMOTE_REQUEST_RETRY_DELAY = 5  # seconds
+REMOTE_FAILURES_BEFORE_ALERT = 2  # alert after 2 consecutive failed checks
 
 CACHE_KEY_REMOTE_FAILURES = "remote_server:failures"
 CACHE_KEY_REMOTE_ALERT_SENT = "remote_server:alert_sent"
@@ -2075,20 +2497,8 @@ def check_remote_server_health():
     import requests as http_requests
     from django.core.cache import cache
 
-    # 1. Проверяем доступность
-    is_up = False
-    error_detail = ""
-    try:
-        resp = http_requests.get(REMOTE_HEALTH_URL, timeout=REMOTE_CHECK_TIMEOUT)
-        is_up = resp.status_code == 200
-        if not is_up:
-            error_detail = f"HTTP {resp.status_code}"
-    except http_requests.exceptions.Timeout:
-        error_detail = "Timeout"
-    except http_requests.exceptions.ConnectionError:
-        error_detail = "Connection refused"
-    except Exception as e:
-        error_detail = str(e)[:100]
+    # 1. Проверяем доступность с короткими повторами, чтобы отсечь мимолётные сетевые сбои
+    is_up, error_detail = _probe_remote_server_health(http_requests)
 
     # 2. Обрабатываем результат
     if is_up:
@@ -2097,27 +2507,56 @@ def check_remote_server_health():
         _handle_remote_server_down(cache, error_detail)
 
 
+def _probe_remote_server_health(http_requests):
+    """Проверяет remote health endpoint с короткими повторами внутри одного запуска."""
+    last_error = ""
+
+    for attempt in range(1, REMOTE_REQUEST_ATTEMPTS + 1):
+        try:
+            resp = http_requests.get(REMOTE_HEALTH_URL, timeout=REMOTE_CHECK_TIMEOUT)
+            if resp.status_code == 200:
+                if attempt > 1:
+                    logger.info(
+                        "[REMOTE_MONITOR] %s recovered within the same check on attempt %s/%s",
+                        REMOTE_SERVER_NAME,
+                        attempt,
+                        REMOTE_REQUEST_ATTEMPTS,
+                    )
+                return True, ""
+
+            last_error = f"HTTP {resp.status_code}"
+        except http_requests.exceptions.Timeout:
+            last_error = "Timeout"
+        except http_requests.exceptions.ConnectionError:
+            last_error = "Connection refused"
+        except Exception as e:
+            last_error = str(e)[:100]
+
+        if attempt < REMOTE_REQUEST_ATTEMPTS:
+            logger.warning(
+                "[REMOTE_MONITOR] %s health check failed on attempt %s/%s (%s), retrying in %ss",
+                REMOTE_SERVER_NAME,
+                attempt,
+                REMOTE_REQUEST_ATTEMPTS,
+                last_error,
+                REMOTE_REQUEST_RETRY_DELAY,
+            )
+            time_module.sleep(REMOTE_REQUEST_RETRY_DELAY)
+
+    return False, last_error
+
 def _handle_remote_server_up(cache) -> None:
     """Сервер доступен — сбрасываем счётчик, шлём recovery если был алерт."""
     was_alert_sent = cache.get(CACHE_KEY_REMOTE_ALERT_SENT)
 
     if was_alert_sent:
-        # Считаем время простоя
-        down_since_iso = cache.get(CACHE_KEY_REMOTE_DOWN_SINCE)
-        downtime_str = "неизвестно"
-        if down_since_iso:
-            try:
-                down_since = datetime.fromisoformat(down_since_iso)
-                delta = datetime.now() - down_since
-                minutes = int(delta.total_seconds() // 60)
-                downtime_str = f"~{minutes} мин" if minutes > 0 else "<1 мин"
-            except (ValueError, TypeError):
-                pass
+        downtime_str = _format_downtime(cache.get(CACHE_KEY_REMOTE_DOWN_SINCE))
 
-        recovery_sent = _send_remote_alert(
+        recovery_sent = _send_monitoring_alert(
             f"✅ СЕРВЕР ВОССТАНОВЛЕН\n\n"
             f"Сервер: {REMOTE_SERVER_NAME} ({REMOTE_SERVER_IP})\n"
-            f"Время простоя: {downtime_str}"
+            f"Время простоя: {downtime_str}",
+            label="check_remote_server_health",
         )
         if recovery_sent:
             cache.delete(CACHE_KEY_REMOTE_ALERT_SENT)
@@ -2148,14 +2587,15 @@ def _handle_remote_server_down(cache, error_detail: str) -> None:
         moscow_tz = pytz.timezone('Europe/Moscow')
         now_msk = datetime.now(moscow_tz).strftime('%H:%M')
 
-        sent = _send_remote_alert(
+        sent = _send_monitoring_alert(
             f"🚨 СЕРВЕР НЕДОСТУПЕН\n\n"
             f"Сервер: {REMOTE_SERVER_NAME} ({REMOTE_SERVER_IP})\n"
             f"URL: {REMOTE_HEALTH_URL}\n"
             f"Недоступен с: {now_msk} MSK\n"
             f"Проверок подряд: {failures}\n"
             f"Ошибка: {error_detail}\n\n"
-            f"Проверь сервер!"
+            f"Проверь сервер!",
+            label="check_remote_server_health",
         )
         if sent:
             cache.set(CACHE_KEY_REMOTE_ALERT_SENT, True, 86400)
@@ -2164,7 +2604,7 @@ def _handle_remote_server_down(cache, error_detail: str) -> None:
             logger.error(f"[REMOTE_MONITOR] Failed to send alert, will retry next check")
 
 
-def _send_remote_alert(message: str) -> bool:
+def _send_monitoring_alert(message: str, *, label: str) -> bool:
     """Отправить уведомление админу через async admin_notifier. Возвращает True при успехе."""
     try:
         from bot.services.admin_notifier import send_admin_alert
@@ -2173,8 +2613,8 @@ def _send_remote_alert(message: str) -> bool:
         try:
             result = loop.run_until_complete(send_admin_alert(message))
         finally:
-            _shutdown_event_loop(loop, label="check_remote_server_health")
+            _shutdown_event_loop(loop, label=label)
         return bool(result)
     except Exception as e:
-        logger.error(f"[REMOTE_MONITOR] Failed to send alert: {e}")
+        logger.error("[%s] Failed to send alert: %s", label.upper(), e)
         return False

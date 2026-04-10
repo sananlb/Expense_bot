@@ -1753,10 +1753,6 @@ class MonthlyInsight(models.Model):
         verbose_name='AI анализ',
         help_text='Детальный анализ трат и паттернов'
     )
-    ai_recommendations = models.TextField(
-        verbose_name='AI рекомендации',
-        help_text='Рекомендации по оптимизации бюджета'
-    )
 
     # AI service info
     ai_model_used = models.CharField(
