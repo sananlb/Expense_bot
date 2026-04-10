@@ -1,3 +1,4 @@
+import logging
 import os
 import socket
 import ssl
@@ -10,6 +11,13 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.enums import ParseMode
 
+logger = logging.getLogger(__name__)
+
+
+def _get_telegram_proxy() -> Optional[str]:
+    """Получить URL прокси для Telegram из переменных окружения."""
+    return os.getenv("TELEGRAM_PROXY", "").strip() or None
+
 
 def should_force_telegram_ipv4() -> bool:
     value = os.getenv("TELEGRAM_FORCE_IPV4", "")
@@ -17,10 +25,15 @@ def should_force_telegram_ipv4() -> bool:
 
 
 def create_telegram_session() -> AiohttpSession:
-    session = AiohttpSession()
+    proxy = _get_telegram_proxy()
+
+    if proxy:
+        session = AiohttpSession(proxy=proxy)
+        logger.info("Telegram session created with proxy")
+    else:
+        session = AiohttpSession()
 
     if should_force_telegram_ipv4():
-        # Force IPv4 for Telegram API to avoid broken IPv6 / Happy Eyeballs paths.
         session._connector_init["family"] = socket.AF_INET
         session._connector_init["ttl_dns_cache"] = 0
 
@@ -44,6 +57,22 @@ def create_telegram_bot(
 
 
 def create_telegram_http_session(timeout_seconds: int = 10) -> aiohttp.ClientSession:
+    proxy = _get_telegram_proxy()
+    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+
+    if proxy:
+        # Для SOCKS5 прокси используем ProxyConnector из aiohttp_socks
+        try:
+            from aiohttp_socks import ProxyConnector
+            connector = ProxyConnector.from_url(
+                proxy,
+                ssl=ssl.create_default_context(cafile=certifi.where()),
+            )
+            logger.info("Telegram HTTP session created with proxy")
+            return aiohttp.ClientSession(connector=connector, timeout=timeout)
+        except ImportError:
+            logger.warning("aiohttp-socks not installed, proxy ignored for HTTP session")
+
     connector_kwargs = {
         "ssl": ssl.create_default_context(cafile=certifi.where()),
     }
@@ -52,7 +81,6 @@ def create_telegram_http_session(timeout_seconds: int = 10) -> aiohttp.ClientSes
         connector_kwargs["family"] = socket.AF_INET
         connector_kwargs["ttl_dns_cache"] = 0
 
-    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
     connector = aiohttp.TCPConnector(**connector_kwargs)
     return aiohttp.ClientSession(connector=connector, timeout=timeout)
 
