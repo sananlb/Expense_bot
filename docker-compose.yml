@@ -34,6 +34,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: playwright
     container_name: expense_bot_app
     dns:
       - 8.8.8.8
@@ -69,6 +70,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: base
     container_name: expense_bot_celery
     dns:
       - 8.8.8.8
@@ -101,6 +103,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: base
     container_name: expense_bot_celery_beat
     dns:
       - 8.8.8.8
@@ -133,6 +136,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: base
     container_name: expense_bot_web
     dns:
       - 8.8.8.8
