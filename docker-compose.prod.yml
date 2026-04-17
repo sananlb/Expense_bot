@@ -1,3 +1,9 @@
+# ⚠️ LEGACY — этот файл НЕ используется на продакшене.
+# Активный конфиг: docker-compose.yml (без суффикса).
+# Этот файл остался от старой архитектуры (nginx в Docker, отдельная сеть).
+# Текущий продакшен: Nginx на хосте, бот запускается через python -m bot.main.
+# Не запускать: docker-compose -f docker-compose.prod.yml up (упадёт, run_bot.py не существует).
+
 version: '3.8'
 
 services:
