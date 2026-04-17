@@ -56,6 +56,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: expense_bot_app
+    # ⚠️ При смене IP сервера — обновить extra_hosts здесь и в docker-compose.yml
+    extra_hosts:
+      - "expensebot.duckdns.org:144.31.97.139"
     env_file:
       - .env
     environment:
@@ -85,6 +88,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: expense_bot_celery
+    # ⚠️ При смене IP сервера — обновить extra_hosts здесь и в docker-compose.yml
+    extra_hosts:
+      - "expensebot.duckdns.org:144.31.97.139"
     env_file:
       - .env
     environment:
