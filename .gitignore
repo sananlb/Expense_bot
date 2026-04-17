@@ -70,7 +70,17 @@ coverage.xml
 # Backups
 *.bak
 *.backup
+*.sql
 _archive/
+archive_*/
+
+# Documents
+*.docx
+*.doc
+*.pdf
+
+# MCP config (local only)
+.mcp.json
 
 # Excel files (temporary exports)
 exports/

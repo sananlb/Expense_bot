@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "obsidian": {
-      "command": "/opt/homebrew/bin/mcp-obsidian",
-      "args": ["/Users/aleksejnalbantov/Desktop"]
-    }
-  }
-}
