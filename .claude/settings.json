@@ -65,5 +65,8 @@
   },
   "enabledPlugins": {
     "telegram@claude-plugins-official": true
-  }
+  },
+  "enabledMcpjsonServers": [
+    "obsidian"
+  ]
 }
