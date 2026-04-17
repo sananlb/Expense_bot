@@ -39,6 +39,8 @@ services:
     dns:
       - 8.8.8.8
       - 1.1.1.1
+    extra_hosts:
+      - "expensebot.duckdns.org:144.31.97.139"
     env_file:
       - .env
     environment:
@@ -75,6 +77,8 @@ services:
     dns:
       - 8.8.8.8
       - 1.1.1.1
+    extra_hosts:
+      - "expensebot.duckdns.org:144.31.97.139"
     env_file:
       - .env
     environment:
