@@ -39,7 +39,7 @@ services:
     dns:
       - 8.8.8.8
       - 1.1.1.1
-    # ⚠️ При смене IP сервера — обновить extra_hosts здесь и в docker-compose.prod.yml
+    # ⚠️ При смене IP сервера (144.31.97.139) — обновить extra_hosts здесь
     extra_hosts:
       - "expensebot.duckdns.org:144.31.97.139"
     env_file:
@@ -78,7 +78,7 @@ services:
     dns:
       - 8.8.8.8
       - 1.1.1.1
-    # ⚠️ При смене IP сервера — обновить extra_hosts здесь и в docker-compose.prod.yml
+    # ⚠️ При смене IP сервера (144.31.97.139) — обновить extra_hosts здесь
     extra_hosts:
       - "expensebot.duckdns.org:144.31.97.139"
     env_file:

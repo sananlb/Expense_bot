@@ -79,6 +79,13 @@ archive_*/
 *.doc
 *.pdf
 
+# Landing media (images tracked separately if needed)
+landing/*.jpeg
+landing/*.jpg
+landing/*.png
+landing/*.gif
+landing/*.webp
+
 # MCP config (local only)
 .mcp.json
 

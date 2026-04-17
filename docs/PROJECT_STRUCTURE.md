@@ -27,8 +27,7 @@
   - `update_landing.sh` — обновление лендинга на www.coins-bot.ru (rsync + nginx reload).
   - `health_check.sh`, `initial_server_setup.sh`, `manage_bot.sh` — служебные скрипты.
 - `deploy/` — конфигурации для деплоя (nginx и др.).
-- `docker-compose.yml` — базовый compose (локальная среда).
-- `docker-compose.prod.yml` — продакшн стек: `db` (PostgreSQL 15), `redis` (Redis 7), `web` (Gunicorn), `bot` (Telegram-бот), `celery`, `celery-beat`, `nginx`.
+- `docker-compose.yml` — единственный рабочий compose (используется и локально, и на продакшене). Содержит: `db` (PostgreSQL 15), `redis` (Redis 7), `web` (Gunicorn), `bot` (Telegram-бот), `celery`, `celery-beat`. Nginx работает на хосте, не в Docker.
 - `Dockerfile` — сборка образа приложения.
 - `.env` — переменные окружения (см. ниже).
 
@@ -41,16 +40,17 @@
 
 ## Быстрый запуск (прод)
 
-```
-docker-compose -f docker-compose.prod.yml up -d db redis
-docker-compose -f docker-compose.prod.yml up -d web bot celery celery-beat
+Сервер: `ssh batman@144.31.97.139`, путь `/home/batman/expense_bot`.
+
+```bash
+cd /home/batman/expense_bot && docker compose up -d
 ```
 
 Проверки:
 
-```
-docker-compose -f docker-compose.prod.yml ps
-docker-compose -f docker-compose.prod.yml logs -f --tail=50 web
+```bash
+cd /home/batman/expense_bot && docker compose ps
+cd /home/batman/expense_bot && docker compose logs --tail=50 bot
 ```
 
 ## Восстановление базы данных (PostgreSQL)
@@ -68,7 +68,7 @@ chmod +x scripts/restore_database.sh
 docker exec -i expense_bot_db psql -U expense_user -d postgres -c "DROP DATABASE IF EXISTS expense_bot;"
 docker exec -i expense_bot_db psql -U expense_user -d postgres -c "CREATE DATABASE expense_bot OWNER expense_user;"
 docker exec -i expense_bot_db psql -U expense_user -d expense_bot < /path/to/dump.sql
-docker-compose -f docker-compose.prod.yml run --rm web python manage.py migrate --noinput
+cd /home/batman/expense_bot && docker compose run --rm web python manage.py migrate --noinput
 ```
 
 ## Доступ
