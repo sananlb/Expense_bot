@@ -10,59 +10,54 @@
 **Язык:** ru (Русский)
 **Валюта:** RUB (рубли)
 
-## 🚨 КРИТИЧЕСКИ ВАЖНО: АВТОЦИКЛ CODEX REVIEW 🚨
+## 🤖 РУЧНОЙ ВЫЗОВ CODEX REVIEW
 
-### Мультимодельный workflow: Claude Code + Codex
+Автоматический запуск Codex **отключён**. Claude вызывает Codex вручную — либо по запросу пользователя, либо по своей инициативе, когда это оправдано (например, после готового большого плана перед реализацией).
 
-**Документация:** `docs/VIBE_CODING_WORKFLOW.md`
+### Как вызвать Codex
 
-Замечания Codex **автоматически инжектятся в контекст Claude** через PreToolUse hook + additionalContext.
-Claude видит замечания в контексте следующего tool call — ручной Read НЕ нужен.
-
-### Фаза 1: Ревью плана (PostToolUse, макс 5 итераций)
-
-При Edit/Write любого файла `*plan*.md` автоматически запускается Codex CLI (1-4 мин).
+Записать в файл `.codex-task` в корне проекта через Edit/Write:
 
 ```
-1. Edit/Write *plan*.md (ожидание 1-4 мин — Codex ревьюит)
-2. Замечания Codex появляются автоматически в контексте следующего действия
-3. Если Status: APPROVED → ОСТАНОВИТЬСЯ и спросить пользователя
-4. Если есть замечания → для каждого: принять или аргументированно отклонить
-5. Показать пользователю сводку замечаний и решений
-6. Edit план с исправлениями → GOTO шаг 1 (новый цикл автоматически)
-7. Максимум 5 итераций. После 5-й хук перестаёт вызывать Codex и сообщает лимит.
+PROMPT: <что ревьюить, на чём сфокусироваться, какой формат ответа нужен>
+FILE: <опциональный путь к целевому файлу, например docs/MY_PLAN.md>
 ```
 
-**КРИТИЧНО:** После APPROVED плана — НЕ ПЕРЕХОДИТЬ к написанию кода автоматически!
-Claude ОБЯЗАН остановиться и спросить пользователя: "План одобрен Codex. Приступить к реализации?"
-Только после явного подтверждения пользователя → переход к написанию кода.
+После записи автоматически срабатывает хук `codex-task-runner.sh` (PostToolUse), который запускает Codex CLI (1–4 мин). Результат сохраняется в `.codex-review-result.md`.
 
-### Фаза 2: Ревью кода (Stop hook, макс 5 итераций)
+При следующем tool call PreToolUse-хук `codex-inject-review.sh` инжектит содержимое `.codex-review-result.md` в контекст Claude — ручной Read не нужен.
 
-После реализации плана, при завершении работы Claude, Stop hook автоматически запускает Codex для ревью git diff.
-Работает ТОЛЬКО в сессиях где был план (`.codex-plan-session` существует).
+### Типичные сценарии
 
+**1. Ревью плана:**
 ```
-1. Claude завершает реализацию → Stop hook запускает Codex
-2. Codex ревьюит git diff всех изменённых файлов
-3. Если CRITICAL/HIGH → Stop ЗАБЛОКИРОВАН (exit 2), Claude ОБЯЗАН продолжить и исправить
-4. После исправлений Claude снова завершает → Stop hook снова ревьюит
-5. Максимум 5 итераций. После 5-й Stop не блокируется, Claude сообщает оставшиеся замечания.
-6. Если только MEDIUM/LOW → Claude решает сам, Stop НЕ блокируется
+PROMPT: Review this plan as a senior code reviewer. Focus on architectural issues, missing edge cases, hidden risks, and whether the plan matches project patterns (see CLAUDE.md). For each finding: [SEVERITY] Description - Suggestion. Severities: CRITICAL, HIGH, MEDIUM, LOW. If no issues: NO_FINDINGS. Be concise, do NOT rewrite the plan.
+FILE: docs/MY_PLAN.md
 ```
 
-### ЗАПРЕЩЕНО:
-- Игнорировать замечания Codex (они появятся в контексте автоматически)
-- Считать план готовым без APPROVED от Codex
-- Отклонять замечания без аргументации
-- Переходить от плана к коду БЕЗ явного подтверждения пользователя
+**2. Ревью git diff:**
+```
+PROMPT: Review the current git diff for feature XYZ. Focus on correctness, thread-safety, migration risks, and adherence to project conventions. Severities as above.
+```
 
-### Файлы системы:
-- `.claude/hooks/codex-inject-review.sh` — PreToolUse хук (инжекция замечаний в контекст)
-- `.claude/hooks/codex-review-hook.sh` — PostToolUse хук (запуск Codex для ревью планов)
-- `.claude/hooks/codex-code-review-hook.sh` — Stop хук (ревью git diff, блокирует при CRITICAL/HIGH)
-- `.claude/hooks/codex-session-cleanup.sh` — SessionStart (очистка сессий)
-- `.codex-plan-session` — ID сессии Codex (для resume)
+**3. Фокусированный вопрос:**
+```
+PROMPT: In docs/PLAN.md, evaluate whether the proposed regex-based token check in PostgreSQL is safe against special characters. Give a specific verdict.
+```
+
+### Правила использования
+
+- **Не вызывать без нужды.** Мелкие правки, опечатки, тривиальные рефакторинги — без Codex.
+- **Вызывать для:** планов перед реализацией, сложных архитектурных изменений, миграций данных, неочевидных решений, где ценно второе мнение.
+- **После APPROVED плана** — всё равно спросить пользователя перед началом реализации.
+- **Замечания Codex:** для каждого явно принять или аргументированно отклонить, показать пользователю сводку решений.
+
+### Файлы системы
+
+- `.claude/hooks/codex-task-runner.sh` — PostToolUse хук, срабатывает при Edit/Write файла `.codex-task`.
+- `.claude/hooks/codex-inject-review.sh` — PreToolUse хук, инжектит `.codex-review-result.md` в контекст.
+- `.claude/hooks/codex-session-cleanup.sh` — SessionStart, чистит сессионные файлы.
+- `.claude/hooks/codex-review-hook.sh` и `codex-code-review-hook.sh` — скрипты остались на диске, но **не подключены** в `.claude/settings.json`. Если захочется вернуть автоматику — достаточно отредактировать `settings.json`.
 
 ---
 

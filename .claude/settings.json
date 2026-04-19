@@ -40,24 +40,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/codex-review-hook.sh\"",
-            "timeout": 300
-          },
-          {
-            "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/codex-task-runner.sh\"",
             "timeout": 300
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/codex-code-review-hook.sh\"",
-            "timeout": 180
           }
         ]
       }
