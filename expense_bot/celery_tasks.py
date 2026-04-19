@@ -2475,7 +2475,7 @@ def _format_downtime(down_since_iso: str | None) -> str:
 # Cross-server monitoring: expense_bot checks nutrition_bot availability
 # ---------------------------------------------------------------------------
 REMOTE_SERVER_NAME = "Nutrition Bot"
-REMOTE_SERVER_IP = "45.93.201.222"
+REMOTE_SERVER_IP = "144.31.200.167"
 REMOTE_HEALTH_URL = "https://showmefood.duckdns.org/health/"
 REMOTE_CHECK_TIMEOUT = 15  # seconds
 REMOTE_REQUEST_ATTEMPTS = 3

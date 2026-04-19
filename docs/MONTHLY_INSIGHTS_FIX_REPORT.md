@@ -995,12 +995,12 @@ GOOGLE_MODEL_INSIGHTS=gemini-2.5-pro
 
 **⚠️ ИСКЛЮЧЕНИЕ - ОСТАВЛЕНО:**
 ```bash
-# OpenRouter для голосового распознавания (через proxy к Google)
+# OpenRouter для голосового распознавания
 OPENROUTER_MODEL_VOICE=google/gemini-2.5-flash  # ✅ Оставлено!
 ```
 
 **Почему оставлено:**
-- OpenRouter выступает как прокси к Google моделям
+- OpenRouter дает доступ к модели через свой API
 - Работает в России через OpenRouter API
 - Основная модель для распознавания голоса
 - НЕ использует прямой Google API (который заблокирован)
@@ -1087,8 +1087,8 @@ class DeepSeekKeyRotationMixin(KeyRotationMixin):
    - Модель: `qwen-plus`
    - Китайский провайдер, доступен в России
 
-3. **OpenRouter** (универсальный прокси)
-   - Для голоса: `google/gemini-2.5-flash` (через прокси!)
+3. **OpenRouter** (универсальный AI-шлюз)
+   - Для голоса: `google/gemini-2.5-flash` (через OpenRouter API)
    - Fallback провайдер для других задач
 
 4. **OpenAI** (опциональный, дорогой)

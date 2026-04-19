@@ -259,9 +259,7 @@ OPENROUTER_MODEL_CHAT=google/gemini-3-flash-preview
 OPENROUTER_MODEL_VOICE=google/gemini-3-flash-preview
 OPENROUTER_MODEL_INSIGHTS=google/gemini-3-pro-preview
 
-# Прокси для OpenRouter (обход блокировок)
-AI_PROXY_URL=socks5://...
-OPENROUTER_CONNECTION_MODE=proxy
+# OpenRouter работает напрямую
 ```
 
 **Важно:** При категоризации берется только ПЕРВЫЙ fallback из цепочки, иначе ожидание 30+ сек.
@@ -529,24 +527,18 @@ class Expense(models.Model):
 ```python
 # bot/services/unified_ai_service.py (упрощено для статьи)
 from openai import AsyncOpenAI
-from httpx_socks import AsyncProxyTransport
-import httpx
 import json
 
 class UnifiedAIService:
     def __init__(self, provider: str = 'deepseek'):
         self.provider = provider
-        # Для OpenRouter используем SOCKS5 прокси через httpx
-        self._http_client = None
-        if provider == 'openrouter' and os.getenv('AI_PROXY_URL'):
-            transport = AsyncProxyTransport.from_url(os.getenv('AI_PROXY_URL'))
-            self._http_client = httpx.AsyncClient(transport=transport, timeout=15.0)
 
     def _get_client(self) -> AsyncOpenAI:
         return AsyncOpenAI(
             api_key=self._get_api_key(),
             base_url=self._get_base_url(),
-            http_client=self._http_client  # Прокси только для OpenRouter
+            timeout=15.0,
+            max_retries=1,
         )
 
     async def categorize_expense(
