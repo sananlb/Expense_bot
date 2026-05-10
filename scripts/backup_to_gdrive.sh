@@ -58,6 +58,32 @@ error_exit() {
     exit 1
 }
 
+# --- Retry-обёртка для rclone (экспоненциальный backoff: 30s, 60s, 120s) ---
+# Возвращает 0 при успехе, 1 при исчерпании попыток. stdout сохраняется.
+# Не использует error_exit и не падает по set -e (вызывающий код решает что делать).
+rclone_with_retry() {
+    local max_attempts=3
+    local delays=(30 60 120)
+    local attempt=1
+    local rc=0
+    while [ "$attempt" -le "$max_attempts" ]; do
+        if rclone "$@" 2>/tmp/rclone_err.$$; then
+            rm -f /tmp/rclone_err.$$
+            return 0
+        fi
+        rc=$?
+        log "WARNING: rclone $1 неудача (попытка ${attempt}/${max_attempts}, exit=${rc})"
+        if [ "$attempt" -lt "$max_attempts" ]; then
+            sleep "${delays[$((attempt - 1))]}"
+        fi
+        attempt=$((attempt + 1))
+    done
+    log "ERROR: rclone $1 не удался после ${max_attempts} попыток. Stderr:"
+    [ -f /tmp/rclone_err.$$ ] && sed 's/^/  /' /tmp/rclone_err.$$ | head -10 | while IFS= read -r line; do log "$line"; done
+    rm -f /tmp/rclone_err.$$
+    return 1
+}
+
 # --- Trap для неожиданных ошибок ---
 trap 'error_exit "Неожиданная ошибка на строке ${LINENO}"' ERR
 
@@ -104,28 +130,45 @@ if ! docker exec -i expense_bot_db pg_restore --list < "$BACKUP_FILE" > /dev/nul
 fi
 log "Дамп валиден"
 
-# --- Шаг 3: Загрузка на Google Drive ---
+# --- Шаг 3: Загрузка на Google Drive (с retry) ---
 log "Загрузка на Google Drive..."
-if ! rclone copy "$BACKUP_FILE" "$GDRIVE_REMOTE" 2>/dev/null; then
-    error_exit "Загрузка на Google Drive не удалась"
+if ! rclone_with_retry copy "$BACKUP_FILE" "$GDRIVE_REMOTE"; then
+    error_exit "Загрузка на Google Drive не удалась после ретраев"
 fi
 log "Загружено на Google Drive"
 
-# --- Шаг 4: Ротация на Google Drive (оставить последние MAX_GDRIVE_BACKUPS) ---
+# --- Шаг 4: Ротация на Google Drive (NON-FATAL: бэкап уже залит) ---
+# Дамп уже на Google Drive, поэтому сбой ротации (например, Google API quota)
+# не должен помечать весь бэкап как неуспешный — только warning.
 log "Ротация на Google Drive (макс: ${MAX_GDRIVE_BACKUPS})..."
-GDRIVE_FILES=$(rclone lsf "$GDRIVE_REMOTE" --include "$BACKUP_MASK" | sort)
+ROTATION_OK=true
+GDRIVE_FILES=""
+if GDRIVE_FILES_RAW=$(rclone_with_retry lsf "$GDRIVE_REMOTE" --include "$BACKUP_MASK"); then
+    GDRIVE_FILES=$(echo "$GDRIVE_FILES_RAW" | sort)
+else
+    ROTATION_OK=false
+    log "WARNING: не удалось получить список файлов на Google Drive — пропускаю ротацию"
+fi
 GDRIVE_COUNT=$(echo "$GDRIVE_FILES" | grep -c . || true)
 
-if [ "$GDRIVE_COUNT" -gt "$MAX_GDRIVE_BACKUPS" ]; then
+if [ "$ROTATION_OK" = "true" ] && [ "$GDRIVE_COUNT" -gt "$MAX_GDRIVE_BACKUPS" ]; then
     DELETE_COUNT=$((GDRIVE_COUNT - MAX_GDRIVE_BACKUPS))
     DELETE_FILES=$(echo "$GDRIVE_FILES" | head -n "$DELETE_COUNT")
     log "Удаление ${DELETE_COUNT} старых бекапов с Google Drive..."
     while IFS= read -r file; do
-        rclone deletefile "${GDRIVE_REMOTE}/${file}" 2>/dev/null || true
-        log "  Удалён: ${file}"
+        if rclone_with_retry deletefile "${GDRIVE_REMOTE}/${file}"; then
+            log "  Удалён: ${file}"
+        else
+            log "  WARNING: не удалось удалить ${file} (продолжаем)"
+            ROTATION_OK=false
+        fi
     done <<< "$DELETE_FILES"
 fi
 log "На Google Drive: ${GDRIVE_COUNT} бекапов"
+
+if [ "$ROTATION_OK" != "true" ]; then
+    send_telegram "⚠️ <b>Бекап БД залит, но ротация на Google Drive не удалась</b>%0A%0AВремя: $(date '+%d.%m.%Y %H:%M:%S')%0AДействие: проверь Google Drive API quota / rclone логи"
+fi
 
 # --- Шаг 5: Ротация локальная (оставить последние MAX_LOCAL_BACKUPS) ---
 log "Ротация локальных бекапов (макс: ${MAX_LOCAL_BACKUPS})..."
@@ -142,7 +185,7 @@ fi
 # --- Шаг 6: Уведомление об успехе ---
 END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
-GDRIVE_COUNT_FINAL=$(rclone lsf "$GDRIVE_REMOTE" --include "$BACKUP_MASK" | grep -c . || true)
+GDRIVE_COUNT_FINAL=$(rclone lsf "$GDRIVE_REMOTE" --include "$BACKUP_MASK" 2>/dev/null | grep -c . || true)
 
 MESSAGE="✅ <b>Бекап БД выполнен</b>%0A"
 MESSAGE+="📅 $(date '+%d.%m.%Y %H:%M:%S')%0A"
