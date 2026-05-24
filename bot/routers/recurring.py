@@ -27,6 +27,7 @@ from ..utils.category_helpers import get_category_display_name
 from ..utils.validators import parse_description_amount
 from ..utils.formatters import format_currency, format_date
 from ..utils.expense_parser import convert_words_to_numbers, detect_currency
+from ..utils.logging_safe import log_safe_id
 from ..decorators import rate_limit
 
 router = Router(name="recurring")
