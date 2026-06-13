@@ -16,6 +16,7 @@ from bot.utils.expense_parser import (
     parse_income_message,
     detect_currency,
     _extract_leading_amount,
+    extract_amount_from_patterns,
 )
 
 
@@ -444,6 +445,89 @@ class TestExtractLeadingIncomeAmount:
         """15.03.24 — date DD.MM.YY (non-20xx) should also be rejected."""
         amount, remaining, _sig = _extract_leading_amount("15.03.24")
         assert amount is None
+
+
+class TestCurrencyWordformStripping:
+    """
+    Currency word in oblique case must be fully stripped from the description.
+
+    Regression: an amount like "5.30 доллара" used to leave the word "доллара"
+    in the expense description because the patterns only listed "доллар"/"долларов".
+    Now all declension forms are listed explicitly (RU_CURRENCY_FORMS).
+    """
+
+    # (text, expected_amount, expected_remaining) — trailing currency path
+    TRAILING_CASES = [
+        ("Домен для впн 5.30 доллара", Decimal("5.30"), "Домен для впн"),
+        ("10 доллару кофе", Decimal("10"), "кофе"),
+        ("5 долларом такси", Decimal("5"), "такси"),
+        ("7 долларах сувенир", Decimal("7"), "сувенир"),
+        ("100 фунта подписка", Decimal("100"), "подписка"),
+        ("50 юаня алиэкспресс", Decimal("50"), "алиэкспресс"),
+        ("300 рублю долг", Decimal("300"), "долг"),
+        ("500 рублём чаевые", Decimal("500"), "чаевые"),
+        ("5 франка кофе", Decimal("5"), "кофе"),
+        ("100 драма сувенир", Decimal("100"), "сувенир"),
+        ("200 маната такси", Decimal("200"), "такси"),
+        ("5 сома хлеб", Decimal("5"), "хлеб"),
+        ("1000 сума обед", Decimal("1000"), "обед"),
+        ("50 реала кофе", Decimal("50"), "кофе"),
+        ("10 лея магнит", Decimal("10"), "магнит"),
+        # regression — forms that already worked must keep working
+        ("5 долларов кофе", Decimal("5"), "кофе"),
+        ("кофе 200 рублей", Decimal("200"), "кофе"),
+        ("300 рубль", Decimal("300"), ""),
+        ("50 евро", Decimal("50"), ""),
+        ("5 долл", Decimal("5"), ""),
+    ]
+
+    @pytest.mark.parametrize("text,expected_amount,expected_remaining", TRAILING_CASES)
+    def test_trailing_currency_wordform_stripped(self, text, expected_amount, expected_remaining):
+        amount, remaining = extract_amount_from_patterns(text)
+        assert amount == expected_amount
+        assert (remaining or "").strip() == expected_remaining
+
+    # (text, expected_amount, expected_remaining) — leading-amount path
+    LEADING_CASES = [
+        ("5 доллара кофе", Decimal("5"), "кофе"),
+        ("10 долларом такси", Decimal("10"), "такси"),
+        ("100 фунта подписка", Decimal("100"), "подписка"),
+        ("50 юаня алиэкспресс", Decimal("50"), "алиэкспресс"),
+        ("300 рублю долг", Decimal("300"), "долг"),
+        ("500 рублём чаевые", Decimal("500"), "чаевые"),
+        ("5 франка кофе", Decimal("5"), "кофе"),
+        ("5 сома хлеб", Decimal("5"), "хлеб"),
+        ("10 лея магнит", Decimal("10"), "магнит"),
+        # regression
+        ("5 долларов кофе", Decimal("5"), "кофе"),
+        ("200 рублей такси", Decimal("200"), "такси"),
+        ("100 руб обед", Decimal("100"), "обед"),
+    ]
+
+    @pytest.mark.parametrize("text,expected_amount,expected_remaining", LEADING_CASES)
+    def test_leading_currency_wordform_stripped(self, text, expected_amount, expected_remaining):
+        amount, remaining, has_signal = _extract_leading_amount(text)
+        assert amount == expected_amount
+        assert (remaining or "").strip() == expected_remaining
+        assert has_signal is True
+
+    def test_homonym_prefix_not_consumed_as_currency(self):
+        """
+        Words that start like a currency stem ('сомнительный', 'суммарно', 'реально',
+        'лес') must NOT be matched as a currency and must stay in the description.
+        """
+        # 'сомнительном' starts with 'сом' (KGS) but is not a currency form
+        amount, remaining = extract_amount_from_patterns("5 на сомнительном сайте")
+        assert amount == Decimal("5")
+        assert "сомнительном" in (remaining or "")
+
+    @pytest.mark.asyncio
+    async def test_end_to_end_description_no_leftover_word(self):
+        """Full parse: oblique currency word must not leak into description."""
+        result = await parse_expense_message("Домен для впн 5.30 доллара", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(5.30)
+        assert result["description"] == "Домен для впн"
 
 
 class TestConvertWordsToNumbers:
