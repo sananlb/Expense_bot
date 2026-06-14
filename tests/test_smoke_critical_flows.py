@@ -1,3 +1,4 @@
+from calendar import monthrange
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
@@ -231,3 +232,111 @@ async def test_show_expenses_summary_saves_period_and_sends_summary_message():
     state_data = await state.get_data()
     assert state_data["report_start_date"] == today.isoformat()
     assert state_data["report_end_date"] == today.isoformat()
+
+
+@pytest.mark.asyncio
+async def test_month_summary_renders_limits_in_their_currencies():
+    message = make_message()
+    state = make_state()
+    today = date.today()
+    start_date = today.replace(day=1)
+    end_date = today.replace(day=monthrange(today.year, today.month)[1])
+    if today.month == 12:
+        next_month = today.replace(year=today.year + 1, month=1, day=1)
+    else:
+        next_month = today.replace(month=today.month + 1, day=1)
+
+    summary = {
+        "total": Decimal("1500"),
+        "income_total": Decimal("2000"),
+        "income_currency_totals": {"RUB": Decimal("2000"), "USD": Decimal("500")},
+        "balance": Decimal("500"),
+        "currency": "RUB",
+        "currency_totals": {"RUB": 1500.0, "USD": 800.0},
+        "count": 2,
+        "by_category": [
+            {
+                "id": 7,
+                "name": "Food",
+                "amounts": {"RUB": Decimal("900"), "USD": Decimal("300")},
+            },
+            {
+                "id": 8,
+                "name": "Travel",
+                "amounts": {"USD": Decimal("500")},
+            },
+        ],
+        "by_income_category": [
+            {
+                "id": 11,
+                "name": "Salary",
+                "total": Decimal("2000"),
+                "amounts": {"RUB": Decimal("1700"), "USD": Decimal("300")},
+            },
+        ],
+        "potential_cashback": Decimal("0"),
+    }
+    limits = {
+        None: SimpleNamespace(
+            amount=Decimal("1000"),
+            currency="USD",
+            start_date=start_date,
+        ),
+        7: SimpleNamespace(
+            amount=Decimal("400"),
+            currency="USD",
+            start_date=start_date,
+        ),
+        8: SimpleNamespace(
+            amount=Decimal("500"),
+            currency="USD",
+            start_date=next_month,
+        ),
+    }
+    goals = {
+        None: SimpleNamespace(
+            amount=Decimal("1000"),
+            currency="USD",
+            start_date=start_date,
+        ),
+        11: SimpleNamespace(
+            amount=Decimal("400"),
+            currency="USD",
+            start_date=start_date,
+        ),
+    }
+    fake_profile = SimpleNamespace(household=None, settings=SimpleNamespace(view_scope="personal"))
+
+    with patch("bot.routers.reports.check_subscription", AsyncMock(return_value=True)), patch(
+        "bot.routers.reports.get_expenses_summary", AsyncMock(return_value=summary)
+    ), patch(
+        "bot.routers.reports.get_active_limits_map", AsyncMock(return_value=limits)
+    ) as get_limits, patch(
+        "bot.routers.reports.get_active_goals_map", AsyncMock(return_value=goals)
+    ) as get_goals, patch(
+        "bot.routers.reports.send_message_with_cleanup", AsyncMock()
+    ) as send_message, patch(
+        "bot.routers.reports.expenses_summary_keyboard", return_value="KEYBOARD"
+    ), patch(
+        "bot.routers.reports.get_text", side_effect=lambda key, lang="ru", **kwargs: key
+    ), patch(
+        "bot.routers.reports.get_month_name", side_effect=lambda month, lang="ru": f"month-{month}"
+    ), patch(
+        "bot.routers.reports.format_amount", side_effect=lambda amount, currency, lang="ru": f"{amount} {currency}"
+    ), patch(
+        "expenses.models.Profile.objects.get", return_value=fake_profile
+    ), patch(
+        "expenses.models.Profile.objects.filter", return_value=DummyProfileFilter()
+    ):
+        await reports_router.show_expenses_summary(
+            message, start_date, end_date, "ru", state=state
+        )
+
+    get_limits.assert_awaited_once_with(message.from_user.id)
+    get_goals.assert_awaited_once_with(message.from_user.id)
+    _, _, text = send_message.await_args.args[:3]
+    assert reports_router.format_total_bar_line(80) in text
+    assert reports_router.format_category_bar_line(75) in text
+    assert reports_router.format_category_bar_line(100) not in text
+    assert reports_router.format_total_goal_bar_line(50) in text
+    assert reports_router.format_category_goal_bar_line(75) in text

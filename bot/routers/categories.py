@@ -36,6 +36,7 @@ class CategoryForm(StatesGroup):
     waiting_for_edit_choice = State()
     waiting_for_new_name = State()
     waiting_for_new_icon = State()
+    waiting_for_limit_amount = State()
 
 
 class IncomeCategoryForm(StatesGroup):
@@ -46,6 +47,7 @@ class IncomeCategoryForm(StatesGroup):
     waiting_for_new_name = State()
     waiting_for_new_icon = State()
     waiting_for_delete_choice = State()
+    waiting_for_goal_amount = State()
 
 
 class CategoryStates(StatesGroup):
@@ -756,42 +758,239 @@ async def delete_category_direct(callback: types.CallbackQuery, state: FSMContex
 @router.callback_query(lambda c: c.data.startswith("edit_cat_") and not c.data.startswith("edit_cat_name_") and not c.data.startswith("edit_cat_icon_"))
 async def edit_category(callback: types.CallbackQuery, state: FSMContext):
     """Редактирование категории"""
-    from aiogram.exceptions import TelegramBadRequest
     callback_action, _ = sanitize_callback_action(callback.data)
     logger.debug("edit_category called with action='%s'", callback_action)
 
     cat_id = int(callback.data.split("_")[-1])
-    user_id = callback.from_user.id
-    lang = await get_user_language(user_id)
-
-    # Получаем информацию о категории
-    category = await get_category_by_id(user_id, cat_id)
-
-    if category:
-        # Сохраняем ID категории в состоянии для последующего редактирования
-        lang = await get_user_language(callback.from_user.id)
-        category_display = get_category_display_name(category, lang)
-        await state.update_data(editing_category_id=cat_id, old_category_name=category_display, operation='edit', cat_type='expense', category_id=cat_id)
-
-        # Показываем меню выбора что редактировать
-        try:
-            await callback.message.edit_text(
-                get_text('editing_category_header', lang).format(name=category_display),
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text=get_text('edit_name_button', lang), callback_data=f"edit_cat_name_{cat_id}")],
-                    [InlineKeyboardButton(text=get_text('edit_icon_button', lang), callback_data=f"edit_cat_icon_{cat_id}")],
-                    [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="edit_categories")],
-                    [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
-                ]),
-                parse_mode='HTML'
-            )
-        except TelegramBadRequest:
-            # Если сообщение уже такое же, просто подтверждаем callback
-            pass
+    shown = await _render_category_edit_screen(callback, state, cat_id)
+    if shown:
+        await callback.answer()
     else:
         await callback.answer("❌ Категория не найдена", show_alert=True)
 
+
+async def _render_category_edit_screen(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    cat_id: int,
+) -> bool:
+    """Обновляет сообщение карточкой редактирования категории."""
+    user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
+
+    category = await get_category_by_id(user_id, cat_id)
+    if not category:
+        return False
+
+    category_display = get_category_display_name(category, lang)
+    await state.update_data(
+        editing_category_id=cat_id,
+        old_category_name=category_display,
+        operation='edit',
+        cat_type='expense',
+        category_id=cat_id,
+    )
+
+    from ..services.budget import get_limit
+    from ..utils.formatters import format_currency
+
+    limit = await get_limit(user_id, cat_id)
+    if limit is not None:
+        limit_amount_text = format_currency(limit.amount, limit.currency)
+        limit_button_text = get_text('limit_button_with_amount', lang).format(
+            amount=limit_amount_text
+        )
+    else:
+        limit_button_text = get_text('limit_button_set', lang)
+
+    try:
+        await callback.message.edit_text(
+            get_text('editing_category_header', lang).format(name=category_display),
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=get_text('edit_name_button', lang), callback_data=f"edit_cat_name_{cat_id}")],
+                [InlineKeyboardButton(text=get_text('edit_icon_button', lang), callback_data=f"edit_cat_icon_{cat_id}")],
+                [InlineKeyboardButton(text=limit_button_text, callback_data=f"cat_limit_{cat_id}")],
+                [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="edit_categories")],
+                [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
+            ]),
+            parse_mode='HTML'
+        )
+    except TelegramBadRequest:
+        pass
+    return True
+
+
+# ===== Лимиты на категорию =====
+
+def _category_limit_keyboard(cat_id: int, lang: str, has_limit: bool) -> InlineKeyboardMarkup:
+    """Клавиатура экрана лимита категории."""
+    rows = []
+    if has_limit:
+        rows.append([InlineKeyboardButton(text=get_text('limit_edit_button', lang), callback_data=f"cat_limit_edit_{cat_id}")])
+        rows.append([InlineKeyboardButton(text=get_text('limit_remove_button', lang), callback_data=f"cat_limit_remove_{cat_id}")])
+    rows.append([InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data=f"edit_cat_{cat_id}")])
+    rows.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _prompt_category_limit_amount(callback: types.CallbackQuery, state: FSMContext,
+                                        cat_id: int, lang: str, category_display: str,
+                                        change: bool = False):
+    """Показывает приглашение ввести сумму лимита и переводит в FSM-состояние."""
+    from ..services.budget import get_limit
+    from ..utils.formatters import format_currency
+
+    if change:
+        limit = await get_limit(callback.from_user.id, cat_id)
+        current = format_currency(limit.amount, limit.currency) if limit else ''
+        text = get_text('limit_input_prompt_change', lang).format(category=category_display, amount=current)
+    else:
+        text = get_text('limit_input_prompt', lang).format(category=category_display)
+
+    await state.update_data(limit_category_id=cat_id, limit_category_display=category_display, lang=lang)
+    await state.set_state(CategoryForm.waiting_for_limit_amount)
+    await callback.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data=f"edit_cat_{cat_id}")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")],
+        ]),
+        parse_mode='HTML',
+    )
+
+
+@router.callback_query(lambda c: c.data.startswith("cat_limit_edit_"))
+async def category_limit_change(callback: types.CallbackQuery, state: FSMContext):
+    """Изменить существующий лимит — сразу к вводу суммы."""
+    cat_id = int(callback.data.split("_")[-1])
+    user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
+    category = await get_category_by_id(user_id, cat_id)
+    if not category:
+        await callback.answer("❌ Категория не найдена", show_alert=True)
+        return
+    category_display = get_category_display_name(category, lang)
+    await _prompt_category_limit_amount(callback, state, cat_id, lang, category_display, change=True)
     await callback.answer()
+
+
+@router.callback_query(lambda c: c.data.startswith("cat_limit_remove_"))
+async def category_limit_remove(callback: types.CallbackQuery, state: FSMContext):
+    """Убрать лимит с категории."""
+    from ..services.budget import remove_limit
+    cat_id = int(callback.data.split("_")[-1])
+    user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
+    await remove_limit(user_id, cat_id)
+    shown = await _render_category_edit_screen(callback, state, cat_id)
+    if shown:
+        await callback.answer(get_text('limit_removed_success', lang))
+    else:
+        await callback.answer("❌ Категория не найдена", show_alert=True)
+
+
+@router.callback_query(lambda c: c.data.startswith("cat_limit_"))
+async def category_limit_entry(callback: types.CallbackQuery, state: FSMContext):
+    """Точка входа в лимит категории: если лимит есть — показываем экран,
+    иначе сразу приглашение ввести сумму."""
+    from ..services.budget import get_limit_status
+    cat_id = int(callback.data.split("_")[-1])
+    user_id = callback.from_user.id
+    lang = await get_user_language(user_id)
+
+    category = await get_category_by_id(user_id, cat_id)
+    if not category:
+        await callback.answer("❌ Категория не найдена", show_alert=True)
+        return
+    category_display = get_category_display_name(category, lang)
+
+    status = await get_limit_status(user_id, cat_id)
+    if status is None:
+        # Лимита нет — сразу к вводу суммы.
+        await _prompt_category_limit_amount(callback, state, cat_id, lang, category_display, change=False)
+        await callback.answer()
+        return
+
+    from ..utils.budget_display import format_limit_screen_body
+    header = get_text('limit_category_header', lang).format(category=category_display)
+    body = format_limit_screen_body(status, lang)
+    try:
+        await callback.message.edit_text(
+            f"{header}\n\n{body}",
+            reply_markup=_category_limit_keyboard(cat_id, lang, has_limit=True),
+            parse_mode='HTML',
+        )
+    except TelegramBadRequest:
+        pass
+    await callback.answer()
+
+
+@router.message(CategoryForm.waiting_for_limit_amount)
+async def process_category_limit_amount(message: types.Message, state: FSMContext,
+                                        voice_text: str | None = None,
+                                        voice_no_subscription: bool = False,
+                                        voice_transcribe_failed: bool = False):
+    """Обработка ввода суммы лимита категории (текст или голос)."""
+    from ..utils.expense_parser import convert_words_to_numbers
+    from ..utils.validators import parse_description_amount
+    from ..services.budget import set_limit, get_limit_status
+    from ..utils.budget_display import format_limit_screen_body
+
+    data = await state.get_data()
+    lang = data.get('lang', await get_user_language(message.from_user.id))
+    cat_id = data.get('limit_category_id')
+    category_display = data.get('limit_category_display', '')
+
+    if cat_id is None:
+        await state.clear()
+        return
+
+    # Извлекаем текст (голос или обычный)
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(subscription_required_message(), reply_markup=get_subscription_button(), parse_mode="HTML")
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом.")
+            return
+        raw = voice_text
+    elif message.text:
+        raw = message.text.strip()
+    else:
+        await message.answer(get_text('limit_invalid_amount', lang))
+        return
+
+    # Парсим сумму
+    try:
+        parsed = parse_description_amount(convert_words_to_numbers(raw), allow_only_amount=True)
+        amount = parsed.get('amount')
+    except ValueError:
+        amount = None
+
+    if not amount or amount <= 0:
+        await send_message_with_cleanup(message, state, get_text('limit_invalid_amount', lang))
+        return
+
+    # Устанавливаем лимит (валидация владельца/подписки внутри сервиса)
+    try:
+        await set_limit(message.from_user.id, cat_id, amount)
+    except ValueError as e:
+        await send_message_with_cleanup(message, state, f"❌ {str(e)}")
+        return
+
+    await state.set_state(None)
+
+    # Показываем обновлённый экран лимита
+    status = await get_limit_status(message.from_user.id, cat_id)
+    header = get_text('limit_category_header', lang).format(category=category_display)
+    body = format_limit_screen_body(status, lang) if status else ''
+    await send_message_with_cleanup(
+        message, state,
+        f"{header}\n\n{body}",
+        reply_markup=_category_limit_keyboard(cat_id, lang, has_limit=True),
+        parse_mode='HTML',
+    )
 
 
 @router.callback_query(lambda c: c.data.startswith("edit_cat_name_"))
@@ -1296,38 +1495,302 @@ async def edit_income_categories_start(callback: types.CallbackQuery, state: FSM
     await callback.answer()
 
 
-@router.callback_query(lambda c: c.data.startswith("edit_income_cat_"))
-async def edit_income_category(callback: types.CallbackQuery, state: FSMContext):
-    """Редактирование выбранной категории доходов"""
-    category_id = int(callback.data.replace("edit_income_cat_", ""))
+async def _get_income_category_for_user(user_id: int, category_id: int):
+    """Возвращает активную категорию дохода пользователя."""
+    from bot.services.income import get_user_income_categories
+
+    categories = await get_user_income_categories(user_id)
+    return next((cat for cat in categories if cat.id == category_id), None)
+
+
+async def _render_income_category_edit_screen(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    category_id: int,
+) -> bool:
+    """Обновляет сообщение карточкой редактирования категории дохода."""
     user_id = callback.from_user.id
     lang = await get_user_language(user_id)
-    
-    # Получаем информацию о категории
-    from bot.services.income import get_user_income_categories
-    categories = await get_user_income_categories(user_id)
-    category = next((cat for cat in categories if cat.id == category_id), None)
-    
-    if category:
-        lang = await get_user_language(user_id)
-        category_display_name = get_category_display_name(category, lang)
-        await state.update_data(editing_income_category_id=category_id, category_id=category_id, old_income_category_name=category_display_name)
-        
-        # Показываем меню выбора что редактировать
+    category = await _get_income_category_for_user(user_id, category_id)
+    if not category:
+        return False
+
+    category_display_name = get_category_display_name(category, lang)
+    await state.update_data(
+        editing_income_category_id=category_id,
+        category_id=category_id,
+        old_income_category_name=category_display_name,
+        operation='edit',
+        cat_type='income',
+    )
+
+    from bot.services.income_goal import get_goal
+    from bot.utils.formatters import format_currency
+
+    goal = await get_goal(user_id, category_id)
+    if goal is not None:
+        goal_button_text = get_text('goal_button_with_amount', lang).format(
+            amount=format_currency(goal.amount, goal.currency),
+        )
+    else:
+        goal_button_text = get_text('goal_button_set', lang)
+
+    try:
         await callback.message.edit_text(
             get_text('editing_income_category_header', lang).format(name=category_display_name),
             reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text=get_text('edit_name_button', lang), callback_data=f"edit_income_name_{category_id}")],
                 [InlineKeyboardButton(text=get_text('edit_icon_button', lang), callback_data=f"edit_income_icon_{category_id}")],
+                [InlineKeyboardButton(text=goal_button_text, callback_data=f"inc_goal_{category_id}")],
                 [InlineKeyboardButton(text=get_text('back_arrow', lang), callback_data="edit_income_categories")],
                 [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
             ]),
             parse_mode='HTML'
         )
+    except TelegramBadRequest:
+        pass
+    return True
+
+
+@router.callback_query(lambda c: c.data.startswith("edit_income_cat_"))
+async def edit_income_category(callback: types.CallbackQuery, state: FSMContext):
+    """Редактирование выбранной категории доходов."""
+    category_id = int(callback.data.replace("edit_income_cat_", ""))
+    lang = await get_user_language(callback.from_user.id)
+    shown = await _render_income_category_edit_screen(callback, state, category_id)
+    if not shown:
+        await callback.answer(get_text('error_category_not_found', lang), show_alert=True)
+        return
+    await callback.answer()
+
+
+# ===== Цели на категорию дохода =====
+
+def _income_goal_keyboard(
+    category_id: int,
+    lang: str,
+    has_goal: bool,
+) -> InlineKeyboardMarkup:
+    """Клавиатура экрана цели категории дохода."""
+    rows = []
+    if has_goal:
+        rows.append([
+            InlineKeyboardButton(
+                text=get_text('goal_edit_button', lang),
+                callback_data=f"inc_goal_edit_{category_id}",
+            )
+        ])
+        rows.append([
+            InlineKeyboardButton(
+                text=get_text('goal_remove_button', lang),
+                callback_data=f"inc_goal_remove_{category_id}",
+            )
+        ])
+    rows.append([
+        InlineKeyboardButton(
+            text=get_text('back_arrow', lang),
+            callback_data=f"edit_income_cat_{category_id}",
+        )
+    ])
+    rows.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _prompt_income_goal_amount(
+    callback: types.CallbackQuery,
+    state: FSMContext,
+    category_id: int,
+    lang: str,
+    category_display: str,
+    change: bool = False,
+) -> None:
+    """Показывает приглашение ввести сумму цели и переводит в FSM."""
+    from bot.services.income_goal import get_goal
+    from bot.utils.formatters import format_currency
+
+    if change:
+        goal = await get_goal(callback.from_user.id, category_id)
+        current = format_currency(goal.amount, goal.currency) if goal else ''
+        text = get_text('goal_input_prompt_change', lang).format(
+            category=category_display,
+            amount=current,
+        )
+    else:
+        text = get_text('goal_input_prompt', lang).format(category=category_display)
+
+    await state.update_data(
+        goal_category_id=category_id,
+        goal_category_display=category_display,
+        lang=lang,
+    )
+    await state.set_state(IncomeCategoryForm.waiting_for_goal_amount)
+    await callback.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=get_text('back_arrow', lang),
+                    callback_data=f"edit_income_cat_{category_id}",
+                )
+            ],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")],
+        ]),
+        parse_mode='HTML',
+    )
+
+
+@router.callback_query(lambda c: c.data.startswith("inc_goal_edit_"))
+async def income_goal_change(callback: types.CallbackQuery, state: FSMContext):
+    """Изменяет существующую цель категории дохода."""
+    category_id = int(callback.data.split("_")[-1])
+    lang = await get_user_language(callback.from_user.id)
+    category = await _get_income_category_for_user(callback.from_user.id, category_id)
+    if not category:
+        await callback.answer(get_text('error_category_not_found', lang), show_alert=True)
+        return
+    await _prompt_income_goal_amount(
+        callback,
+        state,
+        category_id,
+        lang,
+        get_category_display_name(category, lang),
+        change=True,
+    )
+    await callback.answer()
+
+
+@router.callback_query(lambda c: c.data.startswith("inc_goal_remove_"))
+async def income_goal_remove(callback: types.CallbackQuery, state: FSMContext):
+    """Убирает цель с категории дохода."""
+    from bot.services.income_goal import remove_goal
+
+    category_id = int(callback.data.split("_")[-1])
+    lang = await get_user_language(callback.from_user.id)
+    await remove_goal(callback.from_user.id, category_id)
+    shown = await _render_income_category_edit_screen(callback, state, category_id)
+    if shown:
+        await callback.answer(get_text('goal_removed_success', lang))
     else:
         await callback.answer(get_text('error_category_not_found', lang), show_alert=True)
-    
+
+
+@router.callback_query(lambda c: c.data.startswith("inc_goal_"))
+async def income_goal_entry(callback: types.CallbackQuery, state: FSMContext):
+    """Открывает цель категории либо сразу запрашивает сумму."""
+    from bot.services.income_goal import get_goal_status
+
+    category_id = int(callback.data.split("_")[-1])
+    lang = await get_user_language(callback.from_user.id)
+    category = await _get_income_category_for_user(callback.from_user.id, category_id)
+    if not category:
+        await callback.answer(get_text('error_category_not_found', lang), show_alert=True)
+        return
+
+    category_display = get_category_display_name(category, lang)
+    status = await get_goal_status(callback.from_user.id, category_id)
+    if status is None:
+        await _prompt_income_goal_amount(
+            callback,
+            state,
+            category_id,
+            lang,
+            category_display,
+        )
+        await callback.answer()
+        return
+
+    from bot.utils.income_goal_display import format_goal_screen_body
+
+    header = get_text('goal_category_header', lang).format(category=category_display)
+    try:
+        await callback.message.edit_text(
+            f"{header}\n\n{format_goal_screen_body(status, lang)}",
+            reply_markup=_income_goal_keyboard(category_id, lang, has_goal=True),
+            parse_mode='HTML',
+        )
+    except TelegramBadRequest:
+        pass
     await callback.answer()
+
+
+@router.message(IncomeCategoryForm.waiting_for_goal_amount)
+async def process_income_goal_amount(
+    message: types.Message,
+    state: FSMContext,
+    voice_text: str | None = None,
+    voice_no_subscription: bool = False,
+    voice_transcribe_failed: bool = False,
+):
+    """Обрабатывает текстовый или голосовой ввод суммы цели категории."""
+    from bot.services.income_goal import get_goal_status, set_goal
+    from bot.utils.expense_parser import convert_words_to_numbers
+    from bot.utils.income_goal_display import format_goal_screen_body
+    from bot.utils.validators import parse_description_amount
+
+    data = await state.get_data()
+    lang = data.get('lang', await get_user_language(message.from_user.id))
+    category_id = data.get('goal_category_id')
+    category_display = data.get('goal_category_display', '')
+    if category_id is None:
+        await state.clear()
+        return
+
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import (
+                get_subscription_button,
+                subscription_required_message,
+            )
+            await message.answer(
+                subscription_required_message(),
+                reply_markup=get_subscription_button(),
+                parse_mode="HTML",
+            )
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer(get_text('voice_recognition_failed', lang))
+            return
+        raw = voice_text
+    elif message.text:
+        raw = message.text.strip()
+    else:
+        await message.answer(get_text('goal_invalid_amount', lang))
+        return
+
+    try:
+        parsed = parse_description_amount(
+            convert_words_to_numbers(raw),
+            allow_only_amount=True,
+        )
+        amount = parsed.get('amount')
+    except ValueError:
+        amount = None
+
+    if not amount or amount <= 0:
+        await send_message_with_cleanup(
+            message,
+            state,
+            get_text('goal_invalid_amount', lang),
+        )
+        return
+
+    try:
+        await set_goal(message.from_user.id, category_id, amount)
+    except ValueError as exc:
+        await send_message_with_cleanup(message, state, f"❌ {exc}")
+        return
+
+    await state.set_state(None)
+    status = await get_goal_status(message.from_user.id, category_id)
+    header = get_text('goal_category_header', lang).format(category=category_display)
+    body = format_goal_screen_body(status, lang) if status else ''
+    await send_message_with_cleanup(
+        message,
+        state,
+        f"{header}\n\n{body}",
+        reply_markup=_income_goal_keyboard(category_id, lang, has_goal=True),
+        parse_mode='HTML',
+    )
 
 
 @router.callback_query(lambda c: c.data.startswith("edit_income_name_"))

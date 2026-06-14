@@ -32,6 +32,8 @@ from ..utils.expense_parser import parse_expense_message
 from ..utils.formatters import format_currency, format_expenses_summary, format_date
 from ..utils.validators import validate_amount, parse_description_amount
 from ..utils.expense_messages import format_expense_added_message
+from ..utils.budget_notifications import send_expense_limit_alerts
+from ..utils.income_goal_notifications import send_income_goal_alerts
 from ..utils.category_helpers import get_category_display_name
 from ..utils.logging_safe import log_safe_id, sanitize_callback_action, summarize_text
 from ..decorators import require_subscription, rate_limit
@@ -1221,6 +1223,9 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
         parse_mode="HTML",
         keep_message=True  # Не удалять это сообщение при следующих действиях
     )
+    await send_expense_limit_alerts(
+        message.bot, user_id, expense, category=category, lang=lang
+    )
 
     # Удаляем сообщение с запросом суммы ПОСЛЕ отправки нового
     if clarification_message_id:
@@ -1314,6 +1319,12 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         "CategoryForm:waiting_for_custom_icon",
         "CategoryForm:waiting_for_new_name",
         "CategoryStates:editing_name",
+        # Budget limit states - пользователь вводит сумму лимита
+        "CategoryForm:waiting_for_limit_amount",
+        "SettingsStates:waiting_for_total_limit_amount",
+        # Income goal states - пользователь вводит сумму цели
+        "IncomeCategoryForm:waiting_for_goal_amount",
+        "SettingsStates:waiting_for_total_goal_amount",
         # Edit expense - пользователь вводит текст/голос
         "EditExpenseForm:editing_amount",
         "EditExpenseForm:editing_description",
@@ -1659,6 +1670,13 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     parse_mode="HTML",
                     keep_message=True  # Не удалять это сообщение при следующих действиях
                 )
+                await send_income_goal_alerts(
+                    message.bot,
+                    user_id,
+                    income,
+                    category=category,
+                    lang=lang,
+                )
                 
                 logger.info("Income %s created for %s", income.id, log_safe_id(user_id, "user"))
                 return
@@ -1839,6 +1857,13 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                             parse_mode="HTML",
                             keep_message=True
                         )
+                        await send_income_goal_alerts(
+                            message.bot,
+                            user_id,
+                            income,
+                            category=category,
+                            lang=lang,
+                        )
                     else:
                         # Если не удалось создать доход (ошибка в БД или другие проблемы)
                         await cancel_typing()
@@ -1916,6 +1941,13 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                                 reply_markup=keyboard,
                                 parse_mode="HTML",
                                 keep_message=True
+                            )
+                            await send_income_goal_alerts(
+                                message.bot,
+                                user_id,
+                                income,
+                                category=category,
+                                lang=lang,
                             )
                         else:
                             # Если не удалось создать доход (ошибка в БД или другие проблемы)
@@ -2001,6 +2033,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                     ]),
                     parse_mode="HTML",
                     keep_message=True  # Не удалять это сообщение при следующих действиях
+                )
+                await send_expense_limit_alerts(
+                    message.bot, user_id, expense, category=category, lang=lang
                 )
             else:
                 # Если похожих трат нет, используем обычный двухшаговый ввод
@@ -2133,6 +2168,9 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         ]),
         parse_mode="HTML",
         keep_message=True  # Не удалять это сообщение при следующих действиях
+    )
+    await send_expense_limit_alerts(
+        message.bot, user_id, expense, category=category, lang=lang
     )
 
     # Гарантируем отмену задачи

@@ -225,12 +225,12 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(subscription_router)  # Роутер подписок - ДОЛЖЕН БЫТЬ ДО expense_router для промокодов!
     dp.include_router(referral_router)     # Роутер реферальной системы
     dp.include_router(household_router)     # Роутер семейного бюджета (FSM состояния) - ДОЛЖЕН БЫТЬ ДО expense_router!
+    dp.include_router(settings_router)      # FSM ввода суммы лимита трат - ДОЛЖЕН БЫТЬ ДО expense_router!
     dp.include_router(inline_router)        # Роутер inline queries для приглашений
     dp.include_router(expense_router)  # Команды должны быть выше FSM состояний
     dp.include_router(reports_router)  # Команды должны быть выше FSM состояний
     dp.include_router(top5_router)
     dp.include_router(blogger_stats_router)  # Статистика для блогеров
-    dp.include_router(settings_router)
     dp.include_router(info_router)
     dp.include_router(chat_router)     # Низкий приоритет для обработки чата
     

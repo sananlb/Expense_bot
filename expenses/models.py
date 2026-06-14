@@ -518,11 +518,15 @@ class Expense(models.Model):
 
 
 class Budget(models.Model):
-    """Бюджеты по категориям согласно ТЗ"""
+    """Лимиты трат: на категорию (category заполнена) либо общий лимит на все
+    траты профиля (category IS NULL). Информирует пользователя, не блокирует трату."""
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='budgets')
     category = models.ForeignKey(ExpenseCategory, on_delete=models.CASCADE, null=True, blank=True)
-    
+
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+    # Валюта лимита: фиксируется из валюты профиля на момент установки/изменения.
+    # В прогресс попадают только траты с совпадающей валютой.
+    currency = models.CharField(max_length=3, default='RUB')
     period_type = models.CharField(
         max_length=20,
         choices=[
@@ -533,15 +537,34 @@ class Budget(models.Model):
     )
     start_date = models.DateField()
     end_date = models.DateField(null=True, blank=True)
-    
+
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'expenses_budget'
         verbose_name = 'Бюджет'
         verbose_name_plural = 'Бюджеты'
+        constraints = [
+            # Один активный лимит на категорию у профиля
+            models.UniqueConstraint(
+                fields=['profile', 'category'],
+                condition=models.Q(is_active=True) & models.Q(category__isnull=False),
+                name='unique_active_budget_per_category',
+            ),
+            # Один активный общий лимит (category IS NULL) у профиля.
+            # Отдельный constraint нужен, т.к. в Postgres NULL не конфликтуют
+            # между собой в обычном unique.
+            models.UniqueConstraint(
+                fields=['profile'],
+                condition=models.Q(is_active=True) & models.Q(category__isnull=True),
+                name='unique_active_total_budget_per_profile',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['profile', 'is_active']),
+        ]
 
 
 class RecurringPayment(models.Model):
@@ -1140,6 +1163,59 @@ class Income(models.Model):
             self.original_currency is not None
             and self.original_currency != self.currency
         )
+
+
+class IncomeBudget(models.Model):
+    """Месячные цели доходов: по категории или общая цель профиля."""
+
+    profile = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name='income_budgets',
+    )
+    category = models.ForeignKey(
+        IncomeCategory,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='income_budgets',
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=3, default='RUB')
+    period_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('monthly', 'Месячная'),
+            ('weekly', 'Недельная'),
+            ('daily', 'Дневная'),
+        ],
+        default='monthly',
+    )
+    start_date = models.DateField()
+    end_date = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'incomes_income_budget'
+        verbose_name = 'Цель по доходу'
+        verbose_name_plural = 'Цели по доходам'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['profile', 'category'],
+                condition=models.Q(is_active=True) & models.Q(category__isnull=False),
+                name='unique_active_income_goal_per_category',
+            ),
+            models.UniqueConstraint(
+                fields=['profile'],
+                condition=models.Q(is_active=True) & models.Q(category__isnull=True),
+                name='unique_active_total_income_goal_per_profile',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['profile', 'is_active']),
+        ]
 
 
 class IncomeCategoryKeyword(models.Model):

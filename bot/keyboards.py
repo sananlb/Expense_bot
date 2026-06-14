@@ -24,6 +24,12 @@ def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True, has_subsc
     keyboard.button(text=get_text('change_timezone', lang), callback_data="change_timezone")
     keyboard.button(text=get_text('change_currency', lang), callback_data="change_currency")
 
+    # Кнопка общего лимита трат (выше семейного бюджета)
+    keyboard.button(text=get_text('total_limit_button', lang), callback_data="total_limit")
+
+    # Кнопка общей цели дохода
+    keyboard.button(text=get_text('total_goal_button', lang), callback_data="total_goal")
+
     # Кнопка семейного бюджета
     keyboard.button(text=get_text('household_button', lang), callback_data="household_budget")
 
@@ -39,8 +45,8 @@ def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True, has_subsc
     # Кнопка навигации
     keyboard.button(text=get_text('close', lang), callback_data="close")
 
-    # Правильная настройка кнопок - по одной в ряд (7 кнопок)
-    keyboard.adjust(1, 1, 1, 1, 1, 1, 1)
+    # Правильная настройка кнопок - по одной в ряд (9 кнопок)
+    keyboard.adjust(1, 1, 1, 1, 1, 1, 1, 1, 1)
 
     return keyboard.as_markup()
 

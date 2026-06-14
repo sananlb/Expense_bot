@@ -74,7 +74,21 @@ async def format_expense_added_message(
     # Получаем отображаемое имя категории на языке пользователя
     category_display = get_category_display_name(category, lang)
     message += category_display
-    
+
+    # Добавляем процент израсходованного лимита категории (если лимит установлен)
+    if category is not None and getattr(category, 'id', None):
+        try:
+            from ..services.budget import get_limit_status
+            status = await get_limit_status(expense.profile.telegram_id, category.id)
+            if status is not None:
+                if status.exceeded:
+                    message += f" ({status.percent}% 🔴)"
+                else:
+                    message += f" ({status.percent}%)"
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"Error getting category limit status: {e}")
+
     # Добавляем уточнения если есть
     if confidence_text:
         message += confidence_text
@@ -203,7 +217,29 @@ async def format_income_added_message(
     else:
         category_display = 'Прочие доходы' if lang == 'ru' else 'Other Income'
     message += category_display
-    
+
+    # Добавляем прогресс категорийной цели дохода.
+    if category is not None and getattr(category, 'id', None):
+        try:
+            from ..services.income_goal import get_goal_status
+
+            status = await get_goal_status(
+                income.profile.telegram_id,
+                category.id,
+            )
+            if status is not None:
+                if status.achieved:
+                    message += f" ({status.percent}% 🎉)"
+                else:
+                    message += f" ({status.percent}%)"
+        except Exception as exc:
+            import logging
+
+            logging.getLogger(__name__).error(
+                "Error getting income category goal status: %s",
+                exc,
+            )
+
     # Добавляем уточнение если использованы данные из последней похожей записи
     if similar_income:
         hint_text = "Used data from last similar record" if lang == 'en' else "Использованы данные из последней похожей записи"

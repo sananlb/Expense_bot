@@ -435,11 +435,43 @@ def _get_income_summary(
     income_total = incomes.aggregate(total=Sum('amount'))['total'] or Decimal('0')
     income_count = incomes.count()
 
-    # Group by income category
-    by_income_category = incomes.values('category__id').annotate(
+    # Группируем по категории и валюте. Общие total сохраняют старый контракт,
+    # а amounts/income_currency_totals используются точными шкалами целей.
+    grouped_categories = {}
+    income_currency_totals = {}
+    category_currency_rows = incomes.values('category__id', 'currency').annotate(
         total=Sum('amount'),
-        count=Count('id')
-    ).order_by('-total')
+        count=Count('id'),
+    )
+    for row in category_currency_rows:
+        category_id = row['category__id']
+        currency = row['currency'] or profile.currency or 'RUB'
+        total = row['total'] or Decimal('0')
+        count = row['count'] or 0
+
+        income_currency_totals[currency] = (
+            income_currency_totals.get(currency, Decimal('0')) + total
+        )
+        category_data = grouped_categories.setdefault(
+            category_id,
+            {
+                'category__id': category_id,
+                'total': Decimal('0'),
+                'count': 0,
+                'amounts': {},
+            },
+        )
+        category_data['total'] += total
+        category_data['count'] += count
+        category_data['amounts'][currency] = (
+            category_data['amounts'].get(currency, Decimal('0')) + total
+        )
+
+    by_income_category = sorted(
+        grouped_categories.values(),
+        key=lambda item: item['total'],
+        reverse=True,
+    )
 
     category_ids = [cat['category__id'] for cat in by_income_category if cat['category__id']]
     income_categories = IncomeCategory.objects.in_bulk(category_ids)
@@ -463,13 +495,15 @@ def _get_income_summary(
             'name': cat_name,
             'icon': icon,
             'total': cat['total'],
-            'count': cat['count']
+            'count': cat['count'],
+            'amounts': cat['amounts'],
         })
 
     return {
         'income_total': income_total,
         'income_count': income_count,
-        'by_income_category': income_categories_list
+        'income_currency_totals': income_currency_totals,
+        'by_income_category': income_categories_list,
     }
 
 
@@ -582,6 +616,7 @@ def _build_empty_summary() -> Dict:
         'currency_totals': {},
         'income_total': Decimal('0'),
         'income_count': 0,
+        'income_currency_totals': {},
         'by_income_category': [],
         'balance': Decimal('0')
     }
@@ -704,6 +739,7 @@ def get_expenses_summary(
             'currency_totals': {k: float(v) for k, v in currency_totals.items()},
             'income_total': income_data['income_total'],
             'income_count': income_data['income_count'],
+            'income_currency_totals': income_data['income_currency_totals'],
             'by_income_category': income_data['by_income_category'],
             'balance': balance
         }

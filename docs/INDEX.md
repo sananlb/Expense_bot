@@ -1,7 +1,7 @@
 # Expense Bot — карта документации
 
-**Обновлено:** 2026-04-12
-**Всего файлов:** 67 (current: 16, active: 14, reference: 14, historical: 19, deprecated: 4)
+**Обновлено:** 2026-06-14
+**Всего файлов:** 92 (current: 18, active: 20, reference: 20, historical: 29, deprecated: 5)
 
 ---
 
@@ -29,11 +29,22 @@
 ### deployment
 - [SERVER_COMMANDS.md](SERVER_COMMANDS.md) — docker-compose, обновление кода, Celery, логи, мониторинг
 
+### security
+- [SECURITY_FULL_AUDIT.md](SECURITY_FULL_AUDIT.md) — SSH, UFW, Nginx rate limiting, Docker, fail2ban и карта открытых портов
+- [SECURITY_SETUP.md](SECURITY_SETUP.md) — двухуровневая защита Nginx + fail2ban, мониторинг и troubleshooting
+
 ---
 
 ## Active — незавершённая работа
 
 ### features
+- [AFFILIATE_PROGRAM_MIGRATION_PLAN.md](AFFILIATE_PROGRAM_MIGRATION_PLAN.md) — миграция реферальной программы на Telegram Stars через MTProto API, фаза 2
+- [CATEGORY_LIMITS_PLAN.md](CATEGORY_LIMITS_PLAN.md) — лимиты на категорию + общий месячный лимит: модель Budget, шкалы в обзоре месяца, уведомления 80%/100%
+- [SINGLE_WORD_KEYWORDS_EXTRACTION_PLAN.md](SINGLE_WORD_KEYWORDS_EXTRACTION_PLAN.md) — извлечение одиночных слов из keyword-фраз при ручной коррекции, min-support=2, приоритизация матчинга
+- [FAQ_SYSTEM_IMPLEMENTATION_PLAN.md](FAQ_SYSTEM_IMPLEMENTATION_PLAN.md) — FAQ без AI: exact/fuzzy/keyword matching и fallback-контекст для модели
+- [INCOME_KEYWORDS_UNIQUENESS_PLAN.md](INCOME_KEYWORDS_UNIQUENESS_PLAN.md) — строгая уникальность income-keywords между категориями без normalized_weight
+- [KEYWORD_MATCHING_FIX_PLAN.md](KEYWORD_MATCHING_FIX_PLAN.md) — word-set + fuzzy matching вместо substring, фильтрация и обучение keywords
+- [RECURRING_PAYMENTS_AMOUNT_PARSING_FIX.md](RECURRING_PAYMENTS_AMOUNT_PARSING_FIX.md) — парсинг сумм с пробелами и валютами в регулярных платежах
 - [EXPORT_IMPLEMENTATION_PLAN.md](EXPORT_IMPLEMENTATION_PLAN.md) — экспорт CSV/XLSX с графиками, Premium-only, openpyxl
 - [MONTHLY_REPORTS_SHARE_FEATURE.md](MONTHLY_REPORTS_SHARE_FEATURE.md) — выбор формата отчёта (CSV/Excel/PDF) через push-кнопки 1 числа
 - [CURRENCY_CONVERSION_INTEGRATION_PLAN.md](CURRENCY_CONVERSION_INTEGRATION_PLAN.md) — автоконвертация валют, ЦБ РФ + Fawaz API, original_amount поля
@@ -43,7 +54,6 @@
 ### architecture
 - [UNIFIED_CATEGORY_LOGIC_MIGRATION_PLAN.md](UNIFIED_CATEGORY_LOGIC_MIGRATION_PLAN.md) — перенос keywords из кода в БД для всех пользователей
 - [REMOVE_NORMALIZED_WEIGHT_PLAN.md](REMOVE_NORMALIZED_WEIGHT_PLAN.md) — удаление мёртвого поля normalized_weight из моделей и парсера
-- [ASYNC_OPENAI_MIGRATION_PLAN.md](ASYNC_OPENAI_MIGRATION_PLAN.md) — переход на AsyncOpenAI + httpx-socks, удаление to_thread
 - [CATEGORY_VALIDATION_UNIFICATION_PLAN.md](CATEGORY_VALIDATION_UNIFICATION_PLAN.md) — общие валидаторы для расходов/доходов, устранение асимметрии
 
 ### security
@@ -68,6 +78,7 @@
 - [WEBHOOK_SETUP_GUIDE.md](WEBHOOK_SETUP_GUIDE.md) — DNS timing issue после обновления, retry-механизм, set_webhook.sh
 - [DOCKER_DNS_CONFIG.md](DOCKER_DNS_CONFIG.md) — /etc/docker/daemon.json с 8.8.8.8/1.1.1.1 для резолвинга api.telegram.org
 - [LOCAL_DEVELOPMENT.md](LOCAL_DEVELOPMENT.md) — автоматический запуск через run_bot.py, Redis + Celery + polling
+- [CLAUDE.md](CLAUDE.md) — команды разработки и деплоя, структура проекта, синхронизация с сервером
 
 ### security
 - [LEGAL_COMPLIANCE_AUDIT_RF.md](LEGAL_COMPLIANCE_AUDIT_RF.md) — аудит 152-ФЗ, cookie-баннер, удаление аккаунта, Роскомнадзор
@@ -77,6 +88,11 @@
 ### features
 - [MARKDOWN_V2_ESCAPING.md](MARKDOWN_V2_ESCAPING.md) — правила экранирования спецсимволов MarkdownV2 в Telegram
 - [CATEGORIZATION_IMPROVEMENTS.md](CATEGORIZATION_IMPROVEMENTS.md) — expense_categorizer.py, pyspellchecker, множественный ввод, EN/RU
+- [AFFILIATE_PROGRAM_FIXES.md](AFFILIATE_PROGRAM_FIXES.md) — правки статистики, callback, F-выражений и обработчиков реферальной программы
+- [AFFILIATE_PROGRAM_FIXES_FINAL.md](AFFILIATE_PROGRAM_FIXES_FINAL.md) — критические расхождения плана Telegram Stars с кодом и точечные правки
+- [HIDDEN_COMMANDS_AUDIT.md](HIDDEN_COMMANDS_AUDIT.md) — аудит /summary, /referral, /blogger_stats и дублирующего category.py
+- [user_scenarios_edge_cases.md](user_scenarios_edge_cases.md) — happy/unhappy paths для операций, валют, дат, отчётов, подписки и голоса
+- [user_scenarios_ADDENDUM.md](user_scenarios_ADDENDUM.md) — edge cases для inline, voice, household, recurring и cashback
 
 ### marketing
 - [HABR_TECHNICAL_INFO.md](HABR_TECHNICAL_INFO.md) — стек для статьи на Хабр: aiogram 3, Django ORM, каскад категоризации
@@ -107,10 +123,21 @@
 - [HOUSEHOLD_AUDIT_REPORT.md](HOUSEHOLD_AUDIT_REPORT.md) — аудит семейного бюджета: валидация категорий, race condition, cleanup
 - [INCOME_TYPE_DEPRECATION_REPORT.md](INCOME_TYPE_DEPRECATION_REPORT.md) — поле income_type дублирует IncomeCategory, кандидат на удаление
 - [MONTHLY_INSIGHTS_FIX_REPORT.md](MONTHLY_INSIGHTS_FIX_REPORT.md) — удаление Google AI, переход на DeepSeek, исправление provider='google'
+- [ERROR_REPORT_2026-01-31.md](ERROR_REPORT_2026-01-31.md) — стабильная работа PRIMARY: 2 некритичные ошибки, 7 медленных запросов
 - [USER_ACTIVITY_REPORT_348740371.md](USER_ACTIVITY_REPORT_348740371.md) — стресс-тест бота: 100 трат, 12 категорий, 5 найденных ошибок
 - [PII_REMOVAL_CHANGELOG.md](PII_REMOVAL_CHANGELOG.md) — changelog удаления PII: 6 файлов, 25 совпадений, скрипт check_pii.py
 - [KEYWORD_MATCHING_IMPROVEMENT_PLAN.md](KEYWORD_MATCHING_IMPROVEMENT_PLAN.md) — реализована 2-уровневая система exact+word, STOP_WORDS
 - [NOTIFY_USER_INSTRUCTIONS.md](NOTIFY_USER_INSTRUCTIONS.md) — одноразовая инструкция: уведомление user 411977529 о фиксе бага
+
+### Планы и исправления
+- [CODE_AUDIT_PLAN.md](CODE_AUDIT_PLAN.md) — аудит безопасности, ошибок, async-паттернов и тестовой инфраструктуры
+- [CURRENCY_WORDFORMS_LEFTOVER_FIX.md](CURRENCY_WORDFORMS_LEFTOVER_FIX.md) — точные словоформы валют без остатков в описании, parser-тесты зелёные
+- [FAMILY_BUDGET_FIX_PLAN.md](FAMILY_BUDGET_FIX_PLAN.md) — удаление legacy family-кода, исправления callback, подписки и приглашений
+- [INCOME_GOALS_PLAN.md](INCOME_GOALS_PLAN.md) — цели доходов по категориям и общая цель, шкалы, FSM и уведомления 100%
+- [INCOME_PARSING_LEADING_AMOUNT_FIX.md](INCOME_PARSING_LEADING_AMOUNT_FIX.md) — ведущая сумма дохода не уступает адресным числам в конце описания
+- [MONTHLY_REPORT_IMPROVEMENTS_PLAN.md](MONTHLY_REPORT_IMPROVEMENTS_PLAN.md) — топ-5 изменений, 6-месячные тренды, DeepSeek и трёхуровневый fallback
+- [SUBSCRIPTION_NOTIFICATIONS_DAYTIME_PLAN.md](SUBSCRIPTION_NOTIFICATIONS_DAYTIME_PLAN.md) — дневное окно 10:00–21:00 по timezone для уведомлений подписки
+- [VOICE_RECOGNITION_MIGRATION_PLAN.md](VOICE_RECOGNITION_MIGRATION_PLAN.md) — Yandex SpeechKit + OpenRouter с симметричным fallback и key rotation
 
 ### Справочники (workflow)
 - [VIBE_CODING_WORKFLOW.md](VIBE_CODING_WORKFLOW.md) — мультимодельный Claude Code + Codex: hooks, PreToolUse, Stop review
@@ -119,6 +146,7 @@
 
 ## Deprecated — устарело, есть замена (кандидаты в archive/)
 
+- [ASYNC_OPENAI_MIGRATION_PLAN.md](ASYNC_OPENAI_MIGRATION_PLAN.md) — замена: [`bot/services/unified_ai_service.py`](../bot/services/unified_ai_service.py)
 - [PII_REMOVAL_PLAN.md](PII_REMOVAL_PLAN.md) — замена: [PII_REMOVAL_PLAN_ACTUAL.md](PII_REMOVAL_PLAN_ACTUAL.md)
 - [LANDING_OPTIMIZATION.md](LANDING_OPTIMIZATION.md) — WebP, nginx кеш; устарело после переезда на NL-сервер
 - [INSTAGRAM_MICROBLOGGER_AD_BRIEF.md](INSTAGRAM_MICROBLOGGER_AD_BRIEF.md) — ТЗ для Instagram блогера; сценарии и промокод COINSFRIENDS

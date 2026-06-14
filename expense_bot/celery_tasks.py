@@ -13,6 +13,7 @@ from django.utils import timezone
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.exceptions import TelegramBadRequest, TelegramNotFound
+from bot.utils.logging_safe import log_safe_id
 from bot.utils.telegram_client import create_telegram_bot
 
 logger = logging.getLogger(__name__)
@@ -1394,6 +1395,72 @@ def collect_daily_analytics():
         return {'error': str(e)}
 
 
+async def _send_recurring_operation_notification(bot, payment_info):
+    """Отправляет карточку регулярной операции и связанное уведомление о прогрессе."""
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from bot.utils import get_text
+    from bot.utils.budget_notifications import send_expense_limit_alerts
+    from bot.utils.income_goal_notifications import send_income_goal_alerts
+    from bot.utils.expense_messages import (
+        format_expense_added_message,
+        format_income_added_message,
+    )
+
+    user_id = payment_info['user_id']
+    operation = payment_info['operation']
+    operation_type = payment_info.get('operation_type')
+    user_lang = getattr(operation.profile, 'language_code', None) or 'ru'
+
+    if operation_type == 'income':
+        text = await format_income_added_message(
+            income=operation,
+            category=getattr(operation, 'category', None),
+            is_recurring=True,
+            lang=user_lang,
+        )
+        edit_callback = f"edit_income_{operation.id}"
+    else:
+        text = await format_expense_added_message(
+            expense=operation,
+            category=operation.category,
+            cashback_text="",
+            is_recurring=True,
+            lang=user_lang,
+        )
+        edit_callback = f"edit_expense_{operation.id}"
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text=get_text('edit_button', user_lang),
+            callback_data=edit_callback,
+        )
+    ]])
+    await bot.send_message(
+        chat_id=user_id,
+        text=text,
+        reply_markup=keyboard,
+        parse_mode="HTML",
+    )
+
+    if operation_type != 'income':
+        await send_expense_limit_alerts(
+            bot,
+            user_id,
+            operation,
+            category=operation.category,
+            lang=user_lang,
+        )
+    else:
+        await send_income_goal_alerts(
+            bot,
+            user_id,
+            operation,
+            category=getattr(operation, 'category', None),
+            lang=user_lang,
+        )
+
+
 @shared_task
 def process_recurring_payments():
     """Process recurring payments for today at 12:00"""
@@ -1401,86 +1468,38 @@ def process_recurring_payments():
     loop = None
     try:
         from bot.services.recurring import process_recurring_payments_for_today
-        from bot.utils.expense_messages import format_expense_added_message, format_income_added_message
-        from bot.utils import get_text
-        from aiogram import Bot
-        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
         # Use main bot token for user-facing notifications
         bot_token = os.getenv('BOT_TOKEN') or os.getenv('TELEGRAM_BOT_TOKEN') or os.getenv('MONITORING_BOT_TOKEN')
         bot = create_telegram_bot(token=bot_token)
-        
+
         # Run async function in sync context
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         # Process recurring payments
         processed_count, processed_payments = loop.run_until_complete(
             process_recurring_payments_for_today()
         )
-        
+
         # Отправляем уведомления пользователям о списанных ежемесячных платежах
         for payment_info in processed_payments:
             try:
-                user_id = payment_info['user_id']
-                operation = payment_info['operation']
-                operation_type = payment_info.get('operation_type')
-                payment = payment_info['payment']
-                
-                # Получаем язык пользователя из профиля
-                from expenses.models import Profile
-                profile = Profile.objects.filter(telegram_id=user_id).first()
-                user_lang = profile.language_code if profile else 'ru'
-                
-                cashback_text = ""
-                
-                # Форматируем сообщение, как при ручном создании операции
-                if operation_type == 'income':
-                    text = loop.run_until_complete(
-                        format_income_added_message(
-                            income=operation,
-                            category=getattr(operation, 'category', None),
-                            is_recurring=True,
-                            lang=user_lang
-                        )
-                    )
-                    edit_callback = f"edit_income_{operation.id}"
-                else:
-                    text = loop.run_until_complete(
-                        format_expense_added_message(
-                            expense=operation,
-                            category=operation.category,
-                            cashback_text=cashback_text,
-                            is_recurring=True,
-                            lang=user_lang
-                        )
-                    )
-                    edit_callback = f"edit_expense_{operation.id}"
-                
-                keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [
-                        InlineKeyboardButton(
-                            text=get_text('edit_button', user_lang),
-                            callback_data=edit_callback
-                        )
-                    ]
-                ])
-                
                 loop.run_until_complete(
-                    bot.send_message(
-                        chat_id=user_id,
-                        text=text,
-                        reply_markup=keyboard,
-                        parse_mode="HTML"
-                    )
+                    _send_recurring_operation_notification(bot, payment_info)
                 )
-                
-                logger.info(f"Sent notification to user {user_id} about recurring payment")
-                
-            except Exception as e:
-                logger.error(f"Error sending notification to user {payment_info.get('user_id')}: {e}")
-        
+                logger.info(
+                    "Sent notification to user %s about recurring payment",
+                    log_safe_id(payment_info['user_id'], "user"),
+                )
+            except Exception:
+                logger.exception(
+                    "Error sending recurring notification to user %s",
+                    log_safe_id(payment_info.get('user_id'), "user"),
+                )
+
         logger.info(f"Processed {processed_count} recurring payments")
-        
+
     except Exception as e:
         logger.error(f"Error in process_recurring_payments task: {e}")
 

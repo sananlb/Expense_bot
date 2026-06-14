@@ -10,7 +10,7 @@ from django.utils.safestring import mark_safe
 from .models import (
     Profile, UserSettings, ExpenseCategory, Expense, Budget,
     Cashback, RecurringPayment, Subscription, PromoCode,
-    PromoCodeUsage, Income, IncomeCategory,
+    PromoCodeUsage, Income, IncomeCategory, IncomeBudget,
     AffiliateProgram, AffiliateLink, AffiliateReferral, AffiliateCommission,
     AdvertiserCampaign
 )
@@ -483,27 +483,60 @@ class ExpenseAdmin(admin.ModelAdmin):
     was_edited.boolean = True
     was_edited.admin_order_field = 'updated_at'
     
-# Функционал бюджетов отключен (30.10.2025)
-# @admin.register(Budget)
-# class BudgetAdmin(admin.ModelAdmin):
-#     list_display = ['profile', 'category', 'amount', 'period_type', 'start_date',
-#                     'end_date', 'is_active']
-#     list_filter = ['period_type', 'is_active', 'start_date']
-#     search_fields = ['profile__username', 'category__name']
-#     date_hierarchy = 'start_date'
-#
-#     fieldsets = (
-#         ('Основная информация', {
-#             'fields': ('profile', 'category', 'amount', 'period_type')
-#         }),
-#         ('Период', {
-#             'fields': ('start_date', 'end_date')
-#         }),
-#         ('Статус', {
-#             'fields': ('is_active', 'created_at', 'updated_at')
-#         }),
-#     )
-#     readonly_fields = ['created_at', 'updated_at']
+@admin.register(Budget)
+class BudgetAdmin(admin.ModelAdmin):
+    list_display = [
+        'profile', 'category', 'amount', 'currency', 'period_type',
+        'start_date', 'end_date', 'is_active',
+    ]
+    list_filter = ['period_type', 'currency', 'is_active', 'start_date']
+    search_fields = [
+        'profile__telegram_id', 'profile__username',
+        'category__name', 'category__name_ru', 'category__name_en',
+    ]
+    date_hierarchy = 'start_date'
+    list_select_related = ['profile', 'category']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('profile', 'category', 'amount', 'currency', 'period_type')
+        }),
+        ('Период', {
+            'fields': ('start_date', 'end_date')
+        }),
+        ('Статус', {
+            'fields': ('is_active', 'created_at', 'updated_at')
+        }),
+    )
+
+
+@admin.register(IncomeBudget)
+class IncomeBudgetAdmin(admin.ModelAdmin):
+    list_display = [
+        'profile', 'category', 'amount', 'currency', 'period_type',
+        'start_date', 'end_date', 'is_active',
+    ]
+    list_filter = ['period_type', 'currency', 'is_active', 'start_date']
+    search_fields = [
+        'profile__telegram_id', 'profile__username',
+        'category__name', 'category__name_ru', 'category__name_en',
+    ]
+    date_hierarchy = 'start_date'
+    list_select_related = ['profile', 'category']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('profile', 'category', 'amount', 'currency', 'period_type')
+        }),
+        ('Период', {
+            'fields': ('start_date', 'end_date')
+        }),
+        ('Статус', {
+            'fields': ('is_active', 'created_at', 'updated_at')
+        }),
+    )
 
 
 @admin.register(Cashback)

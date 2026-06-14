@@ -2,6 +2,7 @@
 Router for user settings management
 """
 from aiogram import Router, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import Message, CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -16,6 +17,7 @@ from bot.utils import get_text, set_user_language, get_user_language, format_amo
 from bot.services.profile import get_or_create_profile, get_user_settings, toggle_cashback
 from bot.services.category import update_default_categories_language
 from bot.utils.commands import update_user_commands
+from bot.utils.logging_safe import log_safe_id
 from bot.utils.message_utils import send_message_with_cleanup
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,8 @@ class SettingsStates(StatesGroup):
     language = State()
     timezone = State()
     currency = State()
+    waiting_for_total_limit_amount = State()
+    waiting_for_total_goal_amount = State()
 
 
 @router.callback_query(F.data == "toggle_view_scope")
@@ -205,6 +209,319 @@ async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: st
     except Exception as e:
         logger.error(f"Error showing settings: {e}")
         await callback.answer(get_text('error_occurred', lang))
+
+
+# ===== Общий лимит трат =====
+
+def _total_limit_keyboard(lang: str, has_limit: bool) -> InlineKeyboardMarkup:
+    """Клавиатура экрана общего лимита трат."""
+    rows = []
+    if has_limit:
+        rows.append([InlineKeyboardButton(text=get_text('limit_edit_button', lang), callback_data="total_limit_edit")])
+        rows.append([InlineKeyboardButton(text=get_text('limit_remove_button', lang), callback_data="total_limit_remove")])
+    rows.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")])
+    rows.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _prompt_total_limit_amount(callback: CallbackQuery, state: FSMContext, lang: str, change: bool = False):
+    """Показывает приглашение ввести сумму общего лимита и переводит в FSM."""
+    from bot.services.budget import get_limit
+    if change:
+        limit = await get_limit(callback.from_user.id, None)
+        current = format_amount(limit.amount, limit.currency, lang) if limit else ''
+        text = get_text('total_limit_input_prompt_change', lang).format(amount=current)
+    else:
+        text = get_text('total_limit_input_prompt', lang)
+
+    await state.update_data(lang=lang)
+    await state.set_state(SettingsStates.waiting_for_total_limit_amount)
+    await callback.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")],
+        ]),
+        parse_mode='HTML',
+    )
+
+
+@router.callback_query(F.data == "total_limit_edit")
+async def total_limit_change(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Изменить общий лимит — сразу к вводу суммы."""
+    lang = await get_user_language(callback.from_user.id)
+    await _prompt_total_limit_amount(callback, state, lang, change=True)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "total_limit_remove")
+async def total_limit_remove(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Убрать общий лимит."""
+    from bot.services.budget import remove_limit
+    lang = await get_user_language(callback.from_user.id)
+    await remove_limit(callback.from_user.id, None)
+    await callback.answer(get_text('limit_removed_success', lang))
+    await callback_settings(callback, state, lang)
+
+
+@router.callback_query(F.data == "total_limit")
+async def total_limit_entry(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
+    """Точка входа в общий лимит трат из настроек."""
+    from bot.services.budget import get_limit
+    lang = await get_user_language(callback.from_user.id)
+    limit = await get_limit(callback.from_user.id, None)
+
+    header = get_text('total_limit_header', lang)
+    explainer = get_text('total_limit_explainer', lang)
+    if limit is not None:
+        # Лимит установлен — показываем объяснение и кнопки управления (без цифр).
+        try:
+            await callback.message.edit_text(
+                f"{header}\n\n{explainer}",
+                reply_markup=_total_limit_keyboard(lang, has_limit=True),
+                parse_mode='HTML',
+            )
+        except TelegramBadRequest:
+            pass
+        await callback.answer()
+    else:
+        # Лимита нет — объяснение + приглашение ввести сумму.
+        await _prompt_total_limit_amount(callback, state, lang, change=False)
+        await callback.answer()
+
+
+@router.message(SettingsStates.waiting_for_total_limit_amount)
+async def process_total_limit_amount(message: Message, state: FSMContext,
+                                     voice_text: str | None = None,
+                                     voice_no_subscription: bool = False,
+                                     voice_transcribe_failed: bool = False):
+    """Обработка ввода суммы общего лимита (текст или голос)."""
+    from bot.utils.expense_parser import convert_words_to_numbers
+    from bot.utils.validators import parse_description_amount
+    from bot.services.budget import set_limit
+
+    lang = await get_user_language(message.from_user.id)
+
+    # Извлекаем текст
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import subscription_required_message, get_subscription_button
+            await message.answer(subscription_required_message(), reply_markup=get_subscription_button(), parse_mode="HTML")
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer("❌ Не удалось распознать голосовое сообщение. Попробуйте ещё раз или введите текстом.")
+            return
+        raw = voice_text
+    elif message.text:
+        raw = message.text.strip()
+    else:
+        await message.answer(get_text('limit_invalid_amount', lang))
+        return
+
+    # Парсим сумму
+    try:
+        parsed = parse_description_amount(convert_words_to_numbers(raw), allow_only_amount=True)
+        amount = parsed.get('amount')
+    except ValueError:
+        amount = None
+
+    if not amount or amount <= 0:
+        await send_message_with_cleanup(message, state, get_text('limit_invalid_amount', lang))
+        return
+
+    try:
+        await set_limit(message.from_user.id, None, amount)
+    except ValueError as e:
+        await send_message_with_cleanup(message, state, f"❌ {str(e)}")
+        return
+
+    await state.set_state(None)
+
+    # Подтверждаем и показываем экран общего лимита с объяснением (без цифр).
+    header = get_text('total_limit_header', lang)
+    explainer = get_text('total_limit_explainer', lang)
+    await send_message_with_cleanup(
+        message, state,
+        f"{header}\n\n{explainer}",
+        reply_markup=_total_limit_keyboard(lang, has_limit=True),
+        parse_mode='HTML',
+    )
+
+
+# ===== Общая цель дохода =====
+
+def _total_goal_keyboard(lang: str, has_goal: bool) -> InlineKeyboardMarkup:
+    """Клавиатура экрана общей цели дохода."""
+    rows = []
+    if has_goal:
+        rows.append([
+            InlineKeyboardButton(
+                text=get_text('goal_edit_button', lang),
+                callback_data="total_goal_edit",
+            )
+        ])
+        rows.append([
+            InlineKeyboardButton(
+                text=get_text('goal_remove_button', lang),
+                callback_data="total_goal_remove",
+            )
+        ])
+    rows.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")])
+    rows.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+async def _prompt_total_goal_amount(
+    callback: CallbackQuery,
+    state: FSMContext,
+    lang: str,
+    change: bool = False,
+) -> None:
+    """Показывает приглашение ввести общую цель и переводит в FSM."""
+    from bot.services.income_goal import get_goal
+
+    if change:
+        goal = await get_goal(callback.from_user.id, None)
+        current = format_amount(goal.amount, goal.currency, lang) if goal else ''
+        text = get_text('total_goal_input_prompt_change', lang).format(amount=current)
+    else:
+        text = get_text('total_goal_input_prompt', lang)
+
+    await state.update_data(lang=lang)
+    await state.set_state(SettingsStates.waiting_for_total_goal_amount)
+    await callback.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")],
+            [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")],
+        ]),
+        parse_mode='HTML',
+    )
+
+
+@router.callback_query(F.data == "total_goal_edit")
+async def total_goal_change(
+    callback: CallbackQuery,
+    state: FSMContext,
+    lang: str = 'ru',
+):
+    """Изменяет общую цель дохода."""
+    lang = await get_user_language(callback.from_user.id)
+    await _prompt_total_goal_amount(callback, state, lang, change=True)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "total_goal_remove")
+async def total_goal_remove(
+    callback: CallbackQuery,
+    state: FSMContext,
+    lang: str = 'ru',
+):
+    """Убирает общую цель дохода."""
+    from bot.services.income_goal import remove_goal
+
+    lang = await get_user_language(callback.from_user.id)
+    await remove_goal(callback.from_user.id, None)
+    await callback.answer(get_text('goal_removed_success', lang))
+    await callback_settings(callback, state, lang)
+
+
+@router.callback_query(F.data == "total_goal")
+async def total_goal_entry(
+    callback: CallbackQuery,
+    state: FSMContext,
+    lang: str = 'ru',
+):
+    """Открывает общую цель дохода из настроек."""
+    from bot.services.income_goal import get_goal
+
+    lang = await get_user_language(callback.from_user.id)
+    goal = await get_goal(callback.from_user.id, None)
+    header = get_text('total_goal_header', lang)
+    explainer = get_text('total_goal_explainer', lang)
+    if goal is not None:
+        try:
+            await callback.message.edit_text(
+                f"{header}\n\n{explainer}",
+                reply_markup=_total_goal_keyboard(lang, has_goal=True),
+                parse_mode='HTML',
+            )
+        except TelegramBadRequest:
+            pass
+        await callback.answer()
+    else:
+        await _prompt_total_goal_amount(callback, state, lang)
+        await callback.answer()
+
+
+@router.message(SettingsStates.waiting_for_total_goal_amount)
+async def process_total_goal_amount(
+    message: Message,
+    state: FSMContext,
+    voice_text: str | None = None,
+    voice_no_subscription: bool = False,
+    voice_transcribe_failed: bool = False,
+):
+    """Обрабатывает текстовый или голосовой ввод общей цели дохода."""
+    from bot.services.income_goal import set_goal
+    from bot.utils.expense_parser import convert_words_to_numbers
+    from bot.utils.validators import parse_description_amount
+
+    lang = await get_user_language(message.from_user.id)
+    if message.voice:
+        if voice_no_subscription:
+            from bot.services.subscription import (
+                get_subscription_button,
+                subscription_required_message,
+            )
+            await message.answer(
+                subscription_required_message(),
+                reply_markup=get_subscription_button(),
+                parse_mode="HTML",
+            )
+            return
+        if voice_transcribe_failed or not voice_text:
+            await message.answer(get_text('voice_recognition_failed', lang))
+            return
+        raw = voice_text
+    elif message.text:
+        raw = message.text.strip()
+    else:
+        await message.answer(get_text('goal_invalid_amount', lang))
+        return
+
+    try:
+        parsed = parse_description_amount(
+            convert_words_to_numbers(raw),
+            allow_only_amount=True,
+        )
+        amount = parsed.get('amount')
+    except ValueError:
+        amount = None
+
+    if not amount or amount <= 0:
+        await send_message_with_cleanup(
+            message,
+            state,
+            get_text('goal_invalid_amount', lang),
+        )
+        return
+
+    try:
+        await set_goal(message.from_user.id, None, amount)
+    except ValueError as exc:
+        await send_message_with_cleanup(message, state, f"❌ {exc}")
+        return
+
+    await state.set_state(None)
+    await send_message_with_cleanup(
+        message,
+        state,
+        f"{get_text('total_goal_header', lang)}\n\n"
+        f"{get_text('total_goal_explainer', lang)}",
+        reply_markup=_total_goal_keyboard(lang, has_goal=True),
+        parse_mode='HTML',
+    )
 
 
 @router.callback_query(F.data == "change_language")

@@ -6,6 +6,7 @@ from aiogram.types import Message, CallbackQuery, BufferedInputFile
 from aiogram.fsm.context import FSMContext
 from datetime import datetime, date, timedelta
 from calendar import monthrange
+from decimal import Decimal
 import logging
 import asyncio
 import time
@@ -18,6 +19,13 @@ from bot.utils import get_text, format_amount, get_month_name, get_currency_symb
 from bot.utils.category_helpers import get_category_display_name
 from bot.utils.logging_safe import log_safe_id
 from bot.services.expense import get_expenses_summary, get_expenses_by_period, get_last_expenses
+from bot.services.budget import get_active_limits_map
+from bot.services.income_goal import get_active_goals_map
+from bot.utils.budget_display import format_category_bar_line, format_total_bar_line
+from bot.utils.income_goal_display import (
+    format_category_goal_bar_line,
+    format_total_goal_bar_line,
+)
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
 from bot.utils.telegram_client import create_telegram_bot
@@ -27,6 +35,31 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 logger = logging.getLogger(__name__)
 
 router = Router(name="reports")
+
+
+def _limit_percent(spent, limit_amount) -> int:
+    """Floor-процент использования лимита для уже агрегированных сумм."""
+    spent = Decimal(str(spent or 0))
+    limit_amount = Decimal(str(limit_amount or 0))
+    return int(spent / limit_amount * 100) if limit_amount > 0 else 0
+
+
+def _summary_spent_in_currency(summary: dict, currency: str) -> Decimal:
+    """Сумма расходов из сводки именно в валюте лимита."""
+    currency_totals = summary.get('currency_totals', {})
+    if currency in currency_totals:
+        return Decimal(str(currency_totals[currency]))
+    if summary.get('currency') == currency:
+        return Decimal(str(summary.get('total', 0)))
+    return Decimal('0')
+
+
+def _summary_income_in_currency(summary: dict, currency: str) -> Decimal:
+    """Сумма доходов из сводки именно в валюте цели."""
+    currency_totals = summary.get('income_currency_totals', {})
+    if currency in currency_totals:
+        return Decimal(str(currency_totals[currency]))
+    return Decimal('0')
 
 
 @router.callback_query(F.data == "expenses_today")
@@ -244,6 +277,24 @@ async def show_expenses_summary(
 
         logger.debug("Summary period determined: period=%s, is_today=%s", period, is_today)
 
+        # Лимиты личные и отображаются только в обзоре календарного месяца.
+        report_limits = {}
+        report_goals = {}
+        if period == 'month' and not household_mode:
+            active_limits = await get_active_limits_map(user_id)
+            active_goals = await get_active_goals_map(user_id)
+            report_month = start_date.replace(day=1)
+            report_limits = {
+                category_id: budget
+                for category_id, budget in active_limits.items()
+                if budget.start_date.replace(day=1) <= report_month
+            }
+            report_goals = {
+                category_id: goal
+                for category_id, goal in active_goals.items()
+                if goal.start_date.replace(day=1) <= report_month
+            }
+
         # Формируем текст периода
         if start_date == end_date:
             if start_date == today:
@@ -305,10 +356,23 @@ async def show_expenses_summary(
             # Показываем расходы если они есть
             if has_expenses:
                 text += f"💸 {get_text('expenses_label', lang)}: {expense_amount}\n"
+                total_budget = report_limits.get(None)
+                if total_budget is not None:
+                    total_spent = _summary_spent_in_currency(summary, total_budget.currency)
+                    total_percent = _limit_percent(total_spent, total_budget.amount)
+                    text += f"{format_total_bar_line(total_percent)}\n"
 
             # Показываем доходы если они есть
             if has_incomes:
                 text += f"💰 {get_text('income_label', lang)}: {income_amount}\n"
+                total_goal = report_goals.get(None)
+                if total_goal is not None:
+                    total_received = _summary_income_in_currency(
+                        summary,
+                        total_goal.currency,
+                    )
+                    total_percent = _limit_percent(total_received, total_goal.amount)
+                    text += f"{format_total_goal_bar_line(total_percent)}\n"
 
             # Показываем баланс только если есть и доходы и расходы
             if has_expenses and has_incomes:
@@ -323,34 +387,51 @@ async def show_expenses_summary(
             
             # По категориям расходов (если есть)
             if summary['by_category'] and has_expenses:
-                text += f"📊 <b>{get_text('expenses_by_category', lang)}:</b>\n"
                 total_categories = len(summary['by_category'])
-                
+
                 # Логика отображения: если 22 или меньше - показываем все, если 23+ показываем 20 + остальные
-                if total_categories <= 22:
-                    # Показываем все категории
-                    for cat in summary['by_category']:
-                        # Название уже содержит эмодзи из get_category_display_name
-                        category_display = cat.get('name', get_text('no_category', lang))
+                shown_categories = (
+                    summary['by_category'] if total_categories <= 22
+                    else summary['by_category'][:20]
+                )
 
-                        # Формируем строку с суммами по валютам
-                        amounts = cat.get('amounts', {})
-                        amounts_str = " / ".join([format_amount(amt, cur, lang) for cur, amt in amounts.items()])
-                        text += f"  {category_display}: {amounts_str}\n"
-                else:
-                    # Показываем первые 20 категорий
-                    for cat in summary['by_category'][:20]:
-                        # Название уже содержит эмодзи из get_category_display_name
-                        category_display = cat.get('name', get_text('no_category', lang))
+                def _category_budget_for(cat):
+                    """Активный лимит для категории из показываемого среза (или None)."""
+                    category_id = cat.get('id')
+                    if category_id is None:
+                        return None
+                    return report_limits.get(category_id)
 
-                        # Формируем строку с суммами по валютам
-                        amounts = cat.get('amounts', {})
-                        amounts_str = " / ".join([format_amount(amt, cur, lang) for cur, amt in amounts.items()])
-                        text += f"  {category_display}: {amounts_str}\n"
+                # Есть ли среди показываемых категорий хоть одна со шкалой —
+                # тогда добавляем пустую строку после заголовка и между категориями.
+                any_category_bar = any(
+                    _category_budget_for(cat) is not None for cat in shown_categories
+                )
+
+                text += f"📊 <b>{get_text('expenses_by_category', lang)}:</b>\n"
+                if any_category_bar:
+                    text += "\n"
+
+                for cat in shown_categories:
+                    # Название уже содержит эмодзи из get_category_display_name
+                    category_display = cat.get('name', get_text('no_category', lang))
+
+                    # Формируем строку с суммами по валютам
+                    amounts = cat.get('amounts', {})
+                    amounts_str = " / ".join([format_amount(amt, cur, lang) for cur, amt in amounts.items()])
+                    text += f"  {category_display}: {amounts_str}\n"
+                    category_budget = _category_budget_for(cat)
+                    if category_budget is not None:
+                        spent = amounts.get(category_budget.currency, Decimal('0'))
+                        percent = _limit_percent(spent, category_budget.amount)
+                        text += f"  {format_category_bar_line(percent)}\n"
+                        # Пустая строка-отступ после категории со шкалой.
+                        text += "\n"
+
+                if total_categories > 22:
 
                     # Добавляем "остальные траты" - собираем суммы по валютам
                     remaining_count = total_categories - 20
-                    from decimal import Decimal
                     remaining_by_currency = {}
                     for cat in summary['by_category'][20:]:
                         for cur, amt in cat.get('amounts', {}).items():
@@ -372,25 +453,45 @@ async def show_expenses_summary(
             
             # По категориям доходов (если есть)
             if summary.get('by_income_category') and has_incomes:
-                text += f"💵 <b>{get_text('income_by_category', lang)}:</b>\n"
                 income_categories = summary.get('by_income_category', [])
                 total_income_categories = len(income_categories)
-                
-                # Логика отображения: если 22 или меньше - показываем все, если 23+ показываем 20 + остальные
-                if total_income_categories <= 22:
-                    # Показываем все категории доходов
-                    for cat in income_categories:
-                        # Имя уже переведено в expense.py через get_display_name()
-                        category_display = cat['name']
-                        text += f"  {category_display}: {format_amount(cat['total'], summary['currency'], lang)}\n"
-                else:
-                    # Показываем первые 20 категорий доходов
-                    for cat in income_categories[:20]:
-                        # Имя уже переведено в expense.py через get_display_name()
-                        category_display = cat['name']
-                        text += f"  {category_display}: {format_amount(cat['total'], summary['currency'], lang)}\n"
-                    
-                    # Добавляем "остальные доходы"
+
+                shown_income_categories = (
+                    income_categories if total_income_categories <= 22
+                    else income_categories[:20]
+                )
+
+                def _category_goal_for(cat):
+                    category_id = cat.get('id')
+                    if not category_id:
+                        return None
+                    return report_goals.get(category_id)
+
+                any_category_goal_bar = any(
+                    _category_goal_for(cat) is not None
+                    for cat in shown_income_categories
+                )
+
+                text += f"💵 <b>{get_text('income_by_category', lang)}:</b>\n"
+                if any_category_goal_bar:
+                    text += "\n"
+
+                for cat in shown_income_categories:
+                    category_display = cat['name']
+                    text += (
+                        f"  {category_display}: "
+                        f"{format_amount(cat['total'], summary['currency'], lang)}\n"
+                    )
+                    category_goal = _category_goal_for(cat)
+                    if category_goal is not None:
+                        received = cat.get('amounts', {}).get(
+                            category_goal.currency,
+                            Decimal('0'),
+                        )
+                        percent = _limit_percent(received, category_goal.amount)
+                        text += f"  {format_category_goal_bar_line(percent)}\n\n"
+
+                if total_income_categories > 22:
                     remaining_count = total_income_categories - 20
                     remaining_sum = sum(cat['total'] for cat in income_categories[20:])
                     if lang == 'ru':
