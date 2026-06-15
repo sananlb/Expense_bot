@@ -2085,6 +2085,14 @@ CACHE_KEY_PUBLIC_FAILURES = "public_monitor:failures"
 CACHE_KEY_PUBLIC_ALERT_SENT = "public_monitor:alert_sent"
 CACHE_KEY_PUBLIC_DOWN_SINCE = "public_monitor:down_since"
 CACHE_KEY_PUBLIC_ISSUES_STATE = "public_monitor:issues_state"
+CACHE_KEY_PUBLIC_ISSUE_FAILURES = "public_monitor:issue_failures"
+
+TRANSIENT_PUBLIC_ISSUE_CODES = frozenset(
+    {
+        "certificate_probe_failed",
+        "webhook_info_unavailable",
+    }
+)
 
 
 def _get_public_health_url() -> str:
@@ -2257,23 +2265,48 @@ def _fetch_telegram_webhook_info() -> tuple[dict | None, str]:
     if not bot_token:
         return None, "BOT_TOKEN не настроен"
 
-    try:
-        with urlopen(
-            f"https://api.telegram.org/bot{bot_token}/getWebhookInfo",
-            timeout=PUBLIC_CHECK_TIMEOUT,
-        ) as response:
-            payload = json.load(response)
+    attempts = max(1, int(os.getenv("PUBLIC_WEBHOOK_REQUEST_ATTEMPTS", "3")))
+    retry_delay = max(0.0, float(os.getenv("PUBLIC_WEBHOOK_RETRY_DELAY", "1")))
+    last_error = ""
 
-        if not payload.get("ok"):
-            return None, payload.get("description", "unknown Telegram API error")
+    for attempt in range(1, attempts + 1):
+        try:
+            with urlopen(
+                f"https://api.telegram.org/bot{bot_token}/getWebhookInfo",
+                timeout=PUBLIC_CHECK_TIMEOUT,
+            ) as response:
+                payload = json.load(response)
 
-        return payload.get("result") or {}, ""
-    except HTTPError as exc:
-        return None, f"HTTP {exc.code}"
-    except URLError as exc:
-        return None, str(exc.reason)[:160]
-    except Exception as exc:
-        return None, str(exc)[:160]
+            if not payload.get("ok"):
+                return None, payload.get("description", "unknown Telegram API error")
+
+            if attempt > 1:
+                logger.info(
+                    "[PUBLIC_MONITOR] getWebhookInfo recovered on attempt %s/%s",
+                    attempt,
+                    attempts,
+                )
+            return payload.get("result") or {}, ""
+        except HTTPError as exc:
+            last_error = f"HTTP {exc.code}"
+            if 400 <= exc.code < 500:
+                break
+        except URLError as exc:
+            last_error = str(exc.reason)[:160]
+        except Exception as exc:
+            last_error = str(exc)[:160]
+
+        if attempt < attempts:
+            logger.warning(
+                "[PUBLIC_MONITOR] getWebhookInfo failed on attempt %s/%s (%s), retrying in %ss",
+                attempt,
+                attempts,
+                last_error,
+                retry_delay,
+            )
+            time_module.sleep(retry_delay)
+
+    return None, last_error
 
 
 def _build_public_certificate_issue(
@@ -2430,10 +2463,14 @@ def _handle_public_endpoint_down(cache, health_url: str, error_detail: str) -> N
 
 
 def _handle_public_monitoring_issues(cache, health_url: str, issues: List[dict]) -> None:
+    issues, has_unconfirmed_issues = _confirm_public_monitoring_issues(cache, issues)
     previous_state = cache.get(CACHE_KEY_PUBLIC_ISSUES_STATE)
     current_state = _serialize_monitoring_issues(issues)
 
     if not issues:
+        if has_unconfirmed_issues:
+            return
+
         if previous_state:
             sent = _send_monitoring_alert(
                 f"✅ ПУБЛИЧНЫЙ HTTPS/WEBHOOK МОНИТОРИНГ НОРМАЛИЗОВАЛСЯ\n\n"
@@ -2461,6 +2498,44 @@ def _handle_public_monitoring_issues(cache, health_url: str, issues: List[dict])
     )
     if sent:
         cache.set(CACHE_KEY_PUBLIC_ISSUES_STATE, current_state, 86400)
+
+
+def _confirm_public_monitoring_issues(cache, issues: List[dict]) -> tuple[List[dict], bool]:
+    confirmation_cycles = max(
+        1,
+        int(os.getenv("PUBLIC_TRANSIENT_ISSUE_CONFIRMATION_CYCLES", "2")),
+    )
+    failure_counts = cache.get(CACHE_KEY_PUBLIC_ISSUE_FAILURES) or {}
+    active_transient_codes = {
+        issue.get("code")
+        for issue in issues
+        if issue.get("code") in TRANSIENT_PUBLIC_ISSUE_CODES
+    }
+
+    for code in TRANSIENT_PUBLIC_ISSUE_CODES:
+        if code in active_transient_codes:
+            failure_counts[code] = int(failure_counts.get(code, 0)) + 1
+        else:
+            failure_counts.pop(code, None)
+
+    if failure_counts:
+        cache.set(CACHE_KEY_PUBLIC_ISSUE_FAILURES, failure_counts, 3600)
+    else:
+        cache.delete(CACHE_KEY_PUBLIC_ISSUE_FAILURES)
+
+    confirmed_issues = [
+        issue
+        for issue in issues
+        if (
+            issue.get("code") not in TRANSIENT_PUBLIC_ISSUE_CODES
+            or failure_counts.get(issue.get("code"), 0) >= confirmation_cycles
+        )
+    ]
+    has_unconfirmed_issues = any(
+        failure_counts.get(code, 0) < confirmation_cycles
+        for code in active_transient_codes
+    )
+    return confirmed_issues, has_unconfirmed_issues
 
 
 def _serialize_monitoring_issues(issues: List[dict]) -> str:

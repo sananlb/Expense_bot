@@ -1,48 +1,56 @@
 # Docker DNS Configuration
 
-## Проблема
-Docker контейнеры могут иметь проблемы с резолвингом DNS, особенно на некоторых серверах. Это приводит к ошибкам типа:
-```
-Cannot connect to host api.telegram.org:443 ssl:default [Temporary failure in name resolution]
-```
+## Problem
 
-## Решение
-Настройте DNS серверы для Docker daemon на ОБОИХ серверах (основной и резервный).
+Direct UDP queries from Docker containers to public resolvers can intermittently
+time out:
 
-### Шаг 1: Создайте/отредактируйте файл конфигурации Docker
-
-```bash
-sudo nano /etc/docker/daemon.json
+```text
+Cannot connect to host api.telegram.org:443 ssl:default
+[Temporary failure in name resolution]
 ```
 
-### Шаг 2: Добавьте DNS конфигурацию
+The production setup uses a host-local Unbound cache instead:
 
-```json
-{
-  "dns": ["8.8.8.8", "1.1.1.1"]
-}
-```
+- Unbound listens only on Docker's `172.17.0.1`;
+- containers use `172.17.0.1` as their DNS server;
+- cached answers remain available during short upstream failures;
+- upstream requests to `1.1.1.1` and `8.8.8.8` use TCP, avoiding the observed
+  UDP/53 packet loss.
 
-### Шаг 3: Перезапустите Docker
-
-```bash
-sudo systemctl restart docker
-```
-
-### Шаг 4: Перезапустите контейнеры
+## Installation
 
 ```bash
 cd /home/batman/expense_bot
-docker-compose down
-docker-compose up -d
+sudo bash scripts/setup_local_dns_cache.sh
 ```
 
-## Проверка
+The script validates the `docker0` address, installs Unbound, writes the scoped
+configuration, validates it with `unbound-checkconf`, and runs UDP/TCP lookups.
 
-Проверить что DNS работает внутри контейнера:
+## Container Configuration
+
+Application services in `docker-compose.yml` use:
+
+```yaml
+dns:
+  - 172.17.0.1
+```
+
+Recreate application containers after changing DNS settings:
+
 ```bash
-docker exec expense_bot_app nslookup api.telegram.org
+docker compose up -d --no-deps --force-recreate bot celery celery-beat web
 ```
 
-## Важно!
-Эта настройка должна быть **одинаковой на обоих серверах** для обеспечения идентичности конфигурации.
+## Verification
+
+```bash
+sudo systemctl status unbound --no-pager
+dig @172.17.0.1 api.telegram.org
+docker exec expense_bot_celery getent hosts api.telegram.org
+sudo journalctl -u docker --since "15 minutes ago" --no-pager \
+  | grep "failed to query external DNS server"
+```
+
+No Docker daemon restart is required.
