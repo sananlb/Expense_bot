@@ -38,7 +38,7 @@ services:
     container_name: expense_bot_app
     dns:
       # Host-local Unbound cache configured by scripts/setup_local_dns_cache.sh
-      - 172.17.0.1
+      - 10.255.255.53
     # ⚠️ При смене IP сервера (144.31.97.139) — обновить extra_hosts здесь
     extra_hosts:
       - "expensebot.duckdns.org:144.31.97.139"
@@ -76,7 +76,7 @@ services:
       target: base
     container_name: expense_bot_celery
     dns:
-      - 172.17.0.1
+      - 10.255.255.53
     # ⚠️ При смене IP сервера (144.31.97.139) — обновить extra_hosts здесь
     extra_hosts:
       - "expensebot.duckdns.org:144.31.97.139"
@@ -111,7 +111,7 @@ services:
       target: base
     container_name: expense_bot_celery_beat
     dns:
-      - 172.17.0.1
+      - 10.255.255.53
     env_file:
       - .env
     environment:
@@ -143,7 +143,7 @@ services:
       target: base
     container_name: expense_bot_web
     dns:
-      - 172.17.0.1
+      - 10.255.255.53
     env_file:
       - .env
     environment:

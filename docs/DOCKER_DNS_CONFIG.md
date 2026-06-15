@@ -12,11 +12,15 @@ Cannot connect to host api.telegram.org:443 ssl:default
 
 The production setup uses a host-local Unbound cache instead:
 
-- Unbound listens only on Docker's `172.17.0.1`;
-- containers use `172.17.0.1` as their DNS server;
+- the setup creates a dedicated dummy interface at `10.255.255.53`;
+- Unbound listens only on that host-local address;
+- containers use `10.255.255.53` as their DNS server;
 - cached answers remain available during short upstream failures;
 - upstream requests to `1.1.1.1` and `8.8.8.8` use TCP, avoiding the observed
   UDP/53 packet loss.
+
+Docker bridge addresses are deliberately not used because Docker handles DNS
+traffic specially on those interfaces.
 
 ## Installation
 
@@ -34,7 +38,7 @@ Application services in `docker-compose.yml` use:
 
 ```yaml
 dns:
-  - 172.17.0.1
+  - 10.255.255.53
 ```
 
 Recreate application containers after changing DNS settings:
@@ -47,7 +51,7 @@ docker compose up -d --no-deps --force-recreate bot celery celery-beat web
 
 ```bash
 sudo systemctl status unbound --no-pager
-dig @172.17.0.1 api.telegram.org
+dig @10.255.255.53 api.telegram.org
 docker exec expense_bot_celery getent hosts api.telegram.org
 sudo journalctl -u docker --since "15 minutes ago" --no-pager \
   | grep "failed to query external DNS server"
