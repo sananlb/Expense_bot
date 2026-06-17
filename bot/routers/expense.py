@@ -1262,7 +1262,14 @@ async def cancel_expense_input(callback: types.CallbackQuery, state: FSMContext)
 # Обработчик текстовых сообщений
 @router.message(F.text & ~F.text.startswith('/'))
 @rate_limit(max_calls=30, period=60)  # 30 сообщений в минуту
-async def handle_text_expense(message: types.Message, state: FSMContext, text: str = None, lang: str = 'ru', user_id: Optional[int] = None):
+async def handle_text_expense(
+    message: types.Message,
+    state: FSMContext,
+    text: str = None,
+    lang: str = 'ru',
+    user_id: Optional[int] = None,
+    input_source: str = "text",
+):
     """Обработка текстовых сообщений с тратами
 
     Args:
@@ -1705,6 +1712,120 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         profile = await Profile.objects.aget(telegram_id=user_id)
     except Profile.DoesNotExist:
         profile = None
+
+    async def create_and_send_expense_from_parsed(parsed_expense: dict) -> bool:
+        category = await get_or_create_category(user_id, parsed_expense['category'])
+        amount = parsed_expense['amount']
+        currency = parsed_expense.get('currency')
+        if not currency:
+            from bot.services.profile import get_or_create_profile
+            profile_for_currency = profile or await get_or_create_profile(user_id)
+            currency = profile_for_currency.currency or 'RUB'
+
+        try:
+            expense = await add_expense_with_conversion(
+                user_id=user_id,
+                category_id=category.id,
+                amount=amount,
+                description=parsed_expense['description'],
+                input_currency=currency,
+                expense_date=parsed_expense.get('expense_date'),
+                ai_categorized=parsed_expense.get('ai_enhanced', False),
+                ai_confidence=parsed_expense.get('confidence')
+            )
+        except ValueError as e:
+            await message.answer(f"❌ {str(e)}", parse_mode="HTML")
+            return False
+
+        if expense is None:
+            logger.error("Failed to create expense for %s: add_expense returned None", log_safe_id(user_id, "user"))
+            await message.answer("❌ Не удалось сохранить трату. Попробуйте позже.", parse_mode="HTML")
+            return False
+
+        cashback_text = ""
+        user_currency = profile.currency if profile else 'RUB'
+        if currency == user_currency:
+            current_month = date.today().month
+            cashback = await calculate_expense_cashback(
+                user_id=user_id,
+                category_id=category.id,
+                amount=expense.amount,
+                month=current_month
+            )
+            if cashback > 0:
+                cashback_text = f" (+{format_currency(cashback, user_currency)})"
+                expense.cashback_amount = Decimal(str(cashback))
+                await expense.asave()
+
+        message_text = await format_expense_added_message(
+            expense=expense,
+            category=category,
+            cashback_text=cashback_text,
+            confidence_text="",
+            reused_from_last=parsed_expense.get('reused_from_last', False),
+            lang=lang
+        )
+
+        await send_message_with_cleanup(message, state,
+            message_text,
+            reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    types.InlineKeyboardButton(text=get_text('edit_button', lang), callback_data=f"edit_expense_{expense.id}")
+                ]
+            ]),
+            parse_mode="HTML",
+            keep_message=True
+        )
+        await send_expense_limit_alerts(
+            message.bot, user_id, expense, category=category, lang=lang
+        )
+        return True
+
+    from ..utils.multiple_expense_parser import split_multiple_expense_texts
+
+    multiple_texts = split_multiple_expense_texts(text, input_source=input_source)
+    if multiple_texts:
+        logger.info(
+            "Multiple expense input detected for %s: count=%s, source=%s, text=%s",
+            log_safe_id(user_id, "user"),
+            len(multiple_texts),
+            input_source,
+            summarize_text(text),
+        )
+
+        parsed_items = []
+        failed_item_text = None
+        for item_text in multiple_texts:
+            parsed_item = await parse_expense_message(item_text, user_id=user_id, profile=profile, use_ai=True)
+            if not parsed_item or not parsed_item.get("amount") or parsed_item["amount"] <= 0:
+                failed_item_text = item_text
+                break
+            parsed_items.append(parsed_item)
+
+        if failed_item_text or len(parsed_items) < 2:
+            await cancel_typing()
+            logger.warning(
+                "Failed to parse batch expense item for %s: item=%s, original=%s",
+                log_safe_id(user_id, "user"),
+                summarize_text(failed_item_text or ""),
+                summarize_text(text),
+            )
+            error_msg = (
+                "❌ Не удалось разобрать одну из трат. Формат: название сумма."
+                if lang == "ru"
+                else "❌ Could not parse one of the expenses. Use: name amount."
+            )
+            await message.answer(error_msg, parse_mode="HTML")
+            return
+
+        await cancel_typing()
+        for parsed_item in parsed_items:
+            created = await create_and_send_expense_from_parsed(parsed_item)
+            if not created:
+                return
+
+        logger.info("Created %s batch expenses for %s", len(parsed_items), log_safe_id(user_id, "user"))
+        return
     
     logger.info("Starting parse_expense_message for %s: %s", log_safe_id(user_id, "user"), summarize_text(text))
     parsed = await parse_expense_message(text, user_id=user_id, profile=profile, use_ai=True)
@@ -2076,102 +2197,8 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
         await cancel_typing()
         return
     
-    # Проверяем, использовались ли данные из предыдущей траты
-    reused_from_last = parsed.get('reused_from_last', False)
-    
-    # Проверяем/создаем категорию
-    category = await get_or_create_category(user_id, parsed['category'])
-    
-    # Сохраняем в оригинальной валюте
-    amount = parsed['amount']
-    currency = parsed.get('currency')
-    if not currency:
-        from bot.services.profile import get_or_create_profile
-        profile = await get_or_create_profile(user_id)
-        currency = profile.currency or 'RUB'
-    
-    # Добавляем трату в оригинальной валюте
-    try:
-        expense = await add_expense_with_conversion(
-            user_id=user_id,
-            category_id=category.id,
-            amount=amount,
-            description=parsed['description'],
-            input_currency=currency,
-            expense_date=parsed.get('expense_date'),  # Добавляем дату, если она была указана
-            ai_categorized=parsed.get('ai_enhanced', False),
-            ai_confidence=parsed.get('confidence')
-        )
-    except ValueError as e:
-        # Обработка ошибок валидации даты
-        await message.answer(f"❌ {str(e)}", parse_mode="HTML")
-        return
-
-    # Проверяем что трата успешно создана
-    if expense is None:
-        logger.error("Failed to create expense for %s: add_expense returned None", log_safe_id(user_id, "user"))
-        await message.answer("❌ Не удалось сохранить трату. Попробуйте позже.", parse_mode="HTML")
-        return
-
-    # Формируем ответ (убираем вывод AI уверенности)
-    confidence_text = ""
-    # if parsed.get('ai_enhanced') and parsed.get('confidence'):
-    #     confidence_text = f"\n🤖 AI уверенность: {parsed['confidence']*100:.0f}%"
-
-    # Форматируем сообщение с учетом валюты
-    amount_text = format_currency(expense.amount, currency)
-    
-    # Рассчитываем кешбэк (доступен всем бесплатно)
-    from datetime import datetime
-
-    cashback_text = ""
-    # Получаем валюту пользователя из профиля
-    user_currency = profile.currency if profile else 'RUB'
-    # Кешбэк начисляется только для трат в валюте пользователя
-    if currency == user_currency:
-        current_month = datetime.now().month
-        cashback = await calculate_expense_cashback(
-            user_id=user_id,
-            category_id=category.id,
-            amount=expense.amount,
-            month=current_month
-        )
-        if cashback > 0:
-            cashback_text = f" (+{format_currency(cashback, user_currency)})"
-            # Сохраняем кешбек в базе данных
-            expense.cashback_amount = Decimal(str(cashback))
-            await expense.asave()
-    
-    # Формируем сообщение с информацией о потраченном за день
-    message_text = await format_expense_added_message(
-        expense=expense,
-        category=category,
-        cashback_text=cashback_text,
-        confidence_text=confidence_text,
-        reused_from_last=reused_from_last,
-        lang=lang
-    )
-    
     await cancel_typing()
-
-    # Отправляем сообщение о трате
-    # send_message_with_cleanup сама удалит старое меню после отправки нового
-    await send_message_with_cleanup(message, state,
-        message_text,
-        reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
-            [
-                types.InlineKeyboardButton(text=get_text('edit_button', lang), callback_data=f"edit_expense_{expense.id}")
-            ]
-        ]),
-        parse_mode="HTML",
-        keep_message=True  # Не удалять это сообщение при следующих действиях
-    )
-    await send_expense_limit_alerts(
-        message.bot, user_id, expense, category=category, lang=lang
-    )
-
-    # Гарантируем отмену задачи
-    await cancel_typing()
+    await create_and_send_expense_from_parsed(parsed)
     
     # # Восстанавливаем меню кешбека если оно было активно
     # from ..routers.cashback import restore_cashback_menu_if_needed
@@ -2206,7 +2233,7 @@ async def handle_voice_expense(message: types.Message, state: FSMContext, lang: 
     )
 
     # Вызываем обработчик текстовых сообщений с распознанным текстом
-    await handle_text_expense(message, state, text=voice_text, lang=lang)
+    await handle_text_expense(message, state, text=voice_text, lang=lang, input_source="voice")
 
 
 # Обработчик фото (чеков)

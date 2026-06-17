@@ -12,11 +12,12 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from bot.utils.expense_parser import (
-    parse_expense_message,
-    parse_income_message,
+    detect_income_intent,
     detect_currency,
     _extract_leading_amount,
     extract_amount_from_patterns,
+    parse_expense_message,
+    parse_income_message,
 )
 
 
@@ -203,6 +204,29 @@ class TestIncomeParsing:
         assert result is not None
         assert result["amount"] == pytest.approx(50000)
 
+    def test_income_intent_uses_p_marker_instead_of_d_marker(self):
+        """Short income marker should be п/p, not д/d."""
+        assert detect_income_intent("п5000")
+        assert detect_income_intent("п 5000 зарплата")
+        assert detect_income_intent("зарплата п3000")
+        assert detect_income_intent("зарплата п 3000")
+        assert detect_income_intent("p5000")
+        assert detect_income_intent("salary p3000")
+        assert detect_income_intent("salary p 3000")
+
+        assert not detect_income_intent("д5000")
+        assert not detect_income_intent("зарплата д 3000")
+        assert not detect_income_intent("подарок 5000")
+        assert not detect_income_intent("pasta 20")
+
+    @pytest.mark.asyncio
+    async def test_income_p_marker_is_removed_from_description(self):
+        """п/p marker should not leak into income description."""
+        result = await parse_income_message("зарплата п3000", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(3000)
+        assert result["description"] == "Зарплата"
+
 
 # =============================================================================
 # Edge Cases Tests
@@ -285,11 +309,17 @@ class TestExtractLeadingIncomeAmount:
         assert remaining == ""
         assert has_signal is False
 
-    def test_number_with_thousands_separator_space(self):
-        """Number with space as thousands separator."""
+    def test_number_with_space_before_000_group_is_glued(self):
+        """Space glues amount only when the group is exactly "000": 75 000 => 75000."""
         amount, remaining, _sig = _extract_leading_amount("75 000 аренда")
         assert amount == 75000
         assert remaining == "аренда"
+
+    def test_number_with_space_before_non_000_group_is_not_glued(self):
+        """Space before a non-"000" group does not glue: 1 500 => 1, остаток "500 ..."""
+        amount, remaining, _sig = _extract_leading_amount("1 500 кофе")
+        assert amount == 1
+        assert remaining == "500 кофе"
 
     def test_number_with_thousands_separator_comma(self):
         """Number with comma as thousands separator."""
@@ -740,6 +770,22 @@ class TestExpenseLeadingAmountRegression:
         result = await parse_expense_message("2024 подписка 500", use_ai=False)
         assert result is not None
         assert result["amount"] == pytest.approx(500)
+
+    @pytest.mark.asyncio
+    async def test_expense_address_number_is_kept_in_description(self):
+        """Ленина 5 255 — amount is 255, address number stays in description."""
+        result = await parse_expense_message("Ленина 5 255", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(255)
+        assert result["description"] == "Ленина 5"
+
+    @pytest.mark.asyncio
+    async def test_expense_address_number_with_currency_is_kept_in_description(self):
+        """Ленина 5 255 руб — currency suffix must not glue 5 and 255 into 5255."""
+        result = await parse_expense_message("Ленина 5 255 руб", use_ai=False)
+        assert result is not None
+        assert result["amount"] == pytest.approx(255)
+        assert result["description"] == "Ленина 5"
 
     @pytest.mark.asyncio
     async def test_expense_date_with_slash(self):

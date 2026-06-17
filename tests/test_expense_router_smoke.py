@@ -1,3 +1,4 @@
+from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -28,6 +29,140 @@ def make_callback():
     callback.message.text = "expense"
     callback.message.edit_text = AsyncMock()
     return callback
+
+
+def make_message(text: str = "expense"):
+    bot = AsyncMock()
+    bot.send_chat_action = AsyncMock()
+    message = AsyncMock()
+    message.bot = bot
+    message.from_user = SimpleNamespace(id=123456789, language_code="ru")
+    message.chat = SimpleNamespace(id=123456789, type="private")
+    message.message_id = 101
+    message.text = text
+    message.answer = AsyncMock()
+    return message
+
+
+@pytest.mark.asyncio
+async def test_handle_text_expense_creates_multiple_expenses_from_batch_parser():
+    message = make_message("мороженое 120 помидоры 232")
+    state = make_state()
+    profile = SimpleNamespace(accepted_privacy=True, currency="RUB", language_code="ru")
+    parsed_items = [
+        {
+            "source_text": "мороженое 120",
+            "amount": 120,
+            "description": "Мороженое",
+            "category": "Прочие расходы",
+            "currency": "RUB",
+            "confidence": 0.5,
+            "expense_date": None,
+        },
+        {
+            "source_text": "помидоры 232",
+            "amount": 232,
+            "description": "Помидоры",
+            "category": "Прочие расходы",
+            "currency": "RUB",
+            "confidence": 0.5,
+            "expense_date": None,
+        },
+    ]
+    categories = [SimpleNamespace(id=11), SimpleNamespace(id=12)]
+    expenses = [
+        SimpleNamespace(id=101, amount=Decimal("120"), asave=AsyncMock()),
+        SimpleNamespace(id=102, amount=Decimal("232"), asave=AsyncMock()),
+    ]
+
+    with patch("bot.services.cashback_free_text.looks_like_cashback_free_text", return_value=False), patch(
+        "expenses.models.Profile.objects.aget", AsyncMock(return_value=profile)
+    ), patch(
+        "expenses.models.CategoryKeyword.objects.filter",
+        Mock(return_value=SimpleNamespace(aexists=AsyncMock(return_value=False))),
+    ), patch(
+        "bot.utils.expense_intent.is_show_expenses_request", return_value=(False, 0.0)
+    ), patch(
+        "bot.utils.multiple_expense_parser.split_multiple_expense_texts",
+        return_value=["мороженое 120", "помидоры 232"],
+    ) as split_multiple, patch(
+        "bot.routers.expense.parse_expense_message", AsyncMock(side_effect=parsed_items)
+    ) as parse_single, patch(
+        "bot.services.category.get_or_create_category", AsyncMock(side_effect=categories)
+    ) as get_category, patch(
+        "bot.services.expense.add_expense_with_conversion", AsyncMock(side_effect=expenses)
+    ) as add_expense, patch(
+        "bot.services.cashback.calculate_expense_cashback", AsyncMock(return_value=0)
+    ), patch(
+        "bot.routers.expense.format_expense_added_message", AsyncMock(side_effect=["card-1", "card-2"])
+    ), patch(
+        "bot.routers.expense.send_message_with_cleanup", AsyncMock()
+    ) as send_message, patch(
+        "bot.routers.expense.send_expense_limit_alerts", AsyncMock()
+    ) as send_alerts, patch(
+        "bot.routers.expense.get_text", side_effect=lambda key, lang="ru", **kwargs: key
+    ):
+        await expense_router.handle_text_expense(
+            message,
+            state,
+            text=message.text,
+            lang="ru",
+            input_source="voice",
+        )
+
+    split_multiple.assert_called_once()
+    assert split_multiple.call_args.kwargs["input_source"] == "voice"
+    assert parse_single.await_count == 2
+    assert get_category.await_count == 2
+    assert add_expense.await_count == 2
+    assert send_message.await_count == 2
+    assert send_alerts.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_handle_text_expense_does_not_fallback_when_batch_item_fails():
+    message = make_message("кофе 120, непонятно")
+    state = make_state()
+    profile = SimpleNamespace(accepted_privacy=True, currency="RUB", language_code="ru")
+    parsed_item = {
+        "source_text": "кофе 120",
+        "amount": 120,
+        "description": "Кофе",
+        "category": "Прочие расходы",
+        "currency": "RUB",
+        "confidence": 0.5,
+        "expense_date": None,
+    }
+
+    with patch("bot.services.cashback_free_text.looks_like_cashback_free_text", return_value=False), patch(
+        "expenses.models.Profile.objects.aget", AsyncMock(return_value=profile)
+    ), patch(
+        "expenses.models.CategoryKeyword.objects.filter",
+        Mock(return_value=SimpleNamespace(aexists=AsyncMock(return_value=False))),
+    ), patch(
+        "bot.utils.expense_intent.is_show_expenses_request", return_value=(False, 0.0)
+    ), patch(
+        "bot.utils.multiple_expense_parser.split_multiple_expense_texts",
+        return_value=["кофе 120", "непонятно"],
+    ), patch(
+        "bot.routers.expense.parse_expense_message",
+        AsyncMock(side_effect=[parsed_item, None]),
+    ) as parse_single, patch(
+        "bot.services.expense.add_expense_with_conversion",
+        AsyncMock(),
+    ) as add_expense:
+        await expense_router.handle_text_expense(
+            message,
+            state,
+            text=message.text,
+            lang="ru",
+            input_source="text",
+        )
+
+    assert parse_single.await_count == 2
+    add_expense.assert_not_awaited()
+    message.answer.assert_awaited_once()
+    assert "одну из трат" in message.answer.await_args.args[0]
 
 
 @pytest.mark.asyncio

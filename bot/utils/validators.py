@@ -48,8 +48,8 @@ async def validate_amount(text: str) -> Optional[float]:
 def parse_description_amount(text: str, allow_only_amount: bool = False) -> Dict[str, Any]:
     """
     Парсит текст в формате 'Описание Сумма' или просто 'Сумма'
-    Поддерживает суммы с пробелами: "48 000", "1 000 000"
-    Поддерживает знак + или слово "плюс" для определения доходов
+    Сумма пишется без пробелов: "48000", но "X 000" склеивается: "48 000" => 48000
+    Поддерживает знак +, слово "плюс" или маркер "п"/"p" для определения доходов
 
     Args:
         text: Текст для парсинга
@@ -76,6 +76,13 @@ def parse_description_amount(text: str, allow_only_amount: bool = False) -> Dict
         text = re.sub(r'\bплюс\b', '', text, flags=re.IGNORECASE)
         text = ' '.join(text.split())
 
+    # Короткий маркер дохода: отдельная "п" или "p" перед числом.
+    # НЕ матчит слова вроде "подарок 5000" или "pasta 20".
+    if re.search(r'(^|\s)(?:п|p)\s*(?=\d)', text, re.IGNORECASE):
+        is_income = True
+        text = re.sub(r'(^|\s)(?:п|p)\s*(?=\d)', r'\1', text, flags=re.IGNORECASE)
+        text = ' '.join(text.split())
+
     # Знак + распознается как доход только если перед ним ничего или пробел,
     # и после него (с опциональными пробелами) сразу идут цифры.
     # НЕ матчит "C++" или "abc+500".
@@ -84,8 +91,9 @@ def parse_description_amount(text: str, allow_only_amount: bool = False) -> Dict
         text = re.sub(r'(^|\s)\+\s*(?=\d)', r'\1', text)
         text = ' '.join(text.split())
 
-    # Regex поддерживает суммы с разделителями и без + опциональную валюту в конце
-    number_pattern = r'((?:\d{1,3}(?:[\s\xa0,]\d{3})+|\d+)(?:[.,]\d+)?)(?:\s*(?P<currency>[^\d\s].*))?$'
+    # Regex поддерживает цельные суммы, суммы с запятыми-разделителями тысяч
+    # и исключение для пробела перед группой "000" ("48 000" => 48000)
+    number_pattern = r'((?:\d{1,3}(?:,\d{3}|[\s\xa0]000)+|\d+)(?:[.,]\d+)?)(?:\s*(?P<currency>[^\d\s].*))?$'
     match = re.search(number_pattern, text, re.IGNORECASE)
 
     if not match:

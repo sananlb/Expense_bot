@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from aiogram import types
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -186,6 +187,40 @@ async def test_show_recurring_menu_renders_empty_state_menu():
 
 
 @pytest.mark.asyncio
+async def test_show_recurring_menu_edits_callback_message():
+    state = make_state()
+    callback_message = AsyncMock()
+    callback_message.message_id = 202
+    callback_message.edit_text = AsyncMock()
+    callback = types.CallbackQuery.model_construct(
+        id="recurring-menu",
+        from_user=SimpleNamespace(id=123456789, language_code="ru"),
+        chat_instance="private",
+        message=callback_message,
+        data="recurring_menu",
+    )
+
+    with patch("bot.routers.recurring.get_user_default_currency", AsyncMock(return_value="RUB")), patch(
+        "bot.routers.recurring.get_user_recurring_payments", AsyncMock(return_value=[])
+    ), patch(
+        "bot.routers.recurring.send_message_with_cleanup", AsyncMock()
+    ) as send_message, patch(
+        "bot.routers.recurring.get_text", side_effect=lambda key, lang="ru", **kwargs: key
+    ):
+        await recurring_router.show_recurring_menu(callback, state, lang="ru")
+
+    send_message.assert_not_awaited()
+    callback_message.edit_text.assert_awaited_once()
+    _, kwargs = callback_message.edit_text.await_args
+    assert "recurring_payments" in callback_message.edit_text.await_args.args[0]
+    assert kwargs["parse_mode"] == "HTML"
+    assert kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "add_recurring"
+
+    state_data = await state.get_data()
+    assert state_data["last_menu_message_id"] == 202
+
+
+@pytest.mark.asyncio
 async def test_show_expenses_summary_saves_period_and_sends_summary_message():
     message = make_message()
     state = make_state()
@@ -338,5 +373,11 @@ async def test_month_summary_renders_limits_in_their_currencies():
     # Общий лимит и общая цель показываются шкалой (в «тонком» категорийном формате).
     assert reports_router.format_total_bar_line(80) in text
     assert reports_router.format_total_goal_bar_line(50) in text
+    assert (
+        f"💸 expenses_label: 1500 RUB\n{reports_router.format_total_bar_line(80)}\n\n"
+        f"💰 income_label: 2000 RUB\n{reports_router.format_total_goal_bar_line(50)}"
+    ) in text
+    assert "balance_label" not in text
+    assert "⚖️" not in text
     # Категорийные лимиты/цели теперь без шкалы — только процент в скобках.
     assert "(75%)" in text
