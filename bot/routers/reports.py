@@ -350,38 +350,33 @@ async def show_expenses_summary(
             # Показываем только те строки, где есть данные
             expense_amount = format_amount(summary['total'], summary['currency'], lang)
             income_amount = format_amount(summary.get('income_total', 0), summary['currency'], lang)
-            balance = summary.get('balance', -summary['total'])  # Если нет доходов, баланс = -расходы
-            
+            total_budget = report_limits.get(None)
+            total_goal = report_goals.get(None)
+            summary_blocks = []
+
             # Показываем расходы если они есть
             if has_expenses:
-                text += f"💸 {get_text('expenses_label', lang)}: {expense_amount}\n"
-                total_budget = report_limits.get(None)
+                expense_block = f"💸 {get_text('expenses_label', lang)}: {expense_amount}"
                 if total_budget is not None:
                     total_spent = _summary_spent_in_currency(summary, total_budget.currency)
                     total_percent = _limit_percent(total_spent, total_budget.amount)
-                    text += f"{format_total_bar_line(total_percent)}\n"
+                    expense_block += f"\n{format_total_bar_line(total_percent)}"
+                summary_blocks.append(expense_block)
 
             # Показываем доходы если они есть
             if has_incomes:
-                text += f"💰 {get_text('income_label', lang)}: {income_amount}\n"
-                total_goal = report_goals.get(None)
+                income_block = f"💰 {get_text('income_label', lang)}: {income_amount}"
                 if total_goal is not None:
                     total_received = _summary_income_in_currency(
                         summary,
                         total_goal.currency,
                     )
                     total_percent = _limit_percent(total_received, total_goal.amount)
-                    text += f"{format_total_goal_bar_line(total_percent)}\n"
+                    income_block += f"\n{format_total_goal_bar_line(total_percent)}"
+                summary_blocks.append(income_block)
 
-            # Показываем баланс только если есть и доходы и расходы
-            if has_expenses and has_incomes:
-                # Форматируем баланс с + или - в зависимости от знака
-                if balance >= 0:
-                    balance_text = f"+{format_amount(balance, summary['currency'], lang)}"
-                else:
-                    balance_text = format_amount(balance, summary['currency'], lang)
-                text += f"⚖️ {get_text('balance_label', lang)}: {balance_text}\n"
-            
+            summary_separator = "\n\n" if total_budget is not None or total_goal is not None else "\n"
+            text += summary_separator.join(summary_blocks) + "\n"
             text += "\n"
             
             # По категориям расходов (если есть)

@@ -2,6 +2,7 @@
 Обработчик регулярных операций (доходы и расходы)
 """
 from aiogram import Router, types, F
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -143,22 +144,26 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
 
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
 
+    if isinstance(message, types.CallbackQuery):
+        try:
+            await message.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
+        except TelegramBadRequest as exc:
+            if "message is not modified" in str(exc).lower():
+                await state.update_data(last_menu_message_id=message.message.message_id)
+                return
+            await send_message_with_cleanup(message, state, text, reply_markup=keyboard, parse_mode="HTML")
+        else:
+            await state.update_data(last_menu_message_id=message.message.message_id)
+        return
+
     await send_message_with_cleanup(message, state, text, reply_markup=keyboard, parse_mode="HTML")
 
 
 @router.callback_query(lambda c: c.data == "recurring_menu")
 async def callback_recurring_menu(callback: types.CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Показать меню регулярных платежей через callback"""
-    # Сохраняем last_menu_message_id перед очисткой состояния
-    state_data = await state.get_data()
-    old_menu_id = state_data.get('last_menu_message_id')
-
     # Очищаем FSM состояние при возврате в главное меню recurring
     await state.clear()
-
-    # Восстанавливаем last_menu_message_id чтобы send_message_with_cleanup удалил старое меню
-    if old_menu_id:
-        await state.update_data(last_menu_message_id=old_menu_id)
 
     await show_recurring_menu(callback, state, lang)
     await callback.answer()

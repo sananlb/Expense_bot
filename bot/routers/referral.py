@@ -35,10 +35,11 @@ def get_referral_keyboard(lang: str = 'ru', share_url: str = None, share_text: s
             )
         )
 
-    builder.button(
-        text="📊 Статистика" if lang == 'ru' else "📊 Statistics",
-        callback_data="referral_stats"
-    )
+    # TODO: Временно скрыто из меню "Поделиться ботом"; обработчик referral_stats оставлен ниже.
+    # builder.button(
+    #     text="📊 Статистика" if lang == 'ru' else "📊 Statistics",
+    #     callback_data="referral_stats"
+    # )
     builder.button(
         text="📅 История бонусов" if lang == 'ru' else "📅 Bonus history",
         callback_data="referral_rewards"
