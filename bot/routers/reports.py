@@ -21,9 +21,8 @@ from bot.utils.logging_safe import log_safe_id
 from bot.services.expense import get_expenses_summary, get_expenses_by_period, get_last_expenses
 from bot.services.budget import get_active_limits_map
 from bot.services.income_goal import get_active_goals_map
-from bot.utils.budget_display import format_category_bar_line, format_total_bar_line
+from bot.utils.budget_display import format_total_bar_line
 from bot.utils.income_goal_display import (
-    format_category_goal_bar_line,
     format_total_goal_bar_line,
 )
 from bot.utils.message_utils import send_message_with_cleanup
@@ -402,15 +401,7 @@ async def show_expenses_summary(
                         return None
                     return report_limits.get(category_id)
 
-                # Есть ли среди показываемых категорий хоть одна со шкалой —
-                # тогда добавляем пустую строку после заголовка и между категориями.
-                any_category_bar = any(
-                    _category_budget_for(cat) is not None for cat in shown_categories
-                )
-
                 text += f"📊 <b>{get_text('expenses_by_category', lang)}:</b>\n"
-                if any_category_bar:
-                    text += "\n"
 
                 for cat in shown_categories:
                     # Название уже содержит эмодзи из get_category_display_name
@@ -419,14 +410,14 @@ async def show_expenses_summary(
                     # Формируем строку с суммами по валютам
                     amounts = cat.get('amounts', {})
                     amounts_str = " / ".join([format_amount(amt, cur, lang) for cur, amt in amounts.items()])
-                    text += f"  {category_display}: {amounts_str}\n"
                     category_budget = _category_budget_for(cat)
                     if category_budget is not None:
+                        # Лимит на категорию — показываем только процент в скобках (без шкалы).
                         spent = amounts.get(category_budget.currency, Decimal('0'))
                         percent = _limit_percent(spent, category_budget.amount)
-                        text += f"  {format_category_bar_line(percent)}\n"
-                        # Пустая строка-отступ после категории со шкалой.
-                        text += "\n"
+                        text += f"  {category_display}: {amounts_str} ({percent}%)\n"
+                    else:
+                        text += f"  {category_display}: {amounts_str}\n"
 
                 if total_categories > 22:
 
@@ -467,29 +458,27 @@ async def show_expenses_summary(
                         return None
                     return report_goals.get(category_id)
 
-                any_category_goal_bar = any(
-                    _category_goal_for(cat) is not None
-                    for cat in shown_income_categories
-                )
-
                 text += f"💵 <b>{get_text('income_by_category', lang)}:</b>\n"
-                if any_category_goal_bar:
-                    text += "\n"
 
                 for cat in shown_income_categories:
                     category_display = cat['name']
-                    text += (
-                        f"  {category_display}: "
-                        f"{format_amount(cat['total'], summary['currency'], lang)}\n"
-                    )
                     category_goal = _category_goal_for(cat)
                     if category_goal is not None:
+                        # Цель на категорию — показываем только процент в скобках (без шкалы).
                         received = cat.get('amounts', {}).get(
                             category_goal.currency,
                             Decimal('0'),
                         )
                         percent = _limit_percent(received, category_goal.amount)
-                        text += f"  {format_category_goal_bar_line(percent)}\n\n"
+                        text += (
+                            f"  {category_display}: "
+                            f"{format_amount(cat['total'], summary['currency'], lang)} ({percent}%)\n"
+                        )
+                    else:
+                        text += (
+                            f"  {category_display}: "
+                            f"{format_amount(cat['total'], summary['currency'], lang)}\n"
+                        )
 
                 if total_income_categories > 22:
                     remaining_count = total_income_categories - 20

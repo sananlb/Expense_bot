@@ -147,7 +147,9 @@ async def test_deactivate_expired_subscriptions_disables_premium_settings_and_up
     assert expired_count == 1
     assert refreshed_subscription.is_active is False
     assert settings.view_scope == "personal"
-    assert settings.cashback_enabled is False
+    # Кешбэк доступен всем бесплатно и больше НЕ отключается при истечении подписки
+    # (см. TOOLS_MENU_IMPLEMENTATION_PLAN.md §4).
+    assert settings.cashback_enabled is True
     update_commands.assert_awaited_once_with([test_profile.telegram_id])
 
 

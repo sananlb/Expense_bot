@@ -6,7 +6,6 @@ from .budget_display import (
     days_left_in_month,
     format_days_left,
     render_category_bar,
-    render_total_bar,
 )
 from .formatters import format_currency
 
@@ -18,8 +17,11 @@ def format_category_goal_bar_line(percent: int) -> str:
 
 
 def format_total_goal_bar_line(percent: int) -> str:
-    """Строка шкалы общей цели без дополнительного статусного эмодзи."""
-    return f"{render_total_bar(percent)} {percent}%"
+    """Строка шкалы общей цели в формате категорийной шкалы: '▰▰▰▱▱ 80%'
+    (+ 🎉 при достижении). Категорийные шкалы в обзоре месяца больше не рисуются —
+    шкала остаётся только у общей цели, но в «тонком» категорийном формате."""
+    suffix = " 🎉" if percent >= 100 else ""
+    return f"{render_category_bar(percent)} {percent}%{suffix}"
 
 
 def format_goal_screen_body(status, lang: str = 'ru') -> str:

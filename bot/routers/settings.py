@@ -14,7 +14,7 @@ import logging
 
 from bot.keyboards import settings_keyboard, back_close_keyboard, get_language_keyboard, get_timezone_keyboard, get_currency_keyboard, delete_profile_step1_keyboard, delete_profile_final_keyboard
 from bot.utils import get_text, set_user_language, get_user_language, format_amount
-from bot.services.profile import get_or_create_profile, get_user_settings, toggle_cashback
+from bot.services.profile import get_or_create_profile
 from bot.services.category import update_default_categories_language
 from bot.utils.commands import update_user_commands
 from bot.utils.logging_safe import log_safe_id
@@ -130,15 +130,11 @@ async def cmd_settings(message: Message, state: FSMContext, lang: str = 'ru'):
 
         text = "\n".join(text_lines)
 
-        # Получаем настройки кешбэка
-        user_settings = await get_user_settings(message.from_user.id)
-        cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
-
         await send_message_with_cleanup(
             message,
             state,
             text,
-            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription, view_scope),
+            reply_markup=settings_keyboard(lang, has_subscription, view_scope),
             parse_mode="HTML"
         )
         
@@ -197,12 +193,9 @@ async def callback_settings(callback: CallbackQuery, state: FSMContext, lang: st
 
         text = "\n".join(text_lines)
 
-        # Получаем настройки кешбэка
-        user_settings = await get_user_settings(callback.from_user.id)
-        cashback_enabled = user_settings.cashback_enabled if hasattr(user_settings, 'cashback_enabled') else True
         await callback.message.edit_text(
             text,
-            reply_markup=settings_keyboard(lang, cashback_enabled, has_subscription, view_scope),
+            reply_markup=settings_keyboard(lang, has_subscription, view_scope),
             parse_mode="HTML"
         )
         
@@ -219,7 +212,7 @@ def _total_limit_keyboard(lang: str, has_limit: bool) -> InlineKeyboardMarkup:
     if has_limit:
         rows.append([InlineKeyboardButton(text=get_text('limit_edit_button', lang), callback_data="total_limit_edit")])
         rows.append([InlineKeyboardButton(text=get_text('limit_remove_button', lang), callback_data="total_limit_remove")])
-    rows.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")])
+    rows.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="tools")])
     rows.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -239,7 +232,7 @@ async def _prompt_total_limit_amount(callback: CallbackQuery, state: FSMContext,
     await callback.message.edit_text(
         text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")],
+            [InlineKeyboardButton(text=get_text('back', lang), callback_data="tools")],
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")],
         ]),
         parse_mode='HTML',
@@ -258,26 +251,28 @@ async def total_limit_change(callback: CallbackQuery, state: FSMContext, lang: s
 async def total_limit_remove(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
     """Убрать общий лимит."""
     from bot.services.budget import remove_limit
+    from bot.routers.tools import callback_tools
     lang = await get_user_language(callback.from_user.id)
     await remove_limit(callback.from_user.id, None)
     await callback.answer(get_text('limit_removed_success', lang))
-    await callback_settings(callback, state, lang)
+    # Лимит вынесен в меню «Инструменты» — возвращаемся туда, а не в Настройки.
+    await callback_tools(callback, state, lang)
 
 
 @router.callback_query(F.data == "total_limit")
 async def total_limit_entry(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Точка входа в общий лимит трат из настроек."""
-    from bot.services.budget import get_limit
+    """Точка входа в общий лимит трат из меню «Инструменты»."""
+    from bot.services.budget import get_limit_status
+    from bot.utils.budget_display import format_limit_screen_body
     lang = await get_user_language(callback.from_user.id)
-    limit = await get_limit(callback.from_user.id, None)
+    status = await get_limit_status(callback.from_user.id, None)
 
     header = get_text('total_limit_header', lang)
-    explainer = get_text('total_limit_explainer', lang)
-    if limit is not None:
-        # Лимит установлен — показываем объяснение и кнопки управления (без цифр).
+    if status is not None:
+        # Лимит установлен — показываем текущую настройку: сумму, потрачено, остаток, дни.
         try:
             await callback.message.edit_text(
-                f"{header}\n\n{explainer}",
+                f"{header}\n\n{format_limit_screen_body(status, lang)}",
                 reply_markup=_total_limit_keyboard(lang, has_limit=True),
                 parse_mode='HTML',
             )
@@ -285,7 +280,7 @@ async def total_limit_entry(callback: CallbackQuery, state: FSMContext, lang: st
             pass
         await callback.answer()
     else:
-        # Лимита нет — объяснение + приглашение ввести сумму.
+        # Лимита нет — приглашение ввести сумму.
         await _prompt_total_limit_amount(callback, state, lang, change=False)
         await callback.answer()
 
@@ -337,12 +332,15 @@ async def process_total_limit_amount(message: Message, state: FSMContext,
 
     await state.set_state(None)
 
-    # Подтверждаем и показываем экран общего лимита с объяснением (без цифр).
+    # Показываем экран общего лимита с текущей настройкой: сумма, потрачено, остаток, дни.
+    from bot.services.budget import get_limit_status
+    from bot.utils.budget_display import format_limit_screen_body
+    status = await get_limit_status(message.from_user.id, None)
     header = get_text('total_limit_header', lang)
-    explainer = get_text('total_limit_explainer', lang)
+    body = format_limit_screen_body(status, lang) if status else ''
     await send_message_with_cleanup(
         message, state,
-        f"{header}\n\n{explainer}",
+        f"{header}\n\n{body}",
         reply_markup=_total_limit_keyboard(lang, has_limit=True),
         parse_mode='HTML',
     )
@@ -366,7 +364,7 @@ def _total_goal_keyboard(lang: str, has_goal: bool) -> InlineKeyboardMarkup:
                 callback_data="total_goal_remove",
             )
         ])
-    rows.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")])
+    rows.append([InlineKeyboardButton(text=get_text('back', lang), callback_data="tools")])
     rows.append([InlineKeyboardButton(text=get_text('close', lang), callback_data="close")])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
@@ -392,7 +390,7 @@ async def _prompt_total_goal_amount(
     await callback.message.edit_text(
         text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")],
+            [InlineKeyboardButton(text=get_text('back', lang), callback_data="tools")],
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")],
         ]),
         parse_mode='HTML',
@@ -419,11 +417,13 @@ async def total_goal_remove(
 ):
     """Убирает общую цель дохода."""
     from bot.services.income_goal import remove_goal
+    from bot.routers.tools import callback_tools
 
     lang = await get_user_language(callback.from_user.id)
     await remove_goal(callback.from_user.id, None)
     await callback.answer(get_text('goal_removed_success', lang))
-    await callback_settings(callback, state, lang)
+    # Цель дохода вынесена в меню «Инструменты» — возвращаемся туда.
+    await callback_tools(callback, state, lang)
 
 
 @router.callback_query(F.data == "total_goal")
@@ -432,17 +432,18 @@ async def total_goal_entry(
     state: FSMContext,
     lang: str = 'ru',
 ):
-    """Открывает общую цель дохода из настроек."""
-    from bot.services.income_goal import get_goal
+    """Открывает общую цель дохода из меню «Инструменты»."""
+    from bot.services.income_goal import get_goal_status
+    from bot.utils.income_goal_display import format_goal_screen_body
 
     lang = await get_user_language(callback.from_user.id)
-    goal = await get_goal(callback.from_user.id, None)
+    status = await get_goal_status(callback.from_user.id, None)
     header = get_text('total_goal_header', lang)
-    explainer = get_text('total_goal_explainer', lang)
-    if goal is not None:
+    if status is not None:
+        # Цель установлена — показываем текущую настройку: сумму, получено, остаток, дни.
         try:
             await callback.message.edit_text(
-                f"{header}\n\n{explainer}",
+                f"{header}\n\n{format_goal_screen_body(status, lang)}",
                 reply_markup=_total_goal_keyboard(lang, has_goal=True),
                 parse_mode='HTML',
             )
@@ -514,11 +515,15 @@ async def process_total_goal_amount(
         return
 
     await state.set_state(None)
+    # Показываем экран цели с текущей настройкой: сумма, получено, остаток, дни.
+    from bot.services.income_goal import get_goal_status
+    from bot.utils.income_goal_display import format_goal_screen_body
+    status = await get_goal_status(message.from_user.id, None)
+    body = format_goal_screen_body(status, lang) if status else ''
     await send_message_with_cleanup(
         message,
         state,
-        f"{get_text('total_goal_header', lang)}\n\n"
-        f"{get_text('total_goal_explainer', lang)}",
+        f"{get_text('total_goal_header', lang)}\n\n{body}",
         reply_markup=_total_goal_keyboard(lang, has_goal=True),
         parse_mode='HTML',
     )
@@ -564,56 +569,6 @@ async def process_language_change(callback: CallbackQuery, state: FSMContext, la
     
     # Возвращаемся в меню настроек
     await callback_settings(callback, state, lang)
-
-
-@router.callback_query(F.data == "toggle_cashback")
-async def handle_toggle_cashback(callback: CallbackQuery, state: FSMContext, lang: str = 'ru'):
-    """Переключить кешбэк"""
-    try:
-        # Получаем настройки пользователя
-        user_settings = await get_user_settings(callback.from_user.id)
-
-        # Если кешбек выключен и пользователь хочет его включить - проверяем подписку
-        if not user_settings.cashback_enabled:
-            from bot.services.subscription import check_subscription
-            has_subscription = await check_subscription(callback.from_user.id)
-
-            if not has_subscription:
-                # Показываем сообщение с кнопкой "Оформить подписку"
-                from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
-                keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text=get_text('get_subscription', lang), callback_data="menu_subscription")],
-                    [InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")],
-                    [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
-                ])
-
-                await callback.message.edit_text(
-                    get_text('cashback_subscription_required', lang),
-                    reply_markup=keyboard,
-                    parse_mode="HTML"
-                )
-                await callback.answer()
-                return
-
-        # Переключаем состояние кешбэка
-        new_state = await toggle_cashback(callback.from_user.id)
-
-        # Обновляем команды бота для пользователя (добавляем или убираем /cashback)
-        await update_user_commands(callback.bot, callback.from_user.id)
-
-        # Отправляем уведомление
-        if new_state:
-            await callback.answer(get_text('cashback_enabled_message', lang))
-        else:
-            await callback.answer(get_text('cashback_disabled_message', lang))
-
-        # Обновляем меню настроек с новым состоянием кнопки кешбека
-        await callback_settings(callback, state, lang)
-
-    except Exception as e:
-        logger.error(f"Error toggling cashback: {e}")
-        await callback.answer(get_text('error_occurred', lang))
 
 
 @router.callback_query(F.data == "change_timezone")

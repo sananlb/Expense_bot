@@ -118,17 +118,16 @@ def get_cashback_by_id(user_id: int, cashback_id: int) -> Optional[Cashback]:
 
 @sync_to_async
 def calculate_potential_cashback(user_id: int, start_date: date, end_date: date) -> Decimal:
-    """Рассчитать потенциальный кешбэк за период"""
+    """Рассчитать потенциальный кешбэк за период.
+
+    Кешбэк доступен всем бесплатно — проверка cashback_enabled убрана
+    (см. TOOLS_MENU_IMPLEMENTATION_PLAN.md §4).
+    """
     try:
         profile = Profile.objects.get(telegram_id=user_id)
-        
-        # Проверяем, включен ли кешбэк
-        if hasattr(profile, 'settings') and hasattr(profile.settings, 'cashback_enabled'):
-            if not profile.settings.cashback_enabled:
-                return Decimal('0')
     except Profile.DoesNotExist:
         return Decimal('0')
-    
+
     # Получаем все расходы за период (исключая те, где кешбек отключен)
     expenses = Expense.objects.filter(
         profile=profile,
@@ -181,14 +180,12 @@ def calculate_expense_cashback_sync(user_id: int, category_id: int, amount: Deci
     
     ВАЖНО: Кешбэк рассчитывается только для трат в валюте пользователя.
     Проверка валюты должна происходить на уровне вызывающего кода.
+
+    Кешбэк доступен всем бесплатно — проверка cashback_enabled убрана
+    (см. TOOLS_MENU_IMPLEMENTATION_PLAN.md §4).
     """
     try:
         profile = Profile.objects.get(telegram_id=user_id)
-        
-        # Проверяем, включен ли кешбэк
-        if hasattr(profile, 'settings') and hasattr(profile.settings, 'cashback_enabled'):
-            if not profile.settings.cashback_enabled:
-                return Decimal('0')
     except Profile.DoesNotExist:
         return Decimal('0')
 

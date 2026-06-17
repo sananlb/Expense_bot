@@ -404,10 +404,12 @@ def test_achieved_category_bar_uses_celebration_marker():
     assert format_category_goal_bar_line(100).endswith("100% 🎉")
 
 
-def test_settings_keyboard_contains_income_goal_entry():
-    from bot.keyboards import settings_keyboard
+def test_tools_keyboard_contains_income_goal_entry():
+    # Лимит трат и цель дохода вынесены в меню «Инструменты» (/tools);
+    # цель идёт сразу после лимита.
+    from bot.keyboards import tools_keyboard
 
-    keyboard = settings_keyboard(lang="ru")
+    keyboard = tools_keyboard(lang="ru")
     callbacks = [
         button.callback_data
         for row in keyboard.inline_keyboard

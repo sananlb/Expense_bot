@@ -38,6 +38,7 @@ from .routers import (
     household_router,
     blogger_stats_router,
     inline_router,
+    tools_router,
 )
 from .middlewares import (
     DatabaseMiddleware,
@@ -226,6 +227,7 @@ def create_dispatcher() -> Dispatcher:
     dp.include_router(referral_router)     # Роутер реферальной системы
     dp.include_router(household_router)     # Роутер семейного бюджета (FSM состояния) - ДОЛЖЕН БЫТЬ ДО expense_router!
     dp.include_router(settings_router)      # FSM ввода суммы лимита трат - ДОЛЖЕН БЫТЬ ДО expense_router!
+    dp.include_router(tools_router)         # Меню «Инструменты» (/tools) - рядом с settings_router, выше expense_router
     dp.include_router(inline_router)        # Роутер inline queries для приглашений
     dp.include_router(expense_router)  # Команды должны быть выше FSM состояний
     dp.include_router(reports_router)  # Команды должны быть выше FSM состояний

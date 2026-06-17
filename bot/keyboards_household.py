@@ -10,13 +10,13 @@ def get_household_menu_keyboard(lang: str = 'ru', subscription_active: bool = Tr
     if subscription_active:
         keyboard = [
             [InlineKeyboardButton(text=get_text('create_household_button', lang), callback_data="create_household")],
-            [InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")],
+            [InlineKeyboardButton(text=get_text('back', lang), callback_data="tools")],
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
         ]
     else:
         keyboard = [
             [InlineKeyboardButton(text=get_text('get_subscription', lang), callback_data="menu_subscription")],
-            [InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")],
+            [InlineKeyboardButton(text=get_text('back', lang), callback_data="tools")],
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
         ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
@@ -36,7 +36,7 @@ def get_household_settings_keyboard(is_creator: bool = False, lang: str = 'ru') 
     
     keyboard.extend([
         [InlineKeyboardButton(text=get_text('leave_household_button', lang), callback_data="leave_household")],
-        [InlineKeyboardButton(text=get_text('back', lang), callback_data="settings")],
+        [InlineKeyboardButton(text=get_text('back', lang), callback_data="tools")],
         [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
     ])
     

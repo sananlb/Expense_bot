@@ -15,6 +15,7 @@ from .top5 import router as top5_router
 from .household import router as household_router
 from .blogger_stats import router as blogger_stats_router
 from .inline_router import router as inline_router
+from .tools import router as tools_router
 
 __all__ = [
     "start_router",
@@ -33,4 +34,5 @@ __all__ = [
     "household_router",
     "blogger_stats_router",
     "inline_router",
+    "tools_router",
 ]

@@ -187,7 +187,6 @@ SUBSCRIPTION_PRICES = {
 💵 Учёт доходов
 📊 PDF, Excel и CSV отчёты с графиками
 🏷️ Редактирование категорий
-💳 Отслеживание кэшбэка
 🏠 Семейный доступ''',
         'emoji_title': '💎 Premium • 1 месяц',
         'features': [
@@ -196,7 +195,6 @@ SUBSCRIPTION_PRICES = {
             '💵 Учёт доходов',
             '📊 PDF, Excel и CSV отчёты с графиками',
             '🏷️ Редактирование категорий',
-            '💳 Отслеживание кэшбэка',
             '🏠 Семейный доступ'
         ]
     },
@@ -209,7 +207,6 @@ SUBSCRIPTION_PRICES = {
 💵 Учёт доходов
 📊 PDF, Excel и CSV отчёты с графиками
 🏷️ Редактирование категорий
-💳 Отслеживание кэшбэка
 🏠 Семейный доступ''',
         'emoji_title': '💎 Premium • 6 месяцев',
         'features': [
@@ -219,7 +216,6 @@ SUBSCRIPTION_PRICES = {
             '🎁 Ранний доступ к новинкам',
             '💵 Учёт доходов',
             '🏷️ Редактирование категорий',
-            '💳 Отслеживание кэшбэка',
             '🏠 Семейный доступ'
         ]
     }
@@ -373,7 +369,6 @@ async def send_stars_invoice(callback: CallbackQuery, state: FSMContext, sub_typ
             "💵 Income tracking\n"
             "📊 PDF, Excel and CSV reports with charts\n"
             "🏷️ Category customization\n"
-            "💳 Cashback tracking\n"
             "🏠 Family access"
         )
         price_label = "Pay"
@@ -626,7 +621,6 @@ async def process_promocode(message: Message, state: FSMContext):
                 f"• 🏠 Семейный бюджет\n"
                 f"• 📊 PDF, Excel и CSV отчёты с графиками\n"
                 f"• 📂 Свои категории расходов\n"
-                f"• 💳 Кешбэк-трекер\n"
                 f"• ⚡ Приоритетная поддержка\n\n"
                 f"<i>Спасибо за поддержку проекта!</i> 💙",
                 parse_mode="HTML"
@@ -716,7 +710,6 @@ async def process_promocode(message: Message, state: FSMContext):
                     f"• 🏠 Семейный бюджет\n"
                     f"• 📊 PDF, Excel и CSV отчёты с графиками\n"
                     f"• 📂 Свои категории расходов\n"
-                    f"• 💳 Кешбэк-трекер\n"
                     f"• ⚡ Приоритетная поддержка\n\n"
                     f"<i>Спасибо за поддержку проекта!</i> 💙",
                     parse_mode="HTML"
@@ -864,7 +857,6 @@ async def process_subscription_purchase_with_promo(callback: CallbackQuery, stat
                 f"• 🏠 Семейный бюджет\n"
                 f"• 📊 PDF, Excel и CSV отчёты с графиками\n"
                 f"• 📂 Свои категории расходов\n"
-                f"• 💳 Кешбэк-трекер\n"
                 f"• ⚡ Приоритетная поддержка\n\n"
                 f"<i>Спасибо за поддержку проекта!</i> 💙"
             ),
@@ -1152,7 +1144,6 @@ async def process_successful_payment_updated(message: Message, state: FSMContext
         f"• 🏠 Семейный бюджет\n"
         f"• 📊 PDF, Excel и CSV отчёты с графиками\n"
         f"• 📂 Свои категории расходов\n"
-        f"• 💳 Кешбэк-трекер\n"
         f"• ⚡ Приоритетная поддержка\n\n"
         f"<i>Спасибо за поддержку проекта!</i> 💙",
         parse_mode="HTML"

@@ -52,11 +52,15 @@ def get_user_settings(telegram_id: int) -> UserSettings:
 @sync_to_async
 def toggle_cashback(telegram_id: int) -> bool:
     """
-    Переключить состояние кешбэка
-    
+    Переключить состояние кешбэка.
+
+    DEPRECATED: кешбэк доступен всем бесплатно, из UI этот метод больше не
+    вызывается (см. TOOLS_MENU_IMPLEMENTATION_PLAN.md §4). Оставлен для обратной
+    совместимости и существующих тестов.
+
     Args:
         telegram_id: ID пользователя в Telegram
-        
+
     Returns:
         Новое состояние кешбэка (True - включен, False - выключен)
     """

@@ -16,28 +16,17 @@ def back_close_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     return keyboard.as_markup()
 
 
-def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True, has_subscription: bool = False, view_scope: str = 'personal') -> InlineKeyboardMarkup:
-    """Меню настроек"""
+def settings_keyboard(lang: str = 'ru', has_subscription: bool = False, view_scope: str = 'personal') -> InlineKeyboardMarkup:
+    """Меню настроек.
+
+    Лимиты, цель дохода, семейный бюджет и кешбэк вынесены в меню «Инструменты»
+    (команда /tools, см. tools_keyboard).
+    """
     keyboard = InlineKeyboardBuilder()
 
     keyboard.button(text=get_text('change_language', lang), callback_data="change_language")
     keyboard.button(text=get_text('change_timezone', lang), callback_data="change_timezone")
     keyboard.button(text=get_text('change_currency', lang), callback_data="change_currency")
-
-    # Кнопка общего лимита трат (выше семейного бюджета)
-    keyboard.button(text=get_text('total_limit_button', lang), callback_data="total_limit")
-
-    # Кнопка общей цели дохода
-    keyboard.button(text=get_text('total_goal_button', lang), callback_data="total_goal")
-
-    # Кнопка семейного бюджета
-    keyboard.button(text=get_text('household_button', lang), callback_data="household_budget")
-
-    # Кнопка переключения кешбэка - показываем всем пользователям
-    # При попытке включить без подписки будет показано предложение оформить подписку
-    status = get_text('disable_cashback' if cashback_enabled else 'enable_cashback', lang)
-    cashback_text = get_text('toggle_cashback', lang).format(status=status)
-    keyboard.button(text=cashback_text, callback_data="toggle_cashback")
 
     # Кнопка удаления профиля
     keyboard.button(text=get_text('delete_profile_button', lang), callback_data="delete_profile")
@@ -45,8 +34,29 @@ def settings_keyboard(lang: str = 'ru', cashback_enabled: bool = True, has_subsc
     # Кнопка навигации
     keyboard.button(text=get_text('close', lang), callback_data="close")
 
-    # Правильная настройка кнопок - по одной в ряд (9 кнопок)
-    keyboard.adjust(1, 1, 1, 1, 1, 1, 1, 1, 1)
+    # Правильная настройка кнопок - по одной в ряд (5 кнопок)
+    keyboard.adjust(1, 1, 1, 1, 1)
+
+    return keyboard.as_markup()
+
+
+def tools_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Меню «Инструменты» (команда /tools).
+
+    Собирает функции, ранее перегружавшие меню настроек: повторяющиеся платежи,
+    лимит трат, цель дохода, кешбэк, семейный бюджет.
+    """
+    keyboard = InlineKeyboardBuilder()
+
+    keyboard.button(text=get_text('recurring_button', lang), callback_data="recurring_menu")
+    keyboard.button(text=get_text('total_limit_button', lang), callback_data="total_limit")
+    keyboard.button(text=get_text('total_goal_button', lang), callback_data="total_goal")
+    # Кешбэк доступен всем; используем существующий обработчик cashback_menu
+    keyboard.button(text=get_text('cashback_button', lang), callback_data="cashback_menu")
+    keyboard.button(text=get_text('household_button', lang), callback_data="household_budget")
+    keyboard.button(text=get_text('close', lang), callback_data="close")
+
+    keyboard.adjust(1, 1, 1, 1, 1, 1)
 
     return keyboard.as_markup()
 

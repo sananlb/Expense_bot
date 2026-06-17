@@ -82,8 +82,9 @@ async def deactivate_expired_subscriptions():
 
     При окончании подписки автоматически отключает:
     - Семейный режим (view_scope → 'personal')
-    - Кешбек трекинг (cashback_enabled → False)
-    - Обновляет команды бота для скрытия /cashback
+
+    Кешбэк больше НЕ отключается при истечении подписки — он доступен всем
+    бесплатно (см. TOOLS_MENU_IMPLEMENTATION_PLAN.md §4).
     """
     now = timezone.now()
 
@@ -121,17 +122,14 @@ async def deactivate_expired_subscriptions():
                 settings.view_scope = 'personal'
                 changed_fields.append('view_scope')
 
-            # Отключаем кешбек
-            if settings.cashback_enabled:
-                settings.cashback_enabled = False
-                changed_fields.append('cashback_enabled')
+            # Кешбэк НЕ трогаем — он доступен всем бесплатно.
 
             # Сохраняем изменения в настройках
             if changed_fields:
                 await settings.asave(update_fields=changed_fields)
                 user_ids_to_update.add(profile.telegram_id)
 
-    # Обновляем команды бота для пользователей (скрываем /cashback)
+    # Обновляем команды бота для пользователей, у кого менялись настройки
     if user_ids_to_update:
         await _update_commands_for_users(list(user_ids_to_update))
 

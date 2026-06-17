@@ -1176,13 +1176,12 @@ async def handle_amount_clarification(message: types.Message, state: FSMContext,
     # Форматируем сообщение с учетом валюты
     amount_text = format_currency(expense.amount, currency)
     
-    # Проверяем подписку и рассчитываем кешбэк
+    # Рассчитываем кешбэк (доступен всем бесплатно)
     cashback_text = ""
-    has_subscription = await check_subscription(user_id)
     # Получаем валюту пользователя из профиля
     user_currency = default_currency
     # Кешбэк начисляется только для трат в валюте пользователя
-    if has_subscription and currency == user_currency:
+    if currency == user_currency:
         current_month = datetime.now().month
         cashback = await calculate_expense_cashback(
             user_id=user_id,
@@ -1991,13 +1990,12 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
                 # Форматируем сообщение с учетом валюты
                 amount_text = format_currency(expense.amount, currency)
                 
-                # Проверяем подписку и рассчитываем кешбэк
+                # Рассчитываем кешбэк (доступен всем бесплатно)
                 cashback_text = ""
-                has_subscription = await check_subscription(user_id)
                 # Получаем валюту пользователя из профиля
                 user_currency = profile.currency if profile else 'RUB'
                 # Кешбэк начисляется только для трат в валюте пользователя
-                if has_subscription and currency == user_currency:
+                if currency == user_currency:
                     current_month = datetime.now().month
                     cashback = await calculate_expense_cashback(
                         user_id=user_id,
@@ -2123,15 +2121,14 @@ async def handle_text_expense(message: types.Message, state: FSMContext, text: s
     # Форматируем сообщение с учетом валюты
     amount_text = format_currency(expense.amount, currency)
     
-    # Проверяем подписку и рассчитываем кешбэк
+    # Рассчитываем кешбэк (доступен всем бесплатно)
     from datetime import datetime
-    
+
     cashback_text = ""
-    has_subscription = await check_subscription(user_id)
     # Получаем валюту пользователя из профиля
     user_currency = profile.currency if profile else 'RUB'
     # Кешбэк начисляется только для трат в валюте пользователя
-    if has_subscription and currency == user_currency:
+    if currency == user_currency:
         current_month = datetime.now().month
         cashback = await calculate_expense_cashback(
             user_id=user_id,
@@ -2798,8 +2795,7 @@ async def edit_done(callback: types.CallbackQuery, state: FSMContext, lang: str 
         # Рассчитываем кешбек только для расходов
         cashback_text = ""
         if not is_income:
-            has_subscription = await check_subscription(callback.from_user.id)
-            if has_subscription and expense.category and not expense.cashback_excluded:
+            if expense.category and not expense.cashback_excluded:
                 # Получаем валюту пользователя из профиля
                 user_currency = expense.profile.currency if expense.profile else 'RUB'
                 # Кешбек начисляется только для трат в валюте пользователя
@@ -3025,8 +3021,7 @@ async def show_updated_expense(message: types.Message, state: FSMContext, item_i
         else:
             # Для расходов
             cashback_text = ""
-            has_subscription = await check_subscription(message.from_user.id)
-            if has_subscription and expense.category:
+            if expense.category:
                 # Получаем валюту пользователя из профиля
                 user_currency = expense.profile.currency if expense.profile else 'RUB'
                 # Кешбек начисляется только для трат в валюте пользователя
@@ -3106,8 +3101,7 @@ async def show_updated_expense_callback(callback: types.CallbackQuery, state: FS
         else:
             # Для расходов
             cashback_text = ""
-            has_subscription = await check_subscription(callback.from_user.id)
-            if has_subscription and expense.category and not expense.cashback_excluded:
+            if expense.category and not expense.cashback_excluded:
                 # Получаем валюту пользователя из профиля
                 user_currency = expense.profile.currency if expense.profile else 'RUB'
                 # Кешбек начисляется только для трат в валюте пользователя

@@ -82,8 +82,12 @@ def format_category_bar_line(percent: int) -> str:
 
 
 def format_total_bar_line(percent: int) -> str:
-    """Строка шкалы общего лимита для обзора месяца: '■■■■■□□ 80%' (без эмодзи-индикатора справа)."""
-    bar = render_total_bar(percent)
+    """Строка шкалы общего лимита в формате категорийной шкалы: '▰▰▰▱▱ 80%'
+    (+ 🔴 при превышении). Категорийные шкалы в обзоре месяца больше не рисуются —
+    шкала остаётся только у общего лимита, но в «тонком» категорийном формате."""
+    bar = render_category_bar(percent)
+    if percent >= 100:
+        return f"{bar} {percent}% 🔴"
     return f"{bar} {percent}%"
 
 

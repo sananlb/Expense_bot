@@ -261,6 +261,9 @@ class UserSettings(models.Model):
     profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name='settings')
 
     # Кешбэк
+    # DEPRECATED: кешбэк доступен всем бесплатно, поле больше не читается в логике
+    # (см. TOOLS_MENU_IMPLEMENTATION_PLAN.md §4). Оставлено для обратной совместимости;
+    # полное удаление со схемной миграцией — отдельной задачей.
     cashback_enabled = models.BooleanField(default=True, verbose_name='Кешбэк включен')
 
     # Режим отображения данных: личный или семейный

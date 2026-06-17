@@ -335,8 +335,8 @@ async def test_month_summary_renders_limits_in_their_currencies():
     get_limits.assert_awaited_once_with(message.from_user.id)
     get_goals.assert_awaited_once_with(message.from_user.id)
     _, _, text = send_message.await_args.args[:3]
+    # Общий лимит и общая цель показываются шкалой (в «тонком» категорийном формате).
     assert reports_router.format_total_bar_line(80) in text
-    assert reports_router.format_category_bar_line(75) in text
-    assert reports_router.format_category_bar_line(100) not in text
     assert reports_router.format_total_goal_bar_line(50) in text
-    assert reports_router.format_category_goal_bar_line(75) in text
+    # Категорийные лимиты/цели теперь без шкалы — только процент в скобках.
+    assert "(75%)" in text

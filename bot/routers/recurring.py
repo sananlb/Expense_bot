@@ -134,11 +134,15 @@ async def show_recurring_menu(message: types.Message | types.CallbackQuery, stat
         )
     
     keyboard_buttons.append(
+        [InlineKeyboardButton(text=get_text('back', lang), callback_data="tools")]
+    )
+
+    keyboard_buttons.append(
         [InlineKeyboardButton(text=get_text('close', lang), callback_data="close")]
     )
-    
+
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
-    
+
     await send_message_with_cleanup(message, state, text, reply_markup=keyboard, parse_mode="HTML")
 
 

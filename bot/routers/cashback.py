@@ -88,6 +88,7 @@ async def send_cashback_menu_direct(bot, chat_id: int, state: FSMContext, month:
         # Если кешбеков нет, показываем только кнопки добавить и закрыть
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=get_text('add_cashback', lang), callback_data="cashback_add")],
+            [InlineKeyboardButton(text=get_text('back', lang), callback_data="tools")],
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close_cashback_menu")]
         ])
     else:
@@ -101,9 +102,10 @@ async def send_cashback_menu_direct(bot, chat_id: int, state: FSMContext, month:
                 InlineKeyboardButton(text=get_text('remove_cashback', lang), callback_data="cashback_remove"),
                 InlineKeyboardButton(text=get_text('remove_all_cashback', lang), callback_data="cashback_remove_all")
             ],
+            [InlineKeyboardButton(text=get_text('back', lang), callback_data="tools")],
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close_cashback_menu")]
         ])
-    
+
     # Отправляем меню
     sent_message = await bot.send_message(
         chat_id=chat_id,
@@ -207,6 +209,7 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
         # Если кешбеков нет, показываем только кнопки добавить и закрыть
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=get_text('add_cashback', lang), callback_data="cashback_add")],
+            [InlineKeyboardButton(text=get_text('back', lang), callback_data="tools")],
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close_cashback_menu")]
         ])
     else:
@@ -222,6 +225,7 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
                 InlineKeyboardButton(text=get_text('remove_cashback', lang), callback_data="cashback_remove"),
                 InlineKeyboardButton(text=get_text('remove_all_cashback', lang), callback_data="cashback_remove_all")
             ],
+            [InlineKeyboardButton(text=get_text('back', lang), callback_data="tools")],
             [InlineKeyboardButton(text=get_text('close', lang), callback_data="close_cashback_menu")]
         ])
     
@@ -300,34 +304,17 @@ async def show_cashback_menu(message: types.Message | types.CallbackQuery, state
 
 @router.callback_query(lambda c: c.data == "cashback_menu")
 async def callback_cashback_menu(callback: types.CallbackQuery, state: FSMContext):
-    """Показать меню кешбэков через callback"""
+    """Показать меню кешбэков через callback.
+
+    Кешбэк доступен всем пользователям бесплатно — гейты подписки и
+    cashback_enabled сняты (см. TOOLS_MENU_IMPLEMENTATION_PLAN.md §4).
+    """
     from bot.utils.state_utils import clear_state_keep_cashback
 
     # Очищаем состояние FSM при возврате в главное меню кешбека (но сохраняем флаги)
     await clear_state_keep_cashback(state)
 
-    # Проверяем, включен ли кешбэк
-    from bot.services.profile import get_user_settings
-    user_settings = await get_user_settings(callback.from_user.id)
-
     lang = await get_user_language(callback.from_user.id)
-
-    if not user_settings.cashback_enabled:
-        await callback.answer(get_text('cashback_disabled_message', lang), show_alert=True)
-        return
-
-    # Проверяем подписку
-    from bot.services.subscription import check_subscription, subscription_required_message, get_subscription_button
-
-    has_subscription = await check_subscription(callback.from_user.id)
-    if not has_subscription:
-        await callback.message.edit_text(
-            subscription_required_message() + "\n\n" + get_text('cashback_management_subscription', lang),
-            reply_markup=get_subscription_button(),
-            parse_mode="HTML"
-        )
-        await callback.answer()
-        return
 
     await show_cashback_menu(callback, state, lang)
     await callback.answer()
