@@ -31,6 +31,18 @@ fi
 echo -e "${YELLOW}📍 Текущая директория: $(pwd)${NC}"
 echo ""
 
+# DNS-кэш обязателен: application-контейнеры используют 10.255.255.53 из docker-compose.yml.
+# Восстанавливаем его до остановки контейнеров, чтобы не развернуть стек без доступа к Telegram.
+DNS_CACHE_IP="${DOCKER_DNS_CACHE_IP:-10.255.255.53}"
+echo -e "${YELLOW}🌐 Проверяю локальный DNS-кэш для Docker...${NC}"
+if ! command -v dig >/dev/null 2>&1 || \
+   ! dig +short +time=2 +tries=1 "@${DNS_CACHE_IP}" api.telegram.org A | grep -q .; then
+    echo -e "${YELLOW}  DNS-кэш недоступен, запускаю настройку...${NC}"
+    sudo bash scripts/setup_local_dns_cache.sh
+fi
+echo -e "${GREEN}✓ Локальный DNS-кэш доступен на ${DNS_CACHE_IP}${NC}"
+echo ""
+
 # Шаг 1: Остановка контейнеров
 echo -e "${YELLOW}[1/12] 🛑 Останавливаю Docker контейнеры...${NC}"
 docker-compose down
@@ -202,7 +214,7 @@ fi
 
 # Проверяем статус webhook через Telegram API
 echo -e "${YELLOW}  Проверяю статус webhook в Telegram...${NC}"
-BOT_TOKEN=$(grep "^BOT_TOKEN=" .env | cut -d '=' -f2 | tr -d '\r' | tr -d ' ')
+BOT_TOKEN=$(sed -n 's/^BOT_TOKEN=//p' .env | head -n 1 | tr -d '\r' | tr -d ' ')
 
 if [ -n "$BOT_TOKEN" ]; then
     WEBHOOK_INFO=$(docker exec expense_bot_app python -c "
@@ -222,9 +234,11 @@ except Exception as e:
     print(f'ERROR=Failed to check: {e}')
 " 2>/dev/null || echo "ERROR=Failed to execute check")
 
-    WEBHOOK_URL=$(echo "$WEBHOOK_INFO" | grep "^URL=" | cut -d '=' -f2-)
-    PENDING=$(echo "$WEBHOOK_INFO" | grep "^PENDING=" | cut -d '=' -f2-)
-    ERROR=$(echo "$WEBHOOK_INFO" | grep "^ERROR=" | cut -d '=' -f2-)
+    # sed возвращает 0 и при отсутствии совпадения: временная ошибка диагностики
+    # не должна активировать глобальный ERR trap и останавливать уже запущенный стек.
+    WEBHOOK_URL=$(printf '%s\n' "$WEBHOOK_INFO" | sed -n 's/^URL=//p' | head -n 1)
+    PENDING=$(printf '%s\n' "$WEBHOOK_INFO" | sed -n 's/^PENDING=//p' | head -n 1)
+    ERROR=$(printf '%s\n' "$WEBHOOK_INFO" | sed -n 's/^ERROR=//p' | head -n 1)
 
     if [ -n "$WEBHOOK_URL" ] && [ "$WEBHOOK_URL" != "None" ]; then
         echo -e "${GREEN}  ✅ Webhook установлен: $WEBHOOK_URL${NC}"
