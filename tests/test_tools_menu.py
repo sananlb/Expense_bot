@@ -85,6 +85,40 @@ async def test_tools_text_hides_active_income_goal_without_subscription(monkeypa
     assert "Цель дохода" not in text
 
 
+@pytest.mark.asyncio
+@pytest.mark.django_db(transaction=True)
+async def test_cashback_is_active_only_when_configured_for_current_month(
+    test_expense_category,
+):
+    """Кешбэк из прошлого месяца не должен отображаться как активный."""
+    from bot.routers.tools import _collect_active_tools
+    from expenses.models import Cashback
+
+    profile = test_expense_category.profile
+    current_month = date.today().month
+    previous_month = 12 if current_month == 1 else current_month - 1
+
+    await sync_to_async(Cashback.objects.create)(
+        profile=profile,
+        category=test_expense_category,
+        bank_name="Прошлый банк",
+        cashback_percent=Decimal("5"),
+        month=previous_month,
+    )
+
+    assert "cashback" not in await _collect_active_tools(profile.telegram_id)
+
+    await sync_to_async(Cashback.objects.create)(
+        profile=profile,
+        category=test_expense_category,
+        bank_name="Текущий банк",
+        cashback_percent=Decimal("5"),
+        month=current_month,
+    )
+
+    assert "cashback" in await _collect_active_tools(profile.telegram_id)
+
+
 # --- 2. settings_keyboard ---------------------------------------------------
 
 def test_settings_keyboard_decluttered():

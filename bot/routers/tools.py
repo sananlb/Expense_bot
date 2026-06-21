@@ -5,6 +5,7 @@
 кнопки ведут на уже существующие callback-обработчики соответствующих функций.
 """
 import logging
+from datetime import date
 
 from asgiref.sync import sync_to_async
 from aiogram import F, Router
@@ -64,7 +65,9 @@ def _collect_active_tools(user_id: int) -> list[str]:
         profile=profile, is_active=True, period_type='monthly', category__isnull=True
     ).exists():
         active.append('goal')
-    if Cashback.objects.filter(profile=profile).exists():
+    # Настройки кешбэка привязаны к месяцу: записи за прошлые месяцы не
+    # означают, что кешбэк настроен сейчас.
+    if Cashback.objects.filter(profile=profile, month=date.today().month).exists():
         active.append('cashback')
     if profile.household_id is not None:
         active.append('household')
