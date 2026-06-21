@@ -1269,6 +1269,7 @@ async def handle_text_expense(
     lang: str = 'ru',
     user_id: Optional[int] = None,
     input_source: str = "text",
+    voice_expense_batch: Optional[dict] = None,
 ):
     """Обработка текстовых сообщений с тратами
 
@@ -1285,19 +1286,20 @@ async def handle_text_expense(
     import asyncio
 
     # Глобальная обработка кешбэка: запускается независимо от активного состояния FSM
-    try:
-        incoming_text = text if text is not None else (message.text or "")
-        from ..services.cashback_free_text import looks_like_cashback_free_text, process_cashback_free_text
-        if looks_like_cashback_free_text(incoming_text):
-            ok, resp = await process_cashback_free_text(message.from_user.id, incoming_text)
-            if ok:
-                await send_message_with_cleanup(message, state, resp, parse_mode="HTML")
-            else:
-                hint = "\n\nФормат: <i>кешбек 5 процентов на категорию Кафе и рестораны Тинькофф</i>"
-                await send_message_with_cleanup(message, state, resp + hint, parse_mode="HTML")
-            return
-    except Exception as e:
-        logger.debug(f"Cashback free text detection error (early): {e}")
+    if input_source != "voice_ai":
+        try:
+            incoming_text = text if text is not None else (message.text or "")
+            from ..services.cashback_free_text import looks_like_cashback_free_text, process_cashback_free_text
+            if looks_like_cashback_free_text(incoming_text):
+                ok, resp = await process_cashback_free_text(message.from_user.id, incoming_text)
+                if ok:
+                    await send_message_with_cleanup(message, state, resp, parse_mode="HTML")
+                else:
+                    hint = "\n\nФормат: <i>кешбек 5 процентов на категорию Кафе и рестораны Тинькофф</i>"
+                    await send_message_with_cleanup(message, state, resp + hint, parse_mode="HTML")
+                return
+        except Exception as e:
+            logger.debug(f"Cashback free text detection error (early): {e}")
     
     # Проверяем, есть ли активное состояние (кроме нашего состояния ожидания суммы)
     current_state = await state.get_state()
@@ -1452,14 +1454,17 @@ async def handle_text_expense(
         await asyncio.sleep(2.0)  # Задержка 2 секунды
         if typing_cancelled:
             return
-        await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        try:
+            await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
+        except TelegramAPIError:
+            return
         # Планируем повторную отправку через 4 секунды
         while not typing_cancelled:
             await asyncio.sleep(4.0)
             if not typing_cancelled:
                 try:
                     await message.bot.send_chat_action(chat_id=message.chat.id, action="typing")
-                except (TelegramForbiddenError, TelegramBadRequest):
+                except TelegramAPIError:
                     break  # Пользователь заблокировал бота или некорректный chat_id
     
     # Запускаем задачу
@@ -1513,7 +1518,7 @@ async def handle_text_expense(
 
     # НОВОЕ: Проверка на запрос показа трат ДО вызова AI парсера (экономия токенов)
     # НО только если НЕ найдено ключевое слово
-    if not has_keyword:
+    if input_source != "voice_ai" and not has_keyword:
         is_show_request, confidence = is_show_expenses_request(text)
         if is_show_request and confidence >= 0.7:
             logger.info(
@@ -1531,7 +1536,7 @@ async def handle_text_expense(
 
     # Проверка на доход перед парсингом как расход
     from ..utils.expense_parser import detect_income_intent, parse_income_message
-    if detect_income_intent(text):
+    if input_source != "voice_ai" and detect_income_intent(text):
         logger.info("Detected income intent for %s: %s", log_safe_id(user_id, "user"), summarize_text(text))
 
         # Проверка подписки для функции учета доходов
@@ -1714,7 +1719,18 @@ async def handle_text_expense(
         profile = None
 
     async def create_and_send_expense_from_parsed(parsed_expense: dict) -> bool:
+        total_started = time.monotonic()
+        description_log = summarize_text(parsed_expense.get('description') or "")
+
+        step_started = time.monotonic()
         category = await get_or_create_category(user_id, parsed_expense['category'])
+        logger.info(
+            "[ExpenseCreateTiming] %s | category %.2fs | item=%s",
+            log_safe_id(user_id, "user"),
+            time.monotonic() - step_started,
+            description_log,
+        )
+
         amount = parsed_expense['amount']
         currency = parsed_expense.get('currency')
         if not currency:
@@ -1723,6 +1739,7 @@ async def handle_text_expense(
             currency = profile_for_currency.currency or 'RUB'
 
         try:
+            step_started = time.monotonic()
             expense = await add_expense_with_conversion(
                 user_id=user_id,
                 category_id=category.id,
@@ -1732,6 +1749,12 @@ async def handle_text_expense(
                 expense_date=parsed_expense.get('expense_date'),
                 ai_categorized=parsed_expense.get('ai_enhanced', False),
                 ai_confidence=parsed_expense.get('confidence')
+            )
+            logger.info(
+                "[ExpenseCreateTiming] %s | add_expense %.2fs | item=%s",
+                log_safe_id(user_id, "user"),
+                time.monotonic() - step_started,
+                description_log,
             )
         except ValueError as e:
             await message.answer(f"❌ {str(e)}", parse_mode="HTML")
@@ -1746,17 +1769,25 @@ async def handle_text_expense(
         user_currency = profile.currency if profile else 'RUB'
         if currency == user_currency:
             current_month = date.today().month
+            step_started = time.monotonic()
             cashback = await calculate_expense_cashback(
                 user_id=user_id,
                 category_id=category.id,
                 amount=expense.amount,
                 month=current_month
             )
+            logger.info(
+                "[ExpenseCreateTiming] %s | cashback %.2fs | item=%s",
+                log_safe_id(user_id, "user"),
+                time.monotonic() - step_started,
+                description_log,
+            )
             if cashback > 0:
                 cashback_text = f" (+{format_currency(cashback, user_currency)})"
                 expense.cashback_amount = Decimal(str(cashback))
                 await expense.asave()
 
+        step_started = time.monotonic()
         message_text = await format_expense_added_message(
             expense=expense,
             category=category,
@@ -1765,7 +1796,14 @@ async def handle_text_expense(
             reused_from_last=parsed_expense.get('reused_from_last', False),
             lang=lang
         )
+        logger.info(
+            "[ExpenseCreateTiming] %s | format %.2fs | item=%s",
+            log_safe_id(user_id, "user"),
+            time.monotonic() - step_started,
+            description_log,
+        )
 
+        step_started = time.monotonic()
         await send_message_with_cleanup(message, state,
             message_text,
             reply_markup=types.InlineKeyboardMarkup(inline_keyboard=[
@@ -1776,10 +1814,178 @@ async def handle_text_expense(
             parse_mode="HTML",
             keep_message=True
         )
+        logger.info(
+            "[ExpenseCreateTiming] %s | send_card %.2fs | item=%s",
+            log_safe_id(user_id, "user"),
+            time.monotonic() - step_started,
+            description_log,
+        )
+
+        step_started = time.monotonic()
         await send_expense_limit_alerts(
             message.bot, user_id, expense, category=category, lang=lang
         )
+        logger.info(
+            "[ExpenseCreateTiming] %s | limit_alerts %.2fs | total %.2fs | item=%s",
+            log_safe_id(user_id, "user"),
+            time.monotonic() - step_started,
+            time.monotonic() - total_started,
+            description_log,
+        )
         return True
+
+    def _capitalize_expense_description(value: str) -> str:
+        return value[0].upper() + value[1:] if value else value
+
+    async def resolve_structured_voice_item(item: dict) -> tuple[Optional[dict], Optional[str]]:
+        description = (item.get('description') or '').strip()
+        if not description:
+            return None, ""
+
+        default_currency = (profile.currency if profile else None) or 'RUB'
+        default_category = 'Прочие расходы' if lang == 'ru' else 'Other Expenses'
+        explicit_currency = item.get('currency')
+        currency = explicit_currency or default_currency
+        amount = item.get('amount')
+        confidence = item.get('confidence')
+
+        if amount is not None:
+            item_text = f"{description} {amount}"
+            if explicit_currency:
+                item_text += f" {explicit_currency}"
+
+            parsed_item = await parse_expense_message(
+                item_text,
+                user_id=user_id,
+                profile=profile,
+                use_ai=True,
+            )
+
+            if not parsed_item:
+                parsed_item = {
+                    'category': default_category,
+                    'ai_enhanced': False,
+                    'expense_date': None,
+                }
+            else:
+                parsed_item = dict(parsed_item)
+
+            parsed_item['source_text'] = item_text
+            parsed_item['amount'] = amount
+            parsed_item['description'] = _capitalize_expense_description(description)
+            parsed_item['currency'] = currency
+            parsed_item.setdefault('category', default_category)
+            if not parsed_item.get('category'):
+                parsed_item['category'] = default_category
+            if parsed_item.get('confidence') is None:
+                parsed_item['confidence'] = confidence
+            return parsed_item, None
+
+        from ..services.expense import find_similar_expenses
+
+        logger.info(
+            "Structured voice item has no amount for %s; looking up old price: %s",
+            log_safe_id(user_id, "user"),
+            summarize_text(description),
+        )
+        similar = await find_similar_expenses(user_id, description)
+        if not similar:
+            return None, description
+
+        last_expense = similar[0]
+        return {
+            'source_text': description,
+            'amount': last_expense['amount'],
+            'description': _capitalize_expense_description(description),
+            'category': last_expense.get('category') or default_category,
+            'currency': last_expense.get('currency') or default_currency,
+            'confidence': confidence,
+            'expense_date': None,
+            'ai_enhanced': False,
+            'reused_from_last': True,
+        }, None
+
+    if voice_expense_batch and input_source == "voice_ai":
+        items = voice_expense_batch.get('items') or []
+        logger.info(
+            "Structured voice expense input for %s: pipeline=%s count=%s text=%s",
+            log_safe_id(user_id, "user"),
+            voice_expense_batch.get('pipeline'),
+            len(items),
+            summarize_text(voice_expense_batch.get('transcript') or text or ""),
+        )
+
+        resolve_started = time.monotonic()
+        _VOICE_RESOLVE_CONCURRENCY = 5
+        resolve_sem = asyncio.Semaphore(_VOICE_RESOLVE_CONCURRENCY)
+
+        async def _resolve_one_voice_item(item: dict):
+            async with resolve_sem:
+                return await resolve_structured_voice_item(item)
+
+        resolve_results = await asyncio.gather(
+            *[_resolve_one_voice_item(item) for item in items],
+            return_exceptions=True,
+        )
+
+        logger.info(
+            "Resolved %s structured voice items for %s in %.2fs",
+            len(items),
+            log_safe_id(user_id, "user"),
+            time.monotonic() - resolve_started,
+        )
+
+        parsed_items = []
+        failed_item_description = None
+        for item, result in zip(items, resolve_results):
+            if isinstance(result, Exception):
+                logger.warning(
+                    "Structured voice item resolve raised for %s: item=%s err=%s",
+                    log_safe_id(user_id, "user"),
+                    summarize_text(item.get('description') if isinstance(item, dict) else ""),
+                    result,
+                )
+                failed_item_description = item.get('description') if isinstance(item, dict) else ""
+                break
+
+            parsed_item, failed_description = result
+            if failed_description is not None or not parsed_item:
+                failed_item_description = failed_description or (item.get('description') if isinstance(item, dict) else "")
+                break
+            parsed_items.append(parsed_item)
+
+        if failed_item_description is not None or not parsed_items:
+            await cancel_typing()
+            failed_text = failed_item_description or ""
+            logger.warning(
+                "Failed to resolve structured voice item for %s: item=%s transcript=%s",
+                log_safe_id(user_id, "user"),
+                summarize_text(failed_text),
+                summarize_text(voice_expense_batch.get('transcript') or text or ""),
+            )
+            from html import escape
+            safe_failed_text = escape(failed_text)
+            if lang == "ru":
+                error_msg = (
+                    f"❌ Не нашёл сумму для «{safe_failed_text}». "
+                    "Назовите цену или введите траты текстом через запятую."
+                )
+            else:
+                error_msg = (
+                    f"❌ I could not find a price for \"{safe_failed_text}\". "
+                    "Say the price or send text separated by commas."
+                )
+            await message.answer(error_msg, parse_mode="HTML")
+            return
+
+        await cancel_typing()
+        for parsed_item in parsed_items:
+            created = await create_and_send_expense_from_parsed(parsed_item)
+            if not created:
+                return
+
+        logger.info("Created %s structured voice expenses for %s", len(parsed_items), log_safe_id(user_id, "user"))
+        return
 
     from ..utils.multiple_expense_parser import split_multiple_expense_texts
 
@@ -1793,10 +1999,31 @@ async def handle_text_expense(
             summarize_text(text),
         )
 
+        # Параллельный парсинг с ограничением одновременности и сохранением порядка.
+        # gather сохраняет порядок результатов = порядку multiple_texts.
+        _BATCH_PARSE_CONCURRENCY = 5
+        sem = asyncio.Semaphore(_BATCH_PARSE_CONCURRENCY)
+
+        async def _parse_one(item_text):
+            async with sem:
+                return await parse_expense_message(item_text, user_id=user_id, profile=profile, use_ai=True)
+
+        results = await asyncio.gather(
+            *[_parse_one(t) for t in multiple_texts], return_exceptions=True
+        )
+
         parsed_items = []
         failed_item_text = None
-        for item_text in multiple_texts:
-            parsed_item = await parse_expense_message(item_text, user_id=user_id, profile=profile, use_ai=True)
+        for item_text, parsed_item in zip(multiple_texts, results):
+            if isinstance(parsed_item, Exception):
+                logger.warning(
+                    "Batch item parse raised for %s: item=%s err=%s",
+                    log_safe_id(user_id, "user"),
+                    summarize_text(item_text),
+                    parsed_item,
+                )
+                failed_item_text = item_text
+                break
             if not parsed_item or not parsed_item.get("amount") or parsed_item["amount"] <= 0:
                 failed_item_text = item_text
                 break
@@ -2208,7 +2435,15 @@ async def handle_text_expense(
 # Обработчик голосовых сообщений
 @router.message(F.voice)
 @rate_limit(max_calls=10, period=60)  # 10 голосовых в минуту
-async def handle_voice_expense(message: types.Message, state: FSMContext, lang: str = 'ru', voice_text: str | None = None, voice_no_subscription: bool = False, voice_transcribe_failed: bool = False):
+async def handle_voice_expense(
+    message: types.Message,
+    state: FSMContext,
+    lang: str = 'ru',
+    voice_text: str | None = None,
+    voice_expense_batch: dict | None = None,
+    voice_no_subscription: bool = False,
+    voice_transcribe_failed: bool = False,
+):
     """Обработка голосовых сообщений (транскрибировано в VoiceToTextMiddleware)"""
     from bot.services.subscription import subscription_required_message, get_subscription_button
 
@@ -2227,13 +2462,24 @@ async def handle_voice_expense(message: types.Message, state: FSMContext, lang: 
         return
 
     logger.info(
-        "[VOICE_EXPENSE] %s | Voice recognized | text=%s",
+        "[VOICE_EXPENSE] %s | Voice recognized | pipeline=%s text=%s",
         log_safe_id(message.from_user.id, "user"),
+        voice_expense_batch.get('pipeline') if voice_expense_batch else 'transcript',
         summarize_text(voice_text),
     )
 
     # Вызываем обработчик текстовых сообщений с распознанным текстом
-    await handle_text_expense(message, state, text=voice_text, lang=lang, input_source="voice")
+    if voice_expense_batch:
+        await handle_text_expense(
+            message,
+            state,
+            text=voice_text,
+            lang=lang,
+            input_source="voice_ai",
+            voice_expense_batch=voice_expense_batch,
+        )
+    else:
+        await handle_text_expense(message, state, text=voice_text, lang=lang, input_source="voice")
 
 
 # Обработчик фото (чеков)

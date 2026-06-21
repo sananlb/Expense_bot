@@ -18,6 +18,12 @@ from bot.utils.telegram_client import create_telegram_bot
 
 logger = logging.getLogger(__name__)
 
+
+def _cp1251_log_safe(value: object) -> str:
+    """Keep Cyrillic log text but drop symbols that break Windows cp1251 consoles."""
+    return str(value).encode("cp1251", "ignore").decode("cp1251")
+
+
 def _shutdown_event_loop(loop: asyncio.AbstractEventLoop, *, bot: Bot = None, label: str = "") -> None:
     """
     Deterministically shutdown a manually-created asyncio event loop.
@@ -1621,8 +1627,8 @@ def cleanup_old_keywords(profile_id: int, is_income: bool = False):
         logger.error(f"Error in cleanup_old_keywords for user {profile_id}: {e}")
 
 
-@shared_task
-def learn_keywords_on_create(expense_id: int, category_id: int):
+@shared_task(bind=True)
+def learn_keywords_on_create(self, expense_id: int, category_id: int):
     """
     Обучение системы при создании новой траты с AI-категоризацией.
     ИСПОЛЬЗУЕТ УНИВЕРСАЛЬНЫЙ КОД из keyword_service.py
@@ -1635,8 +1641,16 @@ def learn_keywords_on_create(expense_id: int, category_id: int):
     Пример: "Вчера купил кофе в старбаксе 350р" → "кофе старбаксе"
     """
     try:
+        from django.core.cache import cache
         from expenses.models import Expense, ExpenseCategory
         from bot.utils.keyword_service import ensure_unique_keyword
+
+        task_id = getattr(getattr(self, "request", None), "id", None)
+        if task_id:
+            dedupe_key = f"celery_task_seen:learn_keywords_on_create:{task_id}"
+            if not cache.add(dedupe_key, True, timeout=3600):
+                logger.info("Skipped duplicate learn_keywords_on_create task %s", task_id)
+                return
 
         expense = Expense.objects.select_related('profile', 'category').get(id=expense_id)
         category = ExpenseCategory.objects.get(id=category_id)
@@ -1665,11 +1679,13 @@ def learn_keywords_on_create(expense_id: int, category_id: int):
         kw_obj.save()
 
         # Получаем имя категории для логов
-        cat_name = category.name or category.name_ru or category.name_en or f'ID:{category.id}'
+        cat_name = _cp1251_log_safe(category.name or category.name_ru or category.name_en or f'ID:{category.id}')
+        keyword_log = _cp1251_log_safe(kw_obj.keyword)
+        description_log = _cp1251_log_safe(expense.description)
 
         logger.info(
-            f"Learned keyword '{kw_obj.keyword}' for expense category '{cat_name}' "
-            f"(user {expense.profile.telegram_id}, original: '{expense.description}', removed {removed} duplicates)"
+            f"Learned keyword '{keyword_log}' for expense category '{cat_name}' "
+            f"(user {expense.profile.telegram_id}, original: '{description_log}', removed {removed} duplicates)"
         )
 
         # Очистка старых ключевых слов только если создали новый

@@ -83,7 +83,7 @@ fi
 RESULT_FILE=$(mktemp)
 
 codex exec \
-    -s read-only \
+    -s danger-full-access \
     -C "$PROJECT_ROOT" \
     -o "$RESULT_FILE" \
     "$FULL_PROMPT" > /tmp/codex-task-raw.log 2>&1

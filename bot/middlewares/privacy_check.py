@@ -83,6 +83,51 @@ class PrivacyCheckMiddleware(BaseMiddleware):
             if not display_lang:
                 display_lang = 'ru'
 
+            # GROUP-AWARE: в группах/супергруппах НЕ постим полную политику с кнопками
+            # (кнопки принятия в группе не работают и спамят чат). Вместо этого — одно короткое
+            # сообщение с deeplink в личку и блок. Поведение в личке не меняется.
+            chat = getattr(message, 'chat', None)
+            is_group_chat = chat is not None and chat.type in ('group', 'supergroup')
+
+            if isinstance(event, Message) and is_group_chat:
+                logger.info(
+                    "[PRIVACY_CHECK] %s attempted group action without accepted privacy. deeplink shown.",
+                    log_safe_id(user.id, "user"),
+                )
+                try:
+                    bot_username = (await event.bot.get_me()).username or ""
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("Failed to get bot username for group privacy deeplink: %s", e)
+                    bot_username = ""
+                try:
+                    await message.reply(
+                        get_text('group_privacy_deeplink', display_lang).format(bot_username=bot_username),
+                        parse_mode='HTML',
+                        disable_web_page_preview=True,
+                    )
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("Failed to send group privacy deeplink: %s", e)
+                # БЛОКИРУЕМ выполнение обработчика - политика не принята!
+                return None
+
+            # GROUP-AWARE для CallbackQuery: незарегистрированный/не принявший политику жмёт
+            # публичную inline-кнопку (например edit) в группе — НЕ постим политику в чат,
+            # вместо этого короткий alert с приглашением в личку. Личка не затрагивается.
+            if isinstance(event, CallbackQuery) and is_group_chat:
+                logger.info(
+                    "[PRIVACY_CHECK] %s attempted group callback without accepted privacy. alert shown.",
+                    log_safe_id(user.id, "user"),
+                )
+                try:
+                    await event.answer(
+                        get_text('group_privacy_callback_alert', display_lang),
+                        show_alert=True,
+                    )
+                except Exception as e:  # noqa: BLE001
+                    logger.warning("Failed to answer group privacy callback alert: %s", e)
+                # БЛОКИРУЕМ выполнение обработчика - политика не принята!
+                return None
+
             logger.info(
                 "[PRIVACY_CHECK] %s attempted action without accepted privacy policy. profile_exists=%s, accepted_privacy=%s",
                 log_safe_id(user.id, "user"),

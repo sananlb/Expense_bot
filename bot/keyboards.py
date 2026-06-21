@@ -40,7 +40,7 @@ def settings_keyboard(lang: str = 'ru', has_subscription: bool = False, view_sco
     return keyboard.as_markup()
 
 
-def tools_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+def tools_keyboard(lang: str = 'ru', has_subscription: bool = False) -> InlineKeyboardMarkup:
     """Меню «Инструменты» (команда /tools).
 
     Собирает функции, ранее перегружавшие меню настроек: повторяющиеся платежи,
@@ -50,13 +50,14 @@ def tools_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
 
     keyboard.button(text=get_text('recurring_button', lang), callback_data="recurring_menu")
     keyboard.button(text=get_text('total_limit_button', lang), callback_data="total_limit")
-    keyboard.button(text=get_text('total_goal_button', lang), callback_data="total_goal")
+    if has_subscription:
+        keyboard.button(text=get_text('total_goal_button', lang), callback_data="total_goal")
     # Кешбэк доступен всем; используем существующий обработчик cashback_menu
     keyboard.button(text=get_text('cashback_button', lang), callback_data="cashback_menu")
     keyboard.button(text=get_text('household_button', lang), callback_data="household_budget")
     keyboard.button(text=get_text('close', lang), callback_data="close")
 
-    keyboard.adjust(1, 1, 1, 1, 1, 1)
+    keyboard.adjust(1)
 
     return keyboard.as_markup()
 

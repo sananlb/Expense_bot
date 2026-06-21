@@ -1056,10 +1056,15 @@ async def parse_expense_message(text: str, user_id: Optional[int] = None, profil
                     # Обновляем last_used и usage_count при использовании ключевого слова
                     @sync_to_async
                     def update_keyword_usage():
+                        from django.db.models import F
                         from django.utils import timezone
-                        keyword = CategoryKeyword.objects.get(id=kw.id)
-                        keyword.usage_count += 1
-                        keyword.save(update_fields=['usage_count', 'last_used'])  # last_used обновится auto_now
+                        # Атомарный апдейт через F() — без read-modify-write,
+                        # чтобы исключить lost-update при параллельных вызовах.
+                        # При .update() auto_now не срабатывает, поэтому last_used ставим явно.
+                        CategoryKeyword.objects.filter(id=kw.id).update(
+                            usage_count=F('usage_count') + 1,
+                            last_used=timezone.now(),
+                        )
 
                     await update_keyword_usage()
 

@@ -9,6 +9,7 @@ from .anti_spam import AntiSpamMiddleware
 from .privacy_check import PrivacyCheckMiddleware
 from .fsm_cleanup import FSMCleanupMiddleware
 from .bot_unblock import BotUnblockMiddleware
+from .group_guard import GroupChatGuardMiddleware
 
 __all__ = [
     "DatabaseMiddleware",
@@ -21,4 +22,5 @@ __all__ = [
     "PrivacyCheckMiddleware",
     "FSMCleanupMiddleware",
     "BotUnblockMiddleware",
+    "GroupChatGuardMiddleware",
 ]

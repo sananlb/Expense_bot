@@ -47,7 +47,7 @@ def _command_names(set_my_commands_mock) -> list:
 
 def test_tools_keyboard_has_all_entries():
     """Меню «Инструменты» содержит все запланированные пункты."""
-    callbacks = _callbacks(tools_keyboard("ru"))
+    callbacks = _callbacks(tools_keyboard("ru", has_subscription=True))
 
     for expected in (
         "recurring_menu",
@@ -58,6 +58,31 @@ def test_tools_keyboard_has_all_entries():
         "close",
     ):
         assert expected in callbacks, f"Нет кнопки {expected} в меню инструментов"
+
+
+def test_tools_keyboard_hides_income_goal_without_subscription():
+    """Без подписки цель дохода не показывается в меню инструментов."""
+    callbacks = _callbacks(tools_keyboard("ru", has_subscription=False))
+
+    assert "total_goal" not in callbacks
+    assert "total_limit" in callbacks
+    assert "cashback_menu" in callbacks
+
+
+@pytest.mark.asyncio
+async def test_tools_text_hides_active_income_goal_without_subscription(monkeypatch):
+    """Без подписки цель дохода не показывается даже в блоке активных инструментов."""
+    from bot.routers.tools import _tools_text
+
+    monkeypatch.setattr(
+        "bot.routers.tools._collect_active_tools",
+        AsyncMock(return_value=["limit", "goal"]),
+    )
+
+    text = await _tools_text(123456789, "ru", has_subscription=False)
+
+    assert "Лимит трат" in text
+    assert "Цель дохода" not in text
 
 
 # --- 2. settings_keyboard ---------------------------------------------------

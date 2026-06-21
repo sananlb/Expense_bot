@@ -166,6 +166,185 @@ async def test_handle_text_expense_does_not_fallback_when_batch_item_fails():
 
 
 @pytest.mark.asyncio
+async def test_handle_voice_expense_uses_structured_batch_without_local_splitter():
+    message = make_message("")
+    state = make_state()
+    profile = SimpleNamespace(accepted_privacy=True, currency="RUB", language_code="ru")
+    batch = {
+        "pipeline": "openrouter_audio",
+        "transcript": "мороженое 120 помидоры 232",
+        "items": [
+            {"description": "мороженое", "amount": 120, "currency": None, "confidence": 0.91},
+            {"description": "помидоры", "amount": 232, "currency": None, "confidence": 0.92},
+        ],
+    }
+    parsed_items = [
+        {
+            "source_text": "мороженое 120",
+            "amount": 120,
+            "description": "Мороженое",
+            "category": "Прочие расходы",
+            "currency": "RUB",
+            "confidence": 0.5,
+            "expense_date": None,
+        },
+        {
+            "source_text": "помидоры 232",
+            "amount": 232,
+            "description": "Помидоры",
+            "category": "Прочие расходы",
+            "currency": "RUB",
+            "confidence": 0.5,
+            "expense_date": None,
+        },
+    ]
+    categories = [SimpleNamespace(id=11), SimpleNamespace(id=12)]
+    expenses = [
+        SimpleNamespace(id=201, amount=Decimal("120"), asave=AsyncMock()),
+        SimpleNamespace(id=202, amount=Decimal("232"), asave=AsyncMock()),
+    ]
+
+    with patch("bot.services.cashback_free_text.looks_like_cashback_free_text", return_value=False), patch(
+        "expenses.models.Profile.objects.aget", AsyncMock(return_value=profile)
+    ), patch(
+        "expenses.models.CategoryKeyword.objects.filter",
+        Mock(return_value=SimpleNamespace(aexists=AsyncMock(return_value=False))),
+    ), patch(
+        "bot.utils.expense_intent.is_show_expenses_request", return_value=(False, 0.0)
+    ), patch(
+        "bot.utils.multiple_expense_parser.split_multiple_expense_texts",
+        return_value=["should-not-be-used"],
+    ) as split_multiple, patch(
+        "bot.routers.expense.parse_expense_message", AsyncMock(side_effect=parsed_items)
+    ) as parse_single, patch(
+        "bot.services.category.get_or_create_category", AsyncMock(side_effect=categories)
+    ), patch(
+        "bot.services.expense.add_expense_with_conversion", AsyncMock(side_effect=expenses)
+    ) as add_expense, patch(
+        "bot.services.cashback.calculate_expense_cashback", AsyncMock(return_value=0)
+    ), patch(
+        "bot.routers.expense.format_expense_added_message", AsyncMock(side_effect=["card-1", "card-2"])
+    ), patch(
+        "bot.routers.expense.send_message_with_cleanup", AsyncMock()
+    ) as send_message, patch(
+        "bot.routers.expense.send_expense_limit_alerts", AsyncMock()
+    ), patch(
+        "bot.routers.expense.get_text", side_effect=lambda key, lang="ru", **kwargs: key
+    ):
+        await expense_router.handle_voice_expense(
+            message,
+            state,
+            lang="ru",
+            voice_text=batch["transcript"],
+            voice_expense_batch=batch,
+        )
+
+    split_multiple.assert_not_called()
+    assert parse_single.await_count == 2
+    assert add_expense.await_count == 2
+    assert add_expense.await_args_list[0].kwargs["description"] == "Мороженое"
+    assert add_expense.await_args_list[0].kwargs["input_currency"] == "RUB"
+    assert send_message.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_handle_text_expense_structured_voice_reuses_old_price_for_missing_amount():
+    message = make_message("")
+    state = make_state()
+    profile = SimpleNamespace(accepted_privacy=True, currency="RUB", language_code="ru")
+    batch = {
+        "pipeline": "yandex_deepseek",
+        "transcript": "кальмар",
+        "items": [
+            {"description": "кальмар", "amount": None, "currency": None, "confidence": 0.82},
+        ],
+    }
+    category = SimpleNamespace(id=33)
+    expense = SimpleNamespace(id=301, amount=Decimal("250"), asave=AsyncMock())
+
+    with patch("bot.services.cashback_free_text.looks_like_cashback_free_text", return_value=False), patch(
+        "expenses.models.Profile.objects.aget", AsyncMock(return_value=profile)
+    ), patch(
+        "expenses.models.CategoryKeyword.objects.filter",
+        Mock(return_value=SimpleNamespace(aexists=AsyncMock(return_value=False))),
+    ), patch(
+        "bot.utils.expense_intent.is_show_expenses_request", return_value=(False, 0.0)
+    ), patch(
+        "bot.routers.expense.parse_expense_message", AsyncMock()
+    ) as parse_single, patch(
+        "bot.services.expense.find_similar_expenses",
+        AsyncMock(return_value=[{"amount": 250, "currency": "RUB", "category": "Прочие расходы"}]),
+    ) as find_similar, patch(
+        "bot.services.category.get_or_create_category", AsyncMock(return_value=category)
+    ), patch(
+        "bot.services.expense.add_expense_with_conversion", AsyncMock(return_value=expense)
+    ) as add_expense, patch(
+        "bot.services.cashback.calculate_expense_cashback", AsyncMock(return_value=0)
+    ), patch(
+        "bot.routers.expense.format_expense_added_message", AsyncMock(return_value="card")
+    ), patch(
+        "bot.routers.expense.send_message_with_cleanup", AsyncMock()
+    ), patch(
+        "bot.routers.expense.send_expense_limit_alerts", AsyncMock()
+    ), patch(
+        "bot.routers.expense.get_text", side_effect=lambda key, lang="ru", **kwargs: key
+    ):
+        await expense_router.handle_text_expense(
+            message,
+            state,
+            text=batch["transcript"],
+            lang="ru",
+            input_source="voice_ai",
+            voice_expense_batch=batch,
+        )
+
+    parse_single.assert_not_awaited()
+    find_similar.assert_awaited_once_with(message.from_user.id, "кальмар")
+    add_expense.assert_awaited_once()
+    assert add_expense.await_args.kwargs["amount"] == 250
+    assert add_expense.await_args.kwargs["description"] == "Кальмар"
+
+
+@pytest.mark.asyncio
+async def test_handle_text_expense_structured_voice_errors_when_missing_old_price():
+    message = make_message("")
+    state = make_state()
+    profile = SimpleNamespace(accepted_privacy=True, currency="RUB", language_code="ru")
+    batch = {
+        "pipeline": "yandex_deepseek",
+        "transcript": "неизвестная штука",
+        "items": [
+            {"description": "неизвестная штука", "amount": None, "currency": None, "confidence": 0.7},
+        ],
+    }
+
+    with patch("bot.services.cashback_free_text.looks_like_cashback_free_text", return_value=False), patch(
+        "expenses.models.Profile.objects.aget", AsyncMock(return_value=profile)
+    ), patch(
+        "expenses.models.CategoryKeyword.objects.filter",
+        Mock(return_value=SimpleNamespace(aexists=AsyncMock(return_value=False))),
+    ), patch(
+        "bot.utils.expense_intent.is_show_expenses_request", return_value=(False, 0.0)
+    ), patch(
+        "bot.services.expense.find_similar_expenses", AsyncMock(return_value=[])
+    ), patch(
+        "bot.services.expense.add_expense_with_conversion", AsyncMock()
+    ) as add_expense:
+        await expense_router.handle_text_expense(
+            message,
+            state,
+            text=batch["transcript"],
+            lang="ru",
+            input_source="voice_ai",
+            voice_expense_batch=batch,
+        )
+
+    add_expense.assert_not_awaited()
+    message.answer.assert_awaited_once()
+    assert "Не нашёл сумму" in message.answer.await_args.args[0]
+
+
+@pytest.mark.asyncio
 async def test_cancel_expense_input_clears_state_and_deletes_clarification_message():
     callback = make_callback()
     state = make_state()

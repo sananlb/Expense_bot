@@ -7,6 +7,7 @@ Middleware для автоматической транскрибации гол
 
 Параметры передаваемые в обработчики:
 - voice_text: str | None - распознанный текст из голосового сообщения
+- voice_expense_batch: dict | None - structured JSON batch для premium voice expense
 - voice_no_subscription: bool - True если у пользователя нет подписки
 - voice_transcribe_failed: bool - True если распознавание не удалось
 """
@@ -66,29 +67,61 @@ class VoiceToTextMiddleware(BaseMiddleware):
             except Exception:
                 lang = 'ru'
 
-        # Распознаём голосовое сообщение
+        current_state = None
+        fsm_state = data.get('state')
+        if fsm_state:
+            try:
+                current_state = await fsm_state.get_state()
+            except Exception as e:
+                logger.debug("[VoiceToText] Failed to read FSM state for %s: %s", log_safe_id(user_id, "user"), e)
+
+        # Распознаём голосовое сообщение. В активных FSM-состояниях нужен
+        # обычный transcript, а не expense batch.
         try:
-            from bot.services.voice_recognition import process_voice_for_expense
-            text = await process_voice_for_expense(event, event.bot, lang)
+            if current_state:
+                from bot.services.voice_recognition import process_voice_for_expense
+                text = await process_voice_for_expense(event, event.bot, lang)
 
-            if text:
-                text = text.strip()
+                if text:
+                    text = text.strip()
 
-            if text:
-                logger.info(
-                    "[VoiceToText] Voice transcribed for %s (%s)",
-                    log_safe_id(user_id, "user"),
-                    summarize_text(text),
-                )
-                data['voice_text'] = text
+                if text:
+                    logger.info(
+                        "[VoiceToText] Voice transcribed for %s (%s)",
+                        log_safe_id(user_id, "user"),
+                        summarize_text(text),
+                    )
+                    data['voice_text'] = text
 
-                # Инкрементируем счётчик голосовых в UserAnalytics
-                from bot.utils.analytics import increment_analytics_counter
-                await increment_analytics_counter(user_id, 'voice_messages')
+                    # Инкрементируем счётчик голосовых в UserAnalytics
+                    from bot.utils.analytics import increment_analytics_counter
+                    await increment_analytics_counter(user_id, 'voice_messages')
+                else:
+                    logger.warning("[VoiceToText] Failed to transcribe voice for %s", log_safe_id(user_id, "user"))
+                    data['voice_text'] = None
+                    data['voice_transcribe_failed'] = True
             else:
-                logger.warning("[VoiceToText] Failed to transcribe voice for %s", log_safe_id(user_id, "user"))
-                data['voice_text'] = None
-                data['voice_transcribe_failed'] = True
+                from bot.services.voice_recognition import process_voice_expense_batch
+                payload = await process_voice_expense_batch(event, event.bot, lang)
+
+                if payload:
+                    text = (payload.get('transcript') or '').strip()
+                    logger.info(
+                        "[VoiceToText] Voice expense batch for %s | pipeline=%s items=%s text=%s",
+                        log_safe_id(user_id, "user"),
+                        payload.get('pipeline'),
+                        len(payload.get('items') or []),
+                        summarize_text(text),
+                    )
+                    data['voice_text'] = text
+                    data['voice_expense_batch'] = payload
+
+                    from bot.utils.analytics import increment_analytics_counter
+                    await increment_analytics_counter(user_id, 'voice_messages')
+                else:
+                    logger.warning("[VoiceToText] Failed to parse voice batch for %s", log_safe_id(user_id, "user"))
+                    data['voice_text'] = None
+                    data['voice_transcribe_failed'] = True
 
         except Exception as e:
             logger.error("[VoiceToText] Error transcribing voice for %s: %s", log_safe_id(user_id, "user"), e)

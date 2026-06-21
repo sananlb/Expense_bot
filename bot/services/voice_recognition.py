@@ -86,6 +86,14 @@ class VoiceRecognitionService:
                 elapsed,
                 summarize_text(text),
             )
+            # Отладочный полный текст транскрипции (PII) — только при включённом флаге.
+            from django.conf import settings as _dj_settings
+            if getattr(_dj_settings, 'LOG_FULL_TRANSCRIPT', False):
+                logger.info(
+                    "[VoiceRecognition] %s | FULL TRANSCRIPT: %r",
+                    log_safe_id(user_id, "user"),
+                    text,
+                )
         else:
             logger.warning(
                 "[VoiceRecognition] %s | Lang: %s | Time: %.2fs | FAILED",
@@ -200,15 +208,9 @@ async def recognize_voice(message, bot, user_language: str = 'ru') -> Optional[s
         # Показываем индикатор "печатает..."
         await bot.send_chat_action(chat_id=message.chat.id, action="typing")
 
-        # Получаем файл
-        file_info = await bot.get_file(message.voice.file_id)
-        file_path = file_info.file_path
-
-        # Скачиваем файл в память
-        file_bytes = BytesIO()
-        await bot.download_file(file_path, file_bytes)
-        file_bytes.seek(0)
-        audio_bytes = file_bytes.read()
+        audio_bytes = await download_voice_audio(message, bot)
+        if not audio_bytes:
+            return None
 
         # Получаем user_id для логирования
         user_id = message.from_user.id
@@ -232,6 +234,21 @@ async def recognize_voice(message, bot, user_language: str = 'ru') -> Optional[s
 
     except Exception as e:
         logger.error("Ошибка при распознавании голоса: %s", e)
+        return None
+
+
+async def download_voice_audio(message, bot) -> Optional[bytes]:
+    """Download Telegram voice OGG/Opus file into memory."""
+    try:
+        file_info = await bot.get_file(message.voice.file_id)
+        file_path = file_info.file_path
+
+        file_bytes = BytesIO()
+        await bot.download_file(file_path, file_bytes)
+        file_bytes.seek(0)
+        return file_bytes.read()
+    except Exception as e:
+        logger.error("Ошибка при скачивании голосового сообщения: %s", e)
         return None
 
 
@@ -285,3 +302,66 @@ async def process_voice_for_expense(message, bot, user_language: str = 'ru') -> 
         return None
 
     return text
+
+
+async def process_voice_expense_batch(message, bot, user_language: str = 'ru') -> Optional[dict]:
+    """
+    Premium voice expense batch processing.
+
+    Main path: OpenRouter audio -> expense JSON.
+    Fallback: Yandex STT -> DeepSeek text split JSON.
+    """
+    try:
+        from django.conf import settings
+        max_seconds = getattr(settings, 'MAX_VOICE_DURATION_SECONDS', 60)
+    except Exception:
+        max_seconds = 60
+
+    if message.voice.duration > max_seconds:
+        if user_language == 'ru':
+            await message.answer(f"⚠️ Голосовое сообщение слишком длинное. Максимум {max_seconds} секунд.")
+        else:
+            await message.answer(f"⚠️ Voice message is too long. Maximum {max_seconds} seconds.")
+        return None
+
+    try:
+        await bot.send_chat_action(chat_id=message.chat.id, action="typing")
+
+        audio_bytes = await download_voice_audio(message, bot)
+        if not audio_bytes:
+            return None
+
+        user_id = message.from_user.id
+        duration = message.voice.duration
+        logger.info(
+            "[VOICE_BATCH_INPUT] %s | Duration: %ss | Lang: %s",
+            log_safe_id(user_id, "user"),
+            duration,
+            user_language,
+        )
+
+        from .voice_expense_extraction import VoiceExpenseExtractionService
+
+        payload = await VoiceExpenseExtractionService.extract(
+            audio_bytes,
+            user_language=user_language,
+            user_id=user_id,
+        )
+        if payload:
+            return payload
+
+        if user_language == 'ru':
+            await message.answer(
+                "❌ Не удалось разобрать голосовые траты.\n\n"
+                "Попробуйте повторить голосом с ценами или отправьте текстом через запятую."
+            )
+        else:
+            await message.answer(
+                "❌ Failed to parse voice expenses.\n\n"
+                "Try voice again with prices or send text separated by commas."
+            )
+        return None
+
+    except Exception as e:
+        logger.error("Ошибка при обработке voice expense batch: %s", e)
+        return None

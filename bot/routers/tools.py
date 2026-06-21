@@ -14,6 +14,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import tools_keyboard
+from bot.services.subscription import check_subscription
 from bot.utils import get_text, get_user_language
 from bot.utils.message_utils import send_message_with_cleanup
 from bot.utils.state_utils import clear_state_keep_cashback
@@ -70,10 +71,12 @@ def _collect_active_tools(user_id: int) -> list[str]:
     return active
 
 
-async def _tools_text(user_id: int, lang: str) -> str:
+async def _tools_text(user_id: int, lang: str, has_subscription: bool) -> str:
     """Текст меню инструментов: заголовок + перечень активных инструментов с ✅."""
     text = f"<b>{get_text('tools_menu', lang)}</b>"
     active = await _collect_active_tools(user_id)
+    if not has_subscription:
+        active = [key for key in active if key != 'goal']
     if active:
         lines = "\n".join(
             get_text(_TOOL_LABEL_KEYS[key], lang)
@@ -89,11 +92,12 @@ async def cmd_tools(message: Message, state: FSMContext, lang: str = 'ru'):
     """Показать меню инструментов по команде /tools."""
     await clear_state_keep_cashback(state)
     lang = await get_user_language(message.from_user.id)
+    has_subscription = await check_subscription(message.from_user.id)
     await send_message_with_cleanup(
         message,
         state,
-        await _tools_text(message.from_user.id, lang),
-        reply_markup=tools_keyboard(lang),
+        await _tools_text(message.from_user.id, lang, has_subscription),
+        reply_markup=tools_keyboard(lang, has_subscription=has_subscription),
         parse_mode="HTML",
     )
 
@@ -103,10 +107,11 @@ async def callback_tools(callback: CallbackQuery, state: FSMContext, lang: str =
     """Показать меню инструментов по callback (кнопка «Назад» из под-экранов)."""
     await clear_state_keep_cashback(state)
     lang = await get_user_language(callback.from_user.id)
+    has_subscription = await check_subscription(callback.from_user.id)
     try:
         await callback.message.edit_text(
-            await _tools_text(callback.from_user.id, lang),
-            reply_markup=tools_keyboard(lang),
+            await _tools_text(callback.from_user.id, lang, has_subscription),
+            reply_markup=tools_keyboard(lang, has_subscription=has_subscription),
             parse_mode="HTML",
         )
     except TelegramBadRequest:

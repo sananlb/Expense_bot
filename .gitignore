@@ -86,6 +86,10 @@ landing/*.png
 landing/*.gif
 landing/*.webp
 
+# Large local media and downloaded desktop tools
+*.mp4
+tools/
+
 # MCP config (local only)
 .mcp.json
 
@@ -109,6 +113,10 @@ nul
 
 # Claude Code
 .claude/MONTHLY_INSIGHTS_FIX_REPORT.md
+.agent/
+landing/tmpclaude-*-cwd
+start_claude_telegram.bat
+start_claude_telegram.ps1
 
 # Local development entry point (not for server)
 run_bot.py
@@ -121,3 +129,4 @@ archive_20260128/
 .codex-review-result.md.injected
 .codex-plan-review-count
 .codex-code-review-count
+.codex-task

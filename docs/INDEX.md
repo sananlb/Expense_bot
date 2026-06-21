@@ -1,7 +1,7 @@
 # Expense Bot — карта документации
 
-**Обновлено:** 2026-06-14
-**Всего файлов:** 92 (current: 18, active: 20, reference: 20, historical: 29, deprecated: 5)
+**Обновлено:** 2026-06-21
+**Всего файлов:** 93 (current: 18, active: 21, reference: 20, historical: 29, deprecated: 5)
 
 ---
 
@@ -48,8 +48,9 @@
 - [EXPORT_IMPLEMENTATION_PLAN.md](EXPORT_IMPLEMENTATION_PLAN.md) — экспорт CSV/XLSX с графиками, Premium-only, openpyxl
 - [MONTHLY_REPORTS_SHARE_FEATURE.md](MONTHLY_REPORTS_SHARE_FEATURE.md) — выбор формата отчёта (CSV/Excel/PDF) через push-кнопки 1 числа
 - [CURRENCY_CONVERSION_INTEGRATION_PLAN.md](CURRENCY_CONVERSION_INTEGRATION_PLAN.md) — автоконвертация валют, ЦБ РФ + Fawaz API, original_amount поля
-- [GROUP_CHAT_SUPPORT_PLAN.md](GROUP_CHAT_SUPPORT_PLAN.md) — работа бота в Telegram-группах без привязки к household, MVP
+- [GROUP_CHAT_SUPPORT_PLAN.md](GROUP_CHAT_SUPPORT_PLAN.md) — слэш-ввод трат/доходов в группе (`/кофе 200`, `/зарплата +50000`) → личный бюджет отправителя; SharedLedger и групповые режимы отложены
 - [PROMOCODE_REWORK_PLAN.md](PROMOCODE_REWORK_PLAN.md) — атомарное применение промокодов, валидация, F-выражения
+- [VOICE_BATCH_SPLIT_RESEARCH.md](VOICE_BATCH_SPLIT_RESEARCH.md) — разбиение голосового батча: проблема «1 литр», unit-aware splitter + AI fallback, анализ вариантов A/B/C/D
 
 ### architecture
 - [UNIFIED_CATEGORY_LOGIC_MIGRATION_PLAN.md](UNIFIED_CATEGORY_LOGIC_MIGRATION_PLAN.md) — перенос keywords из кода в БД для всех пользователей

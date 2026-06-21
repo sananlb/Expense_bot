@@ -6,6 +6,7 @@ from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
 import logging
+import threading
 
 from expenses.models import Expense, Profile, ExpenseCategory, Cashback
 from django.db import transaction
@@ -33,6 +34,28 @@ except ImportError:
     update_keywords_weights = None
 
 logger = logging.getLogger(__name__)
+
+
+def _enqueue_keyword_learning(expense_id: int, category_id: int) -> None:
+    """Queue keyword learning without blocking the user-facing request path."""
+    if not learn_keywords_on_create:
+        return
+
+    def _send_task() -> None:
+        try:
+            learn_keywords_on_create.apply_async(
+                args=(expense_id, category_id),
+                countdown=0,
+            )
+            logger.info("Triggered async keywords learning for expense %s", expense_id)
+        except Exception as e:
+            logger.warning("Failed to trigger keywords learning task: %s", e)
+
+    threading.Thread(
+        target=_send_task,
+        name=f"keyword-learning-enqueue-{expense_id}",
+        daemon=True,
+    ).start()
 
 
 @sync_to_async
@@ -179,15 +202,7 @@ def create_expense(
 
         # Если категория определена AI, обучаем систему (сохраняем слова в БД)
         if ai_categorized and category_id and description and learn_keywords_on_create:
-            try:
-                # Запускаем обучение в фоне через Celery (не блокирует пользователя!)
-                learn_keywords_on_create.apply_async(
-                    args=(expense.id, category_id),
-                    countdown=0
-                )
-                logger.info("Triggered async keywords learning for expense %s", expense.id)
-            except Exception as e:
-                logger.warning("Failed to trigger keywords learning task: %s", e)
+            _enqueue_keyword_learning(expense.id, category_id)
 
         # Сбрасываем флаг напоминания о внесении трат
         from expenses.tasks import clear_expense_reminder

@@ -338,6 +338,11 @@ YANDEX_API_KEY = os.getenv('YANDEX_API_KEY', '')
 YANDEX_FOLDER_ID = os.getenv('YANDEX_FOLDER_ID', '')
 YANDEX_SPEECH_TOPIC = os.getenv('YANDEX_SPEECH_TOPIC', 'general:rc')
 
+# Отладка: логировать ПОЛНЫЙ текст распознанной транскрипции голоса.
+# По умолчанию ВЫКЛЮЧЕНО (транскрипция — PII). Включать только для локальной
+# отладки через переменную окружения LOG_FULL_TRANSCRIPT=1.
+LOG_FULL_TRANSCRIPT = os.getenv('LOG_FULL_TRANSCRIPT', 'False').lower() in ('1', 'true', 'yes')
+
 # OpenRouter модели управляются централизованно в ai_selector.py
 # Для изменения модели используйте OPENROUTER_MODEL_DEFAULT или OPENROUTER_MODEL_VOICE в .env
 

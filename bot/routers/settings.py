@@ -405,6 +405,20 @@ async def total_goal_change(
 ):
     """Изменяет общую цель дохода."""
     lang = await get_user_language(callback.from_user.id)
+    from bot.services.subscription import (
+        check_subscription,
+        get_subscription_button,
+        subscription_required_message,
+    )
+    if not await check_subscription(callback.from_user.id):
+        await callback.message.edit_text(
+            subscription_required_message(),
+            reply_markup=get_subscription_button(),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
+
     await _prompt_total_goal_amount(callback, state, lang, change=True)
     await callback.answer()
 
@@ -434,9 +448,23 @@ async def total_goal_entry(
 ):
     """Открывает общую цель дохода из меню «Инструменты»."""
     from bot.services.income_goal import get_goal_status
+    from bot.services.subscription import (
+        check_subscription,
+        get_subscription_button,
+        subscription_required_message,
+    )
     from bot.utils.income_goal_display import format_goal_screen_body
 
     lang = await get_user_language(callback.from_user.id)
+    if not await check_subscription(callback.from_user.id):
+        await callback.message.edit_text(
+            subscription_required_message(),
+            reply_markup=get_subscription_button(),
+            parse_mode="HTML",
+        )
+        await callback.answer()
+        return
+
     status = await get_goal_status(callback.from_user.id, None)
     header = get_text('total_goal_header', lang)
     if status is not None:

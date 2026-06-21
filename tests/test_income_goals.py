@@ -409,7 +409,7 @@ def test_tools_keyboard_contains_income_goal_entry():
     # цель идёт сразу после лимита.
     from bot.keyboards import tools_keyboard
 
-    keyboard = tools_keyboard(lang="ru")
+    keyboard = tools_keyboard(lang="ru", has_subscription=True)
     callbacks = [
         button.callback_data
         for row in keyboard.inline_keyboard

@@ -695,6 +695,202 @@ class UnifiedAIService(AIBaseService):
             )
             return None
 
+    async def extract_voice_expenses(
+        self,
+        audio_bytes: bytes,
+        model: Optional[str] = None,
+        user_context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Extract structured expense items directly from a voice message.
+
+        Returns the raw JSON object from the model. Local schema validation is
+        performed by VoiceExpenseExtractionService.
+        """
+        if self.provider_name != 'openrouter':
+            logger.error("[%s] extract_voice_expenses поддерживается только для OpenRouter", self.provider_name)
+            return None
+
+        user_id = user_context.get('user_id') if user_context else None
+        user_language = user_context.get('language', 'ru') if user_context else 'ru'
+        start_time = time.time()
+
+        try:
+            mp3_bytes = await self._convert_ogg_to_mp3(audio_bytes)
+            if not mp3_bytes:
+                logger.error("[OpenRouter] Не удалось конвертировать OGG в MP3 для expense JSON")
+                return None
+
+            audio_base64 = base64.b64encode(mp3_bytes).decode('utf-8')
+            model_name = model or get_model('voice', self.provider_name)
+
+            from bot.services.voice_expense_extraction import (
+                VOICE_EXPENSE_AUDIO_PROMPT,
+                parse_json_object,
+            )
+
+            system_prompt = (
+                "You are a conservative finance data extraction engine. "
+                "Return only valid JSON. Never invent prices or currencies."
+            )
+            user_prompt = (
+                f"Language hint: {user_language}\n\n"
+                f"{VOICE_EXPENSE_AUDIO_PROMPT}"
+            )
+
+            messages: List[Dict[str, Any]] = [
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_prompt},
+                        {
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": audio_base64,
+                                "format": "mp3",
+                            },
+                        },
+                    ],
+                },
+            ]
+
+            async def create_call(client):
+                return await client.chat.completions.create(
+                    model=model_name,
+                    messages=messages,  # type: ignore
+                    response_format={"type": "json_object"},
+                    max_tokens=1200,
+                    temperature=0.0,
+                )
+
+            response, response_time, _ = await self._make_api_call(
+                create_call, 'extract_voice_expenses'
+            )
+
+            content = response.choices[0].message.content
+            result = parse_json_object(content)
+            success = result is not None
+
+            self._log_metrics(
+                operation='extract_voice_expenses',
+                response_time=response_time,
+                success=success,
+                model=model_name,
+                input_len=len(audio_bytes),
+                tokens=response.usage.total_tokens if hasattr(response, 'usage') and response.usage else None,
+                user_id=user_id,
+                error=None if success else ValueError('Invalid JSON object')
+            )
+
+            logger.info(
+                "[OpenRouter] Voice expense JSON in %.2fs: %s",
+                response_time,
+                summarize_text(content or ""),
+            )
+            return result
+
+        except Exception as e:
+            response_time = time.time() - start_time
+            logger.error("[OpenRouter] Ошибка voice expense JSON за %.2fs: %s", response_time, e)
+            self._log_metrics(
+                operation='extract_voice_expenses',
+                response_time=response_time,
+                success=False,
+                error=e,
+                user_id=user_id
+            )
+            return None
+
+    async def split_expense_text_to_items(
+        self,
+        text: str,
+        model: Optional[str] = None,
+        user_context: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Split a transcribed/text expense batch into strict JSON items.
+
+        Used as the only fallback after Yandex STT for premium voice input.
+        """
+        user_id = user_context.get('user_id') if user_context else None
+        user_language = user_context.get('language', 'ru') if user_context else 'ru'
+        start_time = time.time()
+
+        try:
+            model_name = model or get_model('default', self.provider_name)
+
+            from bot.services.voice_expense_extraction import (
+                TEXT_EXPENSE_SPLIT_PROMPT,
+                parse_json_object,
+            )
+
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a conservative finance data extraction engine. "
+                        "Return only valid JSON. Never invent prices or currencies."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Language hint: {user_language}\n\n"
+                        f"{TEXT_EXPENSE_SPLIT_PROMPT}\n\n"
+                        f"User text:\n{text}"
+                    ),
+                },
+            ]
+
+            async def create_call(client):
+                return await client.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    response_format={"type": "json_object"},
+                    max_tokens=1200,
+                    temperature=0.0,
+                )
+
+            response, response_time, _ = await self._make_api_call(
+                create_call, 'split_expense_text_to_items'
+            )
+
+            content = response.choices[0].message.content
+            result = parse_json_object(content)
+            success = result is not None
+
+            self._log_metrics(
+                operation='split_expense_text_to_items',
+                response_time=response_time,
+                success=success,
+                model=model_name,
+                input_len=len(text),
+                tokens=response.usage.total_tokens if hasattr(response, 'usage') and response.usage else None,
+                user_id=user_id,
+                error=None if success else ValueError('Invalid JSON object')
+            )
+
+            logger.info(
+                "[%s] Expense text split in %.2fs: %s",
+                self.provider_name,
+                response_time,
+                summarize_text(content or ""),
+            )
+            return result
+
+        except Exception as e:
+            response_time = time.time() - start_time
+            logger.error("[%s] Ошибка expense text split за %.2fs: %s", self.provider_name, response_time, e)
+            self._log_metrics(
+                operation='split_expense_text_to_items',
+                response_time=response_time,
+                success=False,
+                error=e,
+                user_id=user_id
+            )
+            return None
+
     async def _convert_ogg_to_mp3(self, ogg_bytes: bytes) -> Optional[bytes]:
         """
         Конвертирует OGG Opus в MP3 через pydub/ffmpeg.

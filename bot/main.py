@@ -39,6 +39,7 @@ from .routers import (
     blogger_stats_router,
     inline_router,
     tools_router,
+    group_router,
 )
 from .middlewares import (
     DatabaseMiddleware,
@@ -49,6 +50,7 @@ from .middlewares import (
     LoggingMiddleware,
     PrivacyCheckMiddleware,
     BotUnblockMiddleware,
+    GroupChatGuardMiddleware,
 )
 from .middlewares.fsm_cleanup import FSMCleanupMiddleware
 from .middlewares.state_reset import StateResetMiddleware
@@ -163,6 +165,14 @@ def create_dispatcher() -> Dispatcher:
     dp.message.outer_middleware(BotUnblockMiddleware())
     dp.callback_query.outer_middleware(BotUnblockMiddleware())
 
+    # 0.5. Group Chat Guard - пропускает только !-ввод и прямой mention бота.
+    # ПЕРВЫЙ обычный message-middleware: должен сработать ДО PrivacyCheck/Database и
+    # отбросить всю групповую болтовню/медиа БЕЗ обращения к БД.
+    # FSM-состояние (data['state']/'raw_state') кладётся FSMContextMiddleware на уровне
+    # наблюдателя update (Dispatcher), т.е. ВЫШЕ любых message-middleware — поэтому
+    # привратник имеет к нему доступ даже как обычный .middleware(). См. group_guard.py.
+    dp.message.middleware(GroupChatGuardMiddleware())
+
     # 1. Activity Tracker - отслеживает активность и отправляет уведомления админу
     activity_tracker = ActivityTrackerMiddleware()
     dp.message.middleware(activity_tracker)
@@ -218,6 +228,9 @@ def create_dispatcher() -> Dispatcher:
     dp.message.middleware(StateResetMiddleware())
     
     # Подключение роутеров (порядок важен для приоритета обработки)
+    # Групповой роутер - ПЕРВЫМ: обрабатывает !-ввод и прямые mention. Slash-сообщения
+    # дропаются guard-мидлварью, поэтому личные команды не раскрывают данные в группе.
+    dp.include_router(group_router)
     dp.include_router(start_router)
     dp.include_router(menu_router)
     dp.include_router(category_router)  # Перемещаем выше expense_router
@@ -291,7 +304,7 @@ async def main_webhook():
         try:
             await bot.set_webhook(
                 url=full_webhook_url,
-                allowed_updates=["message", "callback_query", "pre_checkout_query", "inline_query", "chosen_inline_result"],
+                allowed_updates=["message", "callback_query", "pre_checkout_query", "inline_query", "chosen_inline_result", "my_chat_member"],
                 drop_pending_updates=False,
                 request_timeout=15,
             )

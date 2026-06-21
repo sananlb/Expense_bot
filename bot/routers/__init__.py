@@ -16,8 +16,10 @@ from .household import router as household_router
 from .blogger_stats import router as blogger_stats_router
 from .inline_router import router as inline_router
 from .tools import router as tools_router
+from .group import router as group_router
 
 __all__ = [
+    "group_router",
     "start_router",
     "menu_router",
     "expense_router",
