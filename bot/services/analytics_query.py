@@ -18,6 +18,7 @@ from django.db import transaction
 from asgiref.sync import sync_to_async
 
 from expenses.models import Expense, Income, Profile, ExpenseCategory, IncomeCategory
+from bot.utils.currency_display import operation_currency_fields
 from bot.utils.language import get_text
 from bot.utils.logging_safe import log_safe_id
 
@@ -450,6 +451,7 @@ class AnalyticsQueryExecutor:
                 'amount': float(expense.amount),
                 'category': expense.category.get_display_name(user_lang) if expense.category else None,
                 'description': expense.description,
+                **operation_currency_fields(expense),
                 'currency': expense.currency or default_currency
             })
 
@@ -460,6 +462,7 @@ class AnalyticsQueryExecutor:
                 'amount': float(income.amount),
                 'category': income.category.get_display_name(user_lang) if income.category else None,
                 'description': income.description,
+                **operation_currency_fields(income),
                 'currency': income.currency or default_currency
             })
 
@@ -598,6 +601,9 @@ class AnalyticsQueryExecutor:
                     result['amount'] = float(item.amount)
                     result['category'] = item.category.get_display_name(user_lang) if item.category else None
                     result['description'] = item.description
+
+                # Валюта операции и сумма в валюте ввода (если была автоконвертация)
+                result.update(operation_currency_fields(item))
 
                 results.append(result)
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 from datetime import datetime
 from bot.utils.language import get_text
+from bot.utils.currency_display import format_original_amount_suffix
 from bot.utils.formatters import format_currency
 from bot.utils.logging_safe import log_safe_id
 import logging
@@ -200,13 +201,16 @@ def _format_operations_list(result: Dict, title: str, subtitle: str, lang: str =
             op_type = op.get('type', 'expense')
             currency = op.get('currency') or default_currency
 
+            # Сумма в валюте ввода, если операция была сконвертирована
+            original_suffix = format_original_amount_suffix(op)
+
             if op_type == 'income':
                 amount_str = format_currency(abs(amount), currency)
-                result_parts.append(f"  {time_str} — <b>{description}</b> <b>+{amount_str}</b>")
+                result_parts.append(f"  {time_str} — <b>{description}</b> <b>+{amount_str}</b>{original_suffix}")
                 day_incomes[currency] = day_incomes.get(currency, 0) + abs(amount)
             else:
                 amount_str = format_currency(abs(amount), currency)
-                result_parts.append(f"  {time_str} — {description} {amount_str}")
+                result_parts.append(f"  {time_str} — {description} {amount_str}{original_suffix}")
                 day_expenses[currency] = day_expenses.get(currency, 0) + abs(amount)
 
         # Итоги за день
@@ -537,7 +541,7 @@ def format_function_result(func_name: str, result: Dict) -> str:
         description = result.get('description', '')
         lines = [f"💸 {get_text('biggest_expense', lang)}"]
         lines.append(f"{get_text('date', lang)}: {date_str}{(' ' + time_str) if time_str else ''}")
-        lines.append(f"{get_text('amount', lang)}: {format_currency(amount, currency)}")
+        lines.append(f"{get_text('amount', lang)}: {format_currency(amount, currency)}{format_original_amount_suffix(result)}")
         lines.append(f"{get_text('category', lang)}: {category}")
         if description:
             lines.append(f"{get_text('description', lang)}: {description}")
@@ -552,7 +556,7 @@ def format_function_result(func_name: str, result: Dict) -> str:
         description = inc.get('description', '')
         lines = [f"💰 {get_text('biggest_income', lang)}"]
         lines.append(f"{get_text('date', lang)}: {date_str}")
-        lines.append(f"{get_text('amount', lang)}: {format_currency(amount, currency)}")
+        lines.append(f"{get_text('amount', lang)}: {format_currency(amount, inc.get('currency') or currency)}{format_original_amount_suffix(inc)}")
         lines.append(f"{get_text('category', lang)}: {category}")
         if description:
             lines.append(f"{get_text('description', lang)}: {description}")
@@ -1111,7 +1115,7 @@ def _format_analytics_query_result(result: Dict) -> str:
         if entity == 'expenses':
             lines.append("💰 Результат поиска:")
             lines.append(f"Дата: {item.get('date', 'N/A')}")
-            lines.append(f"Сумма: {format_currency(item.get('amount', 0), item_currency)}")
+            lines.append(f"Сумма: {format_currency(item.get('amount', 0), item_currency)}{format_original_amount_suffix(item)}")
             if 'category' in item:
                 lines.append(f"Категория: {item.get('category', get_text('no_category', lang))}")
             if 'description' in item:
@@ -1119,7 +1123,7 @@ def _format_analytics_query_result(result: Dict) -> str:
         elif entity == 'incomes':
             lines.append("💵 Результат поиска:")
             lines.append(f"Дата: {item.get('date', 'N/A')}")
-            lines.append(f"Сумма: {format_currency(item.get('amount', 0), item_currency)}")
+            lines.append(f"Сумма: {format_currency(item.get('amount', 0), item_currency)}{format_original_amount_suffix(item)}")
             if 'category' in item:
                 lines.append(f"Категория: {item.get('category', get_text('no_category', lang))}")
             if 'description' in item:
@@ -1144,13 +1148,15 @@ def _format_analytics_query_result(result: Dict) -> str:
             description = item.get('description', '')
             item_currency = item.get('currency') or currency
 
+            original_suffix = format_original_amount_suffix(item)
+
             line = f"{i}. {date_str}"
             if entity == 'operations':
                 op_type = item.get('type', '')
                 sign = '-' if op_type == 'expense' else '+'
-                line += f" {sign}{format_currency(amount, item_currency)}"
+                line += f" {sign}{format_currency(amount, item_currency)}{original_suffix}"
             else:
-                line += f" • {format_currency(amount, item_currency)}"
+                line += f" • {format_currency(amount, item_currency)}{original_suffix}"
 
             if category:
                 line += f" • {category}"

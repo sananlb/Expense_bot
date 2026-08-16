@@ -6,6 +6,7 @@ from typing import List, Dict, Any
 from datetime import date, datetime
 from decimal import Decimal
 from . import get_text
+from .currency_display import format_original_amount_suffix
 
 
 logger = logging.getLogger(__name__)
@@ -135,12 +136,8 @@ def format_expenses_diary_style(
             currency_symbol = get_currency_symbol(exp['currency'])
             amount_str += f' {currency_symbol}'
 
-            # Добавляем оригинальную сумму если была конвертация
-            original_suffix = ""
-            if exp.get('original_amount') and exp.get('original_currency'):
-                from bot.utils.formatters import format_currency
-                original_formatted = format_currency(exp['original_amount'], exp['original_currency'])
-                original_suffix = f" <i>({original_formatted})</i>"
+            # Добавляем сумму в валюте ввода если была конвертация
+            original_suffix = format_original_amount_suffix(exp)
 
             text += f"  {exp['time']} — {exp['description']} {amount_str}{original_suffix}\n"
         
@@ -292,7 +289,10 @@ def format_expenses_from_dict_list(
             currency_symbol = get_currency_symbol(currency)
             amount_str += f' {currency_symbol}'
 
-            result_parts.append(f"  {time_str} — {description} {amount_str}")
+            # Добавляем сумму в валюте ввода если была конвертация
+            original_suffix = format_original_amount_suffix(exp_data)
+
+            result_parts.append(f"  {time_str} — {description} {amount_str}{original_suffix}")
             day_totals[currency] = day_totals.get(currency, 0) + amount
 
         # Добавляем итог за день

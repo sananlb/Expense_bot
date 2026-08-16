@@ -7,6 +7,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from . import get_text
 from .category_helpers import get_category_display_name
+from .currency_display import format_original_amount_suffix
 
 
 logger = logging.getLogger(__name__)
@@ -153,12 +154,8 @@ def format_incomes_diary_style(
             currency_symbol = get_currency_symbol(inc['currency'])
             amount_str += f' {currency_symbol}'
 
-            # Добавляем оригинальную сумму если была конвертация
-            original_suffix = ""
-            if inc.get('original_amount') and inc.get('original_currency'):
-                from bot.utils.formatters import format_currency
-                original_formatted = format_currency(inc['original_amount'], inc['original_currency'])
-                original_suffix = f" <i>({original_formatted})</i>"
+            # Добавляем сумму в валюте ввода если была конвертация
+            original_suffix = format_original_amount_suffix(inc)
 
             # Форматируем строку дохода
             text += f"  {inc['time']} — +{inc['description']} {amount_str}{original_suffix}\n"
@@ -282,12 +279,8 @@ def format_incomes_from_dict_list(
             amount_str = f"{amount:,.0f}".replace(',', ' ')
             curr_symbol = get_currency_symbol(currency)
 
-            # Добавляем оригинальную сумму если была конвертация
-            original_suffix = ""
-            if income.get('original_amount') and income.get('original_currency'):
-                from bot.utils.formatters import format_currency
-                original_formatted = format_currency(income['original_amount'], income['original_currency'])
-                original_suffix = f" <i>({original_formatted})</i>"
+            # Добавляем сумму в валюте ввода если была конвертация
+            original_suffix = format_original_amount_suffix(income)
 
             # Доходы делаем жирными (как в дневнике)
             result_parts.append(f"  {time_str} — <b>{description}</b> <b>+{amount_str} {curr_symbol}</b>{original_suffix}")

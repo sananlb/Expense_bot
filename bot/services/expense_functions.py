@@ -10,6 +10,7 @@ from expenses.models import Expense, Profile, Income, IncomeCategory, ExpenseCat
 from django.db.models import Sum, Avg, Max, Min, Count, Q
 from collections import defaultdict
 from bot.utils.category_helpers import get_category_display_name
+from bot.utils.currency_display import operation_currency_fields
 from bot.utils.language import get_user_language, get_text
 from bot.utils.logging_safe import log_safe_id, summarize_text
 import logging
@@ -179,7 +180,7 @@ def _format_search_results(expenses, lang: str) -> tuple:
             'amount': amount,
             'category': get_category_display_name(exp.category, lang) if exp.category else get_text('no_category', lang),
             'description': exp.description,
-            'currency': exp.currency
+            **operation_currency_fields(exp)
         })
 
     return results, total_amount
@@ -329,7 +330,8 @@ class ExpenseFunctions:
                     'time': exp.expense_time.strftime('%H:%M') if exp.expense_time else None,
                     'amount': float(exp.amount),
                     'category': category_name,
-                    'description': exp.description
+                    'description': exp.description,
+                    **operation_currency_fields(exp)
                 })
             
             # Добавляем день недели
@@ -929,7 +931,8 @@ class ExpenseFunctions:
                     'amount': float(exp.amount),
                     # Убираем категорию для уменьшения объема данных
                     # 'category': exp.category.name if exp.category else get_text('no_category', profile.language_code or 'ru'),
-                    'description': exp.description
+                    'description': exp.description,
+                    **operation_currency_fields(exp)
                 })
             
             response = {
@@ -1009,7 +1012,7 @@ class ExpenseFunctions:
                 'amount': float(max_expense.amount),
                 'category': get_category_display_name(max_expense.category, profile.language_code or 'ru') if max_expense.category else get_text('no_category', profile.language_code or 'ru'),
                 'description': max_expense.description,
-                'currency': max_expense.currency
+                **operation_currency_fields(max_expense)
             }
         except Exception as e:
             logger.error(f"Error in get_max_single_expense: {e}")
@@ -1071,7 +1074,7 @@ class ExpenseFunctions:
                 'amount': float(min_expense.amount),
                 'category': get_category_display_name(min_expense.category, profile.language_code or 'ru') if min_expense.category else get_text('no_category', profile.language_code or 'ru'),
                 'description': min_expense.description,
-                'currency': min_expense.currency
+                **operation_currency_fields(min_expense)
             }
         except Exception as e:
             logger.error(f"Error in get_min_single_expense: {e}")
@@ -1345,9 +1348,10 @@ class ExpenseFunctions:
                     'date': exp.expense_date.isoformat(),
                     'amount': float(exp.amount),
                     'category': get_category_display_name(exp.category, profile.language_code or 'ru') if exp.category else get_text('no_category', profile.language_code or 'ru'),
-                    'description': exp.description
+                    'description': exp.description,
+                    **operation_currency_fields(exp)
                 })
-            
+
             response = {
                 'success': True,
                 'min_amount': min_amount,
@@ -1661,9 +1665,9 @@ class ExpenseFunctions:
                     'amount': float(exp.amount),
                     'category': get_category_display_name(exp.category, lang) if exp.category else get_text('no_category', profile.language_code or 'ru'),
                     'description': exp.description,
-                    'currency': exp.currency
+                    **operation_currency_fields(exp)
                 })
-            
+
             return {
                 'success': True,
                 'user_id': user_id,
@@ -1875,9 +1879,9 @@ class ExpenseFunctions:
                     'amount': float(income.amount),
                     'category': get_category_display_name(income.category, lang) if income.category else get_text('no_category', profile.language_code or 'ru'),
                     'description': income.description,
-                    'currency': income.currency
+                    **operation_currency_fields(income)
                 })
-            
+
             return {
                 'success': True,
                 'user_id': user_id,
@@ -1930,7 +1934,8 @@ class ExpenseFunctions:
                 details.append({
                     'amount': float(inc.amount),
                     'description': inc.description or get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('income', profile.language_code or 'ru'),
-                    'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru')
+                    'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru'),
+                    **operation_currency_fields(inc)
                 })
             
             return {
@@ -2038,7 +2043,8 @@ class ExpenseFunctions:
                     'amount': float(max_income.amount),
                     'description': max_income.description or get_text('income', profile.language_code or 'ru'),
                     'category': get_category_display_name(max_income.category, profile.language_code or 'ru') if max_income.category else get_text('no_category', profile.language_code or 'ru'),
-                    'date': max_income.income_date.isoformat()
+                    'date': max_income.income_date.isoformat(),
+                    **operation_currency_fields(max_income)
                 }
             }
         except Exception as e:
@@ -2094,7 +2100,8 @@ class ExpenseFunctions:
                     'amount': float(min_income.amount),
                     'description': min_income.description or get_text('income', profile.language_code or 'ru'),
                     'category': get_category_display_name(min_income.category, profile.language_code or 'ru') if min_income.category else get_text('no_category', profile.language_code or 'ru'),
-                    'date': min_income.income_date.isoformat()
+                    'date': min_income.income_date.isoformat(),
+                    **operation_currency_fields(min_income)
                 }
             }
         except Exception as e:
@@ -2283,7 +2290,8 @@ class ExpenseFunctions:
                     'date': inc.income_date.isoformat(),
                     'amount': float(inc.amount),
                     'description': inc.description or get_text('income', profile.language_code or 'ru'),
-                    'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru')
+                    'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru'),
+                    **operation_currency_fields(inc)
                 })
 
             # Вычисляем сравнение с предыдущим периодом (если указаны даты)
@@ -2641,9 +2649,10 @@ class ExpenseFunctions:
                     'date': inc.income_date.isoformat(),
                     'amount': float(inc.amount),
                     'description': inc.description or get_text('income', profile.language_code or 'ru'),
-                    'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru')
+                    'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru'),
+                    **operation_currency_fields(inc)
                 })
-            
+
             total = queryset.aggregate(Sum('amount'))['amount__sum'] or Decimal('0')
             
             return {
@@ -2823,7 +2832,8 @@ class ExpenseFunctions:
                     'date': inc.income_date.isoformat(),
                     'amount': amount,
                     'description': inc.description or get_text('income', profile.language_code or 'ru'),
-                    'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru')
+                    'category': get_category_display_name(inc.category, profile.language_code or 'ru') if inc.category else get_text('no_category', profile.language_code or 'ru'),
+                    **operation_currency_fields(inc)
                 })
             
             return {
@@ -2937,7 +2947,7 @@ class ExpenseFunctions:
                     'amount': -float(exp.amount),  # Отрицательное значение для расходов
                     'category': get_category_display_name(exp.category, lang) if exp.category else get_text('no_category', profile.language_code or 'ru'),
                     'description': exp.description,
-                    'currency': exp.currency
+                    **operation_currency_fields(exp)
                 })
             
             # Добавляем доходы
@@ -2949,7 +2959,7 @@ class ExpenseFunctions:
                     'amount': float(income.amount),  # Положительное значение для доходов
                     'category': get_category_display_name(income.category, lang) if income.category else get_text('no_category', profile.language_code or 'ru'),
                     'description': income.description,
-                    'currency': income.currency
+                    **operation_currency_fields(income)
                 })
             
             # Сортируем по дате и времени (новые первыми)
