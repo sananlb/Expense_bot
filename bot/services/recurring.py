@@ -220,7 +220,8 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
                     original_currency=orig_currency,
                     exchange_rate_used=rate,
                     description=f"[Ежемесячный] {payment.description}",
-                    income_date=today
+                    income_date=today,
+                    is_recurring=True,
                 )
                 operation_type = 'income'
 
@@ -239,7 +240,8 @@ def process_recurring_payments_for_today() -> tuple[int, list]:
                     exchange_rate_used=rate,
                     description=f"[Ежемесячный] {payment.description}",
                     expense_date=today,
-                    expense_time=datetime.now().time()
+                    expense_time=datetime.now().time(),
+                    is_recurring=True,
                 )
                 operation_type = 'expense'
 

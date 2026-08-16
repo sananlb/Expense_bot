@@ -42,19 +42,22 @@ def calculate_top5_sync(profile: Profile, window_start: date, window_end: date) 
     """
     default_currency = profile.currency or 'RUB'
 
-    # Собираем расходы
+    # Собираем расходы.
+    # Операции, созданные автоматически из регулярных платежей (is_recurring=True),
+    # исключаем: топ-5 — это быстрые кнопки для ручного повторения частых операций,
+    # а регулярные и так создаются сами.
     expense_qs = Expense.objects.filter(
         profile=profile,
         expense_date__gte=window_start,
         expense_date__lte=window_end,
-    ).select_related('category')
+    ).exclude(is_recurring=True).select_related('category')
 
-    # Собираем доходы
+    # Собираем доходы (регулярные исключаем по той же причине)
     income_qs = Income.objects.filter(
         profile=profile,
         income_date__gte=window_start,
         income_date__lte=window_end,
-    ).select_related('category')
+    ).exclude(is_recurring=True).select_related('category')
 
     groups: Dict[Tuple, Dict] = {}
 

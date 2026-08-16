@@ -467,10 +467,14 @@ class Expense(models.Model):
     )
 
     description = models.TextField(blank=True)
-    
+
     # Дата и время (автоматические по ТЗ)
     expense_date = models.DateField(default=date.today)
     expense_time = models.TimeField(default=datetime.now)
+
+    # Регулярность: трата создана автоматически из RecurringPayment
+    # (симметрично Income.is_recurring)
+    is_recurring = models.BooleanField(default=False)
     
     # Вложения
     receipt_photo = models.CharField(max_length=255, blank=True)
@@ -1166,6 +1170,34 @@ class Income(models.Model):
             self.original_currency is not None
             and self.original_currency != self.currency
         )
+
+
+class MonthlyReportLog(models.Model):
+    """Журнал отправленных месячных отчетов.
+
+    Долговременная идемпотентность рассылки: Redis-ключи (timeout 7 дней) не
+    переживают рестарт Redis при деплое, из-за чего celery beat после рестарта
+    повторно рассылал отчеты (инцидент 2026-08-16). Запись здесь — надежный
+    признак "отчет за период уже отправлен этому пользователю".
+    """
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='monthly_report_logs')
+    year = models.IntegerField()
+    month = models.IntegerField(validators=[MinValueValidator(1), MaxValueValidator(12)])
+    sent_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'expenses_monthly_report_log'
+        verbose_name = 'Отправленный месячный отчет'
+        verbose_name_plural = 'Отправленные месячные отчеты'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['profile', 'year', 'month'],
+                name='uniq_monthly_report_per_profile_period',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.profile_id} {self.year}-{self.month:02d}"
 
 
 class IncomeBudget(models.Model):

@@ -165,6 +165,26 @@ class NotificationService:
             )
             return False
 
+        # Долговременная идемпотентность через БД: Redis-ключ (7 дней) не переживает
+        # рестарт Redis при деплое, из-за чего beat после рестарта повторно рассылал
+        # отчеты (инцидент 2026-08-16)
+        from asgiref.sync import sync_to_async
+        from expenses.models import MonthlyReportLog
+
+        already_logged = await sync_to_async(
+            MonthlyReportLog.objects.filter(
+                profile=profile, year=report_year, month=report_month
+            ).exists
+        )()
+        if already_logged:
+            logger.info(
+                "[MONTHLY_REPORT] user=%s status=already_sent_db period=%s-%02d",
+                log_safe_id(user_id, "user"),
+                report_year,
+                report_month,
+            )
+            return False
+
         # Prevent concurrent sends from parallel workers for the same user/period.
         inflight_key = f"monthly_report_sending:{user_id}:{report_year}:{report_month}"
         if not cache.add(inflight_key, True, timeout=600):
@@ -185,8 +205,22 @@ class NotificationService:
                 parse_mode='HTML'
             )
 
-            # Mark as sent for idempotency (keep for 7 days)
+            # Mark as sent for idempotency: fast-path в Redis (7 дней) +
+            # долговременная запись в БД (переживает рестарты)
             cache.set(sent_key, True, timeout=86400 * 7)
+            try:
+                await sync_to_async(MonthlyReportLog.objects.get_or_create)(
+                    profile=profile, year=report_year, month=report_month
+                )
+            except Exception as log_error:
+                # Ошибка журналирования не должна ломать успешную отправку
+                logger.error(
+                    "Failed to write MonthlyReportLog for %s period=%s-%02d: %s",
+                    log_safe_id(user_id, "user"),
+                    report_year,
+                    report_month,
+                    log_error,
+                )
 
             logger.info(
                 "[MONTHLY_REPORT] user=%s status=sent attempt=%s period=%s-%02d",

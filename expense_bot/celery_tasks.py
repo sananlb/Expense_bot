@@ -150,6 +150,16 @@ def send_monthly_reports():
         now = timezone.now()  # Returns timezone-aware datetime in Europe/Moscow
         today = now.date()
 
+        # ЗАЩИТА: задача запланирована на 1-е число, но celery beat после рестарта
+        # может повторно запустить "просроченные" crontab-задачи с day_of_month=1
+        # (инцидент 2026-08-16: рестарт 16-го числа повторно разослал июльские отчеты).
+        if today.day != 1:
+            logger.warning(
+                f"send_monthly_reports skipped: today={today} is not the 1st day of month "
+                f"(most likely a beat restart re-fire)"
+            )
+            return
+
         logger.info(f"Starting monthly reports task for {today}")
 
         # Calculate previous month period
@@ -363,6 +373,14 @@ def generate_monthly_insights():
         # Use timezone-aware datetime to match CELERY_TIMEZONE (Europe/Moscow)
         now = timezone.now()
         today = now.date()
+
+        # ЗАЩИТА: не запускать вне 1-го числа (см. комментарий в send_monthly_reports)
+        if today.day != 1:
+            logger.warning(
+                f"generate_monthly_insights skipped: today={today} is not the 1st day of month "
+                f"(most likely a beat restart re-fire)"
+            )
+            return
 
         logger.info(f"Starting monthly insights generation for {today}")
 
