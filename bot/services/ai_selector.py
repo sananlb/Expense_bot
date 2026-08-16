@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Дефолтная модель OpenRouter (централизованно, меняется ТОЛЬКО здесь или в .env)
-OPENROUTER_DEFAULT_MODEL = os.getenv('OPENROUTER_MODEL_DEFAULT', 'deepseek/deepseek-chat')
+OPENROUTER_DEFAULT_MODEL = os.getenv('OPENROUTER_MODEL_DEFAULT', 'deepseek/deepseek-v4-flash')
 
 # Конфигурация AI провайдеров
 AI_PROVIDERS = {
@@ -17,7 +17,7 @@ AI_PROVIDERS = {
         'provider': os.getenv('AI_PROVIDER_CATEGORIZATION', 'deepseek'),  # DeepSeek по умолчанию
         'model': {
             'openai': os.getenv('OPENAI_MODEL_CATEGORIZATION', 'gpt-4o-mini'),
-            'deepseek': os.getenv('DEEPSEEK_MODEL_CATEGORIZATION', 'deepseek-chat'),
+            'deepseek': os.getenv('DEEPSEEK_MODEL_CATEGORIZATION', 'deepseek-v4-flash'),
             'qwen': os.getenv('QWEN_MODEL_CATEGORIZATION', 'qwen-plus'),
             'openrouter': os.getenv('OPENROUTER_MODEL_CATEGORIZATION', OPENROUTER_DEFAULT_MODEL)
         }
@@ -26,7 +26,7 @@ AI_PROVIDERS = {
         'provider': os.getenv('AI_PROVIDER_CHAT', 'deepseek'),  # DeepSeek по умолчанию
         'model': {
             'openai': os.getenv('OPENAI_MODEL_CHAT', 'gpt-4o-mini'),
-            'deepseek': os.getenv('DEEPSEEK_MODEL_CHAT', 'deepseek-chat'),
+            'deepseek': os.getenv('DEEPSEEK_MODEL_CHAT', 'deepseek-v4-flash'),
             'qwen': os.getenv('QWEN_MODEL_CHAT', 'qwen-plus'),
             'openrouter': os.getenv('OPENROUTER_MODEL_CHAT', OPENROUTER_DEFAULT_MODEL)
         }
@@ -35,7 +35,9 @@ AI_PROVIDERS = {
         'provider': os.getenv('AI_PROVIDER_INSIGHTS', 'deepseek'),  # DeepSeek по умолчанию
         'model': {
             'openai': os.getenv('OPENAI_MODEL_INSIGHTS', 'gpt-4o-mini'),
-            'deepseek': os.getenv('DEEPSEEK_MODEL_INSIGHTS', 'deepseek-reasoner'),  # Reasoner для лучшего анализа
+            # ВАЖНО: legacy-алиас 'deepseek-reasoner' теперь резолвится в v4-flash, а не в pro
+            # (проверено 2026-08-16 через /v1/models) — используем явное имя reasoning-модели
+            'deepseek': os.getenv('DEEPSEEK_MODEL_INSIGHTS', 'deepseek-v4-pro'),
             'qwen': os.getenv('QWEN_MODEL_INSIGHTS', 'qwen-plus'),
             'openrouter': os.getenv('OPENROUTER_MODEL_INSIGHTS', OPENROUTER_DEFAULT_MODEL)
         }
@@ -50,7 +52,7 @@ AI_PROVIDERS = {
         'provider': os.getenv('AI_PROVIDER_DEFAULT', 'deepseek'),  # DeepSeek по умолчанию
         'model': {
             'openai': os.getenv('OPENAI_MODEL_DEFAULT', 'gpt-4o-mini'),
-            'deepseek': os.getenv('DEEPSEEK_MODEL_DEFAULT', 'deepseek-chat'),
+            'deepseek': os.getenv('DEEPSEEK_MODEL_DEFAULT', 'deepseek-v4-flash'),
             'qwen': os.getenv('QWEN_MODEL_DEFAULT', 'qwen-plus'),
             'openrouter': OPENROUTER_DEFAULT_MODEL
         }
@@ -155,12 +157,12 @@ def get_model(service_type: str = 'default', provider: Optional[str] = None) -> 
         if provider == 'openai':
             return models.get(provider, 'gpt-4o-mini')
         elif provider == 'deepseek':
-            return models.get(provider, 'deepseek-chat')
+            return models.get(provider, 'deepseek-v4-flash')
         elif provider == 'qwen':
             return models.get(provider, 'qwen-plus')
         elif provider == 'openrouter':
             return models.get(provider, OPENROUTER_DEFAULT_MODEL)
-        return models.get(provider, 'deepseek-chat')
+        return models.get(provider, 'deepseek-v4-flash')
     else:
         return models
 
@@ -203,7 +205,7 @@ def get_provider_settings(provider: str) -> Dict[str, Any]:
             
         return {
             'api_keys_available': api_keys_available,
-            'default_model': 'deepseek-chat',
+            'default_model': 'deepseek-v4-flash',
             'max_tokens': 4096,
             'temperature': 0.0
         }

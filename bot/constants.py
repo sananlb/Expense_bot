@@ -11,6 +11,11 @@ MAX_DAILY_OPERATIONS = 100
 MAX_OPERATION_DESCRIPTION_LENGTH = 500
 MAX_TRANSACTION_AMOUNT = Decimal("9999999999.99")
 
+# Минимальная уверенность AI-категоризации, при которой ключевые слова из описания
+# сохраняются для автообучения. Ниже порога не обучаем, чтобы неуверенные ответы AI
+# не закреплялись как постоянные правила категоризации.
+AI_KEYWORD_LEARNING_MIN_CONFIDENCE = 0.8
+
 _DEFAULT_PRIVACY_URLS = {
     "ru": "https://www.coins-bot.ru/privacy.html",
     "en": "https://www.coins-bot.ru/privacy_en.html",

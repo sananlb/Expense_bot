@@ -14,6 +14,7 @@ from django.db.models import Sum, Count
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from bot.constants import (
+    AI_KEYWORD_LEARNING_MIN_CONFIDENCE,
     DEFAULT_CURRENCY_CODE,
     MAX_DAILY_OPERATIONS,
     MAX_OPERATION_DESCRIPTION_LENGTH,
@@ -200,9 +201,19 @@ def create_expense(
         # Обновляем объект с загруженным profile для корректной работы
         expense.profile = profile
 
-        # Если категория определена AI, обучаем систему (сохраняем слова в БД)
+        # Если категория определена AI, обучаем систему (сохраняем слова в БД).
+        # Обучаем только при достаточной уверенности AI: неуверенный ответ (например, 0.7
+        # при fallback в "Прочие расходы") не должен закрепляться как постоянное правило.
         if ai_categorized and category_id and description and learn_keywords_on_create:
-            _enqueue_keyword_learning(expense.id, category_id)
+            if (ai_confidence or 0.0) >= AI_KEYWORD_LEARNING_MIN_CONFIDENCE:
+                _enqueue_keyword_learning(expense.id, category_id)
+            else:
+                logger.info(
+                    "Skipped keyword learning for expense %s: AI confidence %s below %s",
+                    expense.id,
+                    ai_confidence,
+                    AI_KEYWORD_LEARNING_MIN_CONFIDENCE,
+                )
 
         # Сбрасываем флаг напоминания о внесении трат
         from expenses.tasks import clear_expense_reminder

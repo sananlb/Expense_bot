@@ -10,10 +10,14 @@ from bot.utils.emoji_utils import strip_leading_emoji
 from bot.utils.keyword_service import match_keyword_in_text
 
 
+# ВАЖНО: Поле 'description' — краткое СМЫСЛОВОЕ описание границ категории (на английском,
+# т.к. инструкции AI-промпта на английском). Оно попадает в промпт AI-категоризации.
+# Не перечисляйте здесь примеры товаров/брендов — для этого есть 'keywords'.
 EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'groceries': {
         'name_ru': '🛒 Продукты',
         'name_en': '🛒 Groceries',
+        'description': 'Food and drinks bought in stores to cook or eat at home.',
         'keywords': [
             # Русские магазины и бренды
             'магнит', 'пятерочка', 'перекресток', 'ашан', 'лента', 'дикси', 'вкусвилл',
@@ -38,6 +42,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'cafes_restaurants': {
         'name_ru': '🍽️ Кафе и рестораны',
         'name_en': '🍽️ Cafes and Restaurants',
+        'description': 'Eating and drinking out, and ready-made food ordered for delivery.',
         'keywords': [
             # Русские
             'ресторан', 'кафе', 'бар', 'паб', 'кофейня', 'пиццерия', 'суши', 'фастфуд',
@@ -66,6 +71,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'gas_station': {
         'name_ru': '⛽ АЗС',
         'name_en': '⛽ Gas Station',
+        'description': 'Refueling a vehicle at a gas station.',
         'keywords': [
             # Русские
             'азс', 'заправка', 'бензин', 'топливо', 'газпром', 'лукойл', 'роснефть',
@@ -82,6 +88,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'transport': {
         'name_ru': '🚕 Транспорт',
         'name_en': '🚕 Transport',
+        'description': 'Getting around by public transport, taxi or other rides (not a personal car).',
         'keywords': [
             # Русские
             'такси', 'uber', 'яндекс такси', 'ситимобил', 'gett', 'wheely', 'метро',
@@ -96,6 +103,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'car': {
         'name_ru': '🚗 Автомобиль',
         'name_en': '🚗 Car',
+        'description': 'Owning and maintaining a personal vehicle: everything the car itself needs or causes.',
         'keywords': [
             # Русские
             'автомобиль', 'машина', 'авто', 'сто', 'автосервис', 'шиномонтаж', 'автомойка',
@@ -122,14 +130,24 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'housing': {
         'name_ru': '🏠 Жилье',
         'name_en': '🏠 Housing',
+        'description': 'Paying for the place you live and anything bought for the home and household: furnishing, interior, household goods and supplies.',
         'keywords': [
             # Русские
             'квартира', 'аренда', 'ипотека', 'квартплата',
             'управляющая компания', 'тсж', 'жск', 'капремонт', 'домофон', 'консьерж',
             'охрана', 'уборка', 'сантехник', 'электрик',
             # Мебель и предметы интерьера
-            'шкаф',
+            'шкаф', 'мебель', 'диван', 'кресло', 'комод', 'полка', 'зеркало',
+            'шторы', 'занавески', 'ковер', 'светильник', 'люстра', 'лампочка', 'лампочки',
+            # Товары для дома и хозяйства
+            'для дома', 'товары для дома', 'хозтовары', 'хозяйственный',
+            'вешалка', 'вешалки', 'посуда', 'кастрюля', 'сковорода', 'тарелки', 'кружка',
+            'полотенце', 'полотенца', 'постельное белье', 'простыня', 'одеяло', 'подушка', 'плед',
+            'обои', 'инструменты', 'дрель', 'саморезы',
+            # Магазины товаров для дома
+            'икеа', 'ikea', 'леруа', 'леруа мерлен', 'хофф', 'hoff', 'фикс прайс', 'fix price',
             # Бытовая химия и товары для дома
+            'бытовая химия',
             'посудомоечные', 'стиральный', 'стиральные', 'порошок', 'моющее', 'чистящее',
             'средство для', 'fairy', 'finish', 'calgon', 'vanish', 'domestos',
             'гель для душа', 'шампунь', 'зубная щетка',
@@ -137,12 +155,16 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
             'apartment', 'rent', 'rental', 'mortgage', 'housing', 'home',
             'plumber', 'electrician', 'repair', 'cleaning', 'security', 'maintenance',
             'dishwasher tablets', 'laundry', 'detergent', 'cleaning supplies',
+            'hanger', 'hangers', 'household goods', 'home goods', 'furniture', 'sofa',
+            'curtains', 'towel', 'bedding', 'pillow', 'blanket', 'dishes', 'cookware',
+            'lamp', 'light bulb',
         ],
         'aliases': ['жилье', 'housing', 'квартира', 'apartment'],
     },
     'pharmacies': {
         'name_ru': '💊 Аптеки',
         'name_en': '💊 Pharmacies',
+        'description': 'Medicines and health products bought in a pharmacy.',
         'keywords': [
             # Русские
             'аптека', 'ригла', 'асна', '36.6', 'горздрав', 'столички', 'фармация',
@@ -157,6 +179,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'medicine': {
         'name_ru': '🏥 Медицина',
         'name_en': '🏥 Medicine',
+        'description': 'Medical services and treatment provided by doctors and clinics.',
         'keywords': [
             # Русские
             'клиника', 'больница', 'поликлиника', 'врач', 'доктор', 'медцентр',
@@ -171,6 +194,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'beauty': {
         'name_ru': '💄 Красота',
         'name_en': '💄 Beauty',
+        'description': 'Personal care and appearance: beauty services and care products.',
         'keywords': [
             # Русские
             'салон', 'парикмахерская', 'барбершоп', 'маникюр', 'педикюр', 'косметолог',
@@ -188,6 +212,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'sports_fitness': {
         'name_ru': '🏃 Спорт и фитнес',
         'name_en': '🏃 Sports and Fitness',
+        'description': 'Sports and physical activity: classes, facilities and sports gear.',
         'keywords': [
             # Русские
             'фитнес', 'спортзал', 'тренажерный', 'бассейн', 'йога', 'пилатес', 'танцы',
@@ -202,6 +227,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'clothes_shoes': {
         'name_ru': '👔 Одежда и обувь',
         'name_en': '👔 Clothes and Shoes',
+        'description': 'Clothing, footwear and wearable accessories.',
         'keywords': [
             # Русские
             'одежда', 'обувь', 'магазин одежды',
@@ -220,6 +246,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'entertainment': {
         'name_ru': '🎭 Развлечения',
         'name_en': '🎭 Entertainment',
+        'description': 'Leisure and having fun: cultural events, nightlife, attractions, alcohol.',
         'keywords': [
             # Русские
             'кино', 'театр', 'концерт', 'музей', 'выставка', 'клуб', 'караоке', 'боулинг',
@@ -236,6 +263,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'education': {
         'name_ru': '📚 Образование',
         'name_en': '📚 Education',
+        'description': 'Learning and personal development, including study materials and supplies.',
         'keywords': [
             # Русские
             'курсы', 'обучение', 'школа', 'университет', 'институт', 'колледж', 'учеба',
@@ -251,6 +279,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'gifts': {
         'name_ru': '🎁 Подарки',
         'name_en': '🎁 Gifts',
+        'description': 'Things bought to give to other people, and celebration-related spending.',
         'keywords': [
             # Русские
             'подарок', 'сувенир', 'цветы', 'букет', 'открытка', 'подарочный', 'презент',
@@ -265,6 +294,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'travel': {
         'name_ru': '✈️ Путешествия',
         'name_en': '✈️ Travel',
+        'description': 'Trips away from home: getting there, staying there, and tourism.',
         'keywords': [
             # Русские
             'авиабилет', 'билет', 'самолет', 'поезд', 'ржд', 'аэрофлот', 'победа',
@@ -281,6 +311,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'utilities_subscriptions': {
         'name_ru': '📱 Коммуналка и подписки',
         'name_en': '📱 Utilities and Subscriptions',
+        'description': 'Recurring bills: utilities, phone and internet service, digital subscriptions.',
         'keywords': [
             # Коммунальные услуги
             'жкх', 'коммуналка', 'коммунальные', 'квитанция', 'счет за',
@@ -300,6 +331,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'savings': {
         'name_ru': '💎 Накопления',
         'name_en': '💎 Savings',
+        'description': 'Money set aside or invested rather than spent.',
         'keywords': [
             # Русские
             'накопления', 'брокер', 'инвестировал', 'вклад', 'кубышка', 'на пенсию',
@@ -319,6 +351,7 @@ EXPENSE_CATEGORY_DEFINITIONS: Dict[str, Dict[str, object]] = {
     'other': {
         'name_ru': '💰 Прочие расходы',
         'name_en': '💰 Other Expenses',
+        'description': 'Use only when the purchase clearly fits no other category.',
         'keywords': [
             # Русские
             'прочее', 'разное', 'другое', 'иное', 'прочие', 'расход',
@@ -338,6 +371,34 @@ def get_expense_category_display_name(category_key: str, language_code: str = 'r
     if language_code.lower().startswith('en'):
         return data['name_en']  # type: ignore[index]
     return data['name_ru']  # type: ignore[index]
+
+
+def get_expense_category_description(label: Optional[str]) -> Optional[str]:
+    """Return the semantic description for a category label (for AI prompts).
+
+    Матчинг намеренно консервативный — только точные имена и aliases, БЕЗ keywords:
+    для кастомной категории неверное описание хуже, чем его отсутствие.
+    """
+    if not label:
+        return None
+    cleaned = strip_leading_emoji(label).lower()
+    if not cleaned:
+        return None
+
+    for data in EXPENSE_CATEGORY_DEFINITIONS.values():
+        potential_matches = {
+            strip_leading_emoji(data['name_ru']).lower(),  # type: ignore[arg-type]
+            strip_leading_emoji(data['name_en']).lower(),  # type: ignore[arg-type]
+        }
+        if cleaned in potential_matches:
+            return data.get('description')  # type: ignore[return-value]
+
+        for alias in data.get('aliases', []):  # type: ignore[union-attr]
+            alias_lower = alias.lower()
+            if alias_lower and (alias_lower == cleaned or alias_lower in cleaned or cleaned in alias_lower):
+                return data.get('description')  # type: ignore[return-value]
+
+    return None
 
 
 def normalize_expense_category_key(label: Optional[str]) -> Optional[str]:
