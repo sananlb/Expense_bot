@@ -49,8 +49,20 @@ def format_days_left(n: int, lang: str = 'ru') -> str:
 
 
 def _render_bar(percent: int, filled_glyph: str, empty_glyph: str, segments: int) -> str:
-    """Рисует шкалу заполнения из segments глифов по проценту (floor)."""
-    filled = min(segments, max(0, percent * segments // 100))
+    """Рисует шкалу заполнения из segments глифов по проценту.
+
+    Заполнение округляется до ближайшего сегмента (half-up), поэтому при
+    10 сегментах 45% уже закрашивают 5 делений, а 48% — не 4, как при floor.
+    Крайние состояния защищены от «вранья» округления: полностью пустая шкала
+    только при 0%, полностью закрашенная — только при 100% и выше.
+    """
+    if percent <= 0:
+        filled = 0
+    elif percent >= 100:
+        filled = segments
+    else:
+        rounded = (percent * segments + 50) // 100
+        filled = min(segments - 1, max(1, rounded))
     return filled_glyph * filled + empty_glyph * (segments - filled)
 
 
